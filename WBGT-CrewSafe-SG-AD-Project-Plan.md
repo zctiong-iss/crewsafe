@@ -920,14 +920,21 @@ Charts must distinguish observed facts, model predictions and agent recommendati
 
 Story points use a Fibonacci scale. The team should split any story larger than 8 before sprint commitment.
 
+Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requirements), **Sprint 1 = Week 2** (Design & Prototyping / infrastructure), **Sprint 2 = Week 3** (Development / MVP + DevSecOps), **Sprint 3 = Week 4** (Development, quality, security, demo). Stretch items begin only after all Must stories pass. Approximate load: Sprint 1 ≈ 49 pts, Sprint 2 ≈ 57 pts, Sprint 3 ≈ 56 pts.
+
 | ID | Priority | Story | Points | Acceptance summary | Sprint |
 |---|---|---|---:|---|---:|
+| US-19 | Must | As a team, we prepare the prioritised backlog, high-level use-case diagram and UI prototype screens. | 5 | Backlog, use-case diagram and navigable mockups accepted by advisor | 0 |
+| US-20 | Must | As a team, we confirm NEA WBGT/lightning data feasibility and cache representative demo fixtures. | 3 | Live pull demonstrated; dated fixtures cached for offline demo | 0 |
 | US-01 | Must | As a user, I can authenticate and see only my assigned site. | 5 | RBAC and negative authorization tests pass | 1 |
 | US-02 | Must | As a supervisor, I can create a shift with workers, tasks and intensity. | 8 | Shift validation and assignments persist | 1 |
 | US-03 | Must | As a worker, I can view my shift and submit readiness flags. | 5 | Only assigned worker can submit; no medical free text | 1 |
 | US-04 | Must | As the system, I ingest and store WBGT/weather with freshness. | 8 | Live and fixture modes work; duplicate ingestion safe | 1 |
 | US-04L | Must | As a worker/supervisor, I see a lightning stop-work warning above the WBGT reading when strikes are detected nearby. | 5 | Lightning risk state ingested; warning shown atop WBGT; stop-work overrides heat plan | 1 |
 | US-05 | Must | As a supervisor, I see current conditions and active shift context. | 5 | Web view uses shared backend and shows freshness | 1 |
+| US-21 | Must | As a team, we provision cloud staging infrastructure and secrets management. | 5 | Web and mobile reach one deployed backend; no secrets in source | 1 |
+| US-22 | Must | As a team, we establish a CI pipeline skeleton (build, unit tests, SAST, secret scan). | 5 | PR triggers build, tests and scans; main branch protected | 1 |
+| US-23 | Should | As a team, we add baseline observability (health checks, correlation IDs, structured logs). | 3 | Health endpoints live; correlation IDs traced end-to-end | 1 |
 | US-06 | Must | As the system, I forecast 30/60-minute WBGT. | 8 | Baselines measured; versioned prediction returned | 2 |
 | US-07 | Must | As the system, I evaluate the correct deterministic policy actions. | 8 | Boundary and mixed-worker tests pass | 2 |
 | US-08 | Must | As a supervisor, I receive an explainable agent draft. | 8 | No unsupported actions; policy/model references shown | 2 |
@@ -935,12 +942,24 @@ Story points use a Fibonacci scale. The team should split any story larger than 
 | US-10 | Must | As a worker, I receive and acknowledge an approved action. | 8 | Only affected workers see it; idempotency works | 2 |
 | US-11 | Must | As a worker, I log rest/hydration or raise a concern. | 5 | Status updates in supervisor view | 2 |
 | US-12 | Must | As a supervisor, I monitor pending, late and completed actions. | 5 | Live state and alert count match backend records | 2 |
+| US-24 | Must | As a safety manager, I configure and version the active heat policy. | 5 | Versioned catalogue with source and effective date; recommendations cite version | 2 |
+| US-27 | Must | As a team, we complete the DevSecOps pipeline (dependency + container scan, auto staging deploy, smoke tests). | 5 | Pipeline scans, deploys staging and runs smoke tests | 2 |
 | US-13 | Must | As a manager, I view compliance and response-time charts. | 8 | Metrics verified against seeded expected values | 3 |
 | US-14 | Must | As a manager, I view forecast accuracy and fallback status. | 5 | Metrics match evaluation artifact | 3 |
 | US-15 | Must | As a manager, I export the audit timeline. | 5 | Export contains trace IDs, actors, rules and decisions | 3 |
 | US-16 | Must | As a user, I see safe degraded behaviour during dependency failure. | 8 | NEA, ML and LLM failure scenarios pass | 3 |
 | US-17 | Should | As a user, I receive an in-app reminder for an unacknowledged approved action. | 3 | Reminder cannot alter instruction | 3 |
+| US-25 | Should | As a supervisor, I see readiness-check freshness and missing checks. | 3 | Stale or missing readiness flagged to supervisor | 3 |
+| US-26 | Should | As a team, we verify agent guardrails using an STPA-derived hazard analysis (allowlist + approval gate). | 5 | Unsupported-action rate zero; approval-gate bypass blocked and audited | 3 |
+| US-28 | Must | As a team, we run a security testing suite and produce remediation evidence. | 8 | Findings, severity, remediation and re-test documented; no unresolved high/critical | 3 |
+| US-29 | Should | As a team, we publish an ML model card with SHAP explainability and forecast-reliability. | 3 | Card includes SHAP drivers, calibration and per-band error | 3 |
+| US-30 | Should | As an administrator, I manage users, roles, sites and integrations. | 5 | Admin CRUD with RBAC; every change audited | 3 |
+| US-31 | Should | As a team, we run accessibility and performance checks (WCAG 2.1 AA basics; p95 latency). | 3 | WCAG AA basics met; read p95 <1s, write p95 <2s | 3 |
 | US-18 | Could | As a worker, I view an approved instruction in another language. | 5 | Human-approved template only | Stretch |
+| US-32 | Could | As a worker, I check in at a simulated rest zone by QR code. | 3 | Scan logs rest at zone; event audited | Stretch |
+| US-33 | Could | As a manager, I use a multi-site management view. | 5 | Manager switches and compares multiple sites | Stretch |
+| US-34 | Could | As a supervisor, I enter a local WBGT reading with source and timestamp. | 3 | Manual reading stored with source/time; no station-equivalence claim | Stretch |
+| US-35 | Could | As a worker, I receive push notifications via Firebase Cloud Messaging. | 5 | Approved action pushes to worker device | Stretch |
 
 ---
 
