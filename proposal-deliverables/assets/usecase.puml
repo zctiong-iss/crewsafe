@@ -1,0 +1,62 @@
+@startuml usecase
+skinparam backgroundColor transparent
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 15
+skinparam ArrowColor #37474F
+skinparam packageStyle rectangle
+
+skinparam actor {
+  BorderColor #1565C0
+  BackgroundColor #E3F2FD
+}
+skinparam usecase {
+  BorderColor #C62828
+  BackgroundColor #FFF3E0
+  FontColor #212121
+}
+skinparam rectangle {
+  BorderColor #90A4AE
+  BorderThickness 2
+}
+
+left to right direction
+
+actor "Outdoor\nWorker" as W
+actor "Site\nSupervisor" as S
+actor "Safety\nManager" as M
+actor "NEA Weather\nService" as N
+
+rectangle "WBGT CrewSafe SG" {
+  usecase "Complete readiness check" as UC1
+  usecase "View shift & risk" as UC2
+  usecase "Receive & acknowledge action" as UC3
+  usecase "Log rest / hydration" as UC4
+  usecase "Raise safety concern" as UC5
+  usecase "Configure shift & tasks" as UC6
+  usecase "Monitor current & forecast risk" as UC7
+  usecase "Review & approve plan" as UC8
+  usecase "Monitor completion" as UC9
+  usecase "Configure policy & users" as UC10
+  usecase "View dashboards & audit" as UC11
+  usecase "Ingest WBGT & weather" as UC12
+}
+
+W --> UC1
+W --> UC2
+W --> UC3
+W --> UC4
+W --> UC5
+
+S --> UC6
+S --> UC7
+S --> UC8
+S --> UC9
+
+M --> UC10
+M --> UC11
+
+N --> UC12
+UC12 ..> UC7 : <<include>>
+UC8 ..> UC7 : <<extend>>
+@enduml
