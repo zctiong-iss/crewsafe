@@ -9,7 +9,7 @@
 
 ## 1. Executive summary
 
-WBGT CrewSafe SG is a human-supervised heat-safety operations platform for smaller outdoor teams that may refer to myENV rather than being required to operate an on-site WBGT meter. The initial target is landscaping, estate or campus maintenance, outdoor cleaning and event-setup teams—not construction sites with a contract sum of S$5 million or more, shipyards, or the process industry. It combines live public Wet Bulb Globe Temperature (WBGT) readings, short-horizon machine-learning forecasts, task intensity and worker acclimatisation context to recommend timely hydration, rest and task adjustments. Supervisors approve material changes before the system sends instructions to workers. Every recommendation, approval, dispatch and acknowledgement is recorded for safety review.
+WBGT CrewSafe SG is a human-supervised heat-safety operations platform for smaller outdoor teams that may refer to myENV rather than being required to operate an on-site WBGT meter. The initial target is landscaping, estate or campus maintenance, outdoor cleaning and event-setup teams—not construction sites with a contract sum of S$5 million or more, shipyards, or the process industry. It combines live public Wet Bulb Globe Temperature (WBGT) readings, short-horizon machine-learning forecasts, task intensity and worker acclimatisation context to recommend timely hydration, rest and task adjustments. It also surfaces NEA lightning-strike observations as an overriding stop-work hazard displayed above the WBGT reading, because an approaching thunderstorm—not heat—can be the more immediate danger to an outdoor crew. Supervisors approve material changes before the system sends instructions to workers. Every recommendation, approval, dispatch and acknowledgement is recorded for safety review.
 
 The product addresses an operational gap: seeing a WBGT reading is not the same as deciding what to do, communicating the decision and proving that the relevant workers received it.
 
@@ -35,6 +35,8 @@ Singapore’s Ministry of Manpower requires employers and occupiers to manage he
 MOM reported 24 non-fatal work-related heat illnesses between 2021 and 2025, of which 22 related to outdoor work. By April 2026, enforcement action had been taken against 213 non-compliant employers. Sources: [MOM February 2026 parliamentary answer](https://www.mom.gov.sg/newsroom/parliament-questions-and-replies/2026/0226-written-answer-to-pq-on-heat-stress-measures) and [MOM April 2026 enforcement update](https://www.mom.gov.sg/newsroom/press-replies/2026/0408-steps-taken-to-mitigate-exposure-risks-for-outdoor-workers).
 
 NEA publishes real-time WBGT observations every 15 minutes. The dataset begins in February 2025 and is suitable for a time-series forecasting prototype. NEA also publishes temperature, relative humidity, rainfall and wind observations at weather-station level. Sources: [NEA WBGT observations](https://data.gov.sg/datasets/d_87884af1f85d702d4f74c6af13b4853d/view) and [NEA real-time weather collection](https://data.gov.sg/collections/1459/view).
+
+NEA additionally publishes near-real-time lightning-strike observations—cloud-to-ground and cloud-to-cloud strikes detected by a five-sensor network, refreshed at roughly two-minute intervals with a short transmission delay and 200 m–2 km location accuracy. Lightning is treated as a distinct, higher-priority hazard than heat: an approaching thunderstorm warrants immediate cessation of outdoor work and sheltering, so WBGT CrewSafe SG shows a lightning risk state (clear, advisory or stop-work) *above* the WBGT reading and lets it override heat-based recommendations. WBGT CrewSafe SG is not a lightning-safety authority; it surfaces the public observation and the corresponding stop-work guidance, and the supervisor remains responsible for the decision to suspend and resume work. Source: [NEA Lightning Observation](https://data.gov.sg/datasets/d_08238953fe0f6dd13f10714ebfbcb9f9/view).
 
 MOM explicitly permits workplaces outside the three mandatory on-site-meter categories to refer to the NEA myENV app. This creates a credible low-cost target segment, but public WBGT represents the reporting station rather than every crew’s exact microclimate. WBGT CrewSafe SG must therefore show the station, observation time and freshness, allow a supervisor to enter a local reading, and avoid claiming site-measurement equivalence.
 
@@ -158,6 +160,7 @@ Targets measure prototype quality. The project will not claim a measured reducti
 - Three task-intensity levels: light, moderate and heavy.
 - Worker acclimatisation status and a minimal readiness check.
 - NEA WBGT and supporting weather ingestion.
+- NEA lightning-strike ingestion with a clear/advisory/stop-work risk state shown above the WBGT reading.
 - Data-freshness and outage indicators.
 - 30- and 60-minute WBGT prediction.
 - Deterministic heat-policy evaluation.
@@ -227,7 +230,8 @@ flowchart LR
         UC9["Monitor completion"]
         UC10["Configure policy and users"]
         UC11["View dashboards and audit"]
-        UC12["Ingest WBGT and weather"]
+        UC12["Ingest WBGT, weather and lightning"]
+        UC13["Receive lightning stop-work alert"]
     end
 
     W --> UC1
@@ -235,14 +239,17 @@ flowchart LR
     W --> UC3
     W --> UC4
     W --> UC5
+    W --> UC13
     S --> UC6
     S --> UC7
     S --> UC8
     S --> UC9
+    S --> UC13
     M --> UC10
     M --> UC11
     N --> UC12
     UC12 --> UC7
+    UC12 --> UC13
 ```
 
 ### 5.2 Worker journey
@@ -333,8 +340,10 @@ sequenceDiagram
 | ID | Requirement | Priority |
 |---|---|---|
 | FR-10 | The backend shall ingest WBGT and supporting weather readings without exposing external API credentials to clients. | Must |
+| FR-10a | The backend shall ingest NEA lightning-strike observations (cloud-to-ground and cloud-to-cloud) and classify a site-level lightning risk state of clear, advisory or stop-work. | Must |
 | FR-11 | The system shall store source, observation time, ingestion time and quality status. | Must |
 | FR-12 | The UI shall distinguish live, delayed, stale and simulated data. | Must |
+| FR-12a | When lightning risk is advisory or stop-work, the UI shall display the lightning warning above the WBGT reading, and stop-work shall visibly override the heat plan until cleared. | Must |
 | FR-13 | The ML service shall return 30- and 60-minute WBGT predictions, model version and generated time. | Must |
 | FR-14 | If the ML service fails, the system shall use a persistence forecast and label the fallback. | Must |
 
@@ -380,6 +389,7 @@ The policy engine—not the LLM—is the source of required action logic.
 
 | Condition | Deterministic policy output |
 |---|---|
+| Lightning risk detected in the site vicinity (NEA lightning observation) | Highest priority and evaluated before any WBGT rule: raise a stop-work warning shown above the WBGT reading; direct workers to seek proper shelter immediately; suspend the heat rest/hydration plan; hold until a supervisor-confirmed all-clear (typically 30 minutes after the last nearby strike). This overrides all heat-based actions below |
 | Any new worker or worker returning after more than one week | Mark as acclimatising; restrict deployment according to seeded site policy; gradually increase exposure over seven days |
 | WBGT below 31°C | Monitor; regular hydration; adequate recovery under shade; maintain emergency readiness |
 | WBGT 31°C to below 32°C | Hydrate at least hourly; consider rescheduling physical work; ensure recovery under shade; monitor vulnerable workers |
@@ -644,16 +654,16 @@ flowchart TB
         MOB["React Native worker mobile"]
     end
 
-    subgraph Azure["Azure cloud"]
-        SWA["Azure Static Web Apps"]
-        API["Spring Boot shared backend\nAzure Container Apps"]
-        ML["Python FastAPI ML service\nAzure Container Apps - internal"]
-        DB[("Azure PostgreSQL")]
-        BLOB["Azure Blob Storage"]
-        OBS["Application Insights"]
+    subgraph AWS["AWS cloud"]
+        SWA["AWS Amplify Hosting\n(S3 + CloudFront)"]
+        API["Spring Boot shared backend\nECS on Fargate"]
+        ML["Python FastAPI ML service\nECS on Fargate - internal"]
+        DB[("Amazon RDS for PostgreSQL")]
+        BLOB["Amazon S3"]
+        OBS["Amazon CloudWatch + X-Ray"]
     end
 
-    EXT["NEA WBGT/weather APIs"]
+    EXT["NEA WBGT / weather / lightning APIs"]
     FCM["Firebase Cloud Messaging\nstretch"]
     LLM["Approved LLM API"]
 
@@ -681,8 +691,8 @@ flowchart TB
 | Agent integration | Tool-calling LLM through a backend adapter with JSON schemas |
 | Database | PostgreSQL |
 | API contract | OpenAPI 3 |
-| Cloud | Azure Static Web Apps, Azure Container Apps, Azure PostgreSQL, Blob Storage |
-| Observability | Structured JSON logs, correlation IDs, health checks, Application Insights |
+| Cloud | AWS Amplify Hosting (S3 + CloudFront), Amazon ECS on Fargate, Amazon RDS for PostgreSQL, Amazon S3, AWS Secrets Manager |
+| Observability | Structured JSON logs, correlation IDs, health checks, Amazon CloudWatch and AWS X-Ray |
 | CI/CD | GitHub Actions |
 
 ### 10.4 Deployment environments
@@ -845,6 +855,7 @@ The shared backend exposes versioned REST endpoints under `/api/v1`.
 
 ### 13.1 Live site dashboard
 
+- Lightning risk banner shown above WBGT: clear, advisory or stop-work, with nearest-strike distance and observation time.
 - Current WBGT and band.
 - 30/60-minute prediction and band.
 - Live/delayed/stale/simulated badge.
@@ -904,6 +915,7 @@ Story points use a Fibonacci scale. The team should split any story larger than 
 | US-02 | Must | As a supervisor, I can create a shift with workers, tasks and intensity. | 8 | Shift validation and assignments persist | 1 |
 | US-03 | Must | As a worker, I can view my shift and submit readiness flags. | 5 | Only assigned worker can submit; no medical free text | 1 |
 | US-04 | Must | As the system, I ingest and store WBGT/weather with freshness. | 8 | Live and fixture modes work; duplicate ingestion safe | 1 |
+| US-04L | Must | As a worker/supervisor, I see a lightning stop-work warning above the WBGT reading when strikes are detected nearby. | 5 | Lightning risk state ingested; warning shown atop WBGT; stop-work overrides heat plan | 1 |
 | US-05 | Must | As a supervisor, I see current conditions and active shift context. | 5 | Web view uses shared backend and shows freshness | 1 |
 | US-06 | Must | As the system, I forecast 30/60-minute WBGT. | 8 | Baselines measured; versioned prediction returned | 2 |
 | US-07 | Must | As the system, I evaluate the correct deterministic policy actions. | 8 | Boundary and mixed-worker tests pass | 2 |
@@ -1309,6 +1321,7 @@ If that loop is reliable, explainable and secure, the project satisfies the busi
 - [MOM Steps to Mitigate Exposure Risks for Outdoor Workers, 7 April 2026](https://www.mom.gov.sg/newsroom/press-replies/2026/0408-steps-taken-to-mitigate-exposure-risks-for-outdoor-workers)
 - [NEA Wet Bulb Globe Temperature Observations](https://data.gov.sg/datasets/d_87884af1f85d702d4f74c6af13b4853d/view)
 - [NEA Real-time Weather Readings](https://data.gov.sg/collections/1459/view)
+- [NEA Lightning Observation](https://data.gov.sg/datasets/d_08238953fe0f6dd13f10714ebfbcb9f9/view)
 - [GovTech myENV](https://www.tech.gov.sg/products-and-services/for-citizens/environment/myenv/)
 - [Absolute WBGT Heat Stress Monitoring System](https://absolute-instrument.com/products/heat-stress-monitors-absolute-wbgt-heat-stress-monitoring-system)
 - [OTM WBGT Monitoring App](https://www.otm.sg/wbgt)

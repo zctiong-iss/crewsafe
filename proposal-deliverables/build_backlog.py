@@ -69,6 +69,9 @@ backlog = [
     ("US-04","Must","Ingest and store WBGT / weather with freshness",8,
      "Backend (Spring Boot scheduler); NEA data.gov.sg APIs; PostgreSQL",
      "Live and fixture modes work; duplicate ingestion safe","1"),
+    ("US-04L","Must","Lightning stop-work warning shown above WBGT",5,
+     "Backend (Spring Boot scheduler); NEA lightning observation API; React · React Native",
+     "Risk state clear/advisory/stop-work; warning atop WBGT; overrides heat plan","1"),
     ("US-05","Must","Supervisor sees current conditions and active shift context",5,
      "Web (React, Chart.js); Backend (Spring Boot)",
      "Web view uses shared backend and shows freshness","1"),
@@ -143,6 +146,7 @@ features = [
     ("Configure shift, tasks & assignments","Web (React, MUI), Backend (Spring Boot, Spring Data JPA, PostgreSQL)"),
     ("Complete worker readiness check","Mobile (React Native, Expo), Backend (Spring Boot, PostgreSQL)"),
     ("Ingest WBGT & weather with freshness","Backend (Spring Boot scheduler), NEA data.gov.sg APIs, PostgreSQL"),
+    ("Lightning warning above WBGT (stop-work)","Backend (Spring Boot), NEA lightning observation API, React + React Native"),
     ("View current & forecast risk (live conditions)","Web (React, Chart.js), Backend (Spring Boot)"),
     ("Forecast 30 / 60-minute WBGT","Python ML (FastAPI, pandas, scikit-learn / XGBoost, time-series)"),
     ("Evaluate deterministic heat policy","Backend (Java 21 rules engine, PostgreSQL policy config)"),
@@ -156,7 +160,7 @@ features = [
     ("Export audit timeline (CSV / PDF)","Backend (export service), Web, PostgreSQL append-only audit"),
     ("Graceful degraded mode","Backend fallback adapters (NEA / ML / LLM)"),
     ("[Stretch] Multilingual instruction template","Agentic AI (human-approved LLM template), Mobile"),
-    ("[Cross-cutting] Cloud deployment","Azure Container Apps, Azure Static Web Apps, Azure PostgreSQL, Blob Storage"),
+    ("[Cross-cutting] Cloud deployment","AWS: Amplify Hosting (S3 + CloudFront), ECS on Fargate, RDS for PostgreSQL, S3, Secrets Manager"),
     ("[Cross-cutting] DevSecOps pipeline","GitHub Actions CI/CD, SAST + secret scan, dependency & container scanning"),
 ]
 r = 3
@@ -180,7 +184,8 @@ for j, h in enumerate(["Actor", "Features"], 1):
 ws3.row_dimensions[2].height = 24
 bp = [
     ("SECTION","Core observe → decide → approve → dispatch → acknowledge → audit loop"),
-    ("NEA Weather Service","Ingest WBGT & weather (system-triggered)"),
+    ("NEA Weather Service","Ingest WBGT, weather & lightning (system-triggered)"),
+    ("System (Lightning)","Classify lightning risk; raise stop-work warning above WBGT"),
     ("System (ML)","Forecast 30 / 60-minute WBGT"),
     ("System (Policy)","Evaluate deterministic heat policy"),
     ("System (Agent)","Draft explainable intervention plan"),
@@ -188,6 +193,7 @@ bp = [
     ("Site Supervisor","Configure shift & tasks"),
     ("Site Supervisor","Monitor current & forecast risk"),
     ("Site Supervisor","Monitor completion & send approved reminder"),
+    ("Outdoor Worker","Receive lightning stop-work alert & seek shelter"),
     ("Outdoor Worker","Complete readiness check"),
     ("Outdoor Worker","Receive & acknowledge action"),
     ("Outdoor Worker","Log rest / hydration"),
@@ -228,8 +234,8 @@ tech = [
     ("Agentic AI","Tool-calling LLM via backend adapter, JSON schemas","Draft prioritised plans from guarded, authorised tools only"),
     ("Database","PostgreSQL","Users, sites, shifts, observations, recommendations, append-only audit"),
     ("API contract","OpenAPI 3, REST /api/v1","Contract between clients and shared backend"),
-    ("Cloud","Azure Static Web Apps, Azure Container Apps, Azure PostgreSQL, Blob Storage","Hosting for web, backend, internal ML service and database"),
-    ("Observability","Structured JSON logs, correlation IDs, Application Insights","Health checks, traceability, integration-failure metrics"),
+    ("Cloud","AWS Amplify Hosting (S3 + CloudFront), Amazon ECS on Fargate, Amazon RDS for PostgreSQL, Amazon S3, AWS Secrets Manager","Hosting for web, backend, internal ML service and database"),
+    ("Observability","Structured JSON logs, correlation IDs, Amazon CloudWatch + AWS X-Ray","Health checks, traceability, integration-failure metrics"),
     ("DevSecOps","GitHub Actions, SAST, secret / dependency / container scanning","CI/CD with automated tests and security remediation evidence"),
 ]
 r = 3
@@ -259,6 +265,7 @@ status = [
     ("Configure shift, tasks & assignments","Web, Backend, PostgreSQL","1","C","I","",""),
     ("Complete worker readiness check","Mobile, Backend, PostgreSQL","1","C","I","",""),
     ("Ingest WBGT & weather with freshness","Backend, NEA APIs, PostgreSQL","1","C","C","",""),
+    ("Lightning warning above WBGT","Backend, NEA lightning API, Web + Mobile","1","C","I","",""),
     ("View current & forecast risk","Web (Chart.js), Backend","1","C","","",""),
     ("Forecast 30 / 60-minute WBGT","Python ML (FastAPI, XGBoost)","2","C","","",""),
     ("Evaluate deterministic heat policy","Backend rules engine","2","C","","",""),

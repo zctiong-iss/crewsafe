@@ -39,7 +39,8 @@ rectangle "WBGT CrewSafe SG" {
   usecase "Monitor completion" as UC9
   usecase "Configure policy & users" as UC10
   usecase "View dashboards & audit" as UC11
-  usecase "Ingest WBGT & weather" as UC12
+  usecase "Ingest WBGT, weather & lightning" as UC12
+  usecase "Receive lightning stop-work alert" as UC13
 }
 
 W --> UC1
@@ -47,16 +48,19 @@ W --> UC2
 W --> UC3
 W --> UC4
 W --> UC5
+W --> UC13
 
 S --> UC6
 S --> UC7
 S --> UC8
 S --> UC9
+S --> UC13
 
 M --> UC10
 M --> UC11
 
 N --> UC12
 UC12 ..> UC7 : <<include>>
+UC12 ..> UC13 : <<include>>
 UC8 ..> UC7 : <<extend>>
 @enduml

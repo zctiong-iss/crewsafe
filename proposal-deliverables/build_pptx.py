@@ -101,9 +101,10 @@ def build_slide1():
     tb(s1, LX,2.74, LW,1.6,
        [[("WBGT CrewSafe SG turns Singapore's public NEA WBGT data into timely, MOM-aligned rest, "
           "hydration and task decisions for crews (landscaping, estate & campus maintenance, event setup) "
-          "that refer to myENV instead of an on-site meter. A guarded AI agent drafts a plan from "
-          "deterministic policy rules; the supervisor approves it; workers receive and acknowledge it on "
-          "mobile — every step recorded end-to-end.",12,TEXT,False)]],
+          "that refer to myENV instead of an on-site meter. NEA lightning-strike observations sit above the "
+          "WBGT reading as an overriding stop-work hazard. A guarded AI agent drafts a plan from deterministic "
+          "policy rules; the supervisor approves it; workers receive and acknowledge it on mobile — every step "
+          "recorded end-to-end.",12,TEXT,False)]],
        line_sp=1.08)
 
     tb(s1, LX,4.44, LW,0.3, [[("VALUE TO STAKEHOLDERS",12,ORANGE,True)]])
@@ -137,11 +138,12 @@ def build_slide2():
     tb(s2, 0.57,0.70, 10.0,0.3, [[("Proposed features, the technologies behind them, and Figma prototype screens",12.5,STEEL,False)]])
     pill(s2, 10.75,0.30, 2.05,0.42, NAVY2, "WBGT CrewSafe SG", STEEL, 11)
 
-    tb(s2, 0.55,1.26, 8.2,0.3, [[("PRIORITISED PRODUCT BACKLOG   (extract — full 18-story backlog in the accompanying workbook)",11,ORANGE,True)]])
+    tb(s2, 0.55,1.26, 8.2,0.3, [[("PRIORITISED PRODUCT BACKLOG   (extract — full 19-story backlog in the accompanying workbook)",11,ORANGE,True)]])
     rows = [
         ("Pri","Feature / user story","Key technologies","Pts","Spr"),
         ("Must","Authenticate & site-scoped access","React · React Native · Spring Security · JWT","5","1"),
         ("Must","Ingest WBGT / weather with freshness","Spring Boot · NEA data.gov.sg API · PostgreSQL","8","1"),
+        ("Must","Lightning stop-work warning above WBGT","Spring Boot · NEA lightning API · React / React Native","5","1"),
         ("Must","Forecast 30 / 60-min WBGT","Python · FastAPI · scikit-learn / XGBoost","8","2"),
         ("Must","Evaluate deterministic heat policy","Java 21 rules engine · PostgreSQL config","8","2"),
         ("Must","Explainable agent draft plan","Tool-calling LLM · JSON-schema guarded tools","8","2"),
@@ -178,7 +180,7 @@ def build_slide2():
     fy = ty + len(rows)*rh + 0.14
     rect(s2, tx, fy, tw, 0.74, LIGHT, shape=MSO_SHAPE.ROUNDED_RECTANGLE, radius=0.10)
     tb(s2, tx+0.18, fy+0.10, tw-0.34, 0.6,
-       [[("Cross-cutting:   ",10,BLUE,True),("Cloud — Azure Container Apps · Static Web Apps · Azure PostgreSQL · Blob Storage",10,TEXT,False)],
+       [[("Cross-cutting:   ",10,BLUE,True),("Cloud — AWS Amplify Hosting (S3 + CloudFront) · ECS on Fargate · RDS for PostgreSQL · S3 · Secrets Manager",10,TEXT,False)],
         [("DevSecOps — ",10,BLUE,True),("GitHub Actions CI/CD · SAST + secret scan · dependency & container scanning · security-remediation evidence",10,TEXT,False)]],
        line_sp=1.05, sp_after=3)
 
