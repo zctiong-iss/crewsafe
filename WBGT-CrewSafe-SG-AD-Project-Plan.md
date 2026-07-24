@@ -497,6 +497,8 @@ Supervisor approval is mandatory for:
 
 Automatic action is limited to data ingestion, forecast generation, draft creation, in-app notification of an approval request and reminders for approved actions.
 
+**Evidence base.** This design instantiates the deterministic pre-action authorization pattern in current safe-agent literature: intercepting and gating tool calls against declarative policy *before* execution is more reliable than sandboxing or probabilistic model screening, reducing adversarial tool-misuse success from 74.6% to 0% in reported testing (Uchibeke, arXiv:2603.20953). Keeping the mandatory-action logic in the deterministic policy engine rather than the LLM (Section 7) also addresses the *silent policy-violation* failure mode, in which tool-using agents breach the very policies they should enforce while appearing to complete the task—the dominant failure category (78%) in the τ²-bench evaluation of Reddy et al. (arXiv:2607.07405). The hazard set behind Section 8.5 and the threat table in Section 19.3 can be derived systematically using System-Theoretic Process Analysis (STPA) as proposed by Doshi et al. (arXiv:2601.08012).
+
 ### 8.5 Agent failure handling
 
 - Invalid tool arguments are rejected by schema validation.
@@ -575,6 +577,8 @@ Synthetic operational data such as task intensity and acclimatisation is not use
 
 Use one model per horizon unless a single multi-output model clearly outperforms without extra complexity.
 
+**Evidence base.** Gradient-boosted trees are a defensible choice for short-horizon, site-specific meteorological forecasting: the Multi-SiteBoost study reports XGBoost performance comparable to bias-corrected numerical weather prediction for site-level temperature and dew point, and pairs it with SHapley Additive exPlanations (SHAP) for per-prediction explainability and forecast reliability (arXiv:2404.03310). Accordingly, this project will use SHAP feature attribution to satisfy the explainability requirement in the model card (Section 9.8) and add a forecast-reliability check to the metrics in Section 9.6, rather than adopting a heavier deep-learning model for a four-week MVP.
+
 ### 9.5 Training and validation
 
 - Sort observations chronologically.
@@ -606,6 +610,11 @@ Operational:
 - Percentage using fallback.
 - Prediction age at recommendation generation.
 
+Reliability and explainability:
+
+- Forecast reliability/calibration check comparing predicted error against realised error across WBGT bands.
+- SHAP feature-attribution summary identifying the dominant drivers of each horizon's predictions.
+
 ### 9.7 Model acceptance and fallback
 
 Select the candidate model only if it beats persistence MAE on the held-out set and does not reduce higher-risk-band recall below the baseline. Otherwise use the better baseline and document the result honestly.
@@ -627,6 +636,8 @@ The final submission must include:
 - validation method;
 - model and baseline results;
 - error by WBGT band;
+- forecast reliability/calibration result;
+- SHAP-based explanation of key prediction drivers;
 - known limitations;
 - fallback behaviour;
 - retraining trigger;
@@ -1332,3 +1343,10 @@ If that loop is reliable, explainable and secure, the project satisfies the busi
 - [viAct Heat Stress Management in Singapore Construction](https://www.viact.ai/post/heat-stress-management-singapore-construction)
 - [Starkz AI Heat Safety Agent](https://starkzai.com/)
 - [Singapore 2026 Hackathon Problem Statements Research](Singapore-2026-Hackathon-Problem-Statements-Research.md)
+
+### 24.1 Academic references
+
+- Fahrudin, N. F. & Che, J. (2024). *Site-specific Deterministic Temperature and Humidity Forecasts with Explainable and Reliable Machine Learning* (Multi-SiteBoost). [arXiv:2404.03310](https://arxiv.org/abs/2404.03310).
+- Uchibeke, U. (2026). *Before the Tool Call: Deterministic Pre-Action Authorization for Autonomous AI Agents*. [arXiv:2603.20953](https://arxiv.org/abs/2603.20953).
+- Reddy, V., Challaram, S. R. & Basu, A. (2026). *Reason Less, Verify More: Deterministic Gates Recover a Silent Policy-Violation Failure Mode in Tool-Using LLM Agents*. [arXiv:2607.07405](https://arxiv.org/abs/2607.07405).
+- Doshi, A., Hong, Y., Xu, C., Kang, E., Kapravelos, A. & Kästner, C. (2026). *Towards Verifiably Safe Tool Use for LLM Agents*. ICSE NIER 2026. [arXiv:2601.08012](https://arxiv.org/abs/2601.08012).
