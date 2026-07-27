@@ -1,4 +1,52 @@
 .DS_Store
 ~$*
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+build/
+*.class
+
+# Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.expo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# ML artifacts and data
+*.ipynb_checkpoints/
+*.pkl
+*.joblib
+*.parquet
+
+# IDE
+.idea/
+.vscode/
+*.iml
