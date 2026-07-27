@@ -8,6 +8,7 @@ import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.domain.SiteMembership;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
+import com.crewsafe.identity.security.JwtProperties;
 import com.crewsafe.identity.security.JwtService;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
@@ -19,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -32,6 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "app.rate-limit.login.capacity=100000")
 class AuthControllerTest extends AbstractIntegrationTest {
 
     private static final String PASSWORD = "correct-password";
@@ -246,9 +249,30 @@ class AuthControllerTest extends AbstractIntegrationTest {
 
     @Test
     void tokenSignedByAnotherKeyIsRejected() throws Exception {
-        String forged = jwtService.generateAccessToken(worker).replace('a', 'b');
+        // Signed with a different key rather than character-substituted. An earlier
+        // version of this test mutated the token with replace('a','b'), which silently
+        // does nothing when a randomly generated token happens to contain no 'a' - and
+        // then asserts that a perfectly valid token is rejected. Forge deliberately.
+        JwtProperties attackerProperties = new JwtProperties();
+        attackerProperties.setSecret("a-totally-different-secret-key-32-bytes");
+        attackerProperties.setIssuer("crewsafe");
+        String forged = new JwtService(attackerProperties).generateAccessToken(worker);
 
         mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + forged))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void tokenWithATamperedPayloadIsRejected() throws Exception {
+        String valid = jwtService.generateAccessToken(worker);
+        String[] parts = valid.split("\\.");
+        // Keep the header and signature, swap in a different payload.
+        String tampered = parts[0] + "." + java.util.Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(("{\"sub\":\"" + UUID.randomUUID() + "\",\"typ\":\"access\"}")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                + "." + parts[2];
+
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + tampered))
                 .andExpect(status().isUnauthorized());
     }
 }

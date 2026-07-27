@@ -37,5 +37,10 @@ public abstract class AbstractIntegrationTest {
         // Test-only signing secret. Set here rather than in a test application.yml, which
         // would shadow the main one and take the datasource and Flyway config with it.
         registry.add("app.jwt.secret", () -> "test-only-signing-secret-at-least-32-bytes-long");
+
+        // Note: do NOT set app.rate-limit.login.capacity here. @DynamicPropertySource
+        // outranks a subclass's @TestPropertySource, so a value set here cannot be
+        // overridden by a test that needs a different one. Classes that log in
+        // repeatedly raise the limit themselves.
     }
 }

@@ -39,6 +39,7 @@ import java.util.Map;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final com.crewsafe.common.security.LoginRateLimitFilter loginRateLimitFilter;
     private final ObjectMapper objectMapper;
 
     @Value("${app.cors.allowed-origins}")
@@ -65,6 +66,14 @@ public class SecurityConfig {
     }
 
     @Bean
+    public FilterRegistrationBean<com.crewsafe.common.security.LoginRateLimitFilter> rateLimitFilterRegistration(
+            com.crewsafe.common.security.LoginRateLimitFilter filter) {
+        var registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             // CSRF protects against a browser automatically attaching ambient credentials
@@ -82,9 +91,24 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .logout(AbstractHttpConfigurer::disable)
 
+            // Defence-in-depth headers. The API returns JSON, never HTML, so the CSP is
+            // maximally restrictive: nothing should ever be loaded or framed from a
+            // response of ours. It also protects the Swagger UI page springdoc serves.
+            .headers(headers -> headers
+                .contentSecurityPolicy(csp -> csp.policyDirectives(
+                        "default-src 'self'; frame-ancestors 'none'; object-src 'none'"))
+                .referrerPolicy(referrer -> referrer.policy(
+                        org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+                                .ReferrerPolicy.NO_REFERRER))
+                .frameOptions(frame -> frame.deny())
+            )
+
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                 .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                // API documentation. Describes endpoint shapes, never data. Disable with
+                // springdoc.api-docs.enabled=false in production-demo if not wanted.
+                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated()
             )
 
@@ -97,6 +121,9 @@ public class SecurityConfig {
                                 "Forbidden", "Access denied"))
             )
 
+            // Rate limit runs first: a flood of login attempts should be rejected before
+            // any authentication work (and any BCrypt comparison) is done.
+            .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

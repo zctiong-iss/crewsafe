@@ -29,6 +29,13 @@ server:
   port: ${SERVER_PORT:8080}
 
 app:
+  rate-limit:
+    login:
+      # Per IP address. Generous enough for a supervisor mistyping a password, far too
+      # small for automated guessing.
+      capacity: 10
+      window: 1m
+
   cors:
     # Vite dev server and the Expo web preview. Staging and production override this.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8081}
