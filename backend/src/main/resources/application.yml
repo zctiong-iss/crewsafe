@@ -28,6 +28,13 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+app:
+  seed:
+    # Password for the synthetic demo accounts, hashed with BCrypt before storage.
+    # Local/staging profiles only. Blank means "do not seed" - there is deliberately
+    # no default credential.
+    password: ${SEED_USER_PASSWORD:}
+
 # Expose only what we need. Health is used by the container platform and the
 # smoke tests; everything else stays closed by default.
 management:
