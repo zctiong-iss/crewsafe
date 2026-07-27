@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: crewsafe-backend
+
+server:
+  port: 8080
+
+# Expose only what we need. Health is used by the container platform and the
+# smoke tests; everything else stays closed by default.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.crewsafe: DEBUG
