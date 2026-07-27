@@ -2,8 +2,31 @@ spring:
   application:
     name: crewsafe-backend
 
+  datasource:
+    # Local default points at the container in infra/local/compose.yaml (host port 5434).
+    # Staging and production inject these from AWS Secrets Manager.
+    url: ${DB_URL:jdbc:postgresql://localhost:5434/crewsafe}
+    username: ${DB_USERNAME:crewsafe}
+    password: ${DB_PASSWORD:crewsafe_local_dev}
+
+  jpa:
+    # Flyway owns the schema. Hibernate must never alter it — 'validate' makes a drift
+    # between entities and migrations fail fast at startup instead of silently at runtime.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 # Expose only what we need. Health is used by the container platform and the
 # smoke tests; everything else stays closed by default.

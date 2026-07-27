@@ -1,0 +1,32 @@
+# Local development dependencies for the CrewSafe backend.
+#
+#   podman compose -f infra/local/compose.yaml up -d
+#   podman compose -f infra/local/compose.yaml down
+#
+# Host port is 5434, not the usual 5432, because developer machines on this project
+# already run PostgreSQL on 5432 and another project's container on 5433. Inside the
+# container it is still 5432.
+#
+# These credentials are local-development only and are intentionally committed —
+# nothing here is used in staging or production, where values come from Secrets Manager.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: crewsafe-postgres
+    environment:
+      POSTGRES_DB: crewsafe
+      POSTGRES_USER: crewsafe
+      POSTGRES_PASSWORD: crewsafe_local_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - crewsafe-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crewsafe -d crewsafe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  crewsafe-pgdata:
