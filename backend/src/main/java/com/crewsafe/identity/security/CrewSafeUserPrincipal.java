@@ -25,6 +25,7 @@ public class CrewSafeUserPrincipal implements UserDetails {
 
     private final UUID id;
     private final String username;
+    private final String displayName;
     private final String passwordHash;
     private final Role role;
     private final boolean active;
@@ -32,6 +33,7 @@ public class CrewSafeUserPrincipal implements UserDetails {
     public CrewSafeUserPrincipal(AppUser user) {
         this.id = user.getId();
         this.username = user.getUsername();
+        this.displayName = user.getDisplayName();
         this.passwordHash = user.getPasswordHash();
         this.role = user.getRole();
         this.active = user.isActive();
@@ -39,6 +41,10 @@ public class CrewSafeUserPrincipal implements UserDetails {
 
     public UUID getId() {
         return id;
+    }
+
+    public String getDisplayName() {
+        return displayName;
     }
 
     public Role getRole() {
