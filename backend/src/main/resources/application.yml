@@ -29,6 +29,14 @@ server:
   port: ${SERVER_PORT:8080}
 
 app:
+  jwt:
+    # HS256 signing secret, at least 256 bits. No default - the application refuses to
+    # start without JWT_SECRET rather than signing tokens with a guessable key.
+    secret: ${JWT_SECRET:}
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+    issuer: crewsafe
+
   seed:
     # Password for the synthetic demo accounts, hashed with BCrypt before storage.
     # Local/staging profiles only. Blank means "do not seed" - there is deliberately

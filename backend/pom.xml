@@ -71,6 +71,30 @@
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
+        <!--
+            JJWT 0.13.0 for JWT generation and validation.
+            Chosen because it enforces algorithm allowlisting by default and rejects
+            alg:none out of the box. Do not substitute a library that requires the
+            algorithm to be pinned manually.
+        -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.13.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.13.0</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.13.0</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

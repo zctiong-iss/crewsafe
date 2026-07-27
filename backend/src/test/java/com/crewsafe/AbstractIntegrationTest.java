@@ -29,9 +29,13 @@ public abstract class AbstractIntegrationTest {
     }
 
     @DynamicPropertySource
-    static void datasourceProperties(DynamicPropertyRegistry registry) {
+    static void testProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+
+        // Test-only signing secret. Set here rather than in a test application.yml, which
+        // would shadow the main one and take the datasource and Flyway config with it.
+        registry.add("app.jwt.secret", () -> "test-only-signing-secret-at-least-32-bytes-long");
     }
 }
