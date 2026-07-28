@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
@@ -77,14 +78,17 @@ public class AuthController {
      */
     @PostMapping("/refresh")
     public ResponseEntity<TokenResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        // Thrown rather than returned so failures travel the same path as a failed login
+        // and produce a byte-identical 401 body. Returning ResponseEntity.build() here
+        // sent an empty body, which every other error response in the API does not.
         Optional<UUID> userId = jwtService.extractUserId(request.refreshToken(), TokenType.REFRESH);
         if (userId.isEmpty()) {
-            return unauthorized();
+            throw new BadCredentialsException("Invalid refresh token");
         }
 
         Optional<AppUser> user = users.findById(userId.get());
         if (user.isEmpty() || !user.get().isActive()) {
-            return unauthorized();
+            throw new BadCredentialsException("Invalid refresh token");
         }
 
         audit.record(user.get().getId(), AuditEventType.TOKEN_REFRESHED, null, user.get().getId(), null);
@@ -97,10 +101,6 @@ public class AuthController {
                 jwtService.generateAccessToken(user),
                 jwtService.generateRefreshToken(user),
                 jwtService.accessTokenTtl().toSeconds());
-    }
-
-    private ResponseEntity<TokenResponse> unauthorized() {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
     /**

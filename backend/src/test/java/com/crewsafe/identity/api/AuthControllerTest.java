@@ -6,6 +6,7 @@ import com.crewsafe.common.audit.AuditEventRepository;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.domain.SiteMembership;
+import com.crewsafe.identity.domain.UserStatus;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.JwtProperties;
@@ -24,6 +25,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -233,11 +236,31 @@ class AuthControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void everyAuthFailureReturnsTheSameJsonBody() throws Exception {
+        // A client parses one error shape. An earlier version returned an empty body from
+        // /auth/refresh while every other failure returned JSON, which would have made
+        // response.json() throw exactly where the client needs to react.
+        String loginFailure = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(username, "wrong-password")))
+                .andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+
+        String refreshFailure = mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"not-a-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(refreshFailure).isNotBlank().isEqualTo(loginFailure);
+    }
+
+    @Test
     void deactivatedUserCannotUseAnExistingToken() throws Exception {
         String accessToken = loginAndReadToken("accessToken");
 
         AppUser stored = users.findById(worker.getId()).orElseThrow();
-        stored.setStatus(com.crewsafe.identity.domain.UserStatus.INACTIVE);
+        stored.setStatus(UserStatus.INACTIVE);
         users.save(stored);
 
         // The token is still cryptographically valid. Account status is re-read from the
@@ -267,9 +290,9 @@ class AuthControllerTest extends AbstractIntegrationTest {
         String valid = jwtService.generateAccessToken(worker);
         String[] parts = valid.split("\\.");
         // Keep the header and signature, swap in a different payload.
-        String tampered = parts[0] + "." + java.util.Base64.getUrlEncoder().withoutPadding()
+        String tampered = parts[0] + "." + Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(("{\"sub\":\"" + UUID.randomUUID() + "\",\"typ\":\"access\"}")
-                        .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                        .getBytes(StandardCharsets.UTF_8))
                 + "." + parts[2];
 
         mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + tampered))
