@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 resolve_script="$repo_root/.github/scripts/resolve-terraform-account.sh"
 metadata_script="$repo_root/.github/scripts/validate-plan-metadata.sh"
 backend_script="$repo_root/.github/scripts/write-backend-config.sh"
+plan_policy="$repo_root/infra/terraform/bootstrap/state/iam/plan-role-policy.json"
+apply_policy="$repo_root/infra/terraform/bootstrap/state/iam/apply-role-policy.json"
 fixture_dir="$(mktemp -d)"
 trap 'rm -rf "$fixture_dir"' EXIT
 
@@ -29,6 +31,48 @@ expect_failure() {
     fail_test "$label unexpectedly succeeded"
   fi
 }
+
+required_bucket_reads='[
+  "s3:GetAccelerateConfiguration",
+  "s3:GetBucketAcl",
+  "s3:GetBucketCORS",
+  "s3:GetBucketLocation",
+  "s3:GetBucketLogging",
+  "s3:GetBucketObjectLockConfiguration",
+  "s3:GetBucketOwnershipControls",
+  "s3:GetBucketPolicy",
+  "s3:GetBucketPublicAccessBlock",
+  "s3:GetBucketRequestPayment",
+  "s3:GetBucketTagging",
+  "s3:GetBucketVersioning",
+  "s3:GetBucketWebsite",
+  "s3:GetEncryptionConfiguration",
+  "s3:GetLifecycleConfiguration",
+  "s3:GetReplicationConfiguration",
+  "s3:ListBucket"
+]'
+
+for policy in "$plan_policy" "$apply_policy"; do
+  jq -e --argjson required "$required_bucket_reads" '
+    [.Statement[] | select(.Effect == "Allow") | .Action[]] as $allowed
+    | all($required[]; . as $action | $allowed | index($action) != null)
+  ' "$policy" >/dev/null || fail_test "$policy is missing an AWS provider bucket read"
+
+  jq -e '
+    [.Statement[] | select(.Effect == "Allow") | .Action[]]
+    | index("s3:DeleteBucket") == null
+  ' "$policy" >/dev/null || fail_test "$policy grants bucket deletion"
+done
+
+jq -e '
+  [.Statement[] | select(.Effect == "Allow") | .Action[]]
+  | index("s3:CreateBucket") == null
+' "$plan_policy" >/dev/null || fail_test "plan role can create a bucket"
+
+jq -e '
+  [.Statement[] | select(.Effect == "Allow") | .Action[]]
+  | index("s3:CreateBucket") != null
+' "$apply_policy" >/dev/null || fail_test "apply role cannot create a bucket"
 
 resolved="$(GITHUB_OUTPUT="" CREWSAFE_AWS_ACCOUNTS_JSON="$valid_registry" "$resolve_script" member-one)"
 jq -e '

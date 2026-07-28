@@ -32,6 +32,12 @@ crewsafe/cognito/staging.tfstate
 crewsafe/<component>/<environment>.tfstate
 ```
 
+Canonical copy-ready policies for the GitHub OIDC roles are in
+[`iam/plan-role-policy.json`](iam/plan-role-policy.json) and
+[`iam/apply-role-policy.json`](iam/apply-role-policy.json). They include all
+bucket subresource reads performed when AWS provider `6.2.0` refreshes
+`aws_s3_bucket`; omitting one can make an apply fail after creating the bucket.
+
 See [the operator runbook](../../../../docs/runbooks/SCRUM-155-terraform-state-backend.md)
 for account onboarding, IAM policies, plan/apply steps, verification, switching,
 and recovery.
