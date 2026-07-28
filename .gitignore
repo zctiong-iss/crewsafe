@@ -33,12 +33,28 @@ dist/
 npm-debug.log*
 yarn-error.log*
 
-# Terraform
+# Spec Kit configuration and locally installed agent skills
+.specify/
+.agents/skills/speckit-*/
+.claude/skills/speckit-*/
+/specs/
+
+# Terraform local and generated files
 .terraform/
+**/.terraform/*
+.terraform-data/
+.backend/
 *.tfstate
 *.tfstate.*
+*.tfplan
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
+crash.log
+crash.*.log
+
+# Keep dependency selections reproducible
+!.terraform.lock.hcl
 
 # ML artifacts and data
 *.ipynb_checkpoints/
