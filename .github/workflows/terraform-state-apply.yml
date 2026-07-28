@@ -122,14 +122,12 @@ jobs:
         env:
           ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
           PLAN_RUN_ID: ${{ inputs.plan_run_id }}
-          APPLY_ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
           .github/scripts/validate-plan-metadata.sh \
             plan-bundle/metadata.json \
             "$ACCOUNT_ALIAS" \
             "$PLAN_RUN_ID" \
-            "$APPLY_ACTOR" \
             plan-bundle/plan.tfplan
           planned_version="$(jq -r '.terraform_version' plan-bundle/metadata.json)"
           actual_version="$(terraform version -json | jq -r '.terraform_version')"

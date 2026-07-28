@@ -232,7 +232,7 @@ APPLY <target_account_alias>
 The workflow:
 
 1. Runs only from `main`.
-2. Requires the apply actor to differ from the plan actor.
+2. Allows the plan actor or another authorized teammate to apply.
 3. Resolves the account registry again.
 4. Downloads the plan artifact identified by `plan_run_id`.
 5. Rejects an artifact that:
@@ -314,7 +314,7 @@ limited to `contents: read`, `id-token: write`, and `actions: read` where requir
 
 ### D. Apply the reviewed plan
 
-A different teammate from the plan creator performs these steps:
+The plan creator or another authorized teammate performs these steps:
 
 1. Open **Actions → Terraform Apply**.
 2. Select **Run workflow**.
@@ -327,7 +327,8 @@ A different teammate from the plan creator performs these steps:
 9. Do not rerun a failure without reviewing its state and recovery evidence.
 
 No maintained apply-approver list is required. Repository workflow access, the reviewed
-plan artifact, exact confirmation, and different-actor check form the manual gate.
+plan artifact, exact confirmation, plan expiry, checksums, account verification, and
+one-time application marker form the manual gate.
 
 ### E. Verify successful completion
 
@@ -426,6 +427,8 @@ Jira is not changed as part of saving this plan.
 - A single Terraform root never spans multiple teammates' accounts.
 - Each account owns its backend and provisioned infrastructure.
 - Repository variables enable account switching without source changes.
-- The plan and apply actors must be different, but there is no maintained approver list.
+- The same actor may plan and apply in test accounts to support solo operation.
+- Production or shared accounts should add independent approval through a protected
+  GitHub Environment.
 - No Terraform command or AWS profile is required on developer machines.
 - Spec Kit tooling and generated artifacts remain local.
