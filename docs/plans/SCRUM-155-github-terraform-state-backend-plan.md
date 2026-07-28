@@ -102,7 +102,7 @@ Both roles trust:
 ```text
 Provider: token.actions.githubusercontent.com
 Audience: sts.amazonaws.com
-Subject: repo:zctiong-iss/crewsafe:ref:refs/heads/main
+Subject: repo:zctiong-iss@<OWNER_ID>/crewsafe@<REPO_ID>:ref:refs/heads/main
 ```
 
 GitHub Actions uses OIDC-issued short-lived credentials. No IAM user or long-lived AWS
@@ -135,7 +135,10 @@ It:
 - sets `lifecycle.prevent_destroy=true`;
 - applies `Project=CrewSafe`, `ManagedBy=Terraform`, and
   `DeploymentAccount=<account_alias>` tags;
-- uses a partial `backend "s3" {}` configuration;
+- uses Terraform's default local backend only for first-bootstrap plan/apply
+  operations on ephemeral GitHub-hosted runners;
+- generates a partial `backend "s3" {}` declaration and values only for
+  managed-state operations and bootstrap migration;
 - enables native S3 locking through `use_lockfile=true`;
 - does not create deprecated DynamoDB locking.
 
@@ -169,7 +172,7 @@ The pull-request workflow receives no AWS credentials and does not request
 `id-token: write`. It runs:
 
 - `terraform fmt -check -recursive`;
-- `terraform init -backend=false`;
+- `terraform init` with the default local backend;
 - `terraform validate`;
 - mocked-provider `terraform test`;
 - workflow and YAML linting;
@@ -197,7 +200,7 @@ The workflow:
 6. Derives the expected account-specific bucket.
 7. Checks whether that bucket exists.
 8. For a new account:
-   - initializes with `-backend=false`;
+   - initializes the default local backend on the ephemeral runner;
    - creates a saved bootstrap plan from empty runner state.
 9. For an existing managed account:
    - generates ephemeral backend configuration;
@@ -272,7 +275,7 @@ limited to `contents: read`, `id-token: write`, and `actions: read` where requir
 5. Create `CrewSafeGitHubTerraformPlanRole`.
 6. Create `CrewSafeGitHubTerraformApplyRole`.
 7. Restrict both trust policies to:
-   - `repo:zctiong-iss/crewsafe:ref:refs/heads/main`
+   - `repo:zctiong-iss@<OWNER_ID>/crewsafe@<REPO_ID>:ref:refs/heads/main`
 8. Give the plan role read-only inspection permissions.
 9. Give the apply role only the S3 permissions required for:
    - the account-specific state bucket;

@@ -12,7 +12,10 @@ bucket:
 crewsafe-terraform-state-<account-id>-ap-southeast-1
 ```
 
-The partial S3 backend is configured ephemerally by the workflows with:
+The first bootstrap plan and apply use Terraform's default local backend only
+inside ephemeral GitHub-hosted runners. After the apply creates the bucket, the
+workflow preserves a recovery copy, generates the partial S3 backend
+declaration and values, and migrates state to:
 
 ```text
 key          = "crewsafe/bootstrap/terraform.tfstate"

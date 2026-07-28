@@ -13,6 +13,7 @@ __pycache__/
 **/.terraform/*
 .terraform-data/
 .backend/
+**/backend.generated.tf
 *.tfstate
 *.tfstate.*
 *.tfplan

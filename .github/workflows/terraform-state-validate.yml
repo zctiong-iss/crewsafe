@@ -40,14 +40,18 @@ jobs:
       - name: Check formatting
         run: terraform fmt -check -recursive
 
-      - name: Initialize without a backend
-        run: terraform init -backend=false -input=false -lockfile=readonly
+      - name: Initialize with the default local backend
+        run: terraform init -input=false -lockfile=readonly
 
       - name: Validate configuration
         run: terraform validate
 
       - name: Run mocked-provider tests
         run: terraform test -no-color
+
+      - name: Test bootstrap plan across fresh runners
+        working-directory: ${{ github.workspace }}
+        run: bash .github/scripts/tests/test-bootstrap-plan-portability.sh
 
       - name: Run CI guard tests
         working-directory: ${{ github.workspace }}
