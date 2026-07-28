@@ -24,8 +24,9 @@ gh api repos/zctiong-iss/crewsafe \
   --jq '"owner_id=\(.owner.id)\nrepo_id=\(.id)"'
 ```
 
-Replace `<ACCOUNT_ID>`, `<OWNER_ID>`, and `<REPO_ID>` in the policies below
-before using them.
+Replace `<ACCOUNT_ID>`, `<OWNER_ID>`, and `<REPO_ID>` before using the trust
+policy. Replace `<ACCOUNT_ID>` in the repository IAM policy templates before
+attaching them to their roles.
 
 Both roles use this trust policy:
 
@@ -50,94 +51,23 @@ Both roles use this trust policy:
 }
 ```
 
-The plan role uses this policy. Its only writes are the short-lived native S3
-lockfile needed to read remote state consistently; it cannot change
-infrastructure or state:
+Use the canonical
+[plan role policy](../../infra/terraform/bootstrap/state/iam/plan-role-policy.json)
+for `CrewSafeGitHubTerraformPlanRole`. Its only writes are short-lived native
+S3 lockfiles needed to read remote state consistently; it cannot change
+infrastructure or state.
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "InspectCrewSafeStateBucket",
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetBucketLocation",
-        "s3:GetBucketOwnershipControls",
-        "s3:GetBucketPolicy",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:GetBucketTagging",
-        "s3:GetBucketVersioning",
-        "s3:GetEncryptionConfiguration",
-        "s3:ListBucket"
-      ],
-      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
-    },
-    {
-      "Sid": "ReadCrewSafeState",
-      "Effect": "Allow",
-      "Action": [
-        "s3:GetObject",
-        "s3:GetObjectVersion"
-      ],
-      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/*"
-    },
-    {
-      "Sid": "ManageOnlyNativePlanLocks",
-      "Effect": "Allow",
-      "Action": [
-        "s3:DeleteObject",
-        "s3:GetObject",
-        "s3:PutObject"
-      ],
-      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/*.tflock"
-    }
-  ]
-}
-```
+Use the canonical
+[apply role policy](../../infra/terraform/bootstrap/state/iam/apply-role-policy.json)
+for `CrewSafeGitHubTerraformApplyRole`.
 
-The apply role uses this initial policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ProvisionCrewSafeStateBucket",
-      "Effect": "Allow",
-      "Action": [
-        "s3:CreateBucket",
-        "s3:GetBucketLocation",
-        "s3:GetBucketOwnershipControls",
-        "s3:GetBucketPolicy",
-        "s3:GetBucketPublicAccessBlock",
-        "s3:GetBucketTagging",
-        "s3:GetBucketVersioning",
-        "s3:GetEncryptionConfiguration",
-        "s3:ListBucket",
-        "s3:PutBucketOwnershipControls",
-        "s3:PutBucketPolicy",
-        "s3:PutBucketPublicAccessBlock",
-        "s3:PutBucketTagging",
-        "s3:PutBucketVersioning",
-        "s3:PutEncryptionConfiguration"
-      ],
-      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
-    },
-    {
-      "Sid": "ManageCrewSafeStateObjects",
-      "Effect": "Allow",
-      "Action": [
-        "s3:DeleteObject",
-        "s3:GetObject",
-        "s3:GetObjectVersion",
-        "s3:PutObject"
-      ],
-      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/*"
-    }
-  ]
-}
-```
+Both policies include the complete bucket-read set used when AWS provider
+`6.2.0` refreshes `aws_s3_bucket`, including ACL, CORS, logging, website,
+lifecycle, replication, acceleration, request-payment, and object-lock
+configuration reads. These reads are required even when CrewSafe does not
+configure those optional features. The apply policy adds only the bucket and
+state-object writes needed by this root. Neither policy grants
+`s3:DeleteBucket`.
 
 Do not create an IAM user or long-lived AWS access key for GitHub. Expand the
 apply role for later Terraform roots only through reviewed policy changes.
@@ -239,3 +169,25 @@ If bootstrap, migration, or verification fails:
    without a reviewed recovery plan.
 6. Record the failed workflow and findings in SCRUM-155.
 7. Resume only after a teammate confirms the recovery procedure.
+
+### Bucket created but Terraform state was not saved
+
+If `aws_s3_bucket.terraform_state: Creating...` succeeded and a later provider
+read failed, the bucket can exist even though the failed runner never saved or
+migrated Terraform state. The original saved plan is stale and must not be
+reused.
+
+1. In the AWS Console, open the derived state bucket in the intended account.
+2. Check **Objects** and enable **Show versions**. Confirm there is no canonical
+   state, recovery state, lockfile, delete marker, or other object under
+   `crewsafe/`.
+3. If the bucket and every version are empty, use an authorized AWS
+   administrator to delete only that exact orphaned bucket. The GitHub apply
+   role intentionally cannot delete buckets.
+4. Update both GitHub IAM roles from the canonical policy templates above.
+5. Run **Terraform State Plan** again from `main` and use its new run ID for a
+   new apply. Never reuse the pre-failure plan.
+
+If any canonical state, recovery state, version, delete marker, lockfile, or
+unrecognized object exists, do not delete the bucket. Stop and prepare a
+reviewed Terraform import or state-recovery procedure first.

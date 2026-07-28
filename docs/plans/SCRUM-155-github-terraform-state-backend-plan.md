@@ -91,11 +91,20 @@ There is no `TERRAFORM_APPLY_APPROVERS` variable or maintained apply-approver li
 Each teammate configures one GitHub OIDC provider and two roles in their AWS account:
 
 - `CrewSafeGitHubTerraformPlanRole`
-  - permits STS identity verification and read-only inspection;
+  - permits STS identity verification, complete AWS provider bucket inspection,
+    remote-state reads, and native lockfile operations;
   - cannot create, update, or delete infrastructure.
 - `CrewSafeGitHubTerraformApplyRole`
   - initially has only the S3 permissions required by SCRUM-155;
   - is expanded for later Terraform roots only through reviewed changes.
+
+The canonical role policies are stored in
+`infra/terraform/bootstrap/state/iam/plan-role-policy.json` and
+`infra/terraform/bootstrap/state/iam/apply-role-policy.json`. Both contain the
+complete bucket-read set used by AWS provider `6.2.0` when refreshing
+`aws_s3_bucket`, including optional bucket subresources that CrewSafe does not
+configure. The apply role additionally permits the required bucket
+configuration and state-object writes. Neither role can delete the bucket.
 
 Both roles trust:
 
@@ -276,15 +285,21 @@ limited to `contents: read`, `id-token: write`, and `actions: read` where requir
 6. Create `CrewSafeGitHubTerraformApplyRole`.
 7. Restrict both trust policies to:
    - `repo:zctiong-iss@<OWNER_ID>/crewsafe@<REPO_ID>:ref:refs/heads/main`
-8. Give the plan role read-only inspection permissions.
-9. Give the apply role only the S3 permissions required for:
+8. Replace `<ACCOUNT_ID>` in the canonical plan and apply policy templates and
+   attach each policy to its matching role.
+9. Confirm both roles can read all bucket subresources required by AWS provider
+   `6.2.0`, including ACL, CORS, logging, website, lifecycle, replication,
+   acceleration, request-payment, object-lock, ownership, policy,
+   public-access-block, tags, versioning, encryption, and location.
+10. Confirm the apply role additionally has only the S3 writes required for:
    - the account-specific state bucket;
    - bucket security configuration;
    - state objects;
    - `.tflock` objects;
    - temporary migration recovery objects.
-10. Do not create an IAM user or AWS access key for GitHub.
-11. Record the account ID and both role ARNs.
+11. Confirm neither role grants `s3:DeleteBucket`.
+12. Do not create an IAM user or AWS access key for GitHub.
+13. Record the account ID and both role ARNs.
 
 ### B. Register the account in GitHub
 
@@ -367,6 +382,20 @@ If bootstrap or migration fails:
    reviewed recovery plan.
 6. Record the failed workflow and findings in SCRUM-155.
 7. Resume only after a teammate confirms the recovery procedure.
+
+If bucket creation succeeded but a subsequent provider read failed before state
+was saved or migrated:
+
+1. Treat the original saved plan as stale and do not reuse it.
+2. Inspect the exact derived bucket in the intended AWS account with object
+   versions visible.
+3. If there is no canonical state, recovery state, lockfile, delete marker, or
+   other object, have an authorized AWS administrator delete only that empty
+   orphaned bucket.
+4. Update both GitHub roles from the canonical IAM policy templates.
+5. Generate a completely new plan from `main`, then apply its new run ID.
+6. If any object or version exists, do not delete the bucket; use a reviewed
+   Terraform import or state-recovery procedure.
 
 ### H. Complete Jira tracking
 
