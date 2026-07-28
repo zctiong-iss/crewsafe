@@ -1,7 +1,37 @@
 .DS_Store
 ~$*
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+build/
+*.class
+
+# Python
 __pycache__/
 *.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.expo/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
 
 # Spec Kit configuration and locally installed agent skills
 .specify/
@@ -10,6 +40,7 @@ __pycache__/
 /specs/
 
 # Terraform local and generated files
+.terraform/
 **/.terraform/*
 .terraform-data/
 .backend/
@@ -18,8 +49,20 @@ __pycache__/
 *.tfplan
 *.tfvars
 *.tfvars.json
+!*.tfvars.example
 crash.log
 crash.*.log
 
 # Keep dependency selections reproducible
 !.terraform.lock.hcl
+
+# ML artifacts and data
+*.ipynb_checkpoints/
+*.pkl
+*.joblib
+*.parquet
+
+# IDE
+.idea/
+.vscode/
+*.iml
