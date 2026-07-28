@@ -121,25 +121,20 @@ jq -n \
   }' >"$fixture_dir/metadata.json"
 
 "$metadata_script" \
-  "$fixture_dir/metadata.json" member-one 1234 applier \
-  "$fixture_dir/plan.tfplan" "$fixture_dir/.terraform.lock.hcl"
-
-expect_failure "same plan and apply actor" \
-  "$metadata_script" \
-  "$fixture_dir/metadata.json" member-one 1234 PLANNER \
+  "$fixture_dir/metadata.json" member-one 1234 \
   "$fixture_dir/plan.tfplan" "$fixture_dir/.terraform.lock.hcl"
 
 jq '.created_at = "2020-01-01T00:00:00Z"' \
   "$fixture_dir/metadata.json" >"$fixture_dir/expired.json"
 expect_failure "expired plan" \
   "$metadata_script" \
-  "$fixture_dir/expired.json" member-one 1234 applier \
+  "$fixture_dir/expired.json" member-one 1234 \
   "$fixture_dir/plan.tfplan" "$fixture_dir/.terraform.lock.hcl"
 
 printf 'tampered\n' >>"$fixture_dir/plan.tfplan"
 expect_failure "tampered plan" \
   "$metadata_script" \
-  "$fixture_dir/metadata.json" member-one 1234 applier \
+  "$fixture_dir/metadata.json" member-one 1234 \
   "$fixture_dir/plan.tfplan" "$fixture_dir/.terraform.lock.hcl"
 
 echo "CI guard tests passed"

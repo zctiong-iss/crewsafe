@@ -187,7 +187,7 @@ non-secret metadata only; it never contains credentials or Terraform state.
 
 ## 4. Apply the reviewed plan
 
-A teammate other than the plan actor performs the apply:
+The plan actor or another authorized teammate performs the apply:
 
 1. Open **Actions → Terraform State Apply → Run workflow**.
 2. Select `main`.
@@ -196,9 +196,10 @@ A teammate other than the plan actor performs the apply:
 5. Verify the account, commit, bucket, and checksum in the run.
 6. Run the workflow.
 
-The workflow rejects expired, altered, cross-account, non-main, reused, or
-same-actor plans. It applies the saved binary plan without replanning. No
-maintained approver list is required.
+The workflow rejects expired, altered, cross-account, non-main, or reused plans.
+It applies the saved binary plan without replanning. The same actor may plan and
+apply for fast solo operation in test accounts; no maintained approver list is
+required.
 
 ## 5. Verify completion
 

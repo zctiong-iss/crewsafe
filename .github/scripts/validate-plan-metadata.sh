@@ -4,9 +4,8 @@ set -euo pipefail
 metadata_file="${1:?metadata file is required}"
 expected_alias="${2:?expected alias is required}"
 expected_run_id="${3:?expected run ID is required}"
-apply_actor="${4:?apply actor is required}"
-plan_file="${5:-plan.tfplan}"
-lock_file="${6:-infra/terraform/bootstrap/state/.terraform.lock.hcl}"
+plan_file="${4:-plan.tfplan}"
+lock_file="${5:-infra/terraform/bootstrap/state/.terraform.lock.hcl}"
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -35,14 +34,6 @@ if ! jq -e \
   and (.created_at | fromdateiso8601 | type == "number")
 ' "$metadata_file" >/dev/null; then
   echo "::error::Plan metadata is malformed or targets a different operation." >&2
-  exit 1
-fi
-
-plan_actor="$(jq -r '.plan_actor' "$metadata_file")"
-normalized_plan_actor="$(printf '%s' "$plan_actor" | tr '[:upper:]' '[:lower:]')"
-normalized_apply_actor="$(printf '%s' "$apply_actor" | tr '[:upper:]' '[:lower:]')"
-if [[ "$normalized_plan_actor" == "$normalized_apply_actor" ]]; then
-  echo "::error::The apply actor must differ from the plan actor." >&2
   exit 1
 fi
 
