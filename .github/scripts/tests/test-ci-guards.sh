@@ -45,14 +45,34 @@ mismatched_registry="$(jq -c \
 expect_failure "cross-account apply role" \
   env GITHUB_OUTPUT="" CREWSAFE_AWS_ACCOUNTS_JSON="$mismatched_registry" "$resolve_script" member-one
 
-"$backend_script" \
+workflow_fixture="$fixture_dir/workflow-backend"
+mkdir -p "$workflow_fixture"
+(
+  cd "$workflow_fixture"
+  "$backend_script" \
+    "crewsafe-terraform-state-123456789012-ap-southeast-1" \
+    "ap-southeast-1"
+)
+grep -q 'use_lockfile = true' "$workflow_fixture/.backend/state.s3.tfbackend" ||
+  fail_test "native lockfile configuration"
+grep -q 'backend "s3" {}' "$workflow_fixture/backend.generated.tf" ||
+  fail_test "generated S3 backend declaration"
+if command -v terraform >/dev/null 2>&1; then
+  terraform fmt -check "$workflow_fixture/backend.generated.tf" >/dev/null ||
+    fail_test "generated S3 backend declaration formatting"
+fi
+expect_failure "unexpected backend bucket" \
+  "$backend_script" \
+  "other-bucket" \
+  "ap-southeast-1" \
+  "$fixture_dir/rejected.tfbackend" \
+  "$fixture_dir/rejected.generated.tf"
+expect_failure "overlapping backend files" \
+  "$backend_script" \
   "crewsafe-terraform-state-123456789012-ap-southeast-1" \
   "ap-southeast-1" \
-  "$fixture_dir/backend.tfbackend"
-grep -q 'use_lockfile = true' "$fixture_dir/backend.tfbackend" ||
-  fail_test "native lockfile configuration"
-expect_failure "unexpected backend bucket" \
-  "$backend_script" "other-bucket" "ap-southeast-1" "$fixture_dir/rejected.tfbackend"
+  "$fixture_dir/overlap.tf" \
+  "$fixture_dir/overlap.tf"
 
 printf 'saved plan fixture\n' >"$fixture_dir/plan.tfplan"
 printf 'dependency lock fixture\n' >"$fixture_dir/.terraform.lock.hcl"

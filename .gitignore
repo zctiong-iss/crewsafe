@@ -44,6 +44,7 @@ yarn-error.log*
 **/.terraform/*
 .terraform-data/
 .backend/
+**/backend.generated.tf
 *.tfstate
 *.tfstate.*
 *.tfplan

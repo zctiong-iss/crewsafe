@@ -16,8 +16,16 @@ In **IAM → Identity providers**, create or reuse this OpenID Connect provider:
 - Audience: `sts.amazonaws.com`
 
 Create `CrewSafeGitHubTerraformPlanRole` and
-`CrewSafeGitHubTerraformApplyRole`. Replace `<ACCOUNT_ID>` in the policies
-below before using them.
+`CrewSafeGitHubTerraformApplyRole`. Obtain the immutable GitHub owner and
+repository IDs from an authenticated workstation:
+
+```bash
+gh api repos/zctiong-iss/crewsafe \
+  --jq '"owner_id=\(.owner.id)\nrepo_id=\(.id)"'
+```
+
+Replace `<ACCOUNT_ID>`, `<OWNER_ID>`, and `<REPO_ID>` in the policies below
+before using them.
 
 Both roles use this trust policy:
 
@@ -34,7 +42,7 @@ Both roles use this trust policy:
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:zctiong-iss/crewsafe:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": "repo:zctiong-iss@<OWNER_ID>/crewsafe@<REPO_ID>:ref:refs/heads/main"
         }
       }
     }
@@ -158,6 +166,11 @@ tokens, or credit details. No `TERRAFORM_APPLY_APPROVERS` variable is used.
 
 The SCRUM-155 implementation must first be merged into `main`, because the OIDC
 trust policy rejects other refs.
+
+For a new account, the plan and apply use local state only within their
+ephemeral GitHub-hosted runners. The apply preserves a recovery object before
+generating the S3 backend configuration and migrating state to the canonical
+key. Developers still never run Terraform locally or download state.
 
 1. Open **Actions → Terraform State Plan → Run workflow**.
 2. Select `main`, enter the registered alias, and select `state-backend`.

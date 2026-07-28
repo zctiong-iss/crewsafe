@@ -228,7 +228,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$BACKEND_MODE" == "bootstrap" ]]; then
-            terraform init -backend=false -input=false -lockfile=readonly
+            terraform init -input=false -lockfile=readonly
           else
             "$GITHUB_WORKSPACE/.github/scripts/write-backend-config.sh" \
               "$STATE_BUCKET" "$AWS_REGION"
