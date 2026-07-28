@@ -30,20 +30,20 @@ expect_failure() {
   fi
 }
 
-resolved="$(CREWSAFE_AWS_ACCOUNTS_JSON="$valid_registry" "$resolve_script" member-one)"
+resolved="$(GITHUB_OUTPUT="" CREWSAFE_AWS_ACCOUNTS_JSON="$valid_registry" "$resolve_script" member-one)"
 jq -e '
   .account_id == "123456789012"
   and .bucket == "crewsafe-terraform-state-123456789012-ap-southeast-1"
 ' <<<"$resolved" >/dev/null || fail_test "valid account resolution"
 
 expect_failure "unknown alias" \
-  env CREWSAFE_AWS_ACCOUNTS_JSON="$valid_registry" "$resolve_script" missing
+  env GITHUB_OUTPUT="" CREWSAFE_AWS_ACCOUNTS_JSON="$valid_registry" "$resolve_script" missing
 
 mismatched_registry="$(jq -c \
   '.["member-one"].apply_role_arn = "arn:aws:iam::999999999999:role/CrewSafeGitHubTerraformApplyRole"' \
   <<<"$valid_registry")"
 expect_failure "cross-account apply role" \
-  env CREWSAFE_AWS_ACCOUNTS_JSON="$mismatched_registry" "$resolve_script" member-one
+  env GITHUB_OUTPUT="" CREWSAFE_AWS_ACCOUNTS_JSON="$mismatched_registry" "$resolve_script" member-one
 
 "$backend_script" \
   "crewsafe-terraform-state-123456789012-ap-southeast-1" \

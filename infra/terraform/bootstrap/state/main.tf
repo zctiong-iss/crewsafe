@@ -32,7 +32,7 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   }
 }
 
-#trivy:ignore:AVD-AWS-0132
+#trivy:ignore:AWS-0132
 # SCRUM-155 deliberately uses AWS-managed SSE-S3 (AES256) to avoid a
 # cross-service KMS dependency in the state-backend bootstrap root.
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
