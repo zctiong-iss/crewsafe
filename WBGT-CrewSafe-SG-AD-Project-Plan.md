@@ -2,6 +2,7 @@
 
 **Document status:** Implementation-ready project plan  
 **Prepared:** 24 July 2026  
+**Backlog synchronised:** 28 July 2026 from `CrewSafe-Product-Backlog - 27 Jul 1105hrs.xlsx`
 **Delivery model:** Sprint 0 plus three one-week delivery sprints  
 **Recommended product type:** Evolutionary prototype that becomes the final MVP
 
@@ -171,6 +172,13 @@ Targets measure prototype quality. The project will not claim a measured reducti
 - Live operational dashboard.
 - Compliance, response-time and model-performance charts.
 - Audit timeline and CSV/PDF-ready export.
+- Safety-manager cross-team live view and a recorded, auto-expiring override of supervisor instructions.
+- Policy-configurable escalation when a stop-work recommendation is not decided within its approval window.
+- Suspected heat-illness incident reporting without medical free text, with notification to the supervisor and safety manager.
+- Offline-readable worker instructions and idempotent queued acknowledgements.
+- Language-neutral approved pictograms for rest, hydrate, stop-work and resume instructions.
+- Shift close-out summary reconciled to the immutable audit trail.
+- Enforced data-retention schedule, consent evidence and PII minimisation.
 - Cloud-hosted integrated system.
 
 ### 4.2 Stretch scope
@@ -182,6 +190,7 @@ Stretch work begins only after all MVP acceptance criteria pass:
 3. Multi-site management view.
 4. Optional supervisor-entered local WBGT reading with source and timestamp.
 5. Push notifications through Firebase Cloud Messaging.
+6. Multilingual heat-safety education assistant, isolated from the instruction path and unable to issue, alter or restate an active directive.
 
 ### 4.3 Explicit exclusions
 
@@ -334,6 +343,7 @@ sequenceDiagram
 | FR-07 | The system shall record whether a worker is within the seven-day acclimatisation period. | Must |
 | FR-08 | Workers shall complete a minimal readiness check, with sensitive free text prohibited. | Must |
 | FR-09 | The system shall show readiness-check freshness and missing checks. | Should |
+| FR-09a | A closed shift shall be immutable and shall have an exportable summary whose totals reconcile with its audit events. | Should |
 
 ### 6.3 Weather and forecast
 
@@ -357,6 +367,8 @@ sequenceDiagram
 | FR-18 | The agent shall not change shift assignments or dispatch material actions without supervisor approval. | Must |
 | FR-19 | Supervisors shall approve, edit or reject each material plan with an optional reason. | Must |
 | FR-20 | Editing a plan shall preserve both the agent draft and approved version. | Must |
+| FR-20a | An unapproved stop-work recommendation shall escalate to the safety manager after a policy-configurable timeout; both escalation and eventual decision shall be audited. | Must |
+| FR-20b | A safety manager may issue a recorded, scoped and auto-expiring override that supersedes affected supervisor instructions and notifies only in-scope workers. | Should |
 
 ### 6.5 Worker actions and live status
 
@@ -368,6 +380,9 @@ sequenceDiagram
 | FR-24 | Workers shall raise a safety concern that immediately appears to their supervisor. | Must |
 | FR-25 | The supervisor dashboard shall show pending, acknowledged, completed, late and escalated states. | Must |
 | FR-26 | The backend shall prevent duplicate acknowledgement or completion events from corrupting state. | Must |
+| FR-26a | A worker shall be able to read the latest cached instruction offline with a visible staleness marker and queue an acknowledgement for idempotent synchronisation. | Should |
+| FR-26b | A worker shall be able to report a suspected heat-illness incident without medical free text; the report shall reach the supervisor and safety manager within one refresh interval. | Must |
+| FR-26c | When the worker has no preferred language or the language is unsupported, the app shall show an approved language-neutral pictogram for rest, hydrate, stop-work or resume without changing instruction meaning. | Must |
 
 ### 6.6 Dashboard and reporting
 
@@ -378,6 +393,8 @@ sequenceDiagram
 | FR-29 | The ML dashboard shall compare predicted and observed WBGT and show MAE and band confusion matrix. | Must |
 | FR-30 | Safety managers shall filter reports by shift and date. | Should |
 | FR-31 | The system shall export the event timeline in CSV; PDF is optional. | Must |
+| FR-32 | A safety manager shall see risk state and active directives across all teams, refreshed within one interval. | Should |
+| FR-33 | The system shall enforce a documented retention schedule, record consent and minimise PII while preserving required audit integrity. | Should |
 
 ---
 
@@ -467,7 +484,8 @@ The agent reduces coordination work. It does not decide what the law requires an
 7. Submit the plan for supervisor approval.
 8. After approval, call the dispatch tool.
 9. Monitor acknowledgement deadlines and send approved reminders.
-10. Summarise closure and unresolved exceptions.
+10. Escalate an undecided stop-work recommendation after the configured approval timeout without dispatching it.
+11. Summarise closure and unresolved exceptions.
 
 ### 8.3 Guarded tools
 
@@ -481,6 +499,7 @@ The agent reduces coordination work. It does not decide what the law requires an
 | `create_approval_request(planId)` | Write workflow | Notify the supervisor |
 | `dispatch_approved_plan(planId)` | Write, approval-gated | Publish approved worker actions |
 | `send_approved_reminder(actionId)` | Write, bounded | Remind only about an existing approved action |
+| `escalate_approval_timeout(planId)` | Write, bounded | Notify the safety manager about an undecided stop-work recommendation; cannot approve or dispatch it |
 | `summarise_event(eventId)` | Read/compute | Produce closure summary without changing records |
 
 ### 8.4 Human-approval boundary
@@ -507,6 +526,7 @@ Automatic action is limited to data ingestion, forecast generation, draft creati
 - Prompt or generated free text never becomes executable instruction data.
 - LLM unavailability falls back to a deterministic plan assembled from action templates.
 - All prompts, tool results, drafts and approvals receive correlation IDs for audit.
+- Agent runs are traced in LangSmith with tool calls and plan-quality scores linked to the authoritative audit trace ID; LangSmith is diagnostic evidence, not the system of record.
 
 ### 8.6 Agent evaluation
 
@@ -666,44 +686,54 @@ flowchart TB
     end
 
     subgraph AWS["AWS cloud"]
-        SWA["AWS Amplify Hosting\n(S3 + CloudFront)"]
+        SWA["Amazon S3 + CloudFront\nweb hosting"]
         API["Spring Boot shared backend\nECS on Fargate"]
         ML["Python FastAPI ML service\nECS on Fargate - internal"]
         DB[("Amazon RDS for PostgreSQL")]
-        BLOB["Amazon S3"]
-        OBS["Amazon CloudWatch + X-Ray"]
+        IDP["Amazon Cognito"]
+        LLM["Amazon Bedrock"]
+        SCHED["EventBridge Scheduler"]
+        SECRETS["AWS Secrets Manager"]
+        OBS["Amazon CloudWatch"]
+        AIOBS["LangSmith\nagent diagnostics"]
     end
 
     EXT["NEA WBGT / weather / lightning APIs"]
     FCM["Firebase Cloud Messaging\nstretch"]
-    LLM["Approved LLM API"]
-
     WEB --> SWA
     SWA --> API
     MOB --> API
+    WEB --> IDP
+    MOB --> IDP
     API --> DB
-    API --> BLOB
     API --> ML
     API --> EXT
     API --> LLM
+    API --> SCHED
+    API --> SECRETS
     API --> FCM
     API --> OBS
     ML --> OBS
+    LLM --> AIOBS
 ```
 
 ### 10.3 Selected technology stack
 
 | Layer | Technology |
 |---|---|
-| Web | React, TypeScript, Vite, Material UI, Chart.js |
+| Web | React, TypeScript, Vite, Material UI, Recharts (analytics), Chart.js (live conditions) |
 | Mobile | React Native, Expo, TypeScript |
+| Identity | Amazon Cognito, JWT, Spring Security resource server |
 | Shared backend | Java 21, Spring Boot, Spring Security, Spring Data JPA |
-| ML service | Python, FastAPI, pandas, scikit-learn, XGBoost if required |
-| Agent integration | Tool-calling LLM through a backend adapter with JSON schemas |
+| ML service | Python, FastAPI, pandas, scikit-learn; persistence and Ridge baselines; HistGradientBoostingRegressor primary; optional XGBoost challenger |
+| Agent integration | Python, FastAPI, LangChain, LangGraph, Amazon Bedrock, tool calling and Pydantic schemas |
+| AI observability | LangSmith for agent tracing and evaluation; not the authoritative audit record |
 | Database | PostgreSQL |
-| API contract | OpenAPI 3 |
-| Cloud | AWS Amplify Hosting (S3 + CloudFront), Amazon ECS on Fargate, Amazon RDS for PostgreSQL, Amazon S3, AWS Secrets Manager |
-| Observability | Structured JSON logs, correlation IDs, health checks, Amazon CloudWatch and AWS X-Ray |
+| Realtime | Server-Sent Events for supervisors; refresh/polling on mobile |
+| API contract | OpenAPI 3, REST `/api/v1`, generated TypeScript clients |
+| Cloud | Amazon CloudFront/S3, ECS Fargate, ALB, ECR, RDS, Cognito, Bedrock, EventBridge Scheduler and Secrets Manager |
+| Infrastructure as code | Terraform with the HashiCorp AWS Provider |
+| Observability | Structured JSON logs, correlation IDs, Spring Boot Actuator health checks and Amazon CloudWatch |
 | CI/CD | GitHub Actions |
 
 ### 10.4 Deployment environments
@@ -910,6 +940,7 @@ Charts must distinguish observed facts, model predictions and agent recommendati
 | Auditability | Append-only audit events for recommendations, decisions, dispatch and worker response |
 | Accessibility | Web targets WCAG 2.1 AA basics; mobile supports scalable text, clear colour contrast and non-colour risk labels |
 | Reliability | Idempotent decisions and acknowledgements; retry-safe weather ingestion |
+| Offline tolerance | Latest instruction remains readable with a staleness marker; queued acknowledgements synchronise idempotently after reconnection |
 | Explainability | Every plan shows input freshness, predicted band, policy references and human decision |
 | Observability | Health endpoints, correlation IDs, structured logs and integration-failure metrics |
 | Maintainability | OpenAPI-generated contract, modular backend packages and migration-managed schema |
@@ -920,7 +951,7 @@ Charts must distinguish observed facts, model predictions and agent recommendati
 
 Story points use a Fibonacci scale. The team should split any story larger than 8 before sprint commitment.
 
-Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requirements), **Sprint 1 = Week 2** (Design & Prototyping / infrastructure), **Sprint 2 = Week 3** (Development / MVP + DevSecOps), **Sprint 3 = Week 4** (Development, quality, security, demo). Stretch items begin only after all Must stories pass. Approximate load: Sprint 1 ≈ 49 pts, Sprint 2 ≈ 57 pts, Sprint 3 ≈ 56 pts.
+Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requirements), **Sprint 1 = Week 2** (Design & Prototyping / infrastructure), **Sprint 2 = Week 3** (Development / MVP + DevSecOps), **Sprint 3 = Week 4** (Development, quality, security, demo). Stretch items begin only after all Must stories pass. The 27 July backlog totals approximately Sprint 1 = 49 points, Sprint 2 = 66 points and Sprint 3 = 85 points. These are prioritised backlog loads, not unconditional commitments: the team must protect all Must stories, use Should stories as the first scope-adjustment lever, and re-estimate capacity at each sprint-planning session.
 
 | ID | Priority | Story | Points | Acceptance summary | Sprint |
 |---|---|---|---:|---|---:|
@@ -944,6 +975,9 @@ Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requi
 | US-12 | Must | As a supervisor, I monitor pending, late and completed actions. | 5 | Live state and alert count match backend records | 2 |
 | US-24 | Must | As a safety manager, I configure and version the active heat policy. | 5 | Versioned catalogue with source and effective date; recommendations cite version | 2 |
 | US-27 | Must | As a team, we complete the DevSecOps pipeline (dependency + container scan, auto staging deploy, smoke tests). | 5 | Pipeline scans, deploys staging and runs smoke tests | 2 |
+| US-36 | Should | As a developer, I trace and evaluate agent runs in AI observability tooling. | 3 | Every run includes tool calls and a plan-quality score linked to the audit trace ID | 2 |
+| US-40 | Must | As a safety manager, I receive an escalation when a stop-work recommendation remains unapproved beyond its configured timeout. | 3 | Timeout and eventual decision are audited; interval is policy-configurable | 2 |
+| US-45 | Must | As a worker, I receive an approved language-neutral pictogram when no supported preferred language is available. | 3 | Rest, hydrate, stop-work and resume pictograms preserve meaning and use the normal acknowledgement path | 2 |
 | US-13 | Must | As a manager, I view compliance and response-time charts. | 8 | Metrics verified against seeded expected values | 3 |
 | US-14 | Must | As a manager, I view forecast accuracy and fallback status. | 5 | Metrics match evaluation artifact | 3 |
 | US-15 | Must | As a manager, I export the audit timeline. | 5 | Export contains trace IDs, actors, rules and decisions | 3 |
@@ -955,11 +989,18 @@ Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requi
 | US-29 | Should | As a team, we publish an ML model card with SHAP explainability and forecast-reliability. | 3 | Card includes SHAP drivers, calibration and per-band error | 3 |
 | US-30 | Should | As an administrator, I manage users, roles, sites and integrations. | 5 | Admin CRUD with RBAC; every change audited | 3 |
 | US-31 | Should | As a team, we run accessibility and performance checks (WCAG 2.1 AA basics; p95 latency). | 3 | WCAG AA basics met; read p95 <1s, write p95 <2s | 3 |
+| US-37 | Should | As a safety manager, I view real-time risk state and active directives across all teams. | 5 | Per-site state and directives refresh within one interval | 3 |
+| US-38 | Should | As a safety manager, I override a supervisor instruction for in-scope workers. | 5 | Override is scoped, recorded, auto-expiring and supersedes affected plans | 3 |
+| US-41 | Must | As a worker, I report a suspected heat-illness incident for escalation. | 5 | Supervisor and safety manager receive it within one interval; no medical free text; append-only audit entry created | 3 |
+| US-42 | Should | As a worker, I read instructions and acknowledge them during intermittent connectivity. | 8 | Cached instruction shows staleness; queued acknowledgement synchronises idempotently | 3 |
+| US-43 | Should | As the system, I enforce data retention, capture consent and minimise PII. | 3 | Retention job and auditable consent exist; audit integrity survives eligible-data purge | 3 |
+| US-44 | Should | As a supervisor, I close a shift with a reconciled summary. | 3 | Totals match the audit trail; closed shift is immutable and exportable | 3 |
 | US-18 | Could | As a worker, I view an approved instruction in another language. | 5 | Human-approved template only | Stretch |
 | US-32 | Could | As a worker, I check in at a simulated rest zone by QR code. | 3 | Scan logs rest at zone; event audited | Stretch |
 | US-33 | Could | As a manager, I use a multi-site management view. | 5 | Manager switches and compares multiple sites | Stretch |
 | US-34 | Could | As a supervisor, I enter a local WBGT reading with source and timestamp. | 3 | Manual reading stored with source/time; no station-equivalence claim | Stretch |
 | US-35 | Could | As a worker, I receive push notifications via Firebase Cloud Messaging. | 5 | Approved action pushes to worker device | Stretch |
+| US-39 | Could | As a worker, I use a multilingual heat-safety education assistant. | 3 | Educational answers only; assistant cannot issue, alter or restate an active directive and is isolated from the instruction path | Stretch |
 
 ---
 
@@ -1037,6 +1078,9 @@ Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requi
 - Dispatch approved actions to mobile.
 - Implement acknowledgement, rest/hydration and safety-concern flows.
 - Implement supervisor live-status view.
+- Implement timeout escalation for undecided stop-work recommendations.
+- Add approved language-neutral pictograms for the four core instruction types.
+- Trace and score agent runs in diagnostic AI observability, linked to the backend audit trace.
 - Add integration, authorization and agent-evaluation tests.
 - Deploy automatically to staging.
 
@@ -1061,6 +1105,10 @@ Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requi
 
 - Complete compliance and ML dashboards.
 - Complete audit export.
+- Add cross-team real-time safety-manager analytics and the scoped, auto-expiring override workflow.
+- Add suspected heat-illness incident escalation without medical free text.
+- Add offline instruction caching and idempotent queued acknowledgement synchronisation.
+- Enforce the retention/consent/PII-minimisation policy and add immutable shift close-out summaries.
 - Implement degraded NEA/ML/LLM behaviour.
 - Run UAT and fix priority defects.
 - Perform SAST, dependency, container and dynamic security testing.
@@ -1121,6 +1169,14 @@ Sprints follow the AD Project schedule: **Sprint 0 = Week 1** (Inception & Requi
 | AT-12 | Worker raises concern | Supervisor sees urgent event; no medical diagnosis generated |
 | AT-13 | Unauthorized manager requests another site | Request denied and security event logged |
 | AT-14 | Audit export | Original draft, edit, approval, dispatch and acknowledgement are present |
+| AT-15 | Stop-work recommendation remains undecided past its approval timeout | Safety manager is notified; no automatic dispatch occurs; timeout and later decision are audited |
+| AT-16 | Safety manager overrides a supervisor instruction | Only in-scope workers receive the superseding instruction; reference, actor and expiry are audited |
+| AT-17 | Worker reports suspected heat illness | Supervisor and safety manager see the incident within one interval; no medical free text is stored |
+| AT-18 | Worker loses connectivity after receiving an instruction | Cached instruction remains readable with a staleness marker; queued acknowledgement synchronises once |
+| AT-19 | Worker has no supported preferred language | Correct approved pictogram is shown beside the canonical instruction and acknowledgement is unchanged |
+| AT-20 | Retention job removes eligible operational PII | Eligible data is purged according to schedule while required audit integrity remains verifiable |
+| AT-21 | Supervisor closes a shift | Summary totals reconcile to audit events; further mutation is rejected; summary is exportable |
+| AT-22 | Agent trace is inspected in LangSmith | Tool calls and plan-quality score share the backend audit trace ID; deleting diagnostic trace data does not alter the audit record |
 
 ### 17.3 Definition of Done
 
@@ -1195,6 +1251,8 @@ The final report must show findings, severity, remediation and re-test result.
 - Do not collect NRIC, diagnosis, medication, pregnancy status or detailed medical history.
 - Do not track worker location continuously.
 - Explain why readiness information is collected and who can see it.
+- Capture auditable consent and enforce the documented retention schedule with a tested purge job.
+- Preserve only the minimum audit evidence required after eligible operational PII is purged.
 - Use synthetic identities and health context in the project demo.
 
 ### 19.2 Responsible AI
@@ -1220,6 +1278,9 @@ The final report must show findings, severity, remediation and re-test result.
 | Prompt injection through user text | Structured categories, input separation and no dynamic tool definitions |
 | Model failure hides risk | Persistence fallback and visible degraded state |
 | Audit trail altered | Append-only application path, restricted database role and export verification |
+| Manager override reaches the wrong crew | Site-scoped authorization, explicit affected-worker set, supersession reference and automatic expiry |
+| Offline acknowledgement is replayed | Client idempotency key, server-side unique constraint and reconciliation on reconnect |
+| Diagnostic AI trace becomes a shadow audit store | Correlation link only; authoritative events remain in PostgreSQL; separate access and retention controls |
 
 ---
 
