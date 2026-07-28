@@ -1,0 +1,17 @@
+.git/
+.github/
+.specify/
+.agents/
+.claude/
+specs/
+docs/
+**/.terraform/
+.terraform-data/
+.backend/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log

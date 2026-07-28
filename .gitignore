@@ -2,3 +2,24 @@
 ~$*
 __pycache__/
 *.py[cod]
+
+# Spec Kit configuration and locally installed agent skills
+.specify/
+.agents/skills/speckit-*/
+.claude/skills/speckit-*/
+/specs/
+
+# Terraform local and generated files
+**/.terraform/*
+.terraform-data/
+.backend/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+
+# Keep dependency selections reproducible
+!.terraform.lock.hcl
