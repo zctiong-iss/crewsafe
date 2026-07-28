@@ -1,0 +1,348 @@
+name: Terraform State Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_account_alias:
+        description: Registered account alias used by the reviewed plan
+        required: true
+        type: string
+      plan_run_id:
+        description: Successful Terraform State Plan workflow run ID
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY followed by a space and the account alias
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: terraform-apply-${{ inputs.target_account_alias }}-state-backend
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_ROOT: infra/terraform/bootstrap/state
+
+jobs:
+  apply:
+    name: Apply state-backend for ${{ inputs.target_account_alias }}
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate manual confirmation
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$CONFIRMATION" == "APPLY $ACCOUNT_ALIAS" ]] || {
+            echo "::error::Confirmation must be exactly: APPLY $ACCOUNT_ALIAS"
+            exit 1
+          }
+          [[ "$PLAN_RUN_ID" =~ ^[0-9]+$ ]] || {
+            echo "::error::Plan run ID must contain only digits."
+            exit 1
+          }
+
+      - name: Check out main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Download reviewed plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: terraform-state-plan-${{ inputs.plan_run_id }}
+          path: plan-bundle
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.plan_run_id }}
+
+      - name: Verify plan workflow run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PLAN_RUN_ID}")"
+          jq -e '
+            .event == "workflow_dispatch"
+            and .head_branch == "main"
+            and .conclusion == "success"
+            and (
+              .path == ".github/workflows/terraform-state-plan.yml"
+              or (.path | startswith(".github/workflows/terraform-state-plan.yml@"))
+            )
+          ' <<<"$run_json" >/dev/null || {
+            echo "::error::Artifact does not belong to a successful main-branch plan workflow."
+            exit 1
+          }
+          metadata_actor="$(jq -r '.plan_actor' plan-bundle/metadata.json)"
+          run_actor="$(jq -r '.actor.login' <<<"$run_json")"
+          [[ "${metadata_actor,,}" == "${run_actor,,}" ]] || {
+            echo "::error::Plan actor does not match the source workflow run."
+            exit 1
+          }
+
+      - name: Check out exact planned commit
+        id: planned
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+        run: |
+          set -euo pipefail
+          commit="$(jq -r '.commit' plan-bundle/metadata.json)"
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::Invalid planned commit."
+            exit 1
+          }
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$commit" origin/main || {
+            echo "::error::Planned commit is not present on main."
+            exit 1
+          }
+          git checkout --detach "$commit"
+          printf 'commit=%s\n' "$commit" >>"$GITHUB_OUTPUT"
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.10.5
+          terraform_wrapper: false
+
+      - name: Validate plan metadata and checksums
+        id: metadata
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          APPLY_ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          .github/scripts/validate-plan-metadata.sh \
+            plan-bundle/metadata.json \
+            "$ACCOUNT_ALIAS" \
+            "$PLAN_RUN_ID" \
+            "$APPLY_ACTOR" \
+            plan-bundle/plan.tfplan
+          planned_version="$(jq -r '.terraform_version' plan-bundle/metadata.json)"
+          actual_version="$(terraform version -json | jq -r '.terraform_version')"
+          [[ "$planned_version" == "$actual_version" ]] || {
+            echo "::error::Terraform version differs from the reviewed plan."
+            exit 1
+          }
+          {
+            printf 'mode=%s\n' "$(jq -r '.mode' plan-bundle/metadata.json)"
+            printf 'account_id=%s\n' "$(jq -r '.account_id' plan-bundle/metadata.json)"
+            printf 'region=%s\n' "$(jq -r '.region' plan-bundle/metadata.json)"
+            printf 'bucket=%s\n' "$(jq -r '.bucket' plan-bundle/metadata.json)"
+            printf 'plan_actor=%s\n' "$(jq -r '.plan_actor' plan-bundle/metadata.json)"
+            printf 'plan_sha256=%s\n' "$(jq -r '.plan_sha256' plan-bundle/metadata.json)"
+          } >>"$GITHUB_OUTPUT"
+
+      - name: Resolve selected account
+        id: account
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+        run: .github/scripts/resolve-terraform-account.sh "$ACCOUNT_ALIAS"
+
+      - name: Verify registry still matches reviewed plan
+        env:
+          REGISTRY_ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
+          REGISTRY_REGION: ${{ steps.account.outputs.region }}
+          REGISTRY_BUCKET: ${{ steps.account.outputs.bucket }}
+          PLANNED_ACCOUNT_ID: ${{ steps.metadata.outputs.account_id }}
+          PLANNED_REGION: ${{ steps.metadata.outputs.region }}
+          PLANNED_BUCKET: ${{ steps.metadata.outputs.bucket }}
+        run: |
+          set -euo pipefail
+          [[ "$REGISTRY_ACCOUNT_ID" == "$PLANNED_ACCOUNT_ID" ]]
+          [[ "$REGISTRY_REGION" == "$PLANNED_REGION" ]]
+          [[ "$REGISTRY_BUCKET" == "$PLANNED_BUCKET" ]]
+
+      - name: Configure apply AWS credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ steps.account.outputs.apply_role_arn }}
+          aws-region: ${{ steps.account.outputs.region }}
+          role-session-name: CrewSafeApply-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Verify authenticated account and unused plan
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          BACKEND_MODE: ${{ steps.metadata.outputs.mode }}
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          AWS_REGION: ${{ steps.account.outputs.region }}
+        run: |
+          set -euo pipefail
+          actual_account_id="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "$actual_account_id" == "$EXPECTED_ACCOUNT_ID" ]] || {
+            echo "::error::OIDC credentials belong to a different AWS account."
+            exit 1
+          }
+          if [[ "$BACKEND_MODE" == "managed" ]]; then
+            .github/scripts/inspect-state-bucket.sh \
+              "$STATE_BUCKET" \
+              "$ACCOUNT_ALIAS" \
+              "$AWS_REGION" >/dev/null
+            error_file="$(mktemp)"
+            if aws s3api head-object \
+              --bucket "$STATE_BUCKET" \
+              --key "crewsafe/bootstrap/applied-plans/${PLAN_RUN_ID}.json" \
+              2>"$error_file"; then
+              echo "::error::This reviewed plan has already been applied."
+              exit 1
+            elif ! grep -Eqi '(404|Not Found|NoSuchKey)' "$error_file"; then
+              sed 's/^/::error::/' "$error_file"
+              echo "::error::Unable to verify whether the plan was previously applied."
+              exit 1
+            fi
+          else
+            error_file="$(mktemp)"
+            if aws s3api head-bucket --bucket "$STATE_BUCKET" 2>"$error_file"; then
+              echo "::error::Bootstrap plan is stale because the target bucket now exists."
+              exit 1
+            elif ! grep -Eqi '(404|Not Found|NoSuchBucket)' "$error_file"; then
+              sed 's/^/::error::/' "$error_file"
+              echo "::error::Unable to verify that the bootstrap target is absent."
+              exit 1
+            fi
+          fi
+
+      - name: Initialize Terraform for reviewed mode
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          BACKEND_MODE: ${{ steps.metadata.outputs.mode }}
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          AWS_REGION: ${{ steps.account.outputs.region }}
+        run: |
+          set -euo pipefail
+          if [[ "$BACKEND_MODE" == "bootstrap" ]]; then
+            terraform init -backend=false -input=false -lockfile=readonly
+          else
+            "$GITHUB_WORKSPACE/.github/scripts/write-backend-config.sh" \
+              "$STATE_BUCKET" "$AWS_REGION"
+            terraform init -input=false -lockfile=readonly -reconfigure \
+              -backend-config=.backend/state.s3.tfbackend
+          fi
+
+      - name: Apply exact reviewed plan
+        working-directory: ${{ env.TF_ROOT }}
+        run: terraform apply -input=false -auto-approve "$GITHUB_WORKSPACE/plan-bundle/plan.tfplan"
+
+      - name: Preserve and migrate bootstrap state
+        if: steps.metadata.outputs.mode == 'bootstrap'
+        id: migration
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          AWS_REGION: ${{ steps.account.outputs.region }}
+        run: |
+          set -euo pipefail
+          [[ -s terraform.tfstate ]] || {
+            echo "::error::Bootstrap apply did not produce runner state."
+            exit 1
+          }
+          recovery_key="crewsafe/bootstrap/recovery/${GITHUB_RUN_ID}.tfstate"
+          aws s3api put-object \
+            --bucket "$STATE_BUCKET" \
+            --key "$recovery_key" \
+            --body terraform.tfstate \
+            --server-side-encryption AES256 >/dev/null
+          printf 'recovery_key=%s\n' "$recovery_key" >>"$GITHUB_OUTPUT"
+          "$GITHUB_WORKSPACE/.github/scripts/write-backend-config.sh" \
+            "$STATE_BUCKET" "$AWS_REGION"
+          terraform init -input=false -lockfile=readonly -migrate-state -force-copy \
+            -backend-config=.backend/state.s3.tfbackend
+          aws s3api head-object \
+            --bucket "$STATE_BUCKET" \
+            --key "crewsafe/bootstrap/terraform.tfstate" >/dev/null
+
+      - name: Verify backend and final no-change plan
+        working-directory: ${{ env.TF_ROOT }}
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          EXPECTED_ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
+          AWS_REGION: ${{ steps.account.outputs.region }}
+          TF_VAR_expected_account_id: ${{ steps.account.outputs.account_id }}
+          TF_VAR_account_alias: ${{ inputs.target_account_alias }}
+          TF_VAR_aws_region: ${{ steps.account.outputs.region }}
+        run: |
+          set -euo pipefail
+          "$GITHUB_WORKSPACE/.github/scripts/verify-state-backend.sh" \
+            "$STATE_BUCKET" \
+            "$ACCOUNT_ALIAS" \
+            "$EXPECTED_ACCOUNT_ID" \
+            "$AWS_REGION"
+          terraform plan -input=false -lock-timeout=5m -detailed-exitcode
+
+      - name: Mark plan applied and remove recovery state
+        env:
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          RECOVERY_KEY: ${{ steps.migration.outputs.recovery_key }}
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          PLANNED_COMMIT: ${{ steps.planned.outputs.commit }}
+          PLAN_SHA256: ${{ steps.metadata.outputs.plan_sha256 }}
+        run: |
+          set -euo pipefail
+          marker="$RUNNER_TEMP/applied-plan.json"
+          jq -n \
+            --arg account_alias "$ACCOUNT_ALIAS" \
+            --arg plan_run_id "$PLAN_RUN_ID" \
+            --arg plan_sha256 "$PLAN_SHA256" \
+            --arg planned_commit "$PLANNED_COMMIT" \
+            --arg applied_by "$GITHUB_ACTOR" \
+            --arg applied_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+              account_alias: $account_alias,
+              plan_run_id: $plan_run_id,
+              plan_sha256: $plan_sha256,
+              planned_commit: $planned_commit,
+              applied_by: $applied_by,
+              applied_at: $applied_at
+            }' >"$marker"
+          aws s3api put-object \
+            --bucket "$STATE_BUCKET" \
+            --key "crewsafe/bootstrap/applied-plans/${PLAN_RUN_ID}.json" \
+            --body "$marker" \
+            --server-side-encryption AES256 >/dev/null
+          if [[ -n "$RECOVERY_KEY" ]]; then
+            aws s3api delete-object \
+              --bucket "$STATE_BUCKET" \
+              --key "$RECOVERY_KEY" >/dev/null
+          fi
+
+      - name: Publish sanitized apply evidence
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          STATE_BUCKET: ${{ steps.account.outputs.bucket }}
+          BACKEND_MODE: ${{ steps.metadata.outputs.mode }}
+          PLANNED_COMMIT: ${{ steps.planned.outputs.commit }}
+          PLAN_SHA256: ${{ steps.metadata.outputs.plan_sha256 }}
+          PLAN_ACTOR: ${{ steps.metadata.outputs.plan_actor }}
+        run: |
+          {
+            echo "## Terraform state apply completed"
+            echo
+            echo "- Account alias: \`$ACCOUNT_ALIAS\`"
+            echo "- Bucket: \`$STATE_BUCKET\`"
+            echo "- Mode: \`$BACKEND_MODE\`"
+            echo "- Planned commit: \`$PLANNED_COMMIT\`"
+            echo "- Plan SHA-256: \`$PLAN_SHA256\`"
+            echo "- Plan actor: \`$PLAN_ACTOR\`"
+            echo "- Apply actor: \`$GITHUB_ACTOR\`"
+            echo "- Canonical state and S3 native locking verified"
+            echo "- Final plan reported no changes"
+          } >>"$GITHUB_STEP_SUMMARY"
