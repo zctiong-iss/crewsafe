@@ -719,22 +719,22 @@ flowchart TB
 
 ### 10.3 Selected technology stack
 
-| Layer | Technology |
-|---|---|
-| Web | React, TypeScript, Vite, Material UI, Recharts (analytics), Chart.js (live conditions) |
-| Mobile | React Native, Expo, TypeScript |
-| Identity | Amazon Cognito, JWT, Spring Security resource server |
-| Shared backend | Java 21, Spring Boot, Spring Security, Spring Data JPA |
-| ML service | Python, FastAPI, pandas, scikit-learn; persistence and Ridge baselines; HistGradientBoostingRegressor primary; optional XGBoost challenger |
-| Agent integration | Python, FastAPI, LangChain, LangGraph, Amazon Bedrock, tool calling and Pydantic schemas |
-| AI observability | LangSmith for agent tracing and evaluation; not the authoritative audit record |
-| Database | PostgreSQL |
-| Realtime | Server-Sent Events for supervisors; refresh/polling on mobile |
-| API contract | OpenAPI 3, REST `/api/v1`, generated TypeScript clients |
-| Cloud | Amazon CloudFront/S3, ECS Fargate, ALB, ECR, RDS, Cognito, Bedrock, EventBridge Scheduler and Secrets Manager |
-| Infrastructure as code | Terraform with the HashiCorp AWS Provider |
-| Observability | Structured JSON logs, correlation IDs, Spring Boot Actuator health checks and Amazon CloudWatch |
-| CI/CD | GitHub Actions |
+| Layer | Technology | Purpose in WBGT CrewSafe SG |
+|---|---|---|
+| Web app | React, TypeScript, Vite, Material UI, Recharts (analytics dashboards), Chart.js (live-condition charts) | Supervisor, manager and administrator console, dashboards and approval workflow |
+| Mobile app | React Native, Expo, TypeScript | Worker readiness, instructions, acknowledgements and rest/hydration logs |
+| Identity | Amazon Cognito, JWT, Spring Security resource server | Sign-in, role claims and site-scoped access for web and mobile |
+| Shared backend | Java 21, Spring Boot, Spring Security, Spring Data JPA | System of record, role-based access control, policy-engine host and authoritative audit |
+| Machine learning | Python, pandas, scikit-learn; persistence and Ridge baselines; HistGradientBoostingRegressor primary; optional XGBoost challenger | Train and run direct 30- and 60-minute WBGT forecasts using time-based validation |
+| Agentic AI | Python, FastAPI, LangChain, LangGraph, Amazon Bedrock, tool calling and Pydantic schemas | Use an approved foundation model to invoke guarded tools and produce validated draft plans |
+| AI observability | LangSmith | Trace agent runs, evaluate plan quality and monitor tool calls; not the authoritative audit record |
+| Database | PostgreSQL, migration-managed schema, protected append-only audit events | Store users, sites, shifts, observations, recommendations and append-only audit events |
+| Realtime | Server-Sent Events for supervisors; refresh/polling on mobile | Deliver live condition, plan and acknowledgement updates |
+| API contract | OpenAPI 3, REST `/api/v1`, generated TypeScript clients | Define the contract between clients and the shared backend |
+| Cloud | Amazon CloudFront/S3, ECS Fargate, ALB, ECR, RDS, Cognito, Bedrock, EventBridge Scheduler and Secrets Manager | Host the web app, containers, database, identity, model inference, scheduled forecasts and secrets |
+| Infrastructure as code | Terraform with the HashiCorp AWS Provider | Provision AWS resources reproducibly through CI/CD |
+| Observability | Structured JSON logs, correlation IDs, health checks and Amazon CloudWatch | Provide health checks, traceability and integration-failure metrics |
+| Analytics and reporting | Recharts and Chart.js | Present compliance, response-time, forecast-accuracy and multi-site analytics for safety managers |
 
 ### 10.4 Deployment environments
 
