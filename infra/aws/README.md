@@ -10,12 +10,54 @@ emulator cannot do.
 ## Use
 
 ```bash
-aws sso login                 # or however this account is authenticated
+aws sts get-caller-identity   # must succeed first - see "Authenticating" below
 cp terraform.tfvars.example terraform.tfvars   # then edit it
 terraform init
 terraform plan
 terraform apply
 ```
+
+## Authenticating
+
+Terraform reads the standard AWS credential chain, so anything that makes
+`aws sts get-caller-identity` work will work here. Two ways to get there.
+
+**Never create access keys for the root user.** They cannot be scoped or revoked without
+disabling the account. Use root only to create the first IAM identity, then stop.
+
+### IAM user + access keys (fastest)
+
+Console → IAM → Users → Create user → attach `AdministratorAccess` → Security credentials →
+Create access key → **Command Line Interface (CLI)**. Then:
+
+```bash
+aws configure     # key, secret, region ap-southeast-1, output json
+```
+
+The secret then lives in `~/.aws/credentials` until rotated.
+
+### IAM Identity Center (no long-lived secret)
+
+Requires a console step *before* the CLI will work — `aws sso login` fails with
+"Missing the following required SSO configuration values" until it is done.
+
+1. Console → **IAM Identity Center** → Enable (pick `ap-southeast-1`; the instance region
+   is fixed once chosen)
+2. **Users** → Add user
+3. **Permission sets** → Create → Predefined → `AdministratorAccess`
+4. **AWS accounts** → select the account → Assign users → user + permission set
+5. Copy the **AWS access portal URL** from the dashboard (`https://d-xxxx.awsapps.com/start`)
+
+Then locally:
+
+```bash
+aws configure sso     # paste the portal URL; SSO region ap-southeast-1; profile e.g. crewsafe
+export AWS_PROFILE=crewsafe
+aws sso login
+```
+
+Re-run `aws sso login` when the session expires. Terraform picks up `AWS_PROFILE`
+automatically.
 
 Then point the backend at it:
 
