@@ -1,4 +1,7 @@
 /// <reference types="vite/client" />
+/**
+ * @author Jemilin Beulah
+ */
 
 interface ImportMetaEnv {
   readonly VITE_COGNITO_AUTHORITY: string;

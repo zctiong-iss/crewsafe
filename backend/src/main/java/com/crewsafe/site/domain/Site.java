@@ -17,6 +17,8 @@ import java.util.UUID;
 /**
  * A worksite. Latitude and longitude are used later to pick the nearest NEA weather
  * station and to evaluate lightning proximity.
+ *
+ * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "site")

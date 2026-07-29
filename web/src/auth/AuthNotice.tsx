@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/Wordmark";
 import "./AuthNotice.css";

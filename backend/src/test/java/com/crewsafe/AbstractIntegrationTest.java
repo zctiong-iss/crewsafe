@@ -40,6 +40,8 @@ import java.util.Map;
  *
  * <p>Both containers use the singleton pattern — started once in a static initialiser and
  * reused by every subclass for the lifetime of the JVM, rather than restarted per test class.
+ *
+ * @author Jemilin Beulah
  */
 @SpringBootTest
 public abstract class AbstractIntegrationTest {

@@ -10,6 +10,8 @@ import com.crewsafe.common.web.RequestIdFilter;
  * name or a file path. {@code requestId} is the one piece of request-specific detail that is
  * safe to hand back: it identifies the request without describing it, so a user can quote it
  * and we can find the full story in our own logs.
+ *
+ * @author Jemilin Beulah
  */
 public record ErrorResponse(String error, String message, String requestId) {
 

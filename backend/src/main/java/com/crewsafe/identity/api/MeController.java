@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * Clients call this after login to learn which sites to offer — the server is the only
  * authority on that list, and sending it here means the UI never has to guess.
+ *
+ * @author Jemilin Beulah
  */
 @RestController
 @RequestMapping("/api/v1")

@@ -22,6 +22,8 @@ import java.util.UUID;
  * Named {@code AppUser} rather than {@code User} because {@code user} is a reserved word in
  * PostgreSQL and {@code org.springframework.security.core.userdetails.User} already occupies
  * the obvious name.
+ *
+ * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "app_user")

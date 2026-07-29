@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { apiBaseUrl } from "@/auth/authConfig";
 import { ApiError, type ApiErrorKind } from "./errors";
 

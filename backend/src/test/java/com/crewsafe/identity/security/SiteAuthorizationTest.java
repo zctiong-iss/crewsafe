@@ -29,6 +29,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * Covers AT-07 (a user cannot reach an object they are not assigned to) and AT-13 (an
  * unauthorized manager requesting another site is denied and the attempt is logged).
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class SiteAuthorizationTest extends AbstractIntegrationTest {

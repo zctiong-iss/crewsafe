@@ -6,6 +6,8 @@ import java.util.UUID;
 /**
  * The current user. A response DTO exists precisely so that entity fields are never
  * exposed by accident.
+ *
+ * @author Jemilin Beulah
  */
 public record MeResponse(
         UUID id,

@@ -20,6 +20,8 @@ import java.util.UUID;
  * "is this pair present?" and "which sites does this user have?", and keeping it free of
  * entity graphs means the authorization check stays a single indexed lookup with no
  * risk of lazy-loading surprises inside a security filter.
+ *
+ * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "site_membership")

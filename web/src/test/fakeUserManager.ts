@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import type { UserManager } from "oidc-client-ts";
 
 export interface FakeSession {

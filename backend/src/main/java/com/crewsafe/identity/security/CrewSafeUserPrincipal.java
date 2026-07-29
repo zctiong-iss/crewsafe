@@ -21,6 +21,8 @@ import java.util.UUID;
  * The {@code ROLE_} prefix is applied here. It is Spring Security's authority-string
  * convention (what {@code hasRole("SUPERVISOR")} looks for), not part of the domain, so the
  * database stores the bare role name.
+ *
+ * @author Jemilin Beulah
  */
 public class CrewSafeUserPrincipal {
 

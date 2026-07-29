@@ -4,6 +4,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
+/**
+ * @author Jemilin Beulah
+ */
 @SpringBootApplication
 @ConfigurationPropertiesScan
 public class CrewSafeApplication {

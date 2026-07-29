@@ -6,6 +6,8 @@ package com.crewsafe.common.audit;
  * String constants rather than an enum because the audit table must be able to store
  * event types written by future features without a schema change, while the types used
  * here stay checked at compile time.
+ *
+ * @author Jemilin Beulah
  */
 public final class AuditEventType {
 

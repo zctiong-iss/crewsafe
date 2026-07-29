@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * @author Jemilin Beulah
+ */
 public interface SiteMembershipRepository extends JpaRepository<SiteMembership, UUID> {
 
     /**

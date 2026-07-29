@@ -18,6 +18,8 @@ import java.util.List;
  * reached on - which, under Testcontainers, is a different port every run. Keeping the two
  * properties independent means the issuer used for token validation can stay a fixed,
  * logical value while the JWKS location tracks wherever the emulator actually is.
+ *
+ * @author Jemilin Beulah
  */
 @ConfigurationProperties(prefix = "app.cognito")
 @Validated

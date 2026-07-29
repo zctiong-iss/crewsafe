@@ -38,6 +38,8 @@ import java.util.List;
  * expects the seven demo usernames to already exist in the Cognito user pool (pre-provisioned
  * in infra/local/cognito-local for local dev, or created via the AWS CLI for staging) and
  * only backfills each one's {@code sub} plus its local role and site memberships.
+ *
+ * @author Jemilin Beulah
  */
 @Component
 @Profile({"local", "staging"})

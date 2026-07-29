@@ -6,6 +6,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * @author Jemilin Beulah
+ */
 public interface SiteRepository extends JpaRepository<Site, UUID> {
 
     Optional<Site> findByName(String name);

@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import "./Wordmark.css";
 
 /**

@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Configuration;
  * The generated spec is the contract the React and React Native clients generate their
  * typed HTTP clients from, so it is a build artifact rather than documentation for its
  * own sake.
+ *
+ * @author Jemilin Beulah
  */
 @Configuration
 public class OpenApiConfig {

@@ -22,6 +22,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Every failure — whether Spring Security writes it before any controller runs, or a
  * controller throws — must produce the same JSON shape. A client that has to guess which
  * shape it got will end up rendering "undefined" to a user at the worst possible moment.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class ErrorContractTest extends AbstractIntegrationTest {

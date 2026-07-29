@@ -41,6 +41,8 @@ import java.util.Set;
  * <p>There is no login endpoint here. Cognito's Hosted UI issues tokens directly to the
  * browser or app; this class only ever validates a token it is handed, and never sees a
  * credential.
+ *
+ * @author Jemilin Beulah
  */
 @Configuration
 @EnableWebSecurity

@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import type { Site } from "@/api/identity";
 import "./SiteCard.css";
 

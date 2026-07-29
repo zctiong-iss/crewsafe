@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import type { Role } from "@/api/identity";
 
 export interface NavItem {

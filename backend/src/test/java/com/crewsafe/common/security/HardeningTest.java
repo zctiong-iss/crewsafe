@@ -16,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * Login rate limiting no longer applies here - there is no login endpoint on this backend
  * to flood. Cognito's Hosted UI is responsible for throttling sign-in attempts.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class HardeningTest extends AbstractIntegrationTest {

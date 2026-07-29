@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { Wordmark } from "./Wordmark";

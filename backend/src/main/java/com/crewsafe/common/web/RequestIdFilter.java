@@ -30,6 +30,8 @@ import java.util.UUID;
  *
  * <p>Ordered first so the id exists before Spring Security runs: the 401 it writes for an
  * unauthenticated request needs one too, and that happens well before any controller.
+ *
+ * @author Jemilin Beulah
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)

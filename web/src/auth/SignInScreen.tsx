@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { useState } from "react";
 import { AuthNotice } from "./AuthNotice";
 

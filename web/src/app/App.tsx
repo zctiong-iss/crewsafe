@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { Navigate, Route, Routes } from "react-router-dom";
 import { HomePage } from "@/features/home/HomePage";
 import { CallbackPage } from "@/auth/CallbackPage";

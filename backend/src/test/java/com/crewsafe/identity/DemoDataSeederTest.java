@@ -16,6 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The seeder is a security-relevant component - it decides which Cognito identities become
  * local accounts - so its behaviour is verified rather than assumed.
+ *
+ * @author Jemilin Beulah
  */
 @ActiveProfiles("local")
 class DemoDataSeederTest extends AbstractIntegrationTest {

@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { describe, expect, it } from "vitest";
 import { authConfig } from "./authConfig";
 

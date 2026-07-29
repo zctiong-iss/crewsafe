@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Behaviour of the filter chain itself, independent of any particular endpoint.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class SecurityChainTest extends AbstractIntegrationTest {

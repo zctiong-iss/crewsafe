@@ -14,6 +14,8 @@ import java.util.UUID;
  * operation being audited. A failed login has no surrounding transaction to join, and a
  * denied request must leave a trace even when the work it attempted is rolled back —
  * evidence that disappears with the failure is not evidence.
+ *
+ * @author Jemilin Beulah
  */
 @Service
 @RequiredArgsConstructor

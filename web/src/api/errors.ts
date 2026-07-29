@@ -1,4 +1,7 @@
 /**
+ * @author Jemilin Beulah
+ */
+/**
  * The error taxonomy the UI branches on.
  *
  * The distinction that matters most is 401 versus 403, because treating them alike is the

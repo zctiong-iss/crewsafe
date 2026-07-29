@@ -35,6 +35,8 @@ import static org.mockito.Mockito.when;
  * authentication lookup needs.
  *
  * <p>{@link CognitoTokenValidationTest} covers the happy path against real Cognito tokens.
+ *
+ * @author Jemilin Beulah
  */
 class CognitoJwtAuthenticationConverterTest {
 

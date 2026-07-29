@@ -31,6 +31,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * rather than provisioned on the fly. Role and status are read from the database on every
  * request, so a demotion or deactivation takes effect on the very next call rather than
  * whenever the token happens to expire.
+ *
+ * @author Jemilin Beulah
  */
 @Component
 @RequiredArgsConstructor

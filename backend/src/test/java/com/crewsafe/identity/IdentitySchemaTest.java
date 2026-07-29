@@ -22,6 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * Proves the Flyway migration produced a schema the entities actually map onto, and that
  * the constraints protecting FR-03 are enforced by the database rather than by hopeful
  * application code.
+ *
+ * @author Jemilin Beulah
  */
 class IdentitySchemaTest extends AbstractIntegrationTest {
 

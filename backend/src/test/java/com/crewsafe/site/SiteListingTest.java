@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the same rule lives. These tests exist to catch it drifting from
  * {@code SiteAccessEvaluator}: a site that does not appear in this list must also be
  * unreachable directly, and vice versa.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class SiteListingTest extends AbstractIntegrationTest {

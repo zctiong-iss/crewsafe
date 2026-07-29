@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { useContext } from "react";
 import { AuthContext, type AuthContextValue } from "./AuthProvider";
 

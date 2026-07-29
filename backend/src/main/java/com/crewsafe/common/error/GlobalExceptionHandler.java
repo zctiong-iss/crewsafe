@@ -18,6 +18,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * message routinely contains a SQL fragment, a class name or a file path — all of which
  * tell an attacker about internals they should have to guess. Each response does carry a
  * {@code requestId}, which is how a report of "it broke" becomes findable in the logs.
+ *
+ * @author Jemilin Beulah
  */
 @RestControllerAdvice
 @Slf4j

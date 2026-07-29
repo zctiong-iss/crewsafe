@@ -25,6 +25,8 @@ import java.util.UUID;
  * These exist mainly to demonstrate and test the two layers of authorization the rest of
  * the system will rely on. The weather, shift and recommendation endpoints follow exactly
  * this shape.
+ *
+ * @author Jemilin Beulah
  */
 @RestController
 @RequestMapping("/api/v1/sites")

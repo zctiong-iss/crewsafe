@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 #
+# @author Jemilin Beulah
+#
 # Runs the whole stack locally: Postgres, the backend, and the web console.
 #
 #   ./run.sh              start everything, follow logs, Ctrl-C to stop

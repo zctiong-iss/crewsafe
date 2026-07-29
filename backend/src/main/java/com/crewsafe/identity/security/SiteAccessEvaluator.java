@@ -30,6 +30,8 @@ import java.util.UUID;
  * of each, which keeps the grant visible and auditable in the database rather than implied
  * by their role. ADMIN is exempt because administration is about managing the system
  * itself, not reading site operations.
+ *
+ * @author Jemilin Beulah
  */
 @Component("siteAccess")
 @RequiredArgsConstructor

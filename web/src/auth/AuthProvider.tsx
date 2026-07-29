@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { User, UserManager } from "oidc-client-ts";
 import { authConfig, cognitoSignOutUrl } from "./authConfig";

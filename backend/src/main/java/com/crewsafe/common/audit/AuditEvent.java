@@ -20,6 +20,8 @@ import java.util.UUID;
  *
  * {@code actorId} is nullable because a failed login has no authenticated actor but still
  * has to be recorded.
+ *
+ * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "audit_event")

@@ -6,6 +6,8 @@ package com.crewsafe.identity.domain;
  * Stored without a {@code ROLE_} prefix. The prefix is Spring Security's convention for
  * authority strings, not a property of the domain, so it is applied when building
  * authorities rather than persisted — see {@code CrewSafeUserPrincipal#getAuthorities}.
+ *
+ * @author Jemilin Beulah
  */
 public enum Role {
 

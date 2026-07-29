@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { apiFetch } from "./client";
 
 /** Mirrors MeResponse on the backend. */

@@ -14,6 +14,8 @@ import java.util.Set;
  * that a token was issued to one of our clients rather than some other app client in the
  * same user pool. Spring's default audience validator does nothing here, so without this
  * check a token from an unrelated client would be accepted.
+ *
+ * @author Jemilin Beulah
  */
 class AllowedClientIdValidator implements OAuth2TokenValidator<Jwt> {
 

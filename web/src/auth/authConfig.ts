@@ -1,3 +1,6 @@
+/**
+ * @author Jemilin Beulah
+ */
 import { WebStorageStateStore, type UserManagerSettings } from "oidc-client-ts";
 
 /**

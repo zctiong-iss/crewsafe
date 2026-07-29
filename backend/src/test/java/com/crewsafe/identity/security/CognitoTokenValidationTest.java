@@ -33,6 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Tokens here are minted for real against cognito-local (see AbstractIntegrationTest), the
  * same emulator used by local development, so these exercise the genuine JWKS lookup and
  * signature check rather than a stub.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class CognitoTokenValidationTest extends AbstractIntegrationTest {

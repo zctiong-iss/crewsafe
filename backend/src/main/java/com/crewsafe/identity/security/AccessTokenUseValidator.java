@@ -11,6 +11,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
  * Cognito issues an ID token and an access token, both signed by the same keys. Accepting
  * either interchangeably would let a client send us an ID token - which carries no scope
  * and was never meant to authorize an API call - as if it were an access token.
+ *
+ * @author Jemilin Beulah
  */
 class AccessTokenUseValidator implements OAuth2TokenValidator<Jwt> {
 
