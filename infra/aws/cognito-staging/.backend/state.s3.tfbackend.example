@@ -1,0 +1,5 @@
+bucket       = "<your-bucket-name>"
+key          = "crewsafe/cognito/staging.tfstate"
+region       = "ap-southeast-1"
+encrypt      = true
+use_lockfile = true

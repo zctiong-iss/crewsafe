@@ -7,6 +7,10 @@ Local development does **not** need this — `infra/local/compose.yaml` runs `co
 instead. This is for staging, and for testing the real Hosted UI redirect flow, which the
 emulator cannot do.
 
+Want to try the real Hosted UI flow on your own AWS account? See
+[`MANUAL_SETUP.md`](MANUAL_SETUP.md) for options (including reusing this Terraform config
+as-is), plus the exact env vars to run the backend and web console against it.
+
 ## Use
 
 ```bash
@@ -16,6 +20,46 @@ terraform init
 terraform plan
 terraform apply
 ```
+
+## State backend
+
+This root uses Terraform's default **local** backend today - `terraform.tfstate` sits next
+to this README, gitignored. To move it to S3:
+
+```bash
+BUCKET=crewsafe-terraform-state-<account-id>-ap-southeast-1   # must be globally unique
+
+aws s3api create-bucket --bucket "$BUCKET" --region ap-southeast-1 \
+  --create-bucket-configuration LocationConstraint=ap-southeast-1
+aws s3api put-bucket-versioning --bucket "$BUCKET" \
+  --versioning-configuration Status=Enabled
+aws s3api put-bucket-encryption --bucket "$BUCKET" \
+  --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+```
+
+Then:
+
+```bash
+cp backend.tf.example backend.tf
+cp .backend/state.s3.tfbackend.example .backend/state.s3.tfbackend
+# edit .backend/state.s3.tfbackend: set bucket to the name you just created.
+# Leave key/region/encrypt/use_lockfile as-is.
+terraform init -backend-config=.backend/state.s3.tfbackend -migrate-state
+terraform plan   # should report no changes
+```
+
+`use_lockfile = true` gets native S3 locking (Terraform 1.10+, no DynamoDB table needed).
+`backend.tf` and `.backend/state.s3.tfbackend` both stay gitignored - a fresh clone gets
+the plain local backend by default, and opts into S3 only by copying the two `.example`
+files above.
+
+`infra/terraform/bootstrap/state` (SCRUM-155) is a separate, heavier option for later if
+this becomes a shared/team account: it provisions the bucket through a GitHub-Actions-only
+OIDC pipeline with its own IAM roles, and reserves the key
+`crewsafe/cognito/staging.tfstate` for this root specifically. Not needed for a personal
+bucket - any key works there.
 
 ## Authenticating
 
@@ -82,8 +126,8 @@ at `cognito-local`; unset is what makes it talk to real AWS.
 ## Things worth knowing before you apply
 
 **The demo password ends up in Terraform state.** `terraform.tfstate` and
-`terraform.tfvars` are both gitignored. If this ever moves to a shared S3 backend, turn on
-encryption there.
+`terraform.tfvars` are both gitignored. See "State backend" above if moving state to S3 -
+that bucket gets encryption turned on too.
 
 **Usernames are plain, not email-shaped.** `username_attributes` is deliberately not set,
 because `DemoDataSeeder` looks accounts up by `worker1`, `supervisor1` and so on. Changing

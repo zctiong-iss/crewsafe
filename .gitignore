@@ -43,8 +43,10 @@ yarn-error.log*
 .terraform/
 **/.terraform/*
 .terraform-data/
-.backend/
+**/.backend/*
+!**/.backend/*.tfbackend.example
 **/backend.generated.tf
+infra/aws/cognito-staging/backend.tf
 *.tfstate
 *.tfstate.*
 *.tfplan
