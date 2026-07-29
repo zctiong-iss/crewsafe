@@ -1,3 +1,5 @@
+-- @author Kumaraguru Surya
+--
 -- Domain schema for shift planning, WBGT observation, and the recommend/approve/dispatch
 -- workflow that the rest of the product builds on. No entity or repository reads or
 -- writes these tables yet -- they exist so the schema is ready when that work starts,
