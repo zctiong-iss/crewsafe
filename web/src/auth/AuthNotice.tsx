@@ -52,7 +52,12 @@ export function AuthNotice({
         {(action ?? secondary) && (
           <div className="auth-notice__actions">
             {action && (
-              <button type="button" className="auth-notice__button" onClick={action.onClick}>
+              <button
+                type="button"
+                className="auth-notice__button"
+                onClick={action.onClick}
+                disabled={busy}
+              >
                 {action.label}
               </button>
             )}
@@ -61,6 +66,7 @@ export function AuthNotice({
                 type="button"
                 className="auth-notice__button auth-notice__button--quiet"
                 onClick={secondary.onClick}
+                disabled={busy}
               >
                 {secondary.label}
               </button>

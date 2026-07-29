@@ -61,3 +61,30 @@ export const apiBaseUrl: string = required(
   "VITE_API_BASE_URL",
   import.meta.env.VITE_API_BASE_URL,
 );
+
+const hostedUiDomain = required(
+  "VITE_COGNITO_HOSTED_UI_DOMAIN",
+  import.meta.env.VITE_COGNITO_HOSTED_UI_DOMAIN,
+);
+
+/**
+ * Cognito's own logout endpoint, built by hand rather than left to
+ * {@link UserManager.signoutRedirect}.
+ *
+ * Cognito's discovery document advertises a standard OIDC `end_session_endpoint`, which
+ * makes `signoutRedirect()` look like it should just work. It does not: Cognito's `/logout`
+ * predates full RP-Initiated Logout support and ignores the standard
+ * `post_logout_redirect_uri` / `id_token_hint` parameters that method sends. It wants its
+ * own `client_id` and `logout_uri` instead, checked against the app client's "Sign out
+ * URLs" — the same `logout_urls` set in infra/aws/cognito-staging. Without this, "sign out"
+ * only clears this app's own tokens: Cognito's own session cookie survives, and clicking
+ * sign in again on the same browser re-authenticates silently, no password prompt, no
+ * matter who is now sitting at the machine.
+ */
+export function cognitoSignOutUrl(): string {
+  const params = new URLSearchParams({
+    client_id: authConfig.client_id,
+    logout_uri: authConfig.post_logout_redirect_uri ?? window.location.origin,
+  });
+  return `${hostedUiDomain}/logout?${params.toString()}`;
+}

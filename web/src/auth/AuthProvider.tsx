@@ -1,6 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { User, UserManager } from "oidc-client-ts";
-import { authConfig } from "./authConfig";
+import { authConfig, cognitoSignOutUrl } from "./authConfig";
 import { setTokenProvider } from "@/api/client";
 import { fetchCurrentUser } from "@/api/identity";
 import type { CurrentUser } from "@/api/identity";
@@ -45,10 +45,19 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({
   children,
   userManager,
+  redirectTo = (url: string) => {
+    window.location.href = url;
+  },
 }: {
   children: ReactNode;
   /** Injectable so tests can drive auth without a real Cognito. */
   userManager?: UserManager;
+  /**
+   * Performs a full-page navigation. Injectable because signing out has to leave the SPA
+   * entirely — it ends Cognito's own session, not just this app's — and jsdom does not
+   * implement real navigation for tests to observe.
+   */
+  redirectTo?: (url: string) => void;
 }) {
   const managerRef = useRef<UserManager>(userManager ?? new UserManager(authConfig));
   const manager = managerRef.current;
@@ -126,8 +135,15 @@ export function AuthProvider({
       state,
       signIn: () => manager.signinRedirect(),
       signOut: async () => {
+        // Clear our own tokens first. The redirect below is a full-page navigation away
+        // from this origin and back, and sessionStorage survives that round trip — so if
+        // Cognito's own logout somehow failed, this app's session must not survive it.
         await manager.removeUser();
         setState({ status: "signed-out" });
+        // Then end Cognito's session too. Without this, its session cookie outlives ours:
+        // the next "Sign in" click on this browser re-authenticates silently, no password,
+        // regardless of who is sitting at the machine now.
+        redirectTo(cognitoSignOutUrl());
       },
       retry: resolveSession,
       completeSignIn: async () => {

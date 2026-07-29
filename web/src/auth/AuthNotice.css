@@ -74,6 +74,11 @@
   background: var(--surface-sunken);
 }
 
+.auth-notice__button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .auth-notice__busy {
   display: flex;
   align-items: center;

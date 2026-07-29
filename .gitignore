@@ -67,3 +67,6 @@ crash.*.log
 .idea/
 .vscode/
 *.iml
+
+# Local orchestration run — logs from ./run.sh
+.local-run/

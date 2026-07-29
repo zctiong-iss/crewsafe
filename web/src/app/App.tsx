@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { HomePage } from "@/features/home/HomePage";
 import { CallbackPage } from "@/auth/CallbackPage";
 import { AuthNotice } from "@/auth/AuthNotice";
+import { SignInScreen } from "@/auth/SignInScreen";
 import { useAuth } from "@/auth/useAuth";
 import { PlaceholderPage } from "@/features/placeholder/PlaceholderPage";
 import { NAVIGATION } from "./navigation";
@@ -36,16 +37,7 @@ export function App() {
       return (
         <Routes>
           {callbackRoute}
-          <Route
-            path="*"
-            element={
-              <AuthNotice
-                title="Sign in to CrewSafe"
-                body="You will be taken to your organisation's secure sign-in page, then brought back here."
-                action={{ label: "Sign in", onClick: () => void signIn() }}
-              />
-            }
-          />
+          <Route path="*" element={<SignInScreen onSignIn={signIn} />} />
         </Routes>
       );
 
