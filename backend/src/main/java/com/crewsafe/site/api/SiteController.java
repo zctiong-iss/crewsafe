@@ -1,16 +1,22 @@
 package com.crewsafe.site.api;
 
+import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.repository.SiteMembershipRepository;
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,6 +32,7 @@ import java.util.UUID;
 public class SiteController {
 
     private final SiteRepository sites;
+    private final SiteMembershipRepository memberships;
 
     public record SiteResponse(UUID id, String name, BigDecimal latitude, BigDecimal longitude, String timezone) {
         static SiteResponse from(Site site) {
@@ -35,6 +42,33 @@ public class SiteController {
     }
 
     public record SiteDashboardResponse(UUID siteId, String name, String status) {
+    }
+
+    /**
+     * The sites this user may reach — what the web app's site switcher is built from.
+     *
+     * <p>Filtered rather than authorized: there is no {@code @PreAuthorize} here because
+     * there is no single site to check. The membership join *is* the authorization, which
+     * makes this the one place the FR-03 rule is expressed as a filter instead of a guard.
+     * The two must not drift, so ADMIN is exempt here exactly as it is in
+     * {@link com.crewsafe.identity.security.SiteAccessEvaluator} — and SAFETY_MANAGER is
+     * deliberately not, for the reason documented there.
+     *
+     * <p>Returning an empty list is a legitimate answer, not an error: a new starter with no
+     * memberships yet is correctly authenticated and correctly sees nothing.
+     */
+    @GetMapping
+    public ResponseEntity<List<SiteResponse>> listAccessibleSites(
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+
+        List<Site> visible = principal.getRole() == Role.ADMIN
+                ? sites.findAll()
+                : sites.findAllById(memberships.findSiteIdsByUserId(principal.getId()));
+
+        return ResponseEntity.ok(visible.stream()
+                .sorted(Comparator.comparing(Site::getName))
+                .map(SiteResponse::from)
+                .toList());
     }
 
     /**

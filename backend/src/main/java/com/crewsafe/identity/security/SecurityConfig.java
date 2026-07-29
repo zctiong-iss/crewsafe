@@ -1,5 +1,7 @@
 package com.crewsafe.identity.security;
 
+import com.crewsafe.common.error.ErrorResponse;
+import com.crewsafe.common.web.RequestIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -138,6 +139,11 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
 
+        // A browser can only read response headers that are explicitly exposed. Without
+        // this the request id reaches the browser but JavaScript cannot see it, so the UI
+        // could never show a user the reference to quote when reporting a failure.
+        config.setExposedHeaders(List.of(RequestIdFilter.HEADER));
+
         // No cookies are used, so the browser never needs to send credentials. Keeping
         // this false also permits a strict origin list without the extra rules the CORS
         // spec imposes on credentialed requests.
@@ -149,10 +155,15 @@ public class SecurityConfig {
         return source;
     }
 
+    /**
+     * Same {@link ErrorResponse} shape the controllers use. Authentication failures are the
+     * errors a client sees most often, so they must not be the one place with a different
+     * body — a client should be able to parse every error the same way.
+     */
     private void writeError(HttpServletResponse response, int status, String error, String message)
             throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getWriter(), Map.of("error", error, "message", message));
+        objectMapper.writeValue(response.getWriter(), ErrorResponse.of(error, message));
     }
 }

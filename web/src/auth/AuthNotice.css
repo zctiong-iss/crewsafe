@@ -1,0 +1,117 @@
+/*
+ * Pre-app states sit on the navy rather than the app canvas. It is a deliberate signal:
+ * everything on this background is *outside* the console. Crossing from navy to the light
+ * canvas is what "you are in" looks like.
+ */
+.auth-notice {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: var(--navy);
+}
+
+.auth-notice__panel {
+  width: min(30rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  border-top: 3px solid var(--action);
+}
+
+.auth-notice__panel--warning {
+  border-top-color: var(--band-moderate);
+}
+
+.auth-notice__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.auth-notice__title {
+  font-size: var(--text-xl);
+  color: var(--ink);
+}
+
+.auth-notice__body {
+  color: var(--ink-secondary);
+  text-wrap: pretty;
+}
+
+.auth-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.auth-notice__button {
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+
+.auth-notice__button:hover {
+  background: var(--action-hover);
+}
+
+.auth-notice__button--quiet {
+  background: transparent;
+  color: var(--ink-secondary);
+  border-color: var(--line-strong);
+}
+
+.auth-notice__button--quiet:hover {
+  background: var(--surface-sunken);
+}
+
+.auth-notice__busy {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.auth-notice__pulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--action);
+  animation: auth-pulse 1.4s var(--ease) infinite;
+}
+
+/* The one piece of motion in the pre-app screens, and only where the app is genuinely
+   waiting on the network. Disabled wholesale under prefers-reduced-motion via --duration. */
+@keyframes auth-pulse {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-notice__pulse {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+.auth-notice__reference {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-4);
+}

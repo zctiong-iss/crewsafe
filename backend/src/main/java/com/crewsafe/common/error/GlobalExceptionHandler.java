@@ -8,30 +8,53 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.util.Map;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Turns unhandled exceptions into JSON.
  *
  * Responses carry a category, never a stack trace or an exception message. An exception
  * message routinely contains a SQL fragment, a class name or a file path — all of which
- * tell an attacker about internals they should have to guess.
+ * tell an attacker about internals they should have to guess. Each response does carry a
+ * {@code requestId}, which is how a report of "it broke" becomes findable in the logs.
  */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException e) {
+    public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", "Bad Request", "message", "Invalid request parameters"));
+                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<Map<String, String>> handleUnreadableBody(HttpMessageNotReadableException e) {
+    public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("error", "Bad Request", "message", "Malformed request body"));
+                .body(ErrorResponse.of("Bad Request", "Malformed request body"));
+    }
+
+    /**
+     * A path variable that will not convert — most often a malformed UUID.
+     *
+     * Without this the catch-all below reports 500, which is both wrong and alarming: the
+     * caller sent a bad request and nothing on the server actually failed.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+    }
+
+    /**
+     * An unmapped URL. Also a 500 under the catch-all otherwise, which would make routine
+     * scanner traffic look like a server on fire.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNotFound(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("Not Found", "No such resource"));
     }
 
     /**
@@ -42,17 +65,17 @@ public class GlobalExceptionHandler {
      * a 500 — hiding a working security control behind what looks like a server bug.
      */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, String>> handleAccessDenied(
-            AccessDeniedException e) {
+    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(Map.of("error", "Forbidden", "message", "Access denied"));
+                .body(ErrorResponse.of("Forbidden", "Access denied"));
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, String>> handleUnexpected(Exception e) {
-        // Logged in full for us, generic for the caller.
+    public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
+        // Logged in full for us, generic for the caller. The log line carries the same
+        // requestId the caller is handed, which is what ties the two together.
         log.error("Unhandled exception", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("error", "Internal Server Error", "message", "An unexpected error occurred"));
+                .body(ErrorResponse.of("Internal Server Error", "An unexpected error occurred"));
     }
 }

@@ -1,0 +1,127 @@
+/*
+ * Design tokens.
+ *
+ * Every colour, size and weight in the app comes from here. Two rules make this worth the
+ * indirection:
+ *
+ * 1. Nothing downstream may write a raw hex value. A one-off colour is a colour nobody can
+ *    find later, and in a safety interface a colour usually means something.
+ *
+ * 2. The two hazard scales are kept separate on purpose — see --band-* and --intensity-*
+ *    below. They look similar and mean entirely different things.
+ */
+
+:root {
+  /* ---- Surfaces -------------------------------------------------------- */
+  /* The console is used outdoors on bright screens, so the canvas is a cool grey rather
+     than white: it lets white cards read as raised without needing heavy shadows. */
+  --canvas: #eef1f6;
+  --surface: #ffffff;
+  --surface-sunken: #f6f8fb;
+  --navy: #0f2540; /* sidebar, headings — the anchor colour of the product */
+  --navy-raised: #1b3557; /* active nav item, cards that sit on the navy */
+
+  /* ---- Ink ------------------------------------------------------------- */
+  --ink: #0f2540;
+  --ink-secondary: #475569;
+  --ink-muted: #64748b;
+  --ink-on-navy: #ffffff;
+  --ink-on-navy-muted: #94a8c0;
+
+  /* ---- Lines ----------------------------------------------------------- */
+  --line: #dde4ed;
+  --line-strong: #c3cedd;
+
+  /* ---- Action ---------------------------------------------------------- */
+  --action: #1d4ed8;
+  --action-hover: #1e40af;
+  --action-ink: #ffffff;
+  --action-quiet: #eff4ff;
+
+  /* ---- Hazard scale 1: WBGT risk band ---------------------------------- */
+  /* What the *environment* is doing. Rendered filled, because it is a state of the world
+     that the user does not control. Sequential low -> extreme. */
+  --band-low: #0f7b6c;
+  --band-low-wash: #dff3ef;
+  --band-moderate: #a15c07;
+  --band-moderate-wash: #fdf0d5;
+  --band-high: #b42318;
+  --band-high-wash: #fde8e6;
+  --band-extreme: #7a1d1d;
+  --band-extreme-wash: #fbdad7;
+
+  /* ---- Hazard scale 2: work intensity ---------------------------------- */
+  /* What the *crew* is doing. Rendered outlined, so a glance never confuses "hard work"
+     with "dangerous conditions" — they share a hue family but not a treatment. */
+  --intensity-light: #3f6212;
+  --intensity-moderate: #92400e;
+  --intensity-heavy: #9f1239;
+
+  /* ---- Status ---------------------------------------------------------- */
+  --status-ok: #15803d;
+  --status-ok-wash: #e3f5e9;
+  --status-waiting: #a15c07;
+  --status-waiting-wash: #fdf0d5;
+  --status-none: #64748b;
+  --status-none-wash: #eef1f6;
+
+  /* ---- Type ------------------------------------------------------------ */
+  /* IBM Plex was drawn for technical interfaces and has true tabular figures, which is
+     what a console full of readings and timestamps actually needs. Mono is reserved for
+     machine-readable identifiers so a code never reads as prose. */
+  --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-code: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-xs: 0.6875rem; /* 11px — eyebrow labels, table headers */
+  --text-sm: 0.8125rem; /* 13px — secondary text, table cells */
+  --text-base: 0.9375rem; /* 15px — body */
+  --text-lg: 1.125rem; /* 18px — card titles */
+  --text-xl: 1.5rem; /* 24px — page titles */
+  --text-reading: 3rem; /* 48px — a WBGT figure, the one thing read across a room */
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-eyebrow: 0.08em;
+
+  /* ---- Space ----------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* ---- Shape ----------------------------------------------------------- */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 1px 2px rgb(15 37 64 / 0.05), 0 1px 3px rgb(15 37 64 / 0.04);
+  --shadow-raised: 0 4px 12px rgb(15 37 64 / 0.1);
+
+  /* ---- Layout ---------------------------------------------------------- */
+  --sidebar-width: 240px;
+  --topbar-height: 72px;
+  --content-max: 1360px;
+
+  /* ---- Motion ---------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --duration-fast: 120ms;
+  --duration: 200ms;
+}
+
+/*
+ * Honour the OS setting rather than animating regardless. Vestibular disorders are not
+ * rare, and nothing here needs motion to be understood.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+  }
+}
