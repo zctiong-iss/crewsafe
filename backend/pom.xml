@@ -70,11 +70,11 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
-        <!-- Token-bucket rate limiting for the login endpoint -->
+        <!-- Validates Cognito-issued access tokens against its JWKS. The backend never
+             issues a token itself, so this is the only auth-related starter it needs. -->
         <dependency>
-            <groupId>com.bucket4j</groupId>
-            <artifactId>bucket4j-core</artifactId>
-            <version>8.10.1</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
 
         <!-- OpenAPI 3 contract, consumed by the web and mobile client generators -->
@@ -84,28 +84,14 @@
             <version>2.8.6</version>
         </dependency>
 
-        <!--
-            JJWT 0.13.0 for JWT generation and validation.
-            Chosen because it enforces algorithm allowlisting by default and rejects
-            alg:none out of the box. Do not substitute a library that requires the
-            algorithm to be pinned manually.
-        -->
+        <!-- Used only by DemoDataSeeder, at application startup in the local/staging
+             profiles, to look up the Cognito "sub" of each already-provisioned demo user
+             (AdminGetUser). Never called on the request-serving path - the backend does
+             not sign in users and never calls InitiateAuth. -->
         <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-api</artifactId>
-            <version>0.13.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-impl</artifactId>
-            <version>0.13.0</version>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt-jackson</artifactId>
-            <version>0.13.0</version>
-            <scope>runtime</scope>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>cognitoidentityprovider</artifactId>
+            <version>2.46.17</version>
         </dependency>
 
         <!-- Lombok -->

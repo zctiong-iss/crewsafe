@@ -29,9 +29,10 @@ public class OpenApiConfig {
                         .description("""
                                 Shared backend for WBGT CrewSafe SG.
 
-                                Authentication is a JWT bearer token obtained from
-                                POST /api/v1/auth/login. No cookies are used anywhere in
-                                this API - send the token in the Authorization header."""))
+                                Authentication happens entirely against AWS Cognito's
+                                Hosted UI - this API never issues or checks a password.
+                                Send the resulting access token in the Authorization
+                                header. No cookies are used anywhere in this API."""))
                 .components(new Components().addSecuritySchemes(BEARER_SCHEME,
                         new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)

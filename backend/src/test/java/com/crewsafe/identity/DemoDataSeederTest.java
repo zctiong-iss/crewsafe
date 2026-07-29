@@ -9,18 +9,15 @@ import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The seeder is a security-relevant component - it creates the only accounts that exist -
- * so its behaviour is verified rather than assumed.
+ * The seeder is a security-relevant component - it decides which Cognito identities become
+ * local accounts - so its behaviour is verified rather than assumed.
  */
 @ActiveProfiles("local")
-@TestPropertySource(properties = "app.seed.password=seed-password-for-tests")
 class DemoDataSeederTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -31,9 +28,6 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
 
     @Autowired
     private SiteMembershipRepository memberships;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
 
     @Autowired
     private DemoDataSeeder seeder;
@@ -51,12 +45,10 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void storesTheSeedPasswordAsABcryptHashNotPlaintext() {
+    void storesTheCognitoSubReturnedByAdminGetUser() {
         AppUser supervisor = users.findByUsername("supervisor1").orElseThrow();
 
-        assertThat(supervisor.getPasswordHash()).isNotEqualTo("seed-password-for-tests");
-        assertThat(supervisor.getPasswordHash()).startsWith("$2a$");
-        assertThat(passwordEncoder.matches("seed-password-for-tests", supervisor.getPasswordHash())).isTrue();
+        assertThat(supervisor.getCognitoSub()).isEqualTo(subFor("supervisor1"));
     }
 
     @Test

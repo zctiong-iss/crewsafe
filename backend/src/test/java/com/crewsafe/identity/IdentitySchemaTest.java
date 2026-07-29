@@ -35,7 +35,7 @@ class IdentitySchemaTest extends AbstractIntegrationTest {
     private SiteMembershipRepository memberships;
 
     private AppUser newUser(String username, Role role) {
-        return users.save(new AppUser(username, "$2a$10$notARealHash", "Test " + username, role));
+        return users.save(new AppUser(username, "not-a-real-sub-" + UUID.randomUUID(), "Test " + username, role));
     }
 
     private Site newSite(String name) {

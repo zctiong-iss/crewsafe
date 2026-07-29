@@ -9,9 +9,18 @@ package com.crewsafe.common.audit;
  */
 public final class AuditEventType {
 
-    public static final String LOGIN_SUCCESS = "LOGIN_SUCCESS";
-    public static final String LOGIN_FAILURE = "LOGIN_FAILURE";
-    public static final String TOKEN_REFRESHED = "TOKEN_REFRESHED";
+    /**
+     * The first authenticated API call seen for a given access token. Cognito owns the
+     * actual credential check (Hosted UI), which happens off our infrastructure, so this is
+     * the closest the backend can observe to "a user logged in" - see
+     * {@link com.crewsafe.identity.security.CognitoJwtAuthenticationConverter}.
+     *
+     * <p>Deliberately <em>not</em> called {@code LOGIN_SUCCESS}: access tokens are short
+     * lived (15 minutes for the web client), so one working day of silent token refresh
+     * produces roughly thirty of these rows for a single human login. Anyone reading this
+     * table must count tokens, not logins.
+     */
+    public static final String TOKEN_FIRST_SEEN = "TOKEN_FIRST_SEEN";
     public static final String ACCESS_DENIED = "ACCESS_DENIED";
 
     private AuditEventType() {

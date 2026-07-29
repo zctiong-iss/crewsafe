@@ -1,23 +1,24 @@
 package com.crewsafe.identity.security;
 
-import com.crewsafe.common.security.LoginRateLimitFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -26,6 +27,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Security configuration — one stateless filter chain, no cookies anywhere.
@@ -34,6 +36,10 @@ import java.util.Map;
  * session-based one with form login and CSRF cookies for its server-rendered pages.
  * CrewSafe has no server-rendered pages, so the second chain, the session and the cookies
  * all disappear.
+ *
+ * <p>There is no login endpoint here. Cognito's Hosted UI issues tokens directly to the
+ * browser or app; this class only ever validates a token it is handed, and never sees a
+ * credential.
  */
 @Configuration
 @EnableWebSecurity
@@ -41,40 +47,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final LoginRateLimitFilter loginRateLimitFilter;
+    private final CognitoProperties cognitoProperties;
+    private final CognitoJwtAuthenticationConverter cognitoJwtAuthenticationConverter;
     private final ObjectMapper objectMapper;
 
     @Value("${app.cors.allowed-origins}")
     private List<String> allowedOrigins;
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
-
-    /**
-     * Stops Spring Boot registering the filter twice.
-     *
-     * A {@code @Component} extending {@code OncePerRequestFilter} is auto-registered with
-     * the servlet container *and* added to the security chain below. The container copy
-     * would run outside the chain, before the authorization rules, on every request.
-     */
-    @Bean
-    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(
-            JwtAuthenticationFilter filter) {
-        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
-    }
-
-    @Bean
-    public FilterRegistrationBean<LoginRateLimitFilter> rateLimitFilterRegistration(
-            LoginRateLimitFilter filter) {
-        var registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
-    }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -107,28 +85,49 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
                 // API documentation. Describes endpoint shapes, never data. Disable with
                 // springdoc.api-docs.enabled=false in production-demo if not wanted.
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated()
             )
 
-            .exceptionHandling(ex -> ex
+            // The resource server is the only authentication mechanism in this chain, so
+            // its entry point and access-denied handler are the whole error story - a
+            // missing token, an invalid one and a rejected refresh all produce the same
+            // uniform 401 JSON. Never distinguishing the cause is deliberate: a client
+            // should not be able to tell "expired" from "forged" from "wrong audience".
+            .oauth2ResourceServer(oauth -> oauth
+                .jwt(jwt -> jwt
+                        .decoder(cognitoJwtDecoder())
+                        .jwtAuthenticationConverter(cognitoJwtAuthenticationConverter))
                 .authenticationEntryPoint((request, response, authException) ->
                         writeError(response, HttpServletResponse.SC_UNAUTHORIZED,
-                                "Unauthorized", "Authentication required"))
+                                "Unauthorized", "Authentication failed"))
                 .accessDeniedHandler((request, response, deniedException) ->
                         writeError(response, HttpServletResponse.SC_FORBIDDEN,
                                 "Forbidden", "Access denied"))
-            )
-
-            // Rate limit runs first: a flood of login attempts should be rejected before
-            // any authentication work (and any BCrypt comparison) is done.
-            .addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            );
 
         return http.build();
+    }
+
+    /**
+     * Validates a Cognito access token: signature and expiry (Nimbus, via the JWKS at
+     * {@code jwkSetUri}), issuer, and the two Cognito-specific traps that a generic OAuth2
+     * resource server config would miss - see {@link AccessTokenUseValidator} and
+     * {@link AllowedClientIdValidator}.
+     */
+    @Bean
+    public JwtDecoder cognitoJwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(cognitoProperties.getJwkSetUri()).build();
+
+        OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefaultWithIssuer(cognitoProperties.getIssuerUri()),
+                new AccessTokenUseValidator(),
+                new AllowedClientIdValidator(Set.copyOf(cognitoProperties.getClientIds())));
+
+        decoder.setJwtValidator(validator);
+        return decoder;
     }
 
     @Bean

@@ -51,3 +51,4 @@ protection is disabled.
 ## Related
 
 - [ADR 0001 — Spring Security with self-issued JWTs](0001-spring-security-with-self-issued-jwts.md)
+- [ADR 0004 — AWS Cognito for authentication](0004-aws-cognito-for-authentication.md) — still holds under Cognito; tokens still arrive as `Authorization: Bearer`

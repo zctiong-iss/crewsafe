@@ -1,6 +1,6 @@
 # ADR 0003 — Stateless refresh tokens
 
-**Status:** Accepted, with a documented limitation
+**Status:** Superseded by [ADR 0004 — AWS Cognito for authentication](0004-aws-cognito-for-authentication.md)
 **Date:** 2026-07-28
 
 ## Context
@@ -61,6 +61,13 @@ Covered by dedicated tests at both the unit level (`JwtServiceTest`) and over HT
 Every token already carries a `jti`. If revocation becomes necessary: add a `revoked_jti`
 table, write to it on logout, and check it at the refresh endpoint. No restructuring, and
 the claim needed is already being issued.
+
+## Superseded
+
+Replaced by [ADR 0004 — AWS Cognito for authentication](0004-aws-cognito-for-authentication.md),
+which closes the limitation this ADR accepted: Cognito refresh tokens can be revoked
+server-side via `AdminUserGlobalSignOut`, so a compromised account is no longer stuck
+waiting out a 7-day token's natural expiry.
 
 ## Related
 

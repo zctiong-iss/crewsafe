@@ -1,6 +1,5 @@
 package com.crewsafe.identity.api;
 
-import com.crewsafe.identity.api.AuthDtos.MeResponse;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import lombok.RequiredArgsConstructor;

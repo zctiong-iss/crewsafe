@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -39,8 +38,6 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
     @Autowired private SiteRepository sites;
     @Autowired private SiteMembershipRepository memberships;
     @Autowired private AuditEventRepository auditEvents;
-    @Autowired private PasswordEncoder passwordEncoder;
-    @Autowired private JwtService jwtService;
 
     private Site siteA;
     private Site siteB;
@@ -52,8 +49,9 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
     private AppUser managerB;
 
     private AppUser user(Role role) {
-        return users.save(new AppUser("authz-" + UUID.randomUUID(), passwordEncoder.encode("x"),
-                "Authz Test " + role, role));
+        String username = "authz-" + UUID.randomUUID();
+        createCognitoUser(username);
+        return users.save(new AppUser(username, subFor(username), "Authz Test " + role, role));
     }
 
     private Site site(String label) {
@@ -62,7 +60,7 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
     }
 
     private String tokenFor(AppUser u) {
-        return jwtService.generateAccessToken(u);
+        return mintAccessToken(u.getUsername());
     }
 
     @BeforeEach

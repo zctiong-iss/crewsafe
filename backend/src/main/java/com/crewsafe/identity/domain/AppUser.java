@@ -36,9 +36,13 @@ public class AppUser {
     @Column(nullable = false, unique = true, length = 64)
     private String username;
 
-    /** BCrypt hash. Never the plaintext password, and never exposed through any API. */
-    @Column(name = "password_hash", nullable = false, length = 120)
-    private String passwordHash;
+    /**
+     * The {@code sub} claim from this user's Cognito access token. How a validated token
+     * is resolved back to a role and site memberships - see
+     * {@link com.crewsafe.identity.security.CognitoJwtAuthenticationConverter}.
+     */
+    @Column(name = "cognito_sub", nullable = false, unique = true, length = 64)
+    private String cognitoSub;
 
     @Column(name = "display_name", nullable = false, length = 120)
     private String displayName;
@@ -57,10 +61,10 @@ public class AppUser {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    public AppUser(String username, String passwordHash, String displayName, Role role) {
+    public AppUser(String username, String cognitoSub, String displayName, Role role) {
         this.id = UUID.randomUUID();
         this.username = username;
-        this.passwordHash = passwordHash;
+        this.cognitoSub = cognitoSub;
         this.displayName = displayName;
         this.role = role;
         this.status = UserStatus.ACTIVE;

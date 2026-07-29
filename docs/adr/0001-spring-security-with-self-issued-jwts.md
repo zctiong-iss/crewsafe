@@ -1,6 +1,6 @@
 # ADR 0001 — Spring Security with self-issued JWTs
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0004 — AWS Cognito for authentication](0004-aws-cognito-for-authentication.md)
 **Date:** 2026-07-28
 
 ## Context
@@ -39,6 +39,15 @@ Authenticate with Spring Security, issuing and validating our own HS256 JWTs via
 - No MFA. Out of scope; note it in the security report.
 - Migration to a managed provider stays open: tokens are standards-compliant, so swapping in
   a resource-server issuer URI and deleting our token endpoint is the whole change.
+
+## Superseded
+
+Replaced by [ADR 0004 — AWS Cognito for authentication](0004-aws-cognito-for-authentication.md).
+The "migration to a managed provider stays open" consequence above turned out to be
+accurate: the swap was exercised while this project had zero production usage and zero
+external clients, so the whole self-issued-JWT design described here — `JwtService`,
+`JwtAuthenticationFilter`, `AuthController`, BCrypt password storage, all of it — was
+removed outright rather than kept alongside a new path.
 
 ## Related
 
