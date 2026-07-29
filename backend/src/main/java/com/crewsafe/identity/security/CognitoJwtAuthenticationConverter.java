@@ -70,14 +70,11 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
      */
     private void auditFirstRequestWithThisToken(Jwt jwt, AppUser user) {
         String jti = jwt.getId();
-        if (jti == null) {
+        if (jti == null || auditedTokens.contains(jti)) {
             return;
         }
         if (auditedTokens.size() >= MAX_TRACKED_TOKENS) {
             auditedTokens.clear();
-        }
-        if (!auditedTokens.add(jti)) {
-            return;
         }
 
         // This runs on the first request of every token, so an audit-write failure here
@@ -90,8 +87,14 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
         try {
             audit.record(user.getId(), AuditEventType.TOKEN_FIRST_SEEN,
                     "First authenticated request seen for this access token");
+            // Marked as seen only once the write succeeded. Marking it before would make the
+            // catch below pointless: the token would already count as audited, so the next
+            // request would return at the guard above and the record would never be retried.
+            // The cost is that two concurrent first requests with the same token can both
+            // write - a duplicate row, which is cheaper than a silently missing one.
+            auditedTokens.add(jti);
         } catch (RuntimeException e) {
-            log.error("Failed to write {} audit event for user={}",
+            log.error("Failed to write {} audit event for user={} - will retry on the next request",
                     AuditEventType.TOKEN_FIRST_SEEN, user.getId(), e);
         }
     }
@@ -99,8 +102,14 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
     /**
      * Logged because it is both a genuine security signal (a validly-signed Cognito token
      * with no local account behind it) and the likeliest support question a new starter
-     * generates. No audit row is written: there is no {@code app_user} to attribute it to,
-     * and a row per request would let a single rejected token flood the table.
+     * generates.
+     *
+     * <p>Logged rather than audited because there is no {@code app_user} row to attribute an
+     * audit event to - {@code audit_event.actor_id} is a foreign key to it. Note this does
+     * fire once per request, so a client retrying a rejected token in a loop will repeat the
+     * line indefinitely. That is acceptable for a log sink, which rolls and is aggregated
+     * upstream, and is exactly why it would not be acceptable for the append-only audit
+     * table, which is evidence and never rolls.
      */
     private static OAuth2AuthenticationException unknownUser(Jwt jwt) {
         log.warn("Rejected token for unknown or inactive user: sub={}", jwt.getSubject());

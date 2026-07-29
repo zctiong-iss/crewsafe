@@ -93,9 +93,10 @@ public class SecurityConfig {
 
             // The resource server is the only authentication mechanism in this chain, so
             // its entry point and access-denied handler are the whole error story - a
-            // missing token, an invalid one and a rejected refresh all produce the same
-            // uniform 401 JSON. Never distinguishing the cause is deliberate: a client
-            // should not be able to tell "expired" from "forged" from "wrong audience".
+            // missing token, a malformed one and a validly-signed one we reject all produce
+            // the same uniform 401 JSON. Never distinguishing the cause is deliberate: a
+            // client should not be able to tell "expired" from "forged" from "wrong issuer"
+            // from "no account here".
             .oauth2ResourceServer(oauth -> oauth
                 .jwt(jwt -> jwt
                         .decoder(cognitoJwtDecoder())

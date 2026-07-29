@@ -12,9 +12,11 @@ import java.util.UUID;
 /**
  * The authenticated principal.
  *
- * Wraps {@link AppUser} so that the user's UUID travels with the security context — the
- * site-access check needs it on every request, and re-reading it from a claim would mean an
- * extra query per call.
+ * Wraps {@link AppUser} so that the local user's UUID travels with the security context.
+ * The converter has already looked the row up to authenticate the request; carrying the id
+ * forward means the site-access check can use it without repeating that query. A Cognito
+ * token identifies its subject by {@code sub}, which is not this id — nothing downstream
+ * could derive it from the token alone.
  *
  * The {@code ROLE_} prefix is applied here. It is Spring Security's authority-string
  * convention (what {@code hasRole("SUPERVISOR")} looks for), not part of the domain, so the
