@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 script="$ROOT/.github/scripts/terraform/verify-cognito-deployment.sh"
 fixture_dir="$(mktemp -d)"
 trap 'rm -rf "$fixture_dir"' EXIT
+expected_oidc_subject="repo:zctiong-iss@267492605/crewsafe@1310783821:ref:refs/heads/main"
 
 [[ -x "$script" ]]
 
@@ -89,7 +90,18 @@ case "${1:-} ${2:-}" in
     printf '%s\n' '{"Groups":[{"GroupName":"developers","RoleArn":null,"Precedence":null},{"GroupName":"synthetic-test-users","RoleArn":null,"Precedence":null}]}'
     ;;
   "iam get-role")
-    printf '%s\n' '{"Role":{"AssumeRolePolicyDocument":{"Statement":[{"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:sub":"repo:zctiong-iss/crewsafe:ref:refs/heads/main"}}}]}}}'
+    provider_account=123456789012
+    audience=sts.amazonaws.com
+    subject=repo:zctiong-iss@267492605/crewsafe@1310783821:ref:refs/heads/main
+    case "${MOCK_OIDC_MISMATCH:-}" in
+      subject) subject=repo:zctiong-iss/crewsafe:ref:refs/heads/main ;;
+      audience) audience=example.invalid ;;
+      provider) provider_account=999999999999 ;;
+      "") ;;
+      *) echo "unexpected OIDC mismatch fixture" >&2; exit 1 ;;
+    esac
+    printf '{"Role":{"AssumeRolePolicyDocument":{"Statement":[{"Effect":"Allow","Principal":{"Federated":"arn:aws:iam::%s:oidc-provider/token.actions.githubusercontent.com"},"Action":"sts:AssumeRoleWithWebIdentity","Condition":{"StringEquals":{"token.actions.githubusercontent.com:aud":"%s","token.actions.githubusercontent.com:sub":"%s"}}}]}}}\n' \
+      "$provider_account" "$audience" "$subject"
     ;;
   *)
     echo "unexpected mocked AWS command: $*" >&2
@@ -108,12 +120,13 @@ chmod +x "$mock_bin/terraform" "$mock_bin/aws" "$mock_bin/curl"
 
 PATH="$mock_bin:$PATH" \
   "$script" "$tf_root" 123456789012 ap-southeast-1 \
-    crewsafe/cognito/shared-dev.tfstate >/dev/null
+    crewsafe/cognito/shared-dev.tfstate "$expected_oidc_subject" >/dev/null
 
 negative_output="$fixture_dir/negative-output"
 if PATH="$mock_bin:$PATH" MOCK_CLIENT_SECRET=true \
   "$script" "$tf_root" 123456789012 ap-southeast-1 \
-    crewsafe/cognito/shared-dev.tfstate >"$negative_output" 2>&1; then
+    crewsafe/cognito/shared-dev.tfstate "$expected_oidc_subject" \
+    >"$negative_output" 2>&1; then
   echo "Verifier accepted a Cognito client secret." >&2
   exit 1
 fi
@@ -122,5 +135,16 @@ if grep -Fq 'must-not-appear-in-output' "$negative_output"; then
   echo "Verifier exposed a Cognito client secret." >&2
   exit 1
 fi
+
+for mismatch in subject audience provider; do
+  if PATH="$mock_bin:$PATH" MOCK_OIDC_MISMATCH="$mismatch" \
+    "$script" "$tf_root" 123456789012 ap-southeast-1 \
+      crewsafe/cognito/shared-dev.tfstate "$expected_oidc_subject" \
+      >"$negative_output" 2>&1; then
+    echo "Verifier accepted an OIDC $mismatch mismatch." >&2
+    exit 1
+  fi
+  grep -Fq 'administration role trust mismatch' "$negative_output"
+done
 
 echo "Cognito deployment verification test passed"

@@ -15,11 +15,19 @@ for invalid in \
     exit 1
   fi
 done
-grep -Fq '^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$' \
+grep -Fq '^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:ref:refs/heads/main$' \
   "$ROOT/infra/terraform/cognito/variables.tf"
+if grep -Fq '^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$' \
+  "$ROOT/infra/terraform/cognito/variables.tf"; then
+  echo "legacy name-only GitHub OIDC subject remains accepted" >&2
+  exit 1
+fi
 if grep -Fq 'endswith(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
   exit 1
 fi
 if grep -Fq 'strcontains(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
   exit 1
 fi
+grep -Fq 'EXPECTED_OIDC_SUBJECT: ${{ vars.CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT }}' \
+  "$ROOT/.github/workflows/terraform-apply.yml"
+grep -Fq '"$EXPECTED_OIDC_SUBJECT"' "$ROOT/.github/workflows/terraform-apply.yml"

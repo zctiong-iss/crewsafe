@@ -271,6 +271,15 @@ for inspection, enable/disable, password reset, global sign-out, and approved
 group membership. Each developer receives an application role and site
 assignment through the non-sensitive mapping.
 
+The Cognito administration role must use the same immutable owner/repository-ID
+OIDC subject as the SCRUM-155 plan and apply roles:
+`repo:<owner>@<OWNER_ID>/<repository>@<REPO_ID>:ref:refs/heads/main`.
+`CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` supplies that reviewed value to the Cognito
+plan. The legacy name-only form is invalid because this repository customizes
+GitHub's OIDC `sub` claim with stable owner and repository IDs. Post-apply
+verification compares the live role's provider account, audience and subject
+exactly rather than accepting a main-branch-shaped value.
+
 Remove Cognito from normal local Compose/runtime. Keep the pinned emulator and
 synthetic fixtures test-scoped for deterministic CI only.
 

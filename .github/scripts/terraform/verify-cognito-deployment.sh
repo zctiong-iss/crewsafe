@@ -5,6 +5,7 @@ tf_root="${1:?Terraform root}"
 expected_account="${2:?account ID}"
 expected_region="${3:?Region}"
 expected_state_key="${4:-crewsafe/cognito/shared-dev.tfstate}"
+expected_oidc_subject="${5:?exact GitHub OIDC main-branch subject}"
 
 fail() {
   echo "::error::Shared Cognito deployment verification failed: $1" >&2
@@ -13,6 +14,8 @@ fail() {
 
 [[ "$expected_account" =~ ^[0-9]{12}$ ]] || fail "invalid expected account"
 [[ "$expected_region" == ap-southeast-1 ]] || fail "unexpected Region"
+[[ "$expected_oidc_subject" =~ ^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:ref:refs/heads/main$ ]] \
+  || fail "invalid expected GitHub OIDC subject"
 [[ "$(aws sts get-caller-identity --query Account --output text)" == "$expected_account" ]] \
   || fail "caller account mismatch"
 
@@ -85,13 +88,16 @@ admin_role_arn="$(terraform -chdir="$tf_root" output -raw administration_role_ar
 [[ "$admin_role_arn" == "arn:aws:iam::${expected_account}:role/CrewSafeGitHubCognitoAdminRole" ]] \
   || fail "administration role mismatch"
 role="$(aws iam get-role --role-name CrewSafeGitHubCognitoAdminRole --output json)"
-jq -e '
+jq -e \
+  --arg provider "arn:aws:iam::${expected_account}:oidc-provider/token.actions.githubusercontent.com" \
+  --arg subject "$expected_oidc_subject" '
   .Role.AssumeRolePolicyDocument.Statement
   | any(
-      .Action == "sts:AssumeRoleWithWebIdentity"
-      and (.Condition.StringEquals["token.actions.githubusercontent.com:sub"]
-        | test("^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$"))
-      and (.Condition.StringEquals["token.actions.githubusercontent.com:sub"] | contains("*") | not)
+      .Effect == "Allow"
+      and .Principal.Federated == $provider
+      and .Action == "sts:AssumeRoleWithWebIdentity"
+      and .Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
+      and .Condition.StringEquals["token.actions.githubusercontent.com:sub"] == $subject
     )
 ' <<<"$role" >/dev/null || fail "administration role trust mismatch"
 

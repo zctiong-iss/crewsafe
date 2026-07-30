@@ -24,11 +24,11 @@ variable "aws_region" {
 }
 
 variable "github_oidc_main_subject" {
-  description = "Exact non-wildcard OIDC subject issued for this repository's main branch."
+  description = "Exact immutable owner/repository-ID OIDC subject issued for this repository's main branch."
   type        = string
   validation {
-    condition     = can(regex("^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$", var.github_oidc_main_subject))
-    error_message = "github_oidc_main_subject must be an exact main-branch subject without wildcards."
+    condition     = can(regex("^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:ref:refs/heads/main$", var.github_oidc_main_subject))
+    error_message = "github_oidc_main_subject must be the exact immutable owner/repository-ID main-branch subject without wildcards."
   }
 }
 
