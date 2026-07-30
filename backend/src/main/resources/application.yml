@@ -43,6 +43,16 @@ app:
     connect-timeout: ${NEA_CONNECT_TIMEOUT:5s}
     read-timeout: ${NEA_READ_TIMEOUT:10s}
 
+  weather:
+    ingestion:
+      # Opt in per environment. This prevents developer/test startup from silently calling
+      # an external safety-data service; live deployments enable it explicitly.
+      enabled: ${WEATHER_INGESTION_ENABLED:false}
+      initial-delay: ${WEATHER_INGESTION_INITIAL_DELAY:5s}
+      interval: ${WEATHER_INGESTION_INTERVAL:15m}
+      delayed-after: ${WEATHER_DELAYED_AFTER:20m}
+      stale-after: ${WEATHER_STALE_AFTER:45m}
+
   # app.cognito.* is deliberately absent from this file. Every value is required (see the
   # @NotBlank/@NotEmpty constraints on CognitoProperties), so leaving them undefined here
   # means a deployment that forgets one fails at startup with a validation error naming the
