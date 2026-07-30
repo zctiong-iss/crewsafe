@@ -617,7 +617,7 @@ Update the `application_users` array in
   "display_name": "Zhong Cheng Tiong",
   "role": "SUPERVISOR",
   "site_codes": [
-    "replace-with-approved-site-code"
+    "bishan"
   ],
   "identity_kind": "developer"
 }
@@ -625,7 +625,8 @@ Update the `application_users` array in
 
 The mapping contains no email. `role` must be one of `WORKER`, `SUPERVISOR`,
 `SAFETY_MANAGER`, or `ADMIN`. Site codes must be explicitly approved for the
-developer. Cognito groups never replace this mapping.
+developer and must currently be `bishan` or `campus`. Cognito groups never
+replace this mapping.
 
 ### 10.5 Complete first sign-in
 
@@ -638,6 +639,305 @@ developer. Cognito groups never replace this mapping.
 
 If the invitation was not delivered or expired, use **Resend invitation** in
 AWS Console. Do not add `AdminCreateUser` to the GitHub role as a workaround.
+
+### 10.6 Add a synthetic demo user for end-to-end login testing
+
+A synthetic demo user is a real login identity in the shared Cognito user
+pool, but it must not represent a real worker or reuse a developer's personal
+account. It requires both:
+
+1. a Cognito identity that can authenticate and receive a JWT; and
+2. a CrewSafe `application_users` mapping that binds the JWT's immutable
+   `sub` to a role and approved sites.
+
+Creating only one side is intentionally insufficient. An unmapped Cognito
+identity can authenticate but must be denied by CrewSafe, while a mapping
+without a Cognito identity cannot log in.
+
+#### Recommended demo roster
+
+Start with these four synthetic users. They cover every CrewSafe role without
+using a real person's account:
+
+| CrewSafe username | Role | Sites | Main demonstration |
+|---|---|---|---|
+| `demo-worker-bishan` | `WORKER` | `bishan` | Worker login and worker-only functions |
+| `demo-supervisor-bishan` | `SUPERVISOR` | `bishan` | Crew supervision at one assigned site |
+| `demo-safety-manager` | `SAFETY_MANAGER` | `bishan`, `campus` | Safety oversight across both demo sites |
+| `demo-admin` | `ADMIN` | `bishan`, `campus` | Administration functions |
+
+Add these only when their negative scenarios are required:
+
+| Cognito identity | CrewSafe mapping | Purpose |
+|---|---|---|
+| `demo-supervisor-campus` | `SUPERVISOR`, `campus` | Compare two supervisors and prove cross-site isolation |
+| `demo-unmapped` | None | Prove that valid Cognito authentication alone is denied by CrewSafe |
+
+Do not create separate identities for every test case. Reuse the minimum
+roster unless tests run concurrently or require conflicting account states.
+Never give `demo-unmapped` an `application_users` entry.
+
+#### 10.6.1 Prepare the test identity
+
+Repeat this preparation for each selected roster entry:
+
+1. Obtain a project-controlled, non-personal test email inbox or email alias
+   that the E2E tester can access. Use one unique alias per Cognito identity.
+2. Copy the username, role, and sites from the roster. Do not replace them
+   with a real person's name.
+3. Confirm that the role and sites are the minimum required by the test.
+4. Choose only the supported site codes `bishan` and/or `campus`.
+5. Prepare an approved secret-manager entry for the login email and password.
+6. Confirm that the identity contains no real worker name, phone number, or
+   other personal data.
+
+The test email and all passwords are credentials or user attributes. Never
+put them in `CREWSAFE_SHARED_COGNITO_JSON`, source control, Jira, workflow
+inputs, workflow summaries, screenshots, recordings, or chat.
+
+#### 10.6.2 Create the Cognito identity
+
+Initial user creation remains AWS Console-only. Repeat these steps for each
+selected roster entry:
+
+1. Sign in to the AWS account for the selected alias.
+2. Open **Amazon Cognito → User pools → `crewsafe-shared-dev` → Users**.
+3. Select **Create user**.
+4. Enter that identity's project-controlled test email as the username.
+5. For a no-email setup, choose **Don't send an invitation**.
+6. Choose **Create a password** and enter a unique temporary password that
+   satisfies the pool's 12-character uppercase, lowercase, number, and symbol
+   policy.
+7. Save the email and temporary password directly into the approved
+   secret-manager entry. Do not stage them in a text file or clipboard
+   manager.
+8. Submit the Cognito form.
+9. Confirm that exactly one new enabled user appears with status
+   `FORCE_CHANGE_PASSWORD`.
+10. Record the creation time, but do not copy the email or temporary password
+   into operator notes.
+
+Do not create the identity with a personal email merely for convenience. Do
+not choose **Don't send an invitation** unless the approved secret manager is
+ready and the tester can access the temporary password there. If no approved
+secret-delivery mechanism exists, send Cognito's invitation to the
+project-controlled inbox instead. AWS documents both console choices under
+[Creating user accounts as administrator](https://docs.aws.amazon.com/cognito/latest/developerguide/how-to-create-user-accounts.html).
+
+#### 10.6.3 Retrieve the immutable `sub`
+
+Immediately after creating each identity:
+
+1. Open **Actions → Cognito User Administration** in GitHub.
+2. Select branch `main`.
+3. Run with:
+   - `target_account_alias`: the selected alias, for example `zctiong`;
+   - `operation`: `list-users`;
+   - `cognito_sub`: blank;
+   - `group`: blank;
+   - `confirmation`: blank.
+4. Match the newly created identity using its creation time and
+   `FORCE_CHANGE_PASSWORD` status.
+5. Record only the returned immutable `sub` beside its non-sensitive
+   CrewSafe username.
+6. If more than one result could match, stop and identify the user in AWS
+   Console. Never guess a `sub`.
+
+#### 10.6.4 Classify it as a synthetic test identity
+
+For each newly recorded `sub`, run **Cognito User Administration** again:
+
+- `target_account_alias`: the selected alias;
+- `operation`: `add-to-group`;
+- `cognito_sub`: the immutable `sub`;
+- `group`: `synthetic-test-users`;
+- `confirmation`: `add-to-group <alias> <sub>`.
+
+The group is classification and audit metadata only. It does not grant a
+CrewSafe role or site access.
+
+#### 10.6.5 Add the CrewSafe mapping
+
+Add one object to the selected account's `application_users` array in the
+GitHub repository variable `CREWSAFE_SHARED_COGNITO_JSON`:
+
+```json
+[
+  {
+    "username": "demo-worker-bishan",
+    "cognito_sub": "REPLACE-WORKER-SUB",
+    "display_name": "Synthetic Bishan Worker",
+    "role": "WORKER",
+    "site_codes": ["bishan"],
+    "identity_kind": "synthetic-test"
+  },
+  {
+    "username": "demo-supervisor-bishan",
+    "cognito_sub": "REPLACE-SUPERVISOR-SUB",
+    "display_name": "Synthetic Bishan Supervisor",
+    "role": "SUPERVISOR",
+    "site_codes": ["bishan"],
+    "identity_kind": "synthetic-test"
+  },
+  {
+    "username": "demo-safety-manager",
+    "cognito_sub": "REPLACE-SAFETY-MANAGER-SUB",
+    "display_name": "Synthetic Safety Manager",
+    "role": "SAFETY_MANAGER",
+    "site_codes": ["bishan", "campus"],
+    "identity_kind": "synthetic-test"
+  },
+  {
+    "username": "demo-admin",
+    "cognito_sub": "REPLACE-ADMIN-SUB",
+    "display_name": "Synthetic Administrator",
+    "role": "ADMIN",
+    "site_codes": ["bishan", "campus"],
+    "identity_kind": "synthetic-test"
+  }
+]
+```
+
+Use the objects inside this example array as entries in the existing selected
+account's `application_users` array. Do not replace the entire repository
+variable with the example. Preserve every account and existing
+application-user entry. Before saving, confirm:
+
+- each `cognito_sub` exactly matches its Cognito result and is not an email;
+- the username and `cognito_sub` are each unique within the account;
+- `identity_kind` is `synthetic-test`;
+- the role is the minimum required by the scenario;
+- every site code is `bishan` or `campus`; and
+- the JSON contains no email, password, access token, or AWS credential.
+
+Retrieve and validate the variable as described in section 9.3. The backend
+consumes application mappings at startup. A long-running deployed backend must
+be redeployed or restarted through its approved deployment process; changing
+the GitHub variable alone does not modify an already-running process.
+
+#### 10.6.6 Start CrewSafe with `run.sh`
+
+The local backend and web app can test these identities directly against the
+deployed shared Cognito pool. No local Cognito, AWS profile, AWS credential, or
+local Terraform is used.
+
+1. Confirm the Cognito users, immutable `sub` values, group memberships, and
+   `application_users` mappings are complete.
+2. Stop any earlier `run.sh` process.
+3. From the repository root, authenticate GitHub CLI:
+
+   ```bash
+   gh auth status
+   ```
+
+4. Start the application for the selected account:
+
+   ```bash
+   ./run.sh --account zctiong
+   ```
+
+5. Leave that terminal running. `run.sh` tails
+   `.local-run/backend.log` after the backend becomes healthy.
+6. Open `http://localhost:5173` in a browser.
+7. If startup fails, inspect `.local-run/backend.log` without copying tokens,
+   email addresses, or credentials into an issue.
+
+On every startup, the backend reconciles the reviewed mapping:
+
+- a new username and `sub` creates one local application user;
+- an existing matching username and `sub` updates reviewed display name,
+  role, and exact site memberships without creating duplicates;
+- an inactive local user remains inactive;
+- removing a mapping makes its local user inactive on the next startup;
+- an empty `application_users` array starts safely with no active mapped
+  users; and
+- a username/immutable-`sub` conflict aborts startup instead of silently
+  rebinding an identity.
+
+Adding another synthetic user later therefore requires updating
+`CREWSAFE_SHARED_COGNITO_JSON`, stopping `run.sh`, and running the same command
+again. A database reset is not normally required.
+
+For a deliberately clean local acceptance run only, use:
+
+```bash
+./run.sh --account zctiong --reset
+```
+
+`--reset` deletes the local CrewSafe PostgreSQL volume and recreates local
+application data. It does not change Cognito, GitHub variables, Terraform
+state, or AWS infrastructure. Do not use it if local application data must be
+preserved.
+
+#### 10.6.7 Complete the first login
+
+Repeat this once for each mapped demo user:
+
+1. Open CrewSafe in a fresh private browser session.
+2. Select the normal CrewSafe login action so the browser is redirected to
+   the Cognito Hosted UI.
+3. Retrieve that identity's email and temporary password from the approved
+   secret manager.
+4. Sign in through the Hosted UI.
+5. When Cognito presents `NEW_PASSWORD_REQUIRED`, set a new unique password
+   that satisfies the pool policy.
+6. Replace the temporary password in the secret manager with the permanent
+   test password.
+7. Confirm the browser returns to CrewSafe.
+8. Sign out before testing the next identity.
+9. Confirm AWS Console now shows the completed user as enabled and no longer
+   in `FORCE_CHANGE_PASSWORD`.
+
+For automated browser E2E execution, inject the email and password only from
+protected CI environment secrets. Mask them, disable credential logging, and
+ensure failure screenshots, videos, traces, and HTML reports cannot capture
+the password field or token-bearing URLs. Do not pass either credential as a
+workflow-dispatch input.
+
+#### 10.6.8 Verify application authorization
+
+Complete all of these checks:
+
+1. Log in as `demo-worker-bishan`; confirm `/api/v1/me` returns `WORKER` and
+   only `bishan`.
+2. Log in as `demo-supervisor-bishan`; confirm `/api/v1/me` returns
+   `SUPERVISOR` and only `bishan`.
+3. As the Bishan supervisor, attempt a Campus-scoped request and confirm it is
+   denied server-side.
+4. Log in as `demo-safety-manager`; confirm `/api/v1/me` returns
+   `SAFETY_MANAGER`, `bishan`, and `campus`.
+5. Log in as `demo-admin`; confirm `/api/v1/me` returns `ADMIN` and both demo
+   sites.
+6. If `demo-unmapped` was created, log in successfully through Cognito and
+   confirm CrewSafe denies `/api/v1/me`.
+7. For every mapped user, exercise one allowed operation appropriate to the
+   role and confirm a higher-privilege operation is denied where applicable.
+8. Sign out, confirm the local session is cleared, and sign in again with one
+   permanent test password.
+9. Record only the commit SHA, account alias, synthetic username, role, site
+   codes, sanitized result, and workflow/run evidence.
+
+Never record the JWT, Cognito email, password, full AWS account ID, or
+response headers containing credentials.
+
+#### 10.6.9 Repeat, reset, and retire safely
+
+- For another test role or site boundary, create a separate least-privilege
+  synthetic identity. Do not repeatedly mutate one identity across concurrent
+  test suites.
+- If the password is lost or expired, run the allowlisted `reset-password`
+  operation and complete the recovery through the project-controlled inbox.
+- Before changing a mapping's immutable `sub`, stop: create a new mapping or
+  correct the mistaken value through review. Never rebind an existing
+  username silently.
+- To suspend the account, remove or disable its application mapping first,
+  then run `disable` and `global-sign-out`.
+- To retire it, also run `remove-from-group` for
+  `synthetic-test-users`, remove its mapping, restart/redeploy the backend,
+  and verify that `/api/v1/me` is denied.
+
+The administration workflow intentionally cannot create users, set a known
+password, authenticate as the synthetic user, or permanently delete it.
 
 ## 11. Controlled user administration
 

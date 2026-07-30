@@ -29,6 +29,11 @@ class DemoDataSeederMappingTest {
     }
 
     @Test
+    void acceptsAnEmptyMappingForInitialSharedCognitoOnboarding() {
+        assertThat(DemoDataSeeder.parseAndValidateMappings(MAPPER, "[]")).isEmpty();
+    }
+
+    @Test
     void rejectsMalformedAndEmailSubjectMappings() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(MAPPER, "{"));

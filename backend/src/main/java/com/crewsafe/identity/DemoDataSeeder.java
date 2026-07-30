@@ -3,6 +3,7 @@ package com.crewsafe.identity;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.domain.SiteMembership;
+import com.crewsafe.identity.domain.UserStatus;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CognitoProperties;
@@ -17,12 +18,18 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
- * Seeds synthetic demo accounts, sites and memberships.
+ * Reconciles reviewed local/staging application accounts, sites and memberships.
  *
  * All identities are fictional — the project uses no real worker data.
  *
@@ -48,35 +55,87 @@ public class DemoDataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (users.existsByUsername("supervisor1")) {
-            log.info("Demo data already present - skipping seeding.");
-            return;
-        }
-
         List<DemoUserMapping> mappings = parseAndValidateMappings(
                 objectMapper, cognitoProperties.getDemoUsersJson());
 
         // Two sites. The second exists so that "user cannot reach a site they are not
         // assigned to" is testable — with only one site the rule is unfalsifiable.
-        Site bishan = sites.save(new Site("Bishan Park Landscaping",
-                new BigDecimal("1.362200"), new BigDecimal("103.845500")));
-        Site campus = sites.save(new Site("NUS Campus Maintenance",
-                new BigDecimal("1.296600"), new BigDecimal("103.776400")));
+        Site bishan = findOrCreateSite("Bishan Park Landscaping",
+                new BigDecimal("1.362200"), new BigDecimal("103.845500"));
+        Site campus = findOrCreateSite("NUS Campus Maintenance",
+                new BigDecimal("1.296600"), new BigDecimal("103.776400"));
 
         Map<String, Site> siteByCode = Map.of("bishan", bishan, "campus", campus);
-        Map<String, AppUser> saved = mappings.stream().collect(java.util.stream.Collectors.toMap(
-                DemoUserMapping::username,
-                mapping -> users.save(new AppUser(mapping.username(), mapping.cognitoSub(),
-                        mapping.displayName(), mapping.role()))));
+        Set<String> configuredUsernames = mappings.stream()
+                .map(DemoUserMapping::username)
+                .collect(Collectors.toUnmodifiableSet());
+
+        // The reviewed mapping is authoritative for local/staging access. Removing an entry
+        // revokes application access on the next startup while preserving the record and its
+        // audit relationships. Re-adding it does not silently reactivate it.
+        users.findAll().stream()
+                .filter(user -> !configuredUsernames.contains(user.getUsername()))
+                .forEach(user -> user.setStatus(UserStatus.INACTIVE));
+
         for (DemoUserMapping mapping : mappings) {
-            for (String siteCode : mapping.siteCodes()) {
-                memberships.save(new SiteMembership(saved.get(mapping.username()).getId(),
-                        siteByCode.get(siteCode).getId()));
-            }
+            AppUser user = reconcileIdentity(mapping);
+            reconcileMemberships(user, mapping.siteCodes(), siteByCode);
         }
 
-        log.info("Seeded {} synthetic demo users across 2 sites ({}, {}).",
+        log.info("Reconciled {} reviewed application users across 2 sites ({}, {}).",
                 mappings.size(), bishan.getName(), campus.getName());
+    }
+
+    private Site findOrCreateSite(String name, BigDecimal latitude, BigDecimal longitude) {
+        return sites.findByName(name)
+                .orElseGet(() -> sites.save(new Site(name, latitude, longitude)));
+    }
+
+    private AppUser reconcileIdentity(DemoUserMapping mapping) {
+        Optional<AppUser> byUsername = users.findByUsername(mapping.username());
+        Optional<AppUser> bySubject = users.findByCognitoSub(mapping.cognitoSub());
+
+        if (byUsername.isEmpty() && bySubject.isEmpty()) {
+            return users.save(new AppUser(mapping.username(), mapping.cognitoSub(),
+                    mapping.displayName(), mapping.role()));
+        }
+
+        if (byUsername.isEmpty() || bySubject.isEmpty()
+                || !byUsername.orElseThrow().getId().equals(bySubject.orElseThrow().getId())) {
+            throw new IllegalStateException(
+                    "Application-user mapping conflicts with an existing immutable Cognito subject.");
+        }
+
+        AppUser existing = byUsername.orElseThrow();
+        existing.setDisplayName(mapping.displayName());
+        existing.setRole(mapping.role());
+        // Status is deliberately preserved: configuration must never reactivate an account
+        // that an operator has disabled.
+        return existing;
+    }
+
+    private void reconcileMemberships(
+            AppUser user, List<String> siteCodes, Map<String, Site> siteByCode) {
+        Set<UUID> desiredSiteIds = siteCodes.stream()
+                .map(siteByCode::get)
+                .map(Site::getId)
+                .collect(Collectors.toUnmodifiableSet());
+        List<SiteMembership> existing = memberships.findByUserId(user.getId());
+        List<SiteMembership> obsolete = existing.stream()
+                .filter(membership -> !desiredSiteIds.contains(membership.getSiteId()))
+                .toList();
+        if (!obsolete.isEmpty()) {
+            memberships.deleteAll(obsolete);
+        }
+
+        Set<UUID> existingSiteIds = existing.stream()
+                .map(SiteMembership::getSiteId)
+                .filter(desiredSiteIds::contains)
+                .collect(Collectors.toCollection(HashSet::new));
+        desiredSiteIds.stream()
+                .filter(existingSiteId -> !existingSiteIds.contains(existingSiteId))
+                .map(siteId -> new SiteMembership(user.getId(), siteId))
+                .forEach(memberships::save);
     }
 
     static List<DemoUserMapping> parseAndValidateMappings(ObjectMapper mapper, String json) {
@@ -86,7 +145,7 @@ public class DemoDataSeeder implements ApplicationRunner {
         } catch (Exception exception) {
             throw new IllegalArgumentException("Mapping JSON is malformed.", exception);
         }
-        if (mappings == null || mappings.isEmpty() || mappings.stream().anyMatch(java.util.Objects::isNull)
+        if (mappings == null || mappings.stream().anyMatch(java.util.Objects::isNull)
                 || mappings.stream().map(DemoUserMapping::username).anyMatch(java.util.Objects::isNull)
                 || mappings.stream().map(DemoUserMapping::username).distinct().count() != mappings.size()
                 || mappings.stream().map(DemoUserMapping::cognitoSub).anyMatch(java.util.Objects::isNull)

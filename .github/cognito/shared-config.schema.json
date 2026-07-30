@@ -137,8 +137,10 @@
           "type": "array",
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            "enum": [
+              "bishan",
+              "campus"
+            ]
           }
         },
         "identity_kind": {

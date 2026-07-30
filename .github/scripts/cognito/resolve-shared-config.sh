@@ -57,7 +57,7 @@ jq -cer --arg alias "$account_alias" '
       and (.identity_kind | IN("developer", "synthetic-test"))
       and (.site_codes | type == "array"
         and length == (unique | length)
-        and all(.[]; test("^[a-z0-9]+(-[a-z0-9]+)*$")))
+        and all(.[]; IN("bishan", "campus")))
     ))
 ' <<<"$config" || {
   echo "Shared Cognito configuration is missing, stale, or unsafe." >&2

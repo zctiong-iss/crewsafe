@@ -4,6 +4,9 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 resolver="$ROOT/.github/scripts/cognito/resolve-shared-config.sh"
 
 jq empty "$ROOT/.github/cognito/shared-config.schema.json"
+jq -e '
+  ."$defs".application_user.properties.site_codes.items.enum == ["bishan", "campus"]
+' "$ROOT/.github/cognito/shared-config.schema.json" >/dev/null
 [[ -x "$resolver" ]]
 grep -Eq 'CREWSAFE_SHARED_COGNITO_JSON' "$ROOT/run.sh"
 grep -Eq 'gh variable get' "$ROOT/run.sh"
@@ -29,7 +32,7 @@ valid='{
         "cognito_sub": "00000000-0000-0000-0000-000000000001",
         "display_name": "Developer One",
         "role": "SUPERVISOR",
-        "site_codes": ["jurong"],
+        "site_codes": ["bishan"],
         "identity_kind": "developer"
       }]
     }
@@ -37,10 +40,14 @@ valid='{
 }'
 
 CREWSAFE_SHARED_COGNITO_JSON="$valid" "$resolver" alice >/dev/null
+CREWSAFE_SHARED_COGNITO_JSON="$(
+  jq '.accounts.alice.application_users = []' <<<"$valid"
+)" "$resolver" alice >/dev/null
 
 for invalid in \
   "$(jq '.accounts.alice.region = "us-east-1"' <<<"$valid")" \
   "$(jq '.accounts.alice.application_users[0].cognito_sub = "person@example.com"' <<<"$valid")" \
+  "$(jq '.accounts.alice.application_users[0].site_codes = ["jurong"]' <<<"$valid")" \
   "$(jq '.accounts.alice.application_users += [.accounts.alice.application_users[0]]' <<<"$valid")" \
   "$(jq '.accounts.alice.issuer_uri = "https://example.invalid/pool"' <<<"$valid")" \
   "$(jq '.accounts.alice.password = "forbidden"' <<<"$valid")"; do
