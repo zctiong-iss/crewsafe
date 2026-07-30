@@ -81,6 +81,8 @@ jobs:
           ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
         run: |
           set -euo pipefail
+          # AWS CLI JMESPath literals require these single quotes.
+          # shellcheck disable=SC2016
           case "$OPERATION" in
             inspect) aws cognito-idp list-users --user-pool-id "$POOL" --filter "sub = \"$SUBJECT\"" --attributes-to-get sub --query 'Users[].{Sub:Attributes[?Name==`sub`]|[0].Value,Enabled:Enabled,Status:UserStatus,Created:UserCreateDate}' ;;
             list-users) aws cognito-idp list-users --user-pool-id "$POOL" --attributes-to-get sub --query 'Users[].{Sub:Attributes[?Name==`sub`]|[0].Value,Enabled:Enabled,Status:UserStatus,Created:UserCreateDate}' ;;

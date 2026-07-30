@@ -59,6 +59,8 @@ jobs:
           REGION: ${{ steps.account.outputs.region }}
           STATE_KEY: ${{ steps.component.outputs.state_key }}
         run: |
+          # Values are supplied by the step environment.
+          # shellcheck disable=SC2153
           . "$GITHUB_WORKSPACE/.github/scripts/terraform/plan-init.sh" \
             "$BACKEND_STRATEGY" "$BUCKET" "$REGION" "$STATE_KEY" "$ACCOUNT_ALIAS"
       - name: Plan
@@ -85,7 +87,9 @@ jobs:
           ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
           ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
           AWS_REGION: ${{ steps.account.outputs.region }}
-        run: "$GITHUB_WORKSPACE/.github/scripts/terraform/write-plan-metadata.sh plan.tfplan .terraform.lock.hcl \"$GITHUB_WORKSPACE/plan-bundle\""
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/terraform/write-plan-metadata.sh" \
+            plan.tfplan .terraform.lock.hcl "$GITHUB_WORKSPACE/plan-bundle"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: terraform-plan-${{ github.run_id }}-${{ github.run_attempt }}

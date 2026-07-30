@@ -134,6 +134,8 @@ jobs:
           REGION: ${{ steps.account.outputs.region }}
           STATE_KEY: ${{ steps.component.outputs.state_key }}
         run: |
+          # Values are supplied by the step environment.
+          # shellcheck disable=SC2153
           . "$GITHUB_WORKSPACE/.github/scripts/terraform/plan-init.sh" \
             "$BACKEND_STRATEGY" "$BUCKET" "$REGION" "$STATE_KEY" "$ACCOUNT_ALIAS"
           terraform apply -input=false -auto-approve "$GITHUB_WORKSPACE/plan-bundle/plan.tfplan"
