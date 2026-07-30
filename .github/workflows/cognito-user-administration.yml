@@ -1,0 +1,100 @@
+name: Cognito User Administration
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_account_alias: { description: "Registered account alias", required: true, type: string }
+      operation:
+        description: "Allowlisted administration operation"
+        required: true
+        type: choice
+        options: [inspect, list-users, list-groups, enable, disable, reset-password, global-sign-out, add-to-group, remove-from-group]
+      cognito_sub: { description: "Immutable Cognito sub; blank for list operations", required: false, type: string }
+      group: { description: "developers or synthetic-test-users for membership operations", required: false, type: string }
+      confirmation: { description: "<operation> <alias> <sub> for state changes", required: false, type: string }
+
+concurrency:
+  group: cognito-admin-${{ inputs.target_account_alias }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.ref == 'refs/heads/main'
+    permissions: { contents: read }
+    runs-on: ubuntu-latest
+    outputs:
+      operation: ${{ steps.guard.outputs.operation }}
+      subject: ${{ steps.guard.outputs.subject }}
+      group: ${{ steps.guard.outputs.group }}
+      pool: ${{ steps.config.outputs.pool }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - id: guard
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          INPUT_CONFIRMATION: ${{ inputs.confirmation }}
+          INPUT_GROUP: ${{ inputs.group }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+          INPUT_SUBJECT: ${{ inputs.cognito_sub }}
+          WORKFLOW_ACTOR: ${{ github.actor }}
+        run: |
+          .github/scripts/cognito/resolve-admin-operation.sh \
+            "$INPUT_ACCOUNT_ALIAS" "$INPUT_OPERATION" "$INPUT_SUBJECT" \
+            "$INPUT_GROUP" "$WORKFLOW_ACTOR" "$INPUT_CONFIRMATION"
+      - id: config
+        env:
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+        run: |
+          pool="$(
+            .github/scripts/cognito/resolve-shared-config.sh \
+              "$INPUT_ACCOUNT_ALIAS" | jq -r .user_pool_id
+          )"
+          printf 'pool=%s\n' "$pool" >>"$GITHUB_OUTPUT"
+
+  administer:
+    needs: authorize
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - id: account
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+        run: .github/scripts/terraform/resolve-terraform-account.sh "$INPUT_ACCOUNT_ALIAS"
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: arn:aws:iam::${{ steps.account.outputs.account_id }}:role/CrewSafeGitHubCognitoAdminRole
+          aws-region: ${{ steps.account.outputs.region }}
+          role-session-name: CrewSafeCognitoAdmin-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Execute allowlisted operation
+        env:
+          POOL: ${{ needs.authorize.outputs.pool }}
+          OPERATION: ${{ needs.authorize.outputs.operation }}
+          SUBJECT: ${{ needs.authorize.outputs.subject }}
+          GROUP: ${{ needs.authorize.outputs.group }}
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+        run: |
+          set -euo pipefail
+          # AWS CLI JMESPath literals require these single quotes.
+          # shellcheck disable=SC2016
+          case "$OPERATION" in
+            inspect) aws cognito-idp list-users --user-pool-id "$POOL" --filter "sub = \"$SUBJECT\"" --attributes-to-get sub --query 'Users[].{Sub:Attributes[?Name==`sub`]|[0].Value,Enabled:Enabled,Status:UserStatus,Created:UserCreateDate}' ;;
+            list-users) aws cognito-idp list-users --user-pool-id "$POOL" --attributes-to-get sub --query 'Users[].{Sub:Attributes[?Name==`sub`]|[0].Value,Enabled:Enabled,Status:UserStatus,Created:UserCreateDate}' ;;
+            list-groups) aws cognito-idp list-groups --user-pool-id "$POOL" --query 'Groups[].GroupName' ;;
+            enable) aws cognito-idp admin-enable-user --user-pool-id "$POOL" --username "$SUBJECT" ;;
+            disable) aws cognito-idp admin-disable-user --user-pool-id "$POOL" --username "$SUBJECT" ;;
+            reset-password) aws cognito-idp admin-reset-user-password --user-pool-id "$POOL" --username "$SUBJECT" ;;
+            global-sign-out) aws cognito-idp admin-user-global-sign-out --user-pool-id "$POOL" --username "$SUBJECT" ;;
+            add-to-group) aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL" --username "$SUBJECT" --group-name "$GROUP" ;;
+            remove-from-group) aws cognito-idp admin-remove-user-from-group --user-pool-id "$POOL" --username "$SUBJECT" --group-name "$GROUP" ;;
+          esac
+          # Markdown backticks in the summary are intentionally single quoted.
+          # shellcheck disable=SC2016
+          printf 'Actor: `%s`\nAccount: `%s`\nOperation: `%s`\nSubject: `%s`\nResult: `succeeded`\nRun: `%s`\n' \
+            "$GITHUB_ACTOR" "$ACCOUNT_ALIAS" "$OPERATION" "${SUBJECT:-n/a}" "$GITHUB_RUN_ID" >>"$GITHUB_STEP_SUMMARY"

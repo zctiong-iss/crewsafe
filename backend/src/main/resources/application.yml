@@ -62,21 +62,17 @@ app:
   # unresolved placeholder binds as the literal string "${COGNITO_ISSUER_URI}", which
   # satisfies @NotBlank and starts the application with nonsense configuration.
   #
-  # Local development:      see application-local.yml
+  # Local development:      run.sh supplies validated shared Cognito values
   # Staging and production: set these environment variables, which Spring binds by relaxed
   #                         naming with no entry needed here —
   #                           APP_COGNITO_ISSUER_URI
   #                           APP_COGNITO_JWK_SET_URI
   #                           APP_COGNITO_CLIENT_IDS      (comma-separated)
-  #                           APP_COGNITO_USER_POOL_ID
-  #                           APP_COGNITO_REGION
-  #                         APP_COGNITO_ENDPOINT_OVERRIDE stays unset outside local dev,
-  #                         so the AWS SDK talks to the real regional endpoint.
+  #                           APP_COGNITO_DEMO_USERS_JSON
   #
-  # issuer-uri and jwk-set-uri are two properties rather than Spring's
-  # discover-from-issuer shortcut: cognito-local's discovery document reports whatever host
-  # and port it happens to be reached on, which under Testcontainers is a different port
-  # every run. Against real Cognito the two naturally coincide.
+  # issuer-uri and jwk-set-uri remain separate so issuer validation stays exact while the
+  # pinned test-only emulator can expose JWKS on a random Testcontainers port. Against
+  # deployed Cognito the two naturally coincide.
 
 # Expose only what we need. Health is used by the container platform and the
 # smoke tests; everything else stays closed by default.

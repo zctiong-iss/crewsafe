@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "components": {
+    "one": {
+      "jira_key": "SCRUM-998",
+      "root": "infra/terraform/synthetic-contract",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/test/shared.tfstate",
+      "allow_destroy": false
+    },
+    "two": {
+      "jira_key": "SCRUM-999",
+      "root": "infra/terraform/synthetic-contract",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/test/shared.tfstate",
+      "allow_destroy": false
+    }
+  }
+}

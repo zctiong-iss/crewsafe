@@ -1,0 +1,98 @@
+name: Terraform Plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_account_alias: { description: "Registered AWS account alias", required: true, type: string }
+      terraform_component: { description: "Catalogued Terraform component", required: true, type: string }
+      operation:
+        description: "Reviewed operation"
+        required: true
+        type: choice
+        default: apply
+        options: [apply, destroy]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-${{ inputs.target_account_alias }}-${{ inputs.terraform_component }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+jobs:
+  plan:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - id: component
+        env:
+          INPUT_COMPONENT: ${{ inputs.terraform_component }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+        run: .github/scripts/terraform/resolve-component.sh "$INPUT_COMPONENT" "$INPUT_OPERATION"
+      - id: account
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+        run: .github/scripts/terraform/resolve-terraform-account.sh "$INPUT_ACCOUNT_ALIAS"
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ steps.account.outputs.plan_role_arn }}
+          aws-region: ${{ steps.account.outputs.region }}
+          role-session-name: CrewSafePlan-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Verify account
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "${{ steps.account.outputs.account_id }}"
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+        with: { terraform_version: 1.10.5, terraform_wrapper: false }
+      - name: Initialize
+        working-directory: ${{ steps.component.outputs.root }}
+        env:
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          BACKEND_STRATEGY: ${{ steps.component.outputs.backend_strategy }}
+          BUCKET: ${{ steps.account.outputs.bucket }}
+          REGION: ${{ steps.account.outputs.region }}
+          STATE_KEY: ${{ steps.component.outputs.state_key }}
+        run: |
+          # Values are supplied by the step environment.
+          # shellcheck disable=SC2153
+          . "$GITHUB_WORKSPACE/.github/scripts/terraform/plan-init.sh" \
+            "$BACKEND_STRATEGY" "$BUCKET" "$REGION" "$STATE_KEY" "$ACCOUNT_ALIAS"
+      - name: Plan
+        working-directory: ${{ steps.component.outputs.root }}
+        env:
+          TF_VAR_expected_account_id: ${{ steps.account.outputs.account_id }}
+          TF_VAR_account_alias: ${{ inputs.target_account_alias }}
+          TF_VAR_aws_region: ${{ steps.account.outputs.region }}
+          TF_VAR_github_oidc_main_subject: ${{ vars.CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+        run: |
+          args=(-input=false -lock-timeout=5m -out=plan.tfplan)
+          [[ "$INPUT_OPERATION" == destroy ]] && args+=(-destroy)
+          terraform plan "${args[@]}"
+      - name: Bundle reviewed plan
+        working-directory: ${{ steps.component.outputs.root }}
+        env:
+          COMPONENT: ${{ inputs.terraform_component }}
+          OPERATION: ${{ inputs.operation }}
+          ROOT: ${{ steps.component.outputs.root }}
+          BACKEND_STRATEGY: ${{ steps.component.outputs.backend_strategy }}
+          STATE_KEY: ${{ steps.component.outputs.state_key }}
+          JIRA_KEY: ${{ steps.component.outputs.jira_key }}
+          ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
+          AWS_REGION: ${{ steps.account.outputs.region }}
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/terraform/write-plan-metadata.sh" \
+            plan.tfplan .terraform.lock.hcl "$GITHUB_WORKSPACE/plan-bundle"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: terraform-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: plan-bundle/
+          retention-days: 1
+          if-no-files-found: error

@@ -79,7 +79,7 @@ const hostedUiDomain = required(
  * predates full RP-Initiated Logout support and ignores the standard
  * `post_logout_redirect_uri` / `id_token_hint` parameters that method sends. It wants its
  * own `client_id` and `logout_uri` instead, checked against the app client's "Sign out
- * URLs" — the same `logout_urls` set in infra/aws/cognito-staging. Without this, "sign out"
+ * URLs" — the same `logout_urls` set in infra/terraform/cognito. Without this, "sign out"
  * only clears this app's own tokens: Cognito's own session cookie survives, and clicking
  * sign in again on the same browser re-authenticates silently, no password prompt, no
  * matter who is now sitting at the machine.

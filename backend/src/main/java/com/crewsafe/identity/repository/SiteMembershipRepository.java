@@ -20,4 +20,6 @@ public interface SiteMembershipRepository extends JpaRepository<SiteMembership, 
 
     @Query("select m.siteId from SiteMembership m where m.userId = :userId")
     List<UUID> findSiteIdsByUserId(UUID userId);
+
+    List<SiteMembership> findByUserId(UUID userId);
 }

@@ -1,5 +1,7 @@
 .DS_Store
 ~$*
+/AGENTS.md
+/CLAUDE.md
 
 # Secrets — never commit
 .env
@@ -46,7 +48,7 @@ yarn-error.log*
 **/.backend/*
 !**/.backend/*.tfbackend.example
 **/backend.generated.tf
-infra/aws/cognito-staging/backend.tf
+plan-bundle/
 *.tfstate
 *.tfstate.*
 *.tfplan
@@ -72,3 +74,4 @@ crash.*.log
 
 # Local orchestration run — logs from ./run.sh
 .local-run/
+.crewsafe-runtime/

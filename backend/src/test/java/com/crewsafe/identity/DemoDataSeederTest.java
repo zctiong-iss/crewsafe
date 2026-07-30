@@ -47,7 +47,7 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void storesTheCognitoSubReturnedByAdminGetUser() {
+    void storesTheConfiguredImmutableCognitoSubWithoutRuntimeLookup() {
         AppUser supervisor = users.findByUsername("supervisor1").orElseThrow();
 
         assertThat(supervisor.getCognitoSub()).isEqualTo(subFor("supervisor1"));
@@ -82,7 +82,7 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
         long sitesBefore = sites.count();
 
         // Simulates a second application start against an already-seeded database.
-        // Without the existsByUsername guard this would throw on the unique constraint.
+        // Per-identity reconciliation must not create duplicate users, sites, or memberships.
         seeder.run(null);
 
         assertThat(users.count()).isEqualTo(usersBefore);

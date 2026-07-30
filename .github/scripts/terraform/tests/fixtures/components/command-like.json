@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "components": {
+    "unsafe": {
+      "jira_key": "SCRUM-999",
+      "root": "infra/terraform/synthetic-contract",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/test/unsafe.tfstate",
+      "allow_destroy": false,
+      "command": "echo unsafe"
+    }
+  }
+}
