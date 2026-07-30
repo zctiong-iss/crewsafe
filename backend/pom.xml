@@ -84,14 +84,12 @@
             <version>2.8.6</version>
         </dependency>
 
-        <!-- Used only by DemoDataSeeder, at application startup in the local/staging
-             profiles, to look up the Cognito "sub" of each already-provisioned demo user
-             (AdminGetUser). Never called on the request-serving path - the backend does
-             not sign in users and never calls InitiateAuth. -->
+        <!-- Test-only Cognito API client used by the pinned Testcontainers emulator. -->
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>cognitoidentityprovider</artifactId>
             <version>2.46.17</version>
+            <scope>test</scope>
         </dependency>
 
         <!-- Lombok -->

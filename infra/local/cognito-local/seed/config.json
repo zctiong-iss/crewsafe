@@ -1,8 +1,0 @@
-{
-  "UserPoolDefaults": {
-    "UsernameAttributes": []
-  },
-  "TokenConfig": {
-    "IssuerDomain": "http://cognito-local"
-  }
-}

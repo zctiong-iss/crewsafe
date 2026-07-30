@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crewsafe.local/schemas/shared-cognito-config.json",
+  "title": "CrewSafe Shared Cognito Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "accounts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "accounts": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/account"
+      }
+    }
+  },
+  "$defs": {
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "region",
+        "user_pool_id",
+        "issuer_uri",
+        "jwks_uri",
+        "hosted_ui_url",
+        "web_client_id",
+        "mobile_client_id",
+        "cli_client_id",
+        "groups",
+        "application_users"
+      ],
+      "properties": {
+        "region": {
+          "const": "ap-southeast-1"
+        },
+        "user_pool_id": {
+          "type": "string",
+          "pattern": "^ap-southeast-1_[A-Za-z0-9]+$"
+        },
+        "issuer_uri": {
+          "type": "string",
+          "pattern": "^https://cognito-idp\\.ap-southeast-1\\.amazonaws\\.com/ap-southeast-1_[A-Za-z0-9]+$"
+        },
+        "jwks_uri": {
+          "type": "string",
+          "pattern": "^https://cognito-idp\\.ap-southeast-1\\.amazonaws\\.com/ap-southeast-1_[A-Za-z0-9]+/\\.well-known/jwks\\.json$"
+        },
+        "hosted_ui_url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "web_client_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mobile_client_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cli_client_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "groups": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "developers"
+            },
+            {
+              "const": "synthetic-test-users"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "application_users": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/application_user"
+          }
+        }
+      }
+    },
+    "application_user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "username",
+        "cognito_sub",
+        "display_name",
+        "role",
+        "site_codes",
+        "identity_kind"
+      ],
+      "properties": {
+        "username": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+          "not": {
+            "pattern": "@"
+          }
+        },
+        "cognito_sub": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^@\\s]+$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "role": {
+          "enum": [
+            "WORKER",
+            "SUPERVISOR",
+            "SAFETY_MANAGER",
+            "ADMIN"
+          ]
+        },
+        "site_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "identity_kind": {
+          "enum": [
+            "developer",
+            "synthetic-test"
+          ]
+        }
+      }
+    }
+  }
+}

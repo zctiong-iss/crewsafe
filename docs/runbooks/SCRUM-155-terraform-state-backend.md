@@ -102,14 +102,14 @@ ephemeral GitHub-hosted runners. The apply preserves a recovery object before
 generating the S3 backend configuration and migrating state to the canonical
 key. Developers still never run Terraform locally or download state.
 
-1. Open **Actions → Terraform State Plan → Run workflow**.
+1. Open **Actions → Terraform Plan → Run workflow**.
 2. Select `main`, enter the registered alias, and select `state-backend`.
 3. Confirm that the run assumes the intended plan role and account.
 4. Review the alias, Region, derived bucket, mode, commit, checksum, and resource
    summary.
 5. Confirm that the plan contains no DynamoDB, Cognito, IAM user, access key, or
    unrelated resource.
-6. Record the successful workflow run ID.
+6. Record the successful workflow run ID and run attempt.
 7. Stop if an existing bucket is not recognized as CrewSafe-managed.
 
 The saved plan expires after one day. The artifact contains the binary plan and
@@ -119,10 +119,11 @@ non-secret metadata only; it never contains credentials or Terraform state.
 
 The plan actor or another authorized teammate performs the apply:
 
-1. Open **Actions → Terraform State Apply → Run workflow**.
+1. Open **Actions → Terraform Apply → Run workflow**.
 2. Select `main`.
-3. Enter the same account alias and successful plan run ID.
-4. Enter exactly `APPLY <account-alias>`.
+3. Enter the same account alias, component, operation, successful plan run ID,
+   and plan run attempt.
+4. Enter exactly `APPLY <account-alias> state-backend`.
 5. Verify the account, commit, bucket, and checksum in the run.
 6. Run the workflow.
 
@@ -185,7 +186,7 @@ reused.
    administrator to delete only that exact orphaned bucket. The GitHub apply
    role intentionally cannot delete buckets.
 4. Update both GitHub IAM roles from the canonical policy templates above.
-5. Run **Terraform State Plan** again from `main` and use its new run ID for a
+5. Run **Terraform Plan** again from `main` and use its new run ID/attempt for a
    new apply. Never reuse the pre-failure plan.
 
 If any canonical state, recovery state, version, delete marker, lockfile, or

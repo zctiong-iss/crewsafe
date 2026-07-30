@@ -138,13 +138,27 @@ public abstract class AbstractIntegrationTest {
         // The other pool's client is trusted on purpose: it removes the client_id check from
         // the picture so that a token from that pool is rejected by the issuer check alone.
         registry.add("app.cognito.client-ids", () -> CLIENT_ID + "," + OTHER_POOL_CLIENT_ID);
-        registry.add("app.cognito.user-pool-id", () -> POOL_ID);
-        registry.add("app.cognito.region", () -> "us-east-1");
-        registry.add("app.cognito.endpoint-override", () -> ENDPOINT);
+        registry.add("app.cognito.demo-users-json", AbstractIntegrationTest::demoUsersJson);
 
         // Note: do NOT set anything here that a subclass's @TestPropertySource might need
         // to override. @DynamicPropertySource outranks a subclass's @TestPropertySource, so
         // a value set here cannot be overridden by a test that needs a different one.
+    }
+
+    private static String demoUsersJson() {
+        return """
+                [
+                  {"username":"supervisor1","cognitoSub":"%s","displayName":"Aisyah (Supervisor)","role":"SUPERVISOR","siteCodes":["bishan"],"identityKind":"developer"},
+                  {"username":"supervisor2","cognitoSub":"%s","displayName":"Rajesh (Supervisor)","role":"SUPERVISOR","siteCodes":["campus"],"identityKind":"developer"},
+                  {"username":"worker1","cognitoSub":"%s","displayName":"Meng Hui (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
+                  {"username":"worker2","cognitoSub":"%s","displayName":"Siti (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
+                  {"username":"worker3","cognitoSub":"%s","displayName":"Kumar (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
+                  {"username":"manager1","cognitoSub":"%s","displayName":"Wei Ling (Safety Manager)","role":"SAFETY_MANAGER","siteCodes":["bishan","campus"],"identityKind":"developer"},
+                  {"username":"admin1","cognitoSub":"%s","displayName":"System Administrator","role":"ADMIN","siteCodes":[],"identityKind":"developer"}
+                ]
+                """.formatted(
+                subFor("supervisor1"), subFor("supervisor2"), subFor("worker1"),
+                subFor("worker2"), subFor("worker3"), subFor("manager1"), subFor("admin1"));
     }
 
     /** Creates a Cognito user with a permanent password, ready for {@link #mintAccessToken}. */

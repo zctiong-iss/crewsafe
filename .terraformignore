@@ -8,6 +8,9 @@ docs/
 **/.terraform/
 .terraform-data/
 .backend/
+plan-bundle/
+.local-run/
+.crewsafe-runtime/
 **/backend.generated.tf
 *.tfstate
 *.tfstate.*

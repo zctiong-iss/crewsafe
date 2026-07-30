@@ -47,7 +47,7 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void storesTheCognitoSubReturnedByAdminGetUser() {
+    void storesTheConfiguredImmutableCognitoSubWithoutRuntimeLookup() {
         AppUser supervisor = users.findByUsername("supervisor1").orElseThrow();
 
         assertThat(supervisor.getCognitoSub()).isEqualTo(subFor("supervisor1"));

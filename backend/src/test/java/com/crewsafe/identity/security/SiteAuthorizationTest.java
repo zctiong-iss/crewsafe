@@ -48,6 +48,7 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
     private String supervisorBToken;
     private String managerBToken;
     private String adminToken;
+    private AppUser workerA;
     private AppUser managerB;
 
     private AppUser user(Role role) {
@@ -70,7 +71,7 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
         siteA = site("Site A");
         siteB = site("Site B");
 
-        AppUser workerA = user(Role.WORKER);
+        workerA = user(Role.WORKER);
         AppUser supervisorA = user(Role.SUPERVISOR);
         AppUser supervisorB = user(Role.SUPERVISOR);
         managerB = user(Role.SAFETY_MANAGER);
@@ -115,6 +116,21 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + workerAToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value("Forbidden"));
+    }
+
+    @Test
+    void databaseOffboardingDeniesTheNextRequestBeforeCognitoIsDisabled() throws Exception {
+        memberships.findAll().stream()
+                .filter(membership -> membership.getUserId().equals(workerA.getId())
+                        && membership.getSiteId().equals(siteA.getId()))
+                .forEach(memberships::delete);
+        memberships.flush();
+
+        // The already-issued Cognito token remains valid. Removing the server-side
+        // membership must still deny the next object-scoped request immediately.
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId())
+                        .header("Authorization", "Bearer " + workerAToken))
+                .andExpect(status().isForbidden());
     }
 
     @Test

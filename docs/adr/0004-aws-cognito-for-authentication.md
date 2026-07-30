@@ -54,12 +54,13 @@ login code in this repository to read at all. The redirect and PKCE handling tha
 lives in `oidc-client-ts` (web) and `expo-auth-session` (mobile), established libraries
 doing exactly what "outsource, don't rebuild" asks for, on the client side.
 
-**Why local development doesn't need an AWS account.**
+**Historical local-emulator decision (superseded for normal development by
+[ADR 0006](0006-shared-remote-cognito-for-development.md)).**
 [`jagregory/cognito-local`](https://github.com/jagregory/cognito-local) is a real
 implementation of the Cognito Identity Provider HTTP API — genuine RS256 tokens, a genuine
-JWKS endpoint — run as a container alongside Postgres. `podman compose up` gives a fully
-working login flow with zero cloud dependency, and the same image runs in CI via
-Testcontainers, so "works on my machine" and "works in CI" mean the same thing. Two
+JWKS endpoint. It was originally run alongside Postgres for normal local development.
+ADR 0006 removed that runtime path; the pinned image and synthetic fixture now run only
+through Testcontainers in automated tests. Two
 Cognito-specific validation traps exist regardless of environment and are covered
 explicitly: **`token_use`**, because an ID token and an access token share signing keys
 and only this claim tells them apart; and **`client_id`**, because Cognito access tokens
@@ -82,14 +83,15 @@ uncovered is smaller than it would be for a public product.
 
 ## Consequences
 
-- The `cognitoidentityprovider` AWS SDK is a dependency only of the offline demo seeder,
-  never of the request-serving path.
+- The `cognitoidentityprovider` AWS SDK is test-scoped for the pinned emulator and is
+  absent from the normal runtime classpath.
 - A compromised refresh token can be revoked server-side via Cognito's
   `AdminUserGlobalSignOut` — a real improvement over the stateless-refresh-token design it
   replaces (ADR 0003), which had no revocation story at all.
 - The backend's login-audit trail (FR-04) covers "authenticated and made an API call," not
   "attempted to log in" — an accepted, explicitly documented gap rather than an oversight.
-- Local development and CI both depend on `cognito-local` staying a faithful emulator.
+- Automated tests depend on `cognito-local` staying a faithful emulator; normal
+  development uses the shared deployed pool defined by ADR 0006.
   Its own limitations are tracked directly rather than assumed:
   - It supports only the `USER_PASSWORD_AUTH` flow — fine for minting tokens in tests,
     irrelevant to the real Hosted UI redirect, which only a real pool can exercise.
@@ -101,9 +103,9 @@ uncovered is smaller than it would be for a public product.
     `CognitoTokenValidationTest.tokenFromAnotherUserPoolIsRejectedByTheIssuerCheck` relies
     on this. Without it the issuer check — whose `issuer-uri` is configured independently
     of `jwk-set-uri` and could therefore drift silently — would have no coverage at all.
-  - It persists issued refresh tokens into its own data directory, so the checked-in pool
-    is mounted read-only and copied into the container at startup rather than bind-mounted
-    read-write. See `infra/local/compose.yaml`.
+  - It persists issued refresh tokens into its own data directory, so the pinned synthetic
+    fixture under `backend/src/test/resources/` is copied into the Testcontainers instance
+    at startup rather than mounted from normal local Compose.
 
 - **The audit write on the authentication path fails open.** `TOKEN_FIRST_SEEN` is recorded
   from the JWT converter, which runs inside an authentication filter that only knows how to
