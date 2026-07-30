@@ -94,5 +94,7 @@ jobs:
             add-to-group) aws cognito-idp admin-add-user-to-group --user-pool-id "$POOL" --username "$SUBJECT" --group-name "$GROUP" ;;
             remove-from-group) aws cognito-idp admin-remove-user-from-group --user-pool-id "$POOL" --username "$SUBJECT" --group-name "$GROUP" ;;
           esac
+          # Markdown backticks in the summary are intentionally single quoted.
+          # shellcheck disable=SC2016
           printf 'Actor: `%s`\nAccount: `%s`\nOperation: `%s`\nSubject: `%s`\nResult: `succeeded`\nRun: `%s`\n' \
             "$GITHUB_ACTOR" "$ACCOUNT_ALIAS" "$OPERATION" "${SUBJECT:-n/a}" "$GITHUB_RUN_ID" >>"$GITHUB_STEP_SUMMARY"
