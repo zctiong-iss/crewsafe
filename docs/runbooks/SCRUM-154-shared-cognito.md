@@ -120,7 +120,11 @@ as additional inline policies.
 4. Select the **JSON** editor.
 5. Copy the complete reviewed document from
    `infra/terraform/cognito/iam/plan-role-policy.json`.
-6. Review that it contains read-only Cognito and IAM actions.
+6. Review that it contains read-only Cognito and IAM actions, including:
+   - `cognito-idp:GetUserPoolMfaConfig`, which the AWS provider uses when
+     refreshing the declared user-pool MFA configuration;
+   - `iam:ListAttachedRolePolicies`, which the provider uses when refreshing
+     `CrewSafeGitHubCognitoAdminRole`.
 7. Name the policy `CrewSafeCognitoTerraformPlan`.
 8. Save the policy.
 
@@ -135,12 +139,16 @@ administration, or IAM mutation permissions.
 4. Select the **JSON** editor.
 5. Copy the complete reviewed document from
    `infra/terraform/cognito/iam/apply-role-policy.json`.
-6. Confirm that IAM mutation is limited to
+6. Confirm that the policy contains
+   `cognito-idp:GetUserPoolMfaConfig`,
+   `cognito-idp:SetUserPoolMfaConfig`, and
+   `iam:ListAttachedRolePolicies`.
+7. Confirm that IAM mutation is limited to
    `CrewSafeGitHubCognitoAdminRole`.
-7. Confirm that the policy does not permit `AdminCreateUser`,
+8. Confirm that the policy does not permit `AdminCreateUser`,
    `AdminDeleteUser`, `AdminSetUserPassword`, or access-key management.
-8. Name the policy `CrewSafeCognitoTerraformApply`.
-9. Save the policy.
+9. Name the policy `CrewSafeCognitoTerraformApply`.
+10. Save the policy.
 
 Do not broaden either policy in the AWS Console. Policy changes belong in a
 reviewed repository change first.
@@ -1074,6 +1082,59 @@ For any failed plan, apply, verification, or administration action:
 | Hosted UI callback error | Wrong web client or callback/logout URL | Confirm `crewsafe-web` and the reviewed localhost URLs |
 | Login succeeds but `/api/v1/me` is denied | Missing/inactive application mapping or wrong immutable `sub` | Verify the non-sensitive mapping and server-side authorization |
 | Issuer or JWKS unavailable | Cognito service/domain issue or stale pool ID | Stop authentication tests and wait or correct configuration; do not switch to a local issuer |
+
+### 14.3 Recover from provider read-back `AccessDenied` after partial creation
+
+Use this procedure when Terraform reports that a Cognito user pool or
+`CrewSafeGitHubCognitoAdminRole` was being created and then fails while reading
+it back, for example on `cognito-idp:GetUserPoolMfaConfig` or
+`iam:ListAttachedRolePolicies`.
+
+The failed apply might already have created AWS resources and written partial
+resource information to remote state. Treat both AWS and remote state as
+authoritative evidence until a new plan proves their relationship.
+
+1. Stop all `cognito-shared-dev` applies for the selected account alias.
+2. Record only the failed apply URL, source plan run ID and attempt, commit,
+   account alias, component, denied action, and timestamp. Do not copy state,
+   credentials, full account IDs, or request payloads.
+3. Do not delete the user pool or IAM role in AWS Console. Do not run
+   Terraform locally, edit remote state, or retry the old saved plan. An apply
+   failure does not make its reviewed plan safe to reuse after AWS mutation or
+   an IAM policy change.
+4. Prepare, review, and merge the repository policy correction first. The
+   canonical documents are:
+   - `infra/terraform/cognito/iam/plan-role-policy.json`;
+   - `infra/terraform/cognito/iam/apply-role-policy.json`.
+5. After that correction is on `main`, open **IAM → Roles →
+   `CrewSafeGitHubTerraformPlanRole` → Permissions**. Edit the existing
+   `CrewSafeCognitoTerraformPlan` inline policy and replace its JSON with the
+   complete canonical plan-role policy from `main`.
+6. Open **IAM → Roles → `CrewSafeGitHubTerraformApplyRole` → Permissions**.
+   Edit `CrewSafeCognitoTerraformApply` and replace its JSON with the complete
+   canonical apply-role policy from `main`.
+7. Verify that both policies contain
+   `cognito-idp:GetUserPoolMfaConfig` and
+   `iam:ListAttachedRolePolicies`; verify that only the apply policy contains
+   `cognito-idp:SetUserPoolMfaConfig`. Confirm the forbidden user/password
+   operations in section 4 remain absent.
+8. Wait briefly for IAM propagation, then run a new **Terraform Plan** from
+   `main` for the same alias, component `cognito-shared-dev`, and operation
+   `apply`. Do not supply or reuse the failed plan run ID.
+9. Review the fresh plan:
+   - if it refreshes the existing pool and role and proposes only the remaining
+     expected resources or no changes, review and apply this new plan normally;
+   - if it proposes creating `crewsafe-shared-dev` or
+     `CrewSafeGitHubCognitoAdminRole` even though that object already exists,
+     stop without applying. The failed create was not reconciled into state;
+   - if refresh still returns `AccessDenied`, stop and compare the selected
+     account, assumed role, inline policy names, and complete canonical JSON.
+10. For an existing-object/state mismatch, open a recovery issue and prepare a
+    reviewed GitHub Actions-only import or state-reconciliation procedure for
+    the exact resource. Do not import locally and do not delete the AWS object
+    merely to make a create plan pass.
+11. After a successful apply, run another fresh plan and require no changes
+    before continuing with user onboarding.
 
 Operators must identify and record a safe recovery decision within 30 minutes.
 
