@@ -144,4 +144,6 @@ jobs:
             "$COMPONENT" "$PLAN_RUN_ID" "$PLAN_RUN_ATTEMPT"
       - name: Verify deployed Cognito boundary
         if: inputs.terraform_component == 'cognito-shared-dev' && inputs.operation == 'apply'
-        run: .github/scripts/terraform/verify-cognito-deployment.sh "${{ steps.component.outputs.root }}" "${{ steps.account.outputs.account_id }}" "${{ steps.account.outputs.region }}" "${{ steps.component.outputs.state_key }}"
+        env:
+          EXPECTED_OIDC_SUBJECT: ${{ vars.CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT }}
+        run: .github/scripts/terraform/verify-cognito-deployment.sh "${{ steps.component.outputs.root }}" "${{ steps.account.outputs.account_id }}" "${{ steps.account.outputs.region }}" "${{ steps.component.outputs.state_key }}" "$EXPECTED_OIDC_SUBJECT"

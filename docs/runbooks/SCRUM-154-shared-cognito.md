@@ -177,17 +177,35 @@ Replace every sample account ID with the selected account's real 12-digit ID.
 Do not put access keys, session tokens, passwords, AWS profiles, or credit
 details in the variable.
 
-### 5.2 Set the exact main-branch OIDC subject
+### 5.2 Set the immutable main-branch OIDC subject
 
-Create or update `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` with:
+This repository customizes GitHub's OIDC `sub` claim with immutable owner and
+repository IDs. Obtain the IDs from an authenticated workstation:
+
+```bash
+gh api repos/zctiong-iss/crewsafe \
+  --jq '"owner_id=\(.owner.id)\nrepo_id=\(.id)"'
+```
+
+Alternatively, copy the exact `sub` condition from the working
+`CrewSafeGitHubTerraformPlanRole` trust policy. For this repository, create or
+update `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` with:
 
 ```text
-repo:zctiong-iss/crewsafe:ref:refs/heads/main
+repo:zctiong-iss@267492605/crewsafe@1310783821:ref:refs/heads/main
 ```
 
 The value must exactly match the `sub` condition trusted by the selected
-account. Wildcards, pull-request subjects, environment subjects, and feature
-branches are rejected.
+account's Terraform plan and apply roles. The legacy name-only value
+`repo:zctiong-iss/crewsafe:ref:refs/heads/main` does not match the customized
+token and is rejected. Wildcards, pull-request subjects, environment subjects,
+feature branches, and IDs copied from a fork or replacement repository are
+also rejected.
+
+Changing this repository variable does not update an existing AWS role. After
+the corrected implementation and variable are on `main`, generate a fresh
+`cognito-shared-dev` plan, review the administration-role trust update, and
+apply that exact saved plan before using Cognito User Administration.
 
 ### 5.3 Allowlist Cognito workflow administrators
 
@@ -218,7 +236,8 @@ Before planning Cognito, confirm:
 - **Terraform Validation** is green;
 - `infra/terraform/cognito/.terraform.lock.hcl` is committed;
 - `zctiong` exists in `CREWSAFE_AWS_ACCOUNTS_JSON`;
-- `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` matches the AWS trust policy;
+- `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` exactly matches the immutable ID-bound
+  `sub` in both SCRUM-155 Terraform role trust policies;
 - no long-lived AWS credential is stored in GitHub.
 
 Plan, apply, and administration workflows intentionally reject non-`main`
@@ -1071,7 +1090,7 @@ For any failed plan, apply, verification, or administration action:
 
 | Symptom | Likely cause | Safe response |
 |---|---|---|
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | OIDC provider, audience, subject, branch, or role ARN mismatch | Compare the exact GitHub variable and AWS trust policy; do not add a wildcard |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Account/provider/audience mismatch, or the Cognito role still trusts the legacy name-only `sub` instead of the repository's immutable ID-bound `sub` | Compare the Cognito role with the working SCRUM-155 plan role. Set `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` to the exact ID-bound value, merge the fix, create and apply a fresh `cognito-shared-dev` plan, then retry administration; do not edit the Terraform-managed role or add a wildcard |
 | `Unknown account alias` | Alias missing from `CREWSAFE_AWS_ACCOUNTS_JSON` | Correct the repository variable and generate a new plan |
 | Cognito or IAM `AccessDenied` during plan/apply | Canonical Cognito policy not attached to the selected role | Attach the reviewed policy in AWS Console, then create a new plan |
 | Backend initialization or lock failure | SCRUM-155 backend incomplete, wrong bucket, state key, or active lock | Follow the SCRUM-155 runbook; do not force-unlock without confirming ownership |

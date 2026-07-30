@@ -5,7 +5,7 @@ run "shared_dev_contract" {
   variables {
     expected_account_id      = "123456789012"
     account_alias            = "alice"
-    github_oidc_main_subject = "repo:owner/crewsafe:ref:refs/heads/main"
+    github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
   }
   override_data {
     target = data.aws_caller_identity.current
@@ -75,4 +75,18 @@ run "shared_dev_contract" {
     )
     error_message = "Groups must not become application roles or precedence controls."
   }
+}
+
+run "reject_legacy_name_only_oidc_subject" {
+  command = plan
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    github_oidc_main_subject = "repo:owner/crewsafe:ref:refs/heads/main"
+  }
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+  expect_failures = [var.github_oidc_main_subject]
 }
