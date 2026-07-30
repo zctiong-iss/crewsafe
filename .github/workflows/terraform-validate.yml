@@ -110,7 +110,7 @@ jobs:
       - id: component
         run: .github/scripts/terraform/resolve-component.sh "${{ matrix.component }}"
       - name: Check formatting
-        run: terraform fmt -check -recursive "${{ steps.component.outputs.root }}"
+        run: terraform fmt -check -diff -recursive "${{ steps.component.outputs.root }}"
       - name: Initialize without remote backend
         working-directory: ${{ steps.component.outputs.root }}
         run: terraform init -backend=false -input=false -lockfile=readonly
