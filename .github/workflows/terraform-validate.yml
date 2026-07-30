@@ -74,6 +74,10 @@ jobs:
       matrix: ${{ steps.components.outputs.matrix }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e
+        with:
+          terraform_version: 1.10.5
+          terraform_wrapper: false
       - id: components
         run: |
           .github/scripts/terraform/tests/test-component-catalog.sh
