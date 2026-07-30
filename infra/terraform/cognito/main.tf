@@ -14,7 +14,7 @@ resource "aws_cognito_user_pool" "shared_dev" {
   user_pool_tier           = "ESSENTIALS"
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
-  deletion_protection      = "ACTIVE"
+  deletion_protection      = "INACTIVE"
   mfa_configuration        = "OFF"
 
   username_configuration {
