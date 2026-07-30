@@ -322,6 +322,162 @@ Confirm the final verification reports success for:
 If any verification fails, treat the apply as incomplete and follow section
 14. Do not immediately rerun it.
 
+### 7.4 Inspect the expected resources in AWS Console
+
+After the apply workflow reports
+`Shared Cognito deployment boundary verified.`, inspect the selected
+`zctiong` account in Region `ap-southeast-1`.
+
+| AWS Console area | Expected result |
+|---|---|
+| **Amazon Cognito → User pools** | One pool named `crewsafe-shared-dev` |
+| **User pool → App clients** | `crewsafe-web`, `crewsafe-mobile`, and `crewsafe-cli-integration` |
+| **User pool → Groups** | `developers` and `synthetic-test-users` |
+| **User pool → App integration → Domain** | `crewsafe-shared-dev-<AWS_ACCOUNT_ID>` |
+| **IAM → Roles** | `CrewSafeGitHubCognitoAdminRole` |
+| **S3 → selected SCRUM-155 state bucket** | State under `crewsafe/cognito/shared-dev.tfstate` |
+
+AWS Console labels can move between console versions. Verify the underlying
+settings below even if the navigation label differs.
+
+#### 7.4.1 User pool
+
+Open **Amazon Cognito → User pools → `crewsafe-shared-dev`** and confirm:
+
+- tier is `Essentials`;
+- deletion protection is `Active`;
+- self-service or public sign-up is disabled;
+- users sign in with email;
+- email is automatically verified;
+- sign-in matching is case-insensitive;
+- MFA is off;
+- minimum password length is 12;
+- uppercase, lowercase, number, and symbol are required;
+- temporary passwords are valid for 30 days.
+
+Immediately after Terraform apply, the **Users** list should be empty. Users
+appear only after the account owner completes the manual invitation procedure
+in section 10.
+
+#### 7.4.2 Web client
+
+Open the `crewsafe-web` app client and confirm:
+
+- no client secret exists;
+- authorization code flow is enabled;
+- OAuth scopes are `openid`, `email`, and `profile`;
+- callback URL is `http://localhost:5173/callback`;
+- logout URL is `http://localhost:5173/`;
+- access token validity is 15 minutes;
+- ID token validity is 15 minutes;
+- refresh token validity is 7 days;
+- password authentication is not enabled;
+- refresh-token authentication and token revocation are enabled.
+
+#### 7.4.3 Mobile client
+
+Open the `crewsafe-mobile` app client and confirm:
+
+- no client secret exists;
+- authorization code flow is enabled;
+- OAuth scopes are `openid`, `email`, and `profile`;
+- callback URL is `crewsafe://callback`;
+- logout URL is `crewsafe://`;
+- access token validity is 1 hour;
+- ID token validity is 60 minutes;
+- refresh token validity is 7 days;
+- password authentication is not enabled;
+- refresh-token authentication and token revocation are enabled.
+
+#### 7.4.4 CLI integration client
+
+Open the `crewsafe-cli-integration` app client and confirm:
+
+- no client secret exists;
+- `ALLOW_USER_PASSWORD_AUTH` is enabled;
+- refresh-token authentication is enabled;
+- access token validity is 15 minutes;
+- ID token validity is 15 minutes;
+- refresh token validity is 1 day;
+- token revocation is enabled.
+
+Only this CLI integration client may permit username/password authentication.
+Stop if the web or mobile client permits it.
+
+#### 7.4.5 Groups
+
+Open the user pool's **Groups** view and confirm exactly:
+
+- `developers`
+- `synthetic-test-users`
+
+Neither group should have an IAM role or precedence value. Membership in these
+groups does not grant a CrewSafe application role or site access.
+
+#### 7.4.6 Hosted UI, issuer, and JWKS
+
+Under **App integration → Domain**, confirm the domain prefix is:
+
+```text
+crewsafe-shared-dev-<AWS_ACCOUNT_ID>
+```
+
+The resulting Hosted UI URL should be:
+
+```text
+https://crewsafe-shared-dev-<AWS_ACCOUNT_ID>.auth.ap-southeast-1.amazoncognito.com
+```
+
+Using the displayed user pool ID, verify:
+
+```text
+Issuer: https://cognito-idp.ap-southeast-1.amazonaws.com/<USER_POOL_ID>
+JWKS:   https://cognito-idp.ap-southeast-1.amazonaws.com/<USER_POOL_ID>/.well-known/jwks.json
+```
+
+Open the JWKS URL in a browser. It must return JSON with a non-empty `keys`
+array.
+
+#### 7.4.7 Cognito administration role
+
+Open **IAM → Roles → `CrewSafeGitHubCognitoAdminRole`** and confirm:
+
+- the trusted identity is the selected account's GitHub OIDC provider;
+- audience is exactly `sts.amazonaws.com`;
+- subject is the exact repository `main` branch subject;
+- the subject contains no wildcard;
+- the inline policy is scoped to the deployed user pool;
+- allowed actions cover sanitized listing, enable/disable, password reset,
+  global sign-out, and approved group membership changes;
+- the role cannot create or delete users, set passwords, update user
+  attributes, authenticate users, or modify pool/client/domain/group
+  definitions.
+
+#### 7.4.8 Remote-state evidence
+
+Open the selected SCRUM-155 state bucket and confirm the Cognito component uses:
+
+```text
+crewsafe/cognito/shared-dev.tfstate
+```
+
+Do not open, download, copy, or edit the state object. Its existence and
+version history are the only Console checks needed.
+
+### 7.5 Confirm what must not exist
+
+Stop and investigate if the apply created any of the following:
+
+- a second test or staging user pool;
+- Terraform-managed users, passwords, invitations, or memberships;
+- a client secret for any of the three app clients;
+- password authentication on the web or mobile client;
+- IAM users or AWS access keys;
+- an IAM role or precedence attached to either Cognito group;
+- a DynamoDB locking table;
+- state outside the selected account's SCRUM-155 bucket and canonical key;
+- unrelated infrastructure.
+
 ## 8. Phase F — Prove idempotence
 
 After a successful apply:
