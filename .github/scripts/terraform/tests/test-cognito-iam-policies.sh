@@ -23,16 +23,24 @@ jq -e '
   and ($actions | index("cognito-idp:SetUserPoolMfaConfig")) == null
   and ($actions | index("cognito-idp:CreateUserPool")) == null
   and ($actions | index("iam:CreateRole")) == null
+  and ($actions | index("iam:ListInstanceProfilesForRole")) == null
+  and ($actions | index("iam:RemoveRoleFromInstanceProfile")) == null
+  and ($actions | index("iam:DeleteInstanceProfile")) == null
+  and ($actions | index("iam:AddRoleToInstanceProfile")) == null
 ' "$plan" >/dev/null
 jq -e '
   [.. | objects | .Action? // empty] | flatten as $actions
   | ([
       "cognito-idp:GetUserPoolMfaConfig",
       "cognito-idp:SetUserPoolMfaConfig",
-      "iam:ListAttachedRolePolicies"
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole"
     ] - $actions | length) == 0
   and ($actions | index("cognito-idp:CreateUserPool")) != null
   and ($actions | index("iam:CreateRole")) != null
+  and ($actions | index("iam:RemoveRoleFromInstanceProfile")) == null
+  and ($actions | index("iam:DeleteInstanceProfile")) == null
+  and ($actions | index("iam:AddRoleToInstanceProfile")) == null
   and ($actions | index("cognito-idp:AdminCreateUser")) == null
   and ($actions | index("cognito-idp:AdminDeleteUser")) == null
   and ($actions | index("cognito-idp:AdminSetUserPassword")) == null
