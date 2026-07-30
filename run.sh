@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+CONTAINER_ENGINE="$(infra/local/resolve-container-engine.sh)"
 ACCOUNT_ALIAS=""
 WITH_WEB=true
 RESET_DB=false
@@ -17,9 +18,13 @@ done
 [[ "$ACCOUNT_ALIAS" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
   echo "A valid --account alias is required." >&2; exit 1;
 }
-for command_name in gh jq podman node curl; do
+for command_name in gh jq "$CONTAINER_ENGINE" node curl; do
   command -v "$command_name" >/dev/null || { echo "$command_name is required." >&2; exit 1; }
 done
+"$CONTAINER_ENGINE" compose version >/dev/null || {
+  echo "$CONTAINER_ENGINE compose is required." >&2
+  exit 1
+}
 gh auth status >/dev/null
 
 CONFIG="$(gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value)"
@@ -40,6 +45,7 @@ export CORS_ALLOWED_ORIGINS=http://localhost:5173
 
 LOG_DIR=.local-run
 COMPOSE=infra/local/compose.yaml
+COMPOSE_COMMAND=("$CONTAINER_ENGINE" compose -f "$COMPOSE")
 mkdir -p "$LOG_DIR"
 BACKEND_PID=""
 WEB_PID=""
@@ -47,15 +53,16 @@ cleanup() {
   [[ -n "$WEB_PID" ]] && kill "$WEB_PID" 2>/dev/null || true
   [[ -n "$BACKEND_PID" ]] && kill "$BACKEND_PID" 2>/dev/null || true
   wait 2>/dev/null || true
-  podman compose -f "$COMPOSE" stop >/dev/null 2>&1 || true
+  "${COMPOSE_COMMAND[@]}" stop >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
 
-[[ "$RESET_DB" == false ]] || podman compose -f "$COMPOSE" down -v >/dev/null 2>&1 || true
-podman compose -f "$COMPOSE" up -d postgres >/dev/null
+[[ "$RESET_DB" == false ]] || "${COMPOSE_COMMAND[@]}" down -v >/dev/null 2>&1 || true
+"${COMPOSE_COMMAND[@]}" up -d postgres >/dev/null
 postgres_ready=false
 for _ in $(seq 1 30); do
-  if podman exec crewsafe-postgres pg_isready -U crewsafe -d crewsafe >/dev/null 2>&1; then
+  if "$CONTAINER_ENGINE" exec crewsafe-postgres \
+    pg_isready -U crewsafe -d crewsafe >/dev/null 2>&1; then
     postgres_ready=true
     break
   fi

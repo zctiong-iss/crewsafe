@@ -256,7 +256,8 @@ Refactor developer startup so it:
 
 - obtains configuration through authenticated GitHub CLI;
 - does not invoke Terraform or require an AWS profile;
-- starts only PostgreSQL, backend and web locally;
+- starts only PostgreSQL, backend and web locally through the shared startup
+  path, using `run.sh` for Podman or `run-docker.sh` for Docker;
 - configures them against deployed AWS Cognito;
 - seeds local application users from configured Cognito `sub` mappings instead
   of calling `AdminGetUser`.

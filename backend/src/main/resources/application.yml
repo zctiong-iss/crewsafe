@@ -42,7 +42,7 @@ app:
   # unresolved placeholder binds as the literal string "${COGNITO_ISSUER_URI}", which
   # satisfies @NotBlank and starts the application with nonsense configuration.
   #
-  # Local development:      run.sh supplies validated shared Cognito values
+  # Local development:      run.sh/run-docker.sh supply validated shared Cognito values
   # Staging and production: set these environment variables, which Spring binds by relaxed
   #                         naming with no entry needed here —
   #                           APP_COGNITO_ISSUER_URI
