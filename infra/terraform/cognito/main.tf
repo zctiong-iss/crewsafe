@@ -144,19 +144,19 @@ resource "aws_iam_role_policy" "cognito_admin" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-        Sid    = "AdministerExistingCrewSafeUsers"
-        Effect = "Allow"
-        Action = [
-          "cognito-idp:ListUsers",
-          "cognito-idp:ListGroups",
-          "cognito-idp:AdminEnableUser",
-          "cognito-idp:AdminDisableUser",
-          "cognito-idp:AdminResetUserPassword",
-          "cognito-idp:AdminUserGlobalSignOut",
-          "cognito-idp:AdminAddUserToGroup",
-          "cognito-idp:AdminRemoveUserFromGroup"
-        ]
-        Resource = aws_cognito_user_pool.shared_dev.arn
+      Sid    = "AdministerExistingCrewSafeUsers"
+      Effect = "Allow"
+      Action = [
+        "cognito-idp:ListUsers",
+        "cognito-idp:ListGroups",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminResetUserPassword",
+        "cognito-idp:AdminUserGlobalSignOut",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminRemoveUserFromGroup"
+      ]
+      Resource = aws_cognito_user_pool.shared_dev.arn
     }]
   })
 }

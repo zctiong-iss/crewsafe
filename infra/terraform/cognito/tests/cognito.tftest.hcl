@@ -3,8 +3,8 @@ mock_provider "aws" {}
 run "shared_dev_contract" {
   command = plan
   variables {
-    expected_account_id     = "123456789012"
-    account_alias           = "alice"
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
     github_oidc_main_subject = "repo:owner/crewsafe:ref:refs/heads/main"
   }
   override_data {
