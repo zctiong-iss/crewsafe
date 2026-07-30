@@ -9,10 +9,12 @@
         "cognito-idp:DescribeUserPoolClient",
         "cognito-idp:DescribeUserPoolDomain",
         "cognito-idp:GetGroup",
+        "cognito-idp:GetUserPoolMfaConfig",
         "cognito-idp:ListGroups",
         "cognito-idp:ListTagsForResource",
         "iam:GetRole",
         "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
         "iam:ListRolePolicies"
       ],
       "Resource": "*"
