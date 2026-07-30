@@ -142,10 +142,14 @@ administration, or IAM mutation permissions.
 6. Confirm that the policy contains
    `cognito-idp:GetUserPoolMfaConfig`,
    `cognito-idp:SetUserPoolMfaConfig`, and
-   `iam:ListAttachedRolePolicies`.
+   `iam:ListAttachedRolePolicies`, and
+   `iam:ListInstanceProfilesForRole`. The last action is a read that the AWS
+   provider performs before deleting the managed administration role, even
+   when the role has no instance-profile associations.
 7. Confirm that IAM mutation is limited to
    `CrewSafeGitHubCognitoAdminRole`.
-8. Confirm that the policy does not permit `AdminCreateUser`,
+8. Confirm that the policy does not permit `RemoveRoleFromInstanceProfile`,
+   `DeleteInstanceProfile`, `AddRoleToInstanceProfile`, `AdminCreateUser`,
    `AdminDeleteUser`, `AdminSetUserPassword`, or access-key management.
 9. Name the policy `CrewSafeCognitoTerraformApply`.
 10. Save the policy.
@@ -1121,6 +1125,7 @@ For any failed plan, apply, verification, or administration action:
 | `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Account/provider/audience mismatch, or the Cognito role still trusts the legacy name-only `sub` instead of the repository's immutable ID-bound `sub` | Compare the Cognito role with the working SCRUM-155 plan role. Set `CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT` to the exact ID-bound value, merge the fix, create and apply a fresh `cognito-shared-dev` plan, then retry administration; do not edit the Terraform-managed role or add a wildcard |
 | `Unknown account alias` | Alias missing from `CREWSAFE_AWS_ACCOUNTS_JSON` | Correct the repository variable and generate a new plan |
 | Cognito or IAM `AccessDenied` during plan/apply | Canonical Cognito policy not attached to the selected role | Attach the reviewed policy in AWS Console, then create a new plan |
+| Destroy fails on `iam:ListInstanceProfilesForRole` after Cognito resources disappear | The apply role is missing the provider-required pre-delete read; the destroy partially completed and left the administration role | Follow section 14.4; do not reuse the mutated destroy plan or manually delete the Terraform-managed role |
 | Backend initialization or lock failure | SCRUM-155 backend incomplete, wrong bucket, state key, or active lock | Follow the SCRUM-155 runbook; do not force-unlock without confirming ownership |
 | Plan is expired, altered, reused, or from the wrong attempt | Saved-plan metadata guard rejected it | Discard it and generate a new plan |
 | Apply succeeded but deployment verification failed | Partial apply, service propagation, or boundary mismatch | Stop; inspect AWS and remote state read-only, then review reconciliation |
@@ -1184,6 +1189,52 @@ authoritative evidence until a new plan proves their relationship.
     before continuing with user onboarding.
 
 Operators must identify and record a safe recovery decision within 30 minutes.
+
+### 14.4 Recover from `ListInstanceProfilesForRole` after partial destroy
+
+Use this procedure when the destroy log shows that the user pool, domain,
+clients, groups, and inline administration policy were destroyed, then fails
+while deleting `CrewSafeGitHubCognitoAdminRole` because
+`iam:ListInstanceProfilesForRole` is denied.
+
+The failed destroy already mutated AWS and remote state. Its saved plan is
+stale even if the applied-plan marker was not written.
+
+1. Stop all `cognito-shared-dev` operations for the selected alias.
+2. Record the failed apply URL, source destroy-plan run ID and attempt, commit,
+   alias, denied action, and timestamp without copying credentials, state, full
+   account IDs, or request payloads.
+3. In AWS Console, confirm the expected partial result: the Cognito pool and
+   its dependent resources are absent, while
+   `CrewSafeGitHubCognitoAdminRole` remains.
+4. Do not rerun the old destroy plan, delete the remaining role manually,
+   modify remote state, or run Terraform locally.
+5. Review and merge the repository correction that adds only
+   `iam:ListInstanceProfilesForRole` to
+   `infra/terraform/cognito/iam/apply-role-policy.json`.
+6. After that correction is on `main`, replace the complete
+   `CrewSafeCognitoTerraformApply` inline policy on
+   `CrewSafeGitHubTerraformApplyRole` with the canonical apply-role policy from
+   `main`. Do not add the read to the plan role.
+7. Verify the apply policy still excludes
+   `iam:RemoveRoleFromInstanceProfile`, `iam:DeleteInstanceProfile`, and
+   `iam:AddRoleToInstanceProfile`. The administration role is not expected to
+   belong to any EC2 instance profile. If an association is discovered, stop
+   and investigate it instead of broadening the policy or removing it.
+8. Wait briefly for IAM propagation, then generate a fresh **Terraform Plan**
+   from `main` for the same alias, component `cognito-shared-dev`, and
+   operation `destroy`.
+9. Review the fresh plan. It should destroy only the remaining managed
+   administration role and any harmless Terraform-only guard still present.
+   Stop if it proposes an unexpected resource, another account, or a create or
+   replacement.
+10. Apply the fresh saved plan with
+    `DESTROY <alias> cognito-shared-dev`. Never supply the failed plan's run ID
+    or attempt.
+11. Generate one more fresh `destroy` plan and require no remaining managed
+    resources before removing stale shared configuration or allowlist entries.
+12. Restore Cognito deletion protection to `ACTIVE` in repository code through
+    review so any future shared pool is protected by default.
 
 ## 15. Audit and periodic access review
 
