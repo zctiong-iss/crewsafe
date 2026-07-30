@@ -33,6 +33,34 @@ app:
     # Vite dev server and the Expo web preview. Staging and production override this.
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:8081}
 
+  nea:
+    # Root of data.gov.sg's real-time weather APIs. Keeping this configurable lets tests
+    # use a local HTTP stub without giving fixture mode (SCRUM-167) a production code path.
+    base-url: ${NEA_API_BASE_URL:https://api-open.data.gov.sg/v2/real-time/api}
+    # Optional for local development. Production deployments should request a data.gov.sg
+    # key for higher rate limits and inject it as a secret.
+    api-key: ${NEA_API_KEY:}
+    connect-timeout: ${NEA_CONNECT_TIMEOUT:5s}
+    read-timeout: ${NEA_READ_TIMEOUT:10s}
+
+  weather:
+    data:
+      # "live" uses data.gov.sg; "fixture" replays the bundled, clearly simulated demo
+      # scenario without any network dependency.
+      mode: ${WEATHER_DATA_MODE:live}
+    fixture:
+      resource: ${WEATHER_FIXTURE_RESOURCE:classpath:weather/fixtures/nea-demo-replay.json}
+      # false advances to the final frame and then holds it; true loops to the beginning.
+      loop: ${WEATHER_FIXTURE_LOOP:false}
+    ingestion:
+      # Opt in per environment. This prevents developer/test startup from silently calling
+      # an external safety-data service; live deployments enable it explicitly.
+      enabled: ${WEATHER_INGESTION_ENABLED:false}
+      initial-delay: ${WEATHER_INGESTION_INITIAL_DELAY:5s}
+      interval: ${WEATHER_INGESTION_INTERVAL:15m}
+      delayed-after: ${WEATHER_DELAYED_AFTER:20m}
+      stale-after: ${WEATHER_STALE_AFTER:45m}
+
   # app.cognito.* is deliberately absent from this file. Every value is required (see the
   # @NotBlank/@NotEmpty constraints on CognitoProperties), so leaving them undefined here
   # means a deployment that forgets one fails at startup with a validation error naming the
