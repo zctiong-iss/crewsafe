@@ -1,0 +1,20 @@
+# Default ownership for anything not matched by a more specific rule
+* @zctiong-iss
+
+# Backend services, APIs, authorization, and database migrations
+/backend/ @zctiong-iss @abn-13 @Jemilin-code
+
+# Web application and shared user-interface components
+/web/ @zctiong-iss @AnimaExMachina @Jemilin-code
+
+# Mobile application
+/mobile/ @zctiong-iss @JustinChua97 @AnimaExMachina
+
+# Machine-learning and agent services
+/ml-service/ @zctiong-iss @KumaraguruSurya @bryanpwy @abn-13
+/notebooks/ @zctiong-iss @KumaraguruSurya @bryanpwy @abn-13
+
+# Infrastructure, deployment automation, and CI/CD
+# Keep these rules last so they override the Markdown ownership rule above.
+/infra/ @zctiong-iss
+/.github/ @zctiong-iss
