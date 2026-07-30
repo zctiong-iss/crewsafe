@@ -67,10 +67,11 @@ terraform_root="$(cd "$root/infra/terraform" && pwd -P)"
   echo "::error::Component root is missing versions.tf." >&2; exit 1;
 }
 if [[ "$backend_strategy" == remote ]]; then
-  [[ -f "$resolved/backend.tf" ]] && grep -Eq 'backend[[:space:]]+"s3"' "$resolved/backend.tf" || {
+  if [[ ! -f "$resolved/backend.tf" ]] ||
+    ! grep -Eq 'backend[[:space:]]+"s3"' "$resolved/backend.tf"; then
     echo "::error::Remote component root is missing its S3 backend declaration." >&2
     exit 1
-  }
+  fi
 fi
 [[ "$(jq -r '.components[].state_key' "$catalog" | sort | uniq -d | wc -l | tr -d ' ')" == 0 ]] || {
   echo "::error::Duplicate Terraform state key." >&2; exit 1;

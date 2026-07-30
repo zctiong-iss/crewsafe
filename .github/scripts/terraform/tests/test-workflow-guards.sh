@@ -10,7 +10,10 @@ assert_contains ".github/workflows/terraform-validate.yml" '"infra/terraform/**"
 assert_not_contains ".github/workflows/terraform-validate.yml" '"docs/**"'
 assert_contains ".github/workflows/terraform-plan.yml" "github.ref == 'refs/heads/main'"
 assert_contains ".github/workflows/terraform-apply.yml" "github.ref == 'refs/heads/main'"
+# GitHub expression syntax must remain literal in these assertions.
+# shellcheck disable=SC2016
 assert_contains ".github/workflows/terraform-plan.yml" 'terraform-${{ inputs.target_account_alias }}-${{ inputs.terraform_component }}'
+# shellcheck disable=SC2016
 assert_contains ".github/workflows/terraform-apply.yml" 'terraform-${{ inputs.target_account_alias }}-${{ inputs.terraform_component }}'
 assert_contains ".github/workflows/terraform-validate.yml" 'terraform-provider-lock-cognito'
 assert_contains ".github/workflows/terraform-validate.yml" 'terraform providers lock'
