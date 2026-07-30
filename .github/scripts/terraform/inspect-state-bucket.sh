@@ -40,8 +40,7 @@ else
   exit 1
 fi
 
+printf '%s\n' "$mode"
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   printf 'mode=%s\n' "$mode" >>"$GITHUB_OUTPUT"
-else
-  printf '%s\n' "$mode"
 fi
