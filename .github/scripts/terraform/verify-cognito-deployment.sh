@@ -54,13 +54,13 @@ verify_client() {
     --argjson access_validity "$expected_access_validity" \
     --arg access_unit "$expected_access_unit" '
     .UserPoolClient.ClientName == $name
-    and .UserPoolClient.GenerateSecret == false
+    and .UserPoolClient.ClientSecret == null
     and .UserPoolClient.PreventUserExistenceErrors == "ENABLED"
     and .UserPoolClient.EnableTokenRevocation == true
     and .UserPoolClient.AccessTokenValidity == $access_validity
     and .UserPoolClient.TokenValidityUnits.AccessToken == $access_unit
     and ((.UserPoolClient.ExplicitAuthFlows | index("ALLOW_USER_PASSWORD_AUTH") != null) == $direct)
-  ' <<<"$client" >/dev/null || fail "public client boundary mismatch"
+  ' <<<"$client" >/dev/null || fail "public client boundary mismatch: $expected_name"
 }
 verify_client web_client_id crewsafe-web false 15 minutes
 verify_client mobile_client_id crewsafe-mobile false 1 hours
