@@ -842,29 +842,38 @@ consumes application mappings at startup. A long-running deployed backend must
 be redeployed or restarted through its approved deployment process; changing
 the GitHub variable alone does not modify an already-running process.
 
-#### 10.6.6 Start CrewSafe with `run.sh`
+#### 10.6.6 Start CrewSafe with Podman or Docker
 
 The local backend and web app can test these identities directly against the
 deployed shared Cognito pool. No local Cognito, AWS profile, AWS credential, or
-local Terraform is used.
+local Terraform is used. Choose one installed container engine for the entire
+local run:
 
 1. Confirm the Cognito users, immutable `sub` values, group memberships, and
    `application_users` mappings are complete.
-2. Stop any earlier `run.sh` process.
+2. Stop any earlier `run.sh` or `run-docker.sh` process.
 3. From the repository root, authenticate GitHub CLI:
 
    ```bash
    gh auth status
    ```
 
-4. Start the application for the selected account:
+4. Start the application for the selected account with one of:
 
    ```bash
+   # Podman
    ./run.sh --account zctiong
+
+   # Docker Engine or Docker Desktop with Compose v2
+   ./run-docker.sh --account zctiong
    ```
 
-5. Leave that terminal running. `run.sh` tails
-   `.local-run/backend.log` after the backend becomes healthy.
+   `run.sh` defaults to Podman. `run-docker.sh` selects Docker and delegates to
+   the same validated startup logic; do not set the internal engine selector
+   directly.
+5. Leave that terminal running. The selected launcher tails
+   `.local-run/backend.log` after the backend becomes healthy and stops its
+   PostgreSQL container when the launcher exits.
 6. Open `http://localhost:5173` in a browser.
 7. If startup fails, inspect `.local-run/backend.log` without copying tokens,
    email addresses, or credentials into an issue.
@@ -882,19 +891,24 @@ On every startup, the backend reconciles the reviewed mapping:
   rebinding an identity.
 
 Adding another synthetic user later therefore requires updating
-`CREWSAFE_SHARED_COGNITO_JSON`, stopping `run.sh`, and running the same command
-again. A database reset is not normally required.
+`CREWSAFE_SHARED_COGNITO_JSON`, stopping the active launcher, and running the
+same engine-specific command again. A database reset is not normally required.
 
 For a deliberately clean local acceptance run only, use:
 
 ```bash
+# Podman
 ./run.sh --account zctiong --reset
+
+# Docker
+./run-docker.sh --account zctiong --reset
 ```
 
 `--reset` deletes the local CrewSafe PostgreSQL volume and recreates local
 application data. It does not change Cognito, GitHub variables, Terraform
 state, or AWS infrastructure. Do not use it if local application data must be
-preserved.
+preserved. Docker and Podman maintain separate local container/volume stores;
+switching engines does not migrate local data between them.
 
 #### 10.6.7 Complete the first login
 
@@ -1009,7 +1023,8 @@ Install and verify:
 
 - GitHub CLI authenticated to the repository;
 - `jq`;
-- Podman and Podman Compose;
+- either Podman with Podman Compose, or Docker Engine/Docker Desktop with
+  Docker Compose v2;
 - Node.js and npm;
 - the Java version pinned by the backend;
 - `curl`.
@@ -1023,10 +1038,13 @@ From a fresh clone:
 
 ```bash
 gh auth status
+
+# Choose one:
 ./run.sh --account zctiong
+./run-docker.sh --account zctiong
 ```
 
-The script:
+Both launchers:
 
 1. retrieves `CREWSAFE_SHARED_COGNITO_JSON` through authenticated GitHub CLI;
 2. validates the selected account entry;
@@ -1034,6 +1052,12 @@ The script:
 4. creates the local web runtime settings;
 5. starts only local PostgreSQL, backend, and web processes;
 6. does not execute Terraform, access AWS APIs, or start local Cognito.
+
+If the backend reports `Connection to localhost:5434 refused`, its local
+PostgreSQL container is not running. Stop the active launcher and start it
+again with the same engine. For inspection, use `podman ps -a` or
+`docker ps -a` as appropriate. Do not use `--reset` merely to restart a stopped
+container.
 
 ### 12.3 Acceptance checks
 
@@ -1065,7 +1089,11 @@ To use another teammate's AWS credits:
 7. Select the same alias in plan, apply, administration, and local runtime:
 
 ```bash
+# Podman
 ./run.sh --account <new-alias>
+
+# Docker
+./run-docker.sh --account <new-alias>
 ```
 
 Never reuse another alias's run ID, state, pool ID, client ID, user, token, or

@@ -1,4 +1,5 @@
 # Normal local development uses the deployed shared Cognito environment.
-# `run.sh --account <alias>` supplies every required app.cognito property from
-# the validated, non-sensitive GitHub repository variable. No localhost
-# identity endpoint or AWS profile is permitted here.
+# `run.sh --account <alias>` or `run-docker.sh --account <alias>` supplies every
+# required app.cognito property from the validated, non-sensitive GitHub
+# repository variable. No localhost identity endpoint or AWS profile is
+# permitted here.

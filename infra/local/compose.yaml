@@ -1,7 +1,7 @@
 # Local development dependencies for the CrewSafe backend.
 #
-#   podman compose -f infra/local/compose.yaml up -d
-#   podman compose -f infra/local/compose.yaml down
+#   ./run.sh --account <alias>         # Podman
+#   ./run-docker.sh --account <alias>  # Docker
 #
 # Host port is 5434, not the usual 5432, because developer machines on this project
 # already run PostgreSQL on 5432 and another project's container on 5433. Inside the
