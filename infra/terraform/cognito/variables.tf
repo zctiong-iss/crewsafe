@@ -36,7 +36,7 @@ variable "web_callback_urls" {
   type    = list(string)
   default = ["http://localhost:5173/callback"]
   validation {
-    condition     = var.web_callback_urls == ["http://localhost:5173/callback"]
+    condition     = var.web_callback_urls == tolist(["http://localhost:5173/callback"])
     error_message = "The shared development web client has one reviewed localhost callback."
   }
 }
@@ -44,7 +44,7 @@ variable "web_logout_urls" {
   type    = list(string)
   default = ["http://localhost:5173/"]
   validation {
-    condition     = var.web_logout_urls == ["http://localhost:5173/"]
+    condition     = var.web_logout_urls == tolist(["http://localhost:5173/"])
     error_message = "The shared development web client has one reviewed localhost logout URL."
   }
 }
@@ -52,7 +52,7 @@ variable "mobile_callback_urls" {
   type    = list(string)
   default = ["crewsafe://callback"]
   validation {
-    condition     = var.mobile_callback_urls == ["crewsafe://callback"]
+    condition     = var.mobile_callback_urls == tolist(["crewsafe://callback"])
     error_message = "The shared development mobile client has one reviewed callback."
   }
 }
@@ -60,7 +60,7 @@ variable "mobile_logout_urls" {
   type    = list(string)
   default = ["crewsafe://"]
   validation {
-    condition     = var.mobile_logout_urls == ["crewsafe://"]
+    condition     = var.mobile_logout_urls == tolist(["crewsafe://"])
     error_message = "The shared development mobile client has one reviewed logout URL."
   }
 }
