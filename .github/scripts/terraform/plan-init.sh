@@ -6,6 +6,10 @@ region="${3:?region}"
 state_key="${4:?state key}"
 account_alias="${5:?account alias}"
 mode="$("$GITHUB_WORKSPACE/.github/scripts/terraform/inspect-state-bucket.sh" "$bucket" "$account_alias" "$region")"
+if [[ "$mode" != bootstrap && "$mode" != managed ]]; then
+  echo "::error::Backend inspection returned an invalid mode." >&2
+  exit 1
+fi
 mkdir -p .backend
 printf '%s\n' "$mode" >.backend/mode
 if [[ "$strategy" == self-bootstrap && "$mode" == bootstrap ]]; then
