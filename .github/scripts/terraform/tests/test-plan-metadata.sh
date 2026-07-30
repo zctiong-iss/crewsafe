@@ -78,7 +78,7 @@ for mutation in \
   fi
 done
 
-rg -q 'schema_version 2' "$writer"
-rg -q 'plan_run_attempt' "$writer"
-rg -q 'catalog_sha256' "$writer"
-rg -q 'age_seconds.*86400' "$validator"
+grep -Eq 'schema_version 2' "$writer"
+grep -Eq 'plan_run_attempt' "$writer"
+grep -Eq 'catalog_sha256' "$writer"
+grep -Eq 'age_seconds.*86400' "$validator"

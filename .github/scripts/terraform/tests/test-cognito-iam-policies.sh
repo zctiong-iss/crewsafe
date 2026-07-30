@@ -8,11 +8,11 @@ apply="$ROOT/infra/terraform/cognito/iam/apply-role-policy.json"
 
 jq empty "$plan"
 jq empty "$apply"
-rg -q 'token.actions.githubusercontent.com:sub.*github_oidc_main_subject' "$main"
-rg -q 'Resource = aws_cognito_user_pool.shared_dev.arn' "$main"
+grep -Eq 'token.actions.githubusercontent.com:sub.*github_oidc_main_subject' "$main"
+grep -Eq 'Resource = aws_cognito_user_pool.shared_dev.arn' "$main"
 
 for action in AdminCreateUser AdminDeleteUser AdminSetUserPassword AdminUpdateUserAttributes; do
-  if rg -q "\"cognito-idp:$action\"" "$main"; then
+  if grep -Eq "\"cognito-idp:$action\"" "$main"; then
     fail "administration role permits forbidden action $action"
   fi
 done

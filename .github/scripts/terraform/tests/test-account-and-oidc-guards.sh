@@ -15,11 +15,11 @@ for invalid in \
     exit 1
   fi
 done
-rg -Fq '^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$' \
+grep -Fq '^repo:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+:ref:refs/heads/main$' \
   "$ROOT/infra/terraform/cognito/variables.tf"
-if rg -Fq 'endswith(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
+if grep -Fq 'endswith(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
   exit 1
 fi
-if rg -Fq 'strcontains(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
+if grep -Fq 'strcontains(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
   exit 1
 fi

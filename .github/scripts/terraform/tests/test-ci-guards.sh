@@ -15,7 +15,7 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 [[ ! -e "$ROOT/.github/workflows/terraform-state-validate.yml" ]]
 legacy_root='infra/aws/cognito'"-staging"
 managed_user='aws_cognito_'"user\""
-if rg -n "$legacy_root|$managed_user" "$ROOT/infra" "$ROOT/.github"; then
+if grep -ERn "$legacy_root|$managed_user" "$ROOT/infra" "$ROOT/.github"; then
   exit 1
 fi
 echo "Terraform CI guards passed"

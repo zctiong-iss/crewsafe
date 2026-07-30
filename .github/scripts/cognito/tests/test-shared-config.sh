@@ -5,9 +5,9 @@ resolver="$ROOT/.github/scripts/cognito/resolve-shared-config.sh"
 
 jq empty "$ROOT/.github/cognito/shared-config.schema.json"
 [[ -x "$resolver" ]]
-rg -q 'CREWSAFE_SHARED_COGNITO_JSON' "$ROOT/run.sh"
-rg -q 'gh variable get' "$ROOT/run.sh"
-if rg -n 'eval|terraform|aws configure' "$ROOT/run.sh"; then
+grep -Eq 'CREWSAFE_SHARED_COGNITO_JSON' "$ROOT/run.sh"
+grep -Eq 'gh variable get' "$ROOT/run.sh"
+if grep -En 'eval|terraform|aws configure' "$ROOT/run.sh"; then
   exit 1
 fi
 

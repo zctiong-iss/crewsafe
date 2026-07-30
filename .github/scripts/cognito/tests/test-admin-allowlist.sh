@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 jq -e '.schema_version == 1 and (.accounts | type == "object")' "$ROOT/.github/cognito/admins.json" >/dev/null
 jq empty "$ROOT/.github/cognito/admins.schema.json"
-rg -q 'Actor is not authorized' "$ROOT/.github/scripts/cognito/resolve-admin-operation.sh"
+grep -Eq 'Actor is not authorized' "$ROOT/.github/scripts/cognito/resolve-admin-operation.sh"
 
 resolver="$ROOT/.github/scripts/cognito/resolve-admin-operation.sh"
 registry='{"alice":{"account_id":"123456789012"}}'

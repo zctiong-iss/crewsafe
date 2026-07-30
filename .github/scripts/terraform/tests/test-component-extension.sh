@@ -36,7 +36,7 @@ if CREWSAFE_TEST_MODE=1 \
 fi
 
 for workflow in terraform-validate.yml terraform-plan.yml terraform-apply.yml; do
-  if rg -q 'synthetic-contract' "$ROOT/.github/workflows/$workflow"; then
+  if grep -Eq 'synthetic-contract' "$ROOT/.github/workflows/$workflow"; then
     fail "$workflow hard-codes the synthetic component"
   fi
 done
