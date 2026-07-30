@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "components": {
+    "symlink-escape": {
+      "jira_key": "SCRUM-999",
+      "root": "infra/terraform/synthetic-link",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/test/symlink.tfstate",
+      "allow_destroy": false
+    }
+  }
+}

@@ -30,9 +30,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code SecurityConfig.cognitoJwtDecoder} - the only authentication surface left once
  * login moves entirely into Cognito's Hosted UI.
  *
- * Tokens here are minted for real against cognito-local (see AbstractIntegrationTest), the
- * same emulator used by local development, so these exercise the genuine JWKS lookup and
- * signature check rather than a stub.
+ * Tokens here are minted against the pinned test-only cognito-local container (see
+ * AbstractIntegrationTest), so these exercise the genuine JWKS lookup and signature check
+ * rather than a stub. Normal development uses the deployed shared pool.
  *
  * @author Jemilin Beulah
  */

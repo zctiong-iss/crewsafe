@@ -13,12 +13,12 @@ npm run dev                    # http://localhost:5173
 
 The dev server port is pinned to **5173** on purpose. Cognito rejects any `redirect_uri`
 that is not registered on the app client, and `http://localhost:5173/callback` is what
-`infra/aws/cognito-staging` registers. A different port is a failed login.
+`infra/terraform/cognito` registers. A different port is a failed login.
 
 ### Filling in `.env.local`
 
 ```bash
-cd ../infra/aws/cognito-staging && terraform output -raw backend_env
+./run.sh --account <registered-alias>
 ```
 
 Use the same pool for `VITE_COGNITO_AUTHORITY` and the **web** client id. None of these are
@@ -38,7 +38,7 @@ SPRING_PROFILES_ACTIVE=staging \
   ./mvnw spring-boot:run
 ```
 
-**Local development cannot use `cognito-local`.** The emulator implements the Cognito
+**Normal development does not use `cognito-local`.** The emulator implements the Cognito
 Identity Provider API but has no Hosted UI, so there is no `/oauth2/authorize` to redirect
 to. `cognito-local` remains what the backend's tests run against; the web app needs a real
 pool.

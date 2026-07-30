@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     // Fixed, not "whatever is free". Cognito rejects any redirect_uri that is not
     // registered on the app client, and http://localhost:5173/callback is what
-    // infra/aws/cognito-staging registers. A different port means a failed login.
+    // infra/terraform/cognito registers. A different port means a failed login.
     port: 5173,
     strictPort: true,
   },
