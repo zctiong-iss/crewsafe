@@ -8,10 +8,16 @@ public record NeaObservation(
         NeaMetric metric,
         Instant observedAt,
         String unit,
-        List<NeaStationReading> readings
+        List<NeaStationReading> readings,
+        boolean simulated
 ) {
 
     public NeaObservation {
         readings = List.copyOf(readings);
+    }
+
+    public NeaObservation(NeaMetric metric, Instant observedAt, String unit,
+                          List<NeaStationReading> readings) {
+        this(metric, observedAt, unit, readings, false);
     }
 }

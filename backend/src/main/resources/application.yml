@@ -44,6 +44,14 @@ app:
     read-timeout: ${NEA_READ_TIMEOUT:10s}
 
   weather:
+    data:
+      # "live" uses data.gov.sg; "fixture" replays the bundled, clearly simulated demo
+      # scenario without any network dependency.
+      mode: ${WEATHER_DATA_MODE:live}
+    fixture:
+      resource: ${WEATHER_FIXTURE_RESOURCE:classpath:weather/fixtures/nea-demo-replay.json}
+      # false advances to the final frame and then holds it; true loops to the beginning.
+      loop: ${WEATHER_FIXTURE_LOOP:false}
     ingestion:
       # Opt in per environment. This prevents developer/test startup from silently calling
       # an external safety-data service; live deployments enable it explicitly.

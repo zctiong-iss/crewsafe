@@ -104,6 +104,55 @@ class WeatherIngestionServiceTest {
     }
 
     @Test
+    void persistsFixtureReplayAsCachedAndSimulatedRegardlessOfItsAge() {
+        Site site = new Site("Replay Site", decimal("1.3000"), decimal("103.8000"));
+        when(sites.findAll()).thenReturn(List.of(site));
+        when(client.fetchAll()).thenReturn(completeSnapshot().stream()
+                .map(observation -> new NeaObservation(
+                        observation.metric(), observation.observedAt(), observation.unit(),
+                        observation.readings(), true))
+                .toList());
+        when(observations.insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(1);
+
+        assertThat(service.ingestCurrentConditions())
+                .isEqualTo(new WeatherIngestionResult(1, 1, 0));
+        verify(observations).insertIfAbsent(
+                any(UUID.class),
+                eq(site.getId()),
+                eq(decimal("31.2")),
+                eq(decimal("29.1")),
+                eq(decimal("81.0")),
+                eq(decimal("4.0")),
+                eq(decimal("0.0")),
+                eq(OBSERVED_AT),
+                eq(NOW),
+                eq("CACHED"),
+                eq("SIMULATED"),
+                eq("WBGT-NEAR"));
+    }
+
+    @Test
+    void refusesToMixLiveAndSimulatedMetrics() {
+        Site site = new Site("Mixed Mode Site", decimal("1.3000"), decimal("103.8000"));
+        when(sites.findAll()).thenReturn(List.of(site));
+        List<NeaObservation> mixed = completeSnapshot().stream()
+                .map(observation -> observation.metric() == NeaMetric.RAINFALL
+                        ? new NeaObservation(observation.metric(), observation.observedAt(),
+                                observation.unit(), observation.readings(), true)
+                        : observation)
+                .toList();
+        when(client.fetchAll()).thenReturn(mixed);
+
+        assertThatThrownBy(service::ingestCurrentConditions)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("mixed live and simulated");
+        verify(observations, never()).insertIfAbsent(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void skipsExternalApiEntirelyWhenThereAreNoSites() {
         when(sites.findAll()).thenReturn(List.of());
 

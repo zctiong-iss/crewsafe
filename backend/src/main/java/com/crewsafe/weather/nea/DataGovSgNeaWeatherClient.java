@@ -1,6 +1,7 @@
 package com.crewsafe.weather.nea;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
@@ -30,6 +31,8 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
  * @author Bryan Phang
  */
 @Component
+@ConditionalOnProperty(prefix = "app.weather.data", name = "mode", havingValue = "live",
+        matchIfMissing = true)
 @RequiredArgsConstructor
 public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
 

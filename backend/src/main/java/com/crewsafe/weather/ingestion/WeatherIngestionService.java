@@ -43,20 +43,23 @@ public class WeatherIngestionService {
                 neaWeatherClient.fetchAll());
         NeaObservation wbgtObservation = observations.get(NeaMetric.WBGT);
         Instant ingestedAt = clock.instant();
-        WeatherQualityStatus qualityStatus = freshnessClassifier.classify(
-                wbgtObservation.observedAt(), ingestedAt);
+        boolean simulated = requireConsistentMode(observations);
+        WeatherQualityStatus qualityStatus = simulated
+                ? WeatherQualityStatus.SIMULATED
+                : freshnessClassifier.classify(wbgtObservation.observedAt(), ingestedAt);
+        WeatherSource source = simulated ? WeatherSource.CACHED : WeatherSource.NEA;
 
         int inserted = 0;
         for (Site site : sites) {
             inserted += persistSiteSnapshot(site, observations, wbgtObservation,
-                    ingestedAt, qualityStatus);
+                    ingestedAt, qualityStatus, source);
         }
         return new WeatherIngestionResult(sites.size(), inserted, sites.size() - inserted);
     }
 
     private int persistSiteSnapshot(Site site, Map<NeaMetric, NeaObservation> observations,
                                     NeaObservation wbgtObservation, Instant ingestedAt,
-                                    WeatherQualityStatus qualityStatus) {
+                                    WeatherQualityStatus qualityStatus, WeatherSource source) {
         NeaStationReading wbgt = nearest(site, observations, NeaMetric.WBGT);
         NeaStationReading temperature = nearest(site, observations, NeaMetric.AIR_TEMPERATURE);
         NeaStationReading humidity = nearest(site, observations, NeaMetric.RELATIVE_HUMIDITY);
@@ -76,7 +79,7 @@ public class WeatherIngestionService {
                 rainfall.value(),
                 wbgtObservation.observedAt(),
                 ingestedAt,
-                WeatherSource.NEA.name(),
+                source.name(),
                 qualityStatus.name(),
                 wbgt.station().id());
     }
@@ -108,5 +111,14 @@ public class WeatherIngestionService {
             }
         }
         return byMetric;
+    }
+
+    private boolean requireConsistentMode(Map<NeaMetric, NeaObservation> observations) {
+        boolean simulated = observations.get(NeaMetric.WBGT).simulated();
+        if (observations.values().stream()
+                .anyMatch(observation -> observation.simulated() != simulated)) {
+            throw new IllegalStateException("NEA client mixed live and simulated observations");
+        }
+        return simulated;
     }
 }

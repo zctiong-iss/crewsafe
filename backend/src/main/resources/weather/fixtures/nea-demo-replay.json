@@ -1,0 +1,155 @@
+{
+  "capturedAt": "2026-07-30T08:45:00Z",
+  "description": "Synthetic dated CrewSafe heat-escalation scenario for offline demonstrations",
+  "stations": [
+    {
+      "id": "S128",
+      "name": "Bishan Street",
+      "latitude": 1.354825,
+      "longitude": 103.852219
+    },
+    {
+      "id": "S150",
+      "name": "Evans Road",
+      "latitude": 1.321182,
+      "longitude": 103.819737
+    }
+  ],
+  "frames": [
+    {
+      "observedAt": "2026-07-30T08:00:00Z",
+      "observations": [
+        {
+          "metric": "WBGT",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 30.8, "heatStress": "Low"},
+            {"stationId": "S150", "value": 31.0, "heatStress": "Low"}
+          ]
+        },
+        {
+          "metric": "AIR_TEMPERATURE",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 30.0},
+            {"stationId": "S150", "value": 30.3}
+          ]
+        },
+        {
+          "metric": "RELATIVE_HUMIDITY",
+          "unit": "percentage",
+          "readings": [
+            {"stationId": "S128", "value": 70.0},
+            {"stationId": "S150", "value": 72.0}
+          ]
+        },
+        {
+          "metric": "WIND_SPEED",
+          "unit": "knots",
+          "readings": [
+            {"stationId": "S128", "value": 4.2},
+            {"stationId": "S150", "value": 3.8}
+          ]
+        },
+        {
+          "metric": "RAINFALL",
+          "unit": "mm",
+          "readings": [
+            {"stationId": "S128", "value": 0.0},
+            {"stationId": "S150", "value": 0.0}
+          ]
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-07-30T08:15:00Z",
+      "observations": [
+        {
+          "metric": "WBGT",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 32.2, "heatStress": "Moderate"},
+            {"stationId": "S150", "value": 32.4, "heatStress": "Moderate"}
+          ]
+        },
+        {
+          "metric": "AIR_TEMPERATURE",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 31.1},
+            {"stationId": "S150", "value": 31.4}
+          ]
+        },
+        {
+          "metric": "RELATIVE_HUMIDITY",
+          "unit": "percentage",
+          "readings": [
+            {"stationId": "S128", "value": 74.0},
+            {"stationId": "S150", "value": 76.0}
+          ]
+        },
+        {
+          "metric": "WIND_SPEED",
+          "unit": "knots",
+          "readings": [
+            {"stationId": "S128", "value": 3.1},
+            {"stationId": "S150", "value": 2.9}
+          ]
+        },
+        {
+          "metric": "RAINFALL",
+          "unit": "mm",
+          "readings": [
+            {"stationId": "S128", "value": 0.0},
+            {"stationId": "S150", "value": 0.0}
+          ]
+        }
+      ]
+    },
+    {
+      "observedAt": "2026-07-30T08:30:00Z",
+      "observations": [
+        {
+          "metric": "WBGT",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 33.1, "heatStress": "High"},
+            {"stationId": "S150", "value": 33.3, "heatStress": "High"}
+          ]
+        },
+        {
+          "metric": "AIR_TEMPERATURE",
+          "unit": "deg C",
+          "readings": [
+            {"stationId": "S128", "value": 32.0},
+            {"stationId": "S150", "value": 32.2}
+          ]
+        },
+        {
+          "metric": "RELATIVE_HUMIDITY",
+          "unit": "percentage",
+          "readings": [
+            {"stationId": "S128", "value": 77.0},
+            {"stationId": "S150", "value": 79.0}
+          ]
+        },
+        {
+          "metric": "WIND_SPEED",
+          "unit": "knots",
+          "readings": [
+            {"stationId": "S128", "value": 2.2},
+            {"stationId": "S150", "value": 2.0}
+          ]
+        },
+        {
+          "metric": "RAINFALL",
+          "unit": "mm",
+          "readings": [
+            {"stationId": "S128", "value": 0.4},
+            {"stationId": "S150", "value": 0.2}
+          ]
+        }
+      ]
+    }
+  ]
+}
