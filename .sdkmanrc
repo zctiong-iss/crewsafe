@@ -1,0 +1,3 @@
+# Enable auto-env through the sdkman_auto_env config
+# Installs and switches to this JDK on `cd` into the project (or run `sdk env`)
+java=17.0.19-tem

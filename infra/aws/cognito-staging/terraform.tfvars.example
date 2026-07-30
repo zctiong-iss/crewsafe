@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored - it holds the
+# demo password.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+region      = "ap-southeast-1"
+environment = "staging"
+
+# Must be globally unique across all of AWS. Add a random-ish suffix.
+hosted_ui_domain = "crewsafe-staging-CHANGEME"
+
+# Where Cognito is allowed to redirect back to after login. Cognito rejects any redirect
+# URI not listed here, so the deployed origin must be added before the deployed app works.
+web_callback_urls = ["http://localhost:5173/callback"]
+web_logout_urls   = ["http://localhost:5173/"]
+
+mobile_callback_urls = ["crewsafe://callback"]
+mobile_logout_urls   = ["crewsafe://"]
+
+# 12+ chars, upper, lower, digit - must satisfy the pool's own password policy.
+demo_user_password = "CHANGEME-Staging-2026"

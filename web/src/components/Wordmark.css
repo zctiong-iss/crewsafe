@@ -1,0 +1,74 @@
+.wordmark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wordmark__glyph {
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  gap: 2px;
+  width: 2rem;
+  height: 2rem;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--navy);
+  flex-shrink: 0;
+}
+
+.wordmark__rung {
+  border-radius: 1px;
+}
+
+/* Bottom-up: the scale reads like a thermometer, safe at the base. */
+.wordmark__rung--low {
+  background: var(--band-extreme);
+}
+.wordmark__rung--moderate {
+  background: var(--band-high);
+}
+.wordmark__rung--high {
+  background: var(--band-moderate);
+}
+.wordmark__rung--extreme {
+  background: var(--band-low);
+}
+
+.wordmark__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.wordmark__name {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.wordmark__tagline {
+  font-size: var(--text-xs);
+  /* Tighter than the standard eyebrow tracking: at 240px the sidebar is the narrowest
+     place this appears, and the wider spacing broke "Heat safety operations" mid-phrase. */
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.wordmark--light .wordmark__name {
+  color: var(--ink);
+}
+.wordmark--light .wordmark__tagline {
+  color: var(--ink-muted);
+}
+
+.wordmark--dark .wordmark__name {
+  color: var(--ink-on-navy);
+}
+.wordmark--dark .wordmark__tagline {
+  color: var(--ink-on-navy-muted);
+}
+
+.wordmark--dark .wordmark__glyph {
+  background: var(--navy-raised);
+}

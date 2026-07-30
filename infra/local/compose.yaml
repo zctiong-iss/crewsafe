@@ -1,0 +1,68 @@
+# Local development dependencies for the CrewSafe backend.
+#
+#   podman compose -f infra/local/compose.yaml up -d
+#   podman compose -f infra/local/compose.yaml down
+#
+# Host port is 5434, not the usual 5432, because developer machines on this project
+# already run PostgreSQL on 5432 and another project's container on 5433. Inside the
+# container it is still 5432.
+#
+# These credentials are local-development only and are intentionally committed —
+# nothing here is used in staging or production, where values come from Secrets Manager.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: crewsafe-postgres
+    environment:
+      POSTGRES_DB: crewsafe
+      POSTGRES_USER: crewsafe
+      POSTGRES_PASSWORD: crewsafe_local_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - crewsafe-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crewsafe -d crewsafe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # A real Cognito Identity Provider API, running locally (jagregory/cognito-local).
+  # It signs genuine RS256 tokens and serves a real JWKS endpoint, so the backend's
+  # resource-server config talks to it exactly as it would talk to AWS.
+  #
+  # The user pool, its two app clients ("web" and "mobile") and all seven demo
+  # accounts are checked into git under ./cognito-local/seed. That is fake local-only
+  # data - same reasoning as the Postgres password above - so `podman compose up`
+  # gives every developer the exact same pool id, client ids and working logins with
+  # no setup step. See application-local.yml for how the backend points at this
+  # instance, and DemoDataSeeder for how the seven accounts here (all sharing the
+  # password below) get their local app_user rows.
+  #
+  # The seed is mounted read-only and copied into place at startup rather than
+  # bind-mounted read-write, because cognito-local *writes* to this directory - it
+  # persists every issued refresh token and updates each user's LastModifiedDate. A
+  # read-write bind mount meant every developer who logged in locally got dirty diffs
+  # on a tracked file, and merge conflicts on data nobody edits by hand.
+  #
+  # The copy runs on every start, so the pool is reset to the seed each time and the
+  # emulator's own scribbles never outlive the container. Local pool state is
+  # deliberately disposable: anything a developer needs to persist belongs in the
+  # seed, in git, where every developer gets it.
+  #
+  # Demo login password for every seeded account: CrewSafe-Local-Dev-2026
+  cognito-local:
+    # Pinned by digest, not :latest. This container is the entire authentication
+    # surface for local development and CI, so an upstream push must never silently
+    # change token shape or break the build.
+    image: docker.io/jagregory/cognito-local@sha256:3bd1cc79aee4444cded432680995ab1a26c6811e0af2bf61773478d9613e0141
+    container_name: crewsafe-cognito-local
+    ports:
+      - "9229:9229"
+    volumes:
+      - ./cognito-local/seed:/seed:ro
+    entrypoint: ["/bin/sh", "-c", "cp -r /seed/. /app/.cognito/ && exec node /app/start.js"]
+
+volumes:
+  crewsafe-pgdata:

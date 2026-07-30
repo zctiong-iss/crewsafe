@@ -1,0 +1,67 @@
+{
+  "Clients": {
+    "1jqmajlb1c0jznyrmpnk51gof": {
+      "AccessTokenValidity": 15,
+      "AllowedOAuthFlows": [
+        "code"
+      ],
+      "AllowedOAuthFlowsUserPoolClient": true,
+      "AllowedOAuthScopes": [
+        "openid",
+        "email"
+      ],
+      "CallbackURLs": [
+        "http://localhost:5173/callback"
+      ],
+      "ClientId": "1jqmajlb1c0jznyrmpnk51gof",
+      "ClientName": "web",
+      "CreationDate": "2026-07-28T15:27:16.244Z",
+      "ExplicitAuthFlows": [
+        "ALLOW_USER_PASSWORD_AUTH",
+        "ALLOW_REFRESH_TOKEN_AUTH"
+      ],
+      "LastModifiedDate": "2026-07-28T15:27:16.244Z",
+      "RefreshTokenValidity": 7,
+      "SupportedIdentityProviders": [
+        "COGNITO"
+      ],
+      "TokenValidityUnits": {
+        "AccessToken": "minutes",
+        "IdToken": "minutes",
+        "RefreshToken": "days"
+      },
+      "UserPoolId": "local_1g2nm7Dp"
+    },
+    "dxja3m5rdanf90uggphz1ffj3": {
+      "AllowedOAuthFlows": [
+        "code"
+      ],
+      "AllowedOAuthFlowsUserPoolClient": true,
+      "AllowedOAuthScopes": [
+        "openid",
+        "email"
+      ],
+      "CallbackURLs": [
+        "crewsafe://callback"
+      ],
+      "ClientId": "dxja3m5rdanf90uggphz1ffj3",
+      "AccessTokenValidity": 1,
+      "ClientName": "mobile",
+      "CreationDate": "2026-07-28T15:27:17.126Z",
+      "ExplicitAuthFlows": [
+        "ALLOW_USER_PASSWORD_AUTH",
+        "ALLOW_REFRESH_TOKEN_AUTH"
+      ],
+      "LastModifiedDate": "2026-07-28T15:27:17.126Z",
+      "SupportedIdentityProviders": [
+        "COGNITO"
+      ],
+      "TokenValidityUnits": {
+        "AccessToken": "hours",
+        "IdToken": "minutes",
+        "RefreshToken": "days"
+      },
+      "UserPoolId": "local_1g2nm7Dp"
+    }
+  }
+}

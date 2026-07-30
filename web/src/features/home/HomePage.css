@@ -1,0 +1,12 @@
+.home__loading {
+  color: var(--ink-muted);
+}
+
+.home__sites {
+  display: grid;
+  /* auto-fill with a capped track, not auto-fit with 1fr: a supervisor assigned to one
+     site should see a card, not a single panel stretched across a 27-inch monitor. Cards
+     keep a readable width and pack from the left as sites are added. */
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 28rem));
+  gap: var(--space-4);
+}

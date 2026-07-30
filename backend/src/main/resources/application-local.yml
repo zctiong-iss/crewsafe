@@ -1,0 +1,27 @@
+# Local-development values. Activate with:
+#
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#
+# These exist in their own file, not as defaults in application.yml, so that a staging or
+# production deployment that forgets an environment variable fails at startup instead of
+# silently pointing at a developer's laptop.
+#
+# One caveat: DemoDataSeederTest is @ActiveProfiles("local"), so this file also loads into
+# that test's context. It is harmless today only because AbstractIntegrationTest's
+# @DynamicPropertySource overrides every key below with Testcontainers values. Adding a key
+# here that the tests do not override would silently change test behaviour, with nothing to
+# catch it — so add local-only settings here, and set anything the tests depend on there.
+#
+# Everything below matches the containers in infra/local/compose.yaml, which ship a
+# pre-seeded Cognito pool (both app clients, all seven demo accounts) so that
+# `podman compose up` needs no further setup.
+
+app:
+  cognito:
+    issuer-uri: http://cognito-local/local_1g2nm7Dp
+    jwk-set-uri: http://localhost:9229/local_1g2nm7Dp/.well-known/jwks.json
+    client-ids: 1jqmajlb1c0jznyrmpnk51gof,dxja3m5rdanf90uggphz1ffj3
+    user-pool-id: local_1g2nm7Dp
+    region: us-east-1
+    # cognito-local, not AWS. Blank in every other environment.
+    endpoint-override: http://localhost:9229
