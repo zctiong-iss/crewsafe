@@ -7,7 +7,7 @@ region="${3:?region is required}"
 error_file="$(mktemp)"
 trap 'rm -f "$error_file"' EXIT
 
-if aws s3api head-bucket --bucket "$bucket" 2>"$error_file"; then
+if aws s3api head-bucket --bucket "$bucket" --output off 2>"$error_file"; then
   actual_region="$(aws s3api get-bucket-location --bucket "$bucket" --query 'LocationConstraint' --output text)"
   if [[ "$actual_region" != "$region" ]]; then
     echo "::error::Existing state bucket is in an unexpected Region." >&2
