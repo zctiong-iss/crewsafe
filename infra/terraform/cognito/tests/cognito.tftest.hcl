@@ -18,14 +18,6 @@ run "shared_dev_contract" {
       arn = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TestPool"
     }
   }
-  override_resource {
-    target = aws_iam_role.cognito_admin
-    values = {
-      id   = "CrewSafeGitHubCognitoAdminRole"
-      name = "CrewSafeGitHubCognitoAdminRole"
-      arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubCognitoAdminRole"
-    }
-  }
   assert {
     condition     = aws_cognito_user_pool.shared_dev.name == "crewsafe-shared-dev"
     error_message = "Pool name must be stable."
@@ -92,17 +84,17 @@ run "shared_dev_contract" {
   }
   assert {
     condition = (
-      strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminCreateUser")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminGetUser")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminListGroupsForUser")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminSetUserPassword")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:GetRandomPassword")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:CreateSecret")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:DescribeSecret")
-      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:PutSecretValue")
-      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminDeleteUser")
-      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:GetSecretValue")
-      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:DeleteSecret")
+      contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminCreateUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminGetUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminListGroupsForUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminSetUserPassword")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:GetRandomPassword")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:CreateSecret")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DescribeSecret")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:PutSecretValue")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminDeleteUser")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:GetSecretValue")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DeleteSecret")
     )
     error_message = "Synthetic-user administration permissions are incomplete or overbroad."
   }

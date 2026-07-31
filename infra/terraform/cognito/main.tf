@@ -1,5 +1,47 @@
 data "aws_caller_identity" "current" {}
 
+locals {
+  cognito_admin_policy = {
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AdministerExistingCrewSafeUsers"
+      Effect = "Allow"
+      Action = [
+        "cognito-idp:ListUsers",
+        "cognito-idp:ListGroups",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminListGroupsForUser",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:AdminEnableUser",
+        "cognito-idp:AdminDisableUser",
+        "cognito-idp:AdminResetUserPassword",
+        "cognito-idp:AdminUserGlobalSignOut",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminRemoveUserFromGroup"
+      ]
+      Resource = aws_cognito_user_pool.shared_dev.arn
+      },
+      {
+        Sid      = "GenerateSyntheticPasswords"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetRandomPassword"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ManageSyntheticCredentialVersions"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:PutSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:crewsafe/${var.account_alias}/cognito/synthetic/*"
+      }
+    ]
+  }
+}
+
 resource "terraform_data" "account_guard" {
   lifecycle {
     precondition {
@@ -139,45 +181,7 @@ resource "aws_iam_role" "cognito_admin" {
 }
 
 resource "aws_iam_role_policy" "cognito_admin" {
-  name = "CrewSafeCognitoUserAdministration"
-  role = aws_iam_role.cognito_admin.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AdministerExistingCrewSafeUsers"
-      Effect = "Allow"
-      Action = [
-        "cognito-idp:ListUsers",
-        "cognito-idp:ListGroups",
-        "cognito-idp:AdminCreateUser",
-        "cognito-idp:AdminGetUser",
-        "cognito-idp:AdminListGroupsForUser",
-        "cognito-idp:AdminSetUserPassword",
-        "cognito-idp:AdminEnableUser",
-        "cognito-idp:AdminDisableUser",
-        "cognito-idp:AdminResetUserPassword",
-        "cognito-idp:AdminUserGlobalSignOut",
-        "cognito-idp:AdminAddUserToGroup",
-        "cognito-idp:AdminRemoveUserFromGroup"
-      ]
-      Resource = aws_cognito_user_pool.shared_dev.arn
-      },
-      {
-        Sid      = "GenerateSyntheticPasswords"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetRandomPassword"]
-        Resource = "*"
-      },
-      {
-        Sid    = "ManageSyntheticCredentialVersions"
-        Effect = "Allow"
-        Action = [
-          "secretsmanager:CreateSecret",
-          "secretsmanager:DescribeSecret",
-          "secretsmanager:PutSecretValue"
-        ]
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:crewsafe/${var.account_alias}/cognito/synthetic/*"
-      }
-    ]
-  })
+  name   = "CrewSafeCognitoUserAdministration"
+  role   = aws_iam_role.cognito_admin.id
+  policy = jsonencode(local.cognito_admin_policy)
 }
