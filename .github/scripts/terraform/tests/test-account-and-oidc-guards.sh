@@ -28,6 +28,9 @@ fi
 if grep -Fq 'strcontains(var.github_oidc_main_subject' "$ROOT/infra/terraform/cognito/variables.tf"; then
   exit 1
 fi
+# These assertions intentionally match literal GitHub and shell expressions.
+# shellcheck disable=SC2016
 grep -Fq 'EXPECTED_OIDC_SUBJECT: ${{ vars.CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT }}' \
   "$ROOT/.github/workflows/terraform-apply.yml"
+# shellcheck disable=SC2016
 grep -Fq '"$EXPECTED_OIDC_SUBJECT"' "$ROOT/.github/workflows/terraform-apply.yml"
