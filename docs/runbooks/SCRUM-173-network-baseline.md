@@ -49,17 +49,57 @@ group. Those belong to the components this one unblocks.
 These are hand-applied documents, not Terraform-managed resources — the same manual step the
 SCRUM-154 and SCRUM-155 runbooks describe.
 
-1. Attach the contents of
-   [`infra/terraform/network/iam/plan-role-policy.json`](../../infra/terraform/network/iam/plan-role-policy.json)
-   to the account's Terraform **plan** role. It grants read-only `ec2:Describe*` actions for
-   the resource types above and nothing else.
-2. Attach the contents of
-   [`infra/terraform/network/iam/apply-role-policy.json`](../../infra/terraform/network/iam/apply-role-policy.json)
-   to the account's Terraform **apply** role. It adds create, modify, delete, and tag actions
-   for those same types, plus `ec2:AllocateAddress` and `ec2:ReleaseAddress` for the NAT
+| Role | Inline policy name | Document |
+| --- | --- | --- |
+| `CrewSafeGitHubTerraformPlanRole` | `CrewSafeNetworkTerraformPlan` | [`iam/plan-role-policy.json`](../../infra/terraform/network/iam/plan-role-policy.json) |
+| `CrewSafeGitHubTerraformApplyRole` | `CrewSafeNetworkTerraformApply` | [`iam/apply-role-policy.json`](../../infra/terraform/network/iam/apply-role-policy.json) |
+
+> **Add, do not replace.** Both roles are shared across every Terraform component and already
+> carry `CrewSafeCognitoTerraformPlan`/`Apply` from SCRUM-154 and their SCRUM-155
+> state-backend policies. Each component contributes its own inline policy; replacing an
+> existing one breaks Cognito or the state backend.
+
+### 3.1 Update the plan role
+
+1. In the AWS Console, open **IAM → Roles**.
+2. Select `CrewSafeGitHubTerraformPlanRole`.
+3. Open **Permissions → Add permissions → Create inline policy**.
+4. Select the **JSON** editor.
+5. Copy the complete reviewed document from
+   `infra/terraform/network/iam/plan-role-policy.json`.
+6. Review that it contains read-only `ec2:Describe*` actions only. It includes
+   `ec2:DescribeSecurityGroupRules` and `ec2:DescribeAddressesAttribute`, which the AWS
+   provider uses when refreshing the separate security group rule resources and the NAT
    gateway's elastic IP.
+7. Name the policy `CrewSafeNetworkTerraformPlan`.
+8. Save the policy.
+
+The plan role must not receive any EC2 create, modify, delete, authorize, revoke, or tag
+permission.
+
+### 3.2 Update the apply role
+
+1. Return to **IAM → Roles**.
+2. Select `CrewSafeGitHubTerraformApplyRole`.
+3. Open **Permissions → Add permissions → Create inline policy**.
+4. Select the **JSON** editor.
+5. Copy the complete reviewed document from
+   `infra/terraform/network/iam/apply-role-policy.json`.
+6. Confirm it contains the same read-only statement as the plan policy, plus four write
+   statements scoped by action: `ManageNetworkTopology`, `ManageNetworkEgress`,
+   `ManageNetworkAccessControl`, and `TagNetworkResources`.
+7. Confirm `ec2:RevokeSecurityGroupEgress` is present. Terraform needs it to strip the
+   allow-all egress rule AWS attaches to a new security group — without it, the database's
+   zero-egress guarantee (section 5, check 1) cannot be satisfied and the default security
+   group cannot be emptied.
+8. Name the policy `CrewSafeNetworkTerraformApply`.
+9. Save the policy.
 
 Do not widen either policy to `ec2:*`. Each new resource type is a reviewed addition.
+
+EC2 networking actions largely do not support resource-level ARNs, so both policies use
+`"Resource": "*"` with the action list as the constraint — the same shape the Cognito plan
+policy uses.
 
 ## 4. Plan
 
