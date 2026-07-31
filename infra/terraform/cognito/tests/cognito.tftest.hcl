@@ -18,6 +18,14 @@ run "shared_dev_contract" {
       arn = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TestPool"
     }
   }
+  override_resource {
+    target = aws_iam_role.cognito_admin
+    values = {
+      id   = "CrewSafeGitHubCognitoAdminRole"
+      name = "CrewSafeGitHubCognitoAdminRole"
+      arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubCognitoAdminRole"
+    }
+  }
   assert {
     condition     = aws_cognito_user_pool.shared_dev.name == "crewsafe-shared-dev"
     error_message = "Pool name must be stable."
