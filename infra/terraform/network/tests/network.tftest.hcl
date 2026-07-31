@@ -317,6 +317,23 @@ run "database_boundary" {
     )
     error_message = "Every security group rule must describe what it permits and why (FR-013)."
   }
+
+  # AWS restricts descriptions to a-zA-Z0-9 and . _-:/()#,@[]+=&;{}!$* — note the
+  # absence of the apostrophe. A character outside that set is accepted by
+  # validate and by plan, then rejected by the EC2 API mid-apply, leaving a
+  # partially provisioned network. Asserting the charset turns a runtime failure
+  # into a test failure.
+  assert {
+    condition = alltrue([
+      for d in [
+        aws_security_group.app.description,
+        aws_security_group.database.description,
+        aws_vpc_security_group_ingress_rule.database_from_app.description,
+        aws_vpc_security_group_egress_rule.app_all.description,
+      ] : can(regex("^[a-zA-Z0-9. _\\-:/()#,@\\[\\]+=&;{}!$*]+$", d)) && length(d) < 256
+    ])
+    error_message = "A security group description uses a character AWS rejects, or exceeds 255 characters. Allowed: a-zA-Z0-9 and . _-:/()#,@[]+=&;{}!$* — an apostrophe is not."
+  }
 }
 
 # ---------------------------------------------------------------------------

@@ -139,8 +139,10 @@ resource "aws_route_table_association" "private" {
 # ---------------------------------------------------------------------------
 
 resource "aws_security_group" "app" {
-  name        = "${local.name_prefix}-app"
-  description = "Application runtime. Membership grants database access; no inbound rule is defined here because the load balancer's ingress belongs to the compute component."
+  name = "${local.name_prefix}-app"
+  # AWS restricts security group descriptions to a-zA-Z0-9 and . _-:/()#,@[]+=&;{}!$*
+  # An apostrophe is not in that set and fails at CreateSecurityGroup, not at plan.
+  description = "Application runtime. Membership grants database access; no inbound rule is defined here because load balancer ingress belongs to the compute component."
   vpc_id      = aws_vpc.main.id
 
   tags = { Name = "${local.name_prefix}-app" }
