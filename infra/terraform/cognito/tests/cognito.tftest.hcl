@@ -11,6 +11,13 @@ run "shared_dev_contract" {
     target = data.aws_caller_identity.current
     values = { account_id = "123456789012" }
   }
+  override_resource {
+    target = aws_cognito_user_pool.shared_dev
+    values = {
+      id  = "ap-southeast-1_TestPool"
+      arn = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TestPool"
+    }
+  }
   assert {
     condition     = aws_cognito_user_pool.shared_dev.name == "crewsafe-shared-dev"
     error_message = "Pool name must be stable."
