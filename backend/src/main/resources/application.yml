@@ -3,7 +3,7 @@ spring:
     name: crewsafe-backend
 
   datasource:
-    # Local default points at the container in infra/local/compose.yaml (host port 5434).
+    # Local default points at the container in local/compose.yaml (host port 5434).
     # Staging and production inject these from AWS Secrets Manager.
     url: ${DB_URL:jdbc:postgresql://localhost:5434/crewsafe}
     username: ${DB_USERNAME:crewsafe}

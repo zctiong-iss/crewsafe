@@ -1,0 +1,80 @@
+# Local development stack for CrewSafe.
+#
+# Start it through the launcher:
+#   ./run.sh --account <alias>         # Podman
+#   ./run-docker.sh --account <alias>  # Docker
+#
+# The launcher resolves the shared Cognito values from the GitHub repository variable
+# and exports the APP_COGNITO_* / VITE_* environment needed by the app containers.
+# No local Cognito emulator belongs in this stack; normal development uses the shared
+# deployed pool described in docs/adr/0006-shared-remote-cognito-for-development.md.
+
+name: crewsafe-local
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: crewsafe-postgres
+    environment:
+      POSTGRES_DB: crewsafe
+      POSTGRES_USER: crewsafe
+      POSTGRES_PASSWORD: crewsafe_local_dev
+    ports:
+      - "5434:5432"
+    volumes:
+      - crewsafe-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crewsafe -d crewsafe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    image: maven:3.9.9-eclipse-temurin-17
+    container_name: crewsafe-backend
+    working_dir: /workspace/backend
+    command: ./mvnw -q -B spring-boot:run
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/crewsafe
+      DB_USERNAME: crewsafe
+      DB_PASSWORD: crewsafe_local_dev
+      SPRING_PROFILES_ACTIVE: local
+      CORS_ALLOWED_ORIGINS: http://localhost:5173
+      APP_COGNITO_ISSUER_URI: ${APP_COGNITO_ISSUER_URI:?APP_COGNITO_ISSUER_URI is required}
+      APP_COGNITO_JWK_SET_URI: ${APP_COGNITO_JWK_SET_URI:?APP_COGNITO_JWK_SET_URI is required}
+      APP_COGNITO_CLIENT_IDS: ${APP_COGNITO_CLIENT_IDS:?APP_COGNITO_CLIENT_IDS is required}
+      APP_COGNITO_DEMO_USERS_JSON: ${APP_COGNITO_DEMO_USERS_JSON:?APP_COGNITO_DEMO_USERS_JSON is required}
+    volumes:
+      - ../:/workspace
+      - crewsafe-m2-cache:/root/.m2
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    image: node:22-bookworm
+    container_name: crewsafe-web
+    working_dir: /workspace/web
+    command: sh -lc 'npm install --no-package-lock && npm run dev -- --host 0.0.0.0'
+    environment:
+      VITE_COGNITO_AUTHORITY: ${VITE_COGNITO_AUTHORITY:?VITE_COGNITO_AUTHORITY is required}
+      VITE_COGNITO_CLIENT_ID: ${VITE_COGNITO_CLIENT_ID:?VITE_COGNITO_CLIENT_ID is required}
+      VITE_COGNITO_HOSTED_UI_DOMAIN: ${VITE_COGNITO_HOSTED_UI_DOMAIN:?VITE_COGNITO_HOSTED_UI_DOMAIN is required}
+      VITE_REDIRECT_URI: http://localhost:5173/callback
+      VITE_POST_LOGOUT_REDIRECT_URI: http://localhost:5173/
+      VITE_API_BASE_URL: http://localhost:8080
+    volumes:
+      - ../:/workspace
+      - crewsafe-web-node-modules:/workspace/web/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  crewsafe-pgdata:
+  crewsafe-m2-cache:
+  crewsafe-web-node-modules:
