@@ -18,7 +18,7 @@ done
 [[ "$ACCOUNT_ALIAS" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
   echo "A valid --account alias is required." >&2; exit 1;
 }
-for command_name in gh jq "$CONTAINER_ENGINE" node curl; do
+for command_name in gh jq ruby "$CONTAINER_ENGINE" node curl; do
   command -v "$command_name" >/dev/null || { echo "$command_name is required." >&2; exit 1; }
 done
 "$CONTAINER_ENGINE" compose version >/dev/null || {
@@ -28,6 +28,7 @@ done
 gh auth status >/dev/null
 
 CONFIG="$(gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value)"
+ACCOUNT_REGISTRY="$(gh variable get CREWSAFE_AWS_ACCOUNTS_JSON --json value --jq .value)"
 ACCOUNT="$(
   CREWSAFE_SHARED_COGNITO_JSON="$CONFIG" \
     .github/scripts/cognito/resolve-shared-config.sh "$ACCOUNT_ALIAS"
@@ -36,10 +37,11 @@ ACCOUNT="$(
 export APP_COGNITO_ISSUER_URI="$(jq -r .issuer_uri <<<"$ACCOUNT")"
 export APP_COGNITO_JWK_SET_URI="$(jq -r .jwks_uri <<<"$ACCOUNT")"
 export APP_COGNITO_CLIENT_IDS="$(jq -r '[.web_client_id,.mobile_client_id] | join(",")' <<<"$ACCOUNT")"
-export APP_COGNITO_DEMO_USERS_JSON="$(jq -c '.application_users | map({
-  username:.username,cognitoSub:.cognito_sub,displayName:.display_name,
-  role:.role,siteCodes:.site_codes,identityKind:.identity_kind
-})' <<<"$ACCOUNT")"
+export APP_COGNITO_DEMO_USERS_JSON="$(
+  CREWSAFE_AWS_ACCOUNTS_JSON="$ACCOUNT_REGISTRY" \
+  CREWSAFE_SHARED_COGNITO_JSON="$CONFIG" \
+    .github/scripts/cognito/build-runtime-mappings.sh "$ACCOUNT_ALIAS"
+)"
 export SPRING_PROFILES_ACTIVE=local
 export CORS_ALLOWED_ORIGINS=http://localhost:5173
 

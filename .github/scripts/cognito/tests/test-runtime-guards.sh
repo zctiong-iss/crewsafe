@@ -35,3 +35,10 @@ fi
 if grep -En 'endpoint-override|localhost:9229' "$ROOT/backend/src/main/resources/application-local.yml"; then
   exit 1
 fi
+
+grep -Fq '.github/cognito/**' "$ROOT/.github/workflows/terraform-validate.yml"
+grep -Fq '.github/scripts/cognito/**' "$ROOT/.github/workflows/terraform-validate.yml"
+grep -Fq '.github/workflows/cognito-user-administration.yml' \
+  "$ROOT/.github/workflows/terraform-validate.yml"
+grep -Fq '.github/scripts/cognito/tests/test-*.sh' \
+  "$ROOT/.github/workflows/terraform-validate.yml"

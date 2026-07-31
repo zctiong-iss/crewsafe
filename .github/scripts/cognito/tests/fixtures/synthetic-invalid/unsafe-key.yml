@@ -1,0 +1,6 @@
+schema_version: 1
+accounts:
+  alice:
+    - {key: Demo Worker, username: worker@synthetic.crewsafe.invalid, display_name: Synthetic Worker, role: WORKER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: demo-supervisor, username: supervisor@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor, role: SUPERVISOR, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: demo-safety-manager, username: safety@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager, role: SAFETY_MANAGER, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}

@@ -11,6 +11,13 @@ run "shared_dev_contract" {
     target = data.aws_caller_identity.current
     values = { account_id = "123456789012" }
   }
+  override_resource {
+    target = aws_cognito_user_pool.shared_dev
+    values = {
+      id  = "ap-southeast-1_TestPool"
+      arn = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TestPool"
+    }
+  }
   assert {
     condition     = aws_cognito_user_pool.shared_dev.name == "crewsafe-shared-dev"
     error_message = "Pool name must be stable."
@@ -74,6 +81,22 @@ run "shared_dev_contract" {
       && aws_cognito_user_group.synthetic_test_users.precedence == null
     )
     error_message = "Groups must not become application roles or precedence controls."
+  }
+  assert {
+    condition = (
+      contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminCreateUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminGetUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminListGroupsForUser")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminSetUserPassword")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:GetRandomPassword")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:CreateSecret")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DescribeSecret")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:PutSecretValue")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminDeleteUser")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:GetSecretValue")
+      && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DeleteSecret")
+    )
+    error_message = "Synthetic-user administration permissions are incomplete or overbroad."
   }
 }
 

@@ -66,17 +66,6 @@ public class DemoDataSeeder implements ApplicationRunner {
                 new BigDecimal("1.296600"), new BigDecimal("103.776400"));
 
         Map<String, Site> siteByCode = Map.of("bishan", bishan, "campus", campus);
-        Set<String> configuredUsernames = mappings.stream()
-                .map(DemoUserMapping::username)
-                .collect(Collectors.toUnmodifiableSet());
-
-        // The reviewed mapping is authoritative for local/staging access. Removing an entry
-        // revokes application access on the next startup while preserving the record and its
-        // audit relationships. Re-adding it does not silently reactivate it.
-        users.findAll().stream()
-                .filter(user -> !configuredUsernames.contains(user.getUsername()))
-                .forEach(user -> user.setStatus(UserStatus.INACTIVE));
-
         for (DemoUserMapping mapping : mappings) {
             AppUser user = reconcileIdentity(mapping);
             reconcileMemberships(user, mapping.siteCodes(), siteByCode);
@@ -96,8 +85,10 @@ public class DemoDataSeeder implements ApplicationRunner {
         Optional<AppUser> bySubject = users.findByCognitoSub(mapping.cognitoSub());
 
         if (byUsername.isEmpty() && bySubject.isEmpty()) {
-            return users.save(new AppUser(mapping.username(), mapping.cognitoSub(),
-                    mapping.displayName(), mapping.role()));
+            AppUser created = new AppUser(mapping.username(), mapping.cognitoSub(),
+                    mapping.displayName(), mapping.role());
+            created.setStatus(initialStatusFor(mapping));
+            return users.save(created);
         }
 
         if (byUsername.isEmpty() || bySubject.isEmpty()
@@ -109,9 +100,22 @@ public class DemoDataSeeder implements ApplicationRunner {
         AppUser existing = byUsername.orElseThrow();
         existing.setDisplayName(mapping.displayName());
         existing.setRole(mapping.role());
-        // Status is deliberately preserved: configuration must never reactivate an account
-        // that an operator has disabled.
+        if (!"preserve".equals(mapping.desiredStatus())) {
+            existing.setStatus(statusForSynthetic(mapping));
+        }
         return existing;
+    }
+
+    private UserStatus initialStatusFor(DemoUserMapping mapping) {
+        return "disabled".equals(mapping.desiredStatus())
+                ? UserStatus.INACTIVE
+                : UserStatus.ACTIVE;
+    }
+
+    private UserStatus statusForSynthetic(DemoUserMapping mapping) {
+        return "enabled".equals(mapping.desiredStatus())
+                ? UserStatus.ACTIVE
+                : UserStatus.INACTIVE;
     }
 
     private void reconcileMemberships(
@@ -153,7 +157,14 @@ public class DemoDataSeeder implements ApplicationRunner {
             throw new IllegalArgumentException("Mappings must contain unique usernames and Cognito subjects.");
         }
         for (DemoUserMapping mapping : mappings) {
-            if (!mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$")
+            boolean developerUsername = "developer".equals(mapping.identityKind())
+                    && mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$");
+            boolean syntheticUsername = "synthetic-test".equals(mapping.identityKind())
+                    && mapping.username().matches(
+                            "^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$")
+                    && mapping.displayName() != null
+                    && mapping.displayName().startsWith("Synthetic ");
+            if (!(developerUsername || syntheticUsername)
                     || mapping.cognitoSub().isBlank() || mapping.cognitoSub().contains("@")
                     || mapping.displayName() == null || mapping.displayName().isBlank()
                     || mapping.displayName().length() > 100 || mapping.role() == null
@@ -162,6 +173,11 @@ public class DemoDataSeeder implements ApplicationRunner {
                     || mapping.siteCodes().stream().distinct().count() != mapping.siteCodes().size()
                     || mapping.identityKind() == null
                     || !List.of("developer", "synthetic-test").contains(mapping.identityKind())
+                    || mapping.desiredStatus() == null
+                    || ("developer".equals(mapping.identityKind())
+                        && !"preserve".equals(mapping.desiredStatus()))
+                    || ("synthetic-test".equals(mapping.identityKind())
+                        && !List.of("enabled", "disabled").contains(mapping.desiredStatus()))
                     || mapping.siteCodes().stream().anyMatch(code -> !List.of("bishan", "campus").contains(code))) {
                 throw new IllegalArgumentException("Mapping contains an unsafe subject, identity kind, or site code.");
             }
@@ -170,5 +186,6 @@ public class DemoDataSeeder implements ApplicationRunner {
     }
 
     record DemoUserMapping(String username, String cognitoSub, String displayName,
-                           Role role, List<String> siteCodes, String identityKind) {}
+                           Role role, List<String> siteCodes, String identityKind,
+                           String desiredStatus) {}
 }

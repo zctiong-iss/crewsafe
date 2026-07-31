@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://crewsafe.invalid/schemas/synthetic-users.schema.json",
+  "title": "CrewSafe synthetic Cognito users",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "accounts"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "accounts": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{1,31}$" },
+      "additionalProperties": {
+        "type": "array",
+        "maxItems": 20,
+        "items": { "$ref": "#/$defs/syntheticUser" }
+      }
+    }
+  },
+  "$defs": {
+    "syntheticUser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "username",
+        "display_name",
+        "role",
+        "site_codes",
+        "group",
+        "desired_status",
+        "cognito_sub"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "minLength": 3,
+          "maxLength": 40
+        },
+        "username": {
+          "type": "string",
+          "format": "email",
+          "pattern": "^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$",
+          "maxLength": 128
+        },
+        "display_name": {
+          "type": "string",
+          "pattern": "^Synthetic ",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "role": {
+          "enum": ["WORKER", "SUPERVISOR", "SAFETY_MANAGER"]
+        },
+        "site_codes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["bishan", "campus"] }
+        },
+        "group": { "const": "synthetic-test-users" },
+        "desired_status": { "enum": ["enabled", "disabled"] },
+        "cognito_sub": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

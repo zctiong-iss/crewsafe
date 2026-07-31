@@ -118,7 +118,8 @@ class DemoDataSeederReconciliationTest {
         seeder.run(null);
         seeder.run(null);
 
-        assertThat(usersByUsername).containsOnlyKeys("demo-worker-bishan");
+        assertThat(usersByUsername)
+                .containsOnlyKeys("worker.bishan@synthetic.crewsafe.invalid");
         assertThat(storedMemberships)
                 .singleElement()
                 .extracting(SiteMembership::getSiteId)
@@ -134,21 +135,25 @@ class DemoDataSeederReconciliationTest {
         seeder.run(null);
 
         assertThat(usersByUsername)
-                .containsOnlyKeys("demo-worker-bishan", "demo-supervisor-campus");
+                .containsOnlyKeys(
+                        "worker.bishan@synthetic.crewsafe.invalid",
+                        "supervisor.campus@synthetic.crewsafe.invalid");
         assertThat(storedMemberships).hasSize(2);
     }
 
     @Test
     void refusesToRebindAnExistingUsernameToAnotherImmutableSubject() {
         AppUser existing = store(new AppUser(
-                "demo-worker-bishan", FIRST_SUB, "Existing User", Role.WORKER));
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Existing User", Role.WORKER));
         properties.setDemoUsersJson(firstMapping().replace(FIRST_SUB, SECOND_SUB));
 
         assertThatIllegalStateException()
                 .isThrownBy(() -> seeder.run(null))
                 .withMessageContaining("immutable Cognito subject");
 
-        assertThat(usersByUsername.get("demo-worker-bishan")).isSameAs(existing);
+        assertThat(usersByUsername.get(
+                "worker.bishan@synthetic.crewsafe.invalid")).isSameAs(existing);
         assertThat(usersBySub).containsOnlyKeys(FIRST_SUB);
     }
 
@@ -167,23 +172,38 @@ class DemoDataSeederReconciliationTest {
     }
 
     @Test
-    void preservesInactiveStatusWhileReconcilingReviewedMetadata() {
+    void reviewedEnabledStatusReactivatesWhileReconcilingMetadata() {
         AppUser existing = store(new AppUser(
-                "demo-worker-bishan", FIRST_SUB, "Old Display", Role.SUPERVISOR));
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Old Display", Role.SUPERVISOR));
         existing.setStatus(UserStatus.INACTIVE);
         properties.setDemoUsersJson(firstMapping());
 
         seeder.run(null);
 
-        assertThat(existing.getStatus()).isEqualTo(UserStatus.INACTIVE);
+        assertThat(existing.getStatus()).isEqualTo(UserStatus.ACTIVE);
         assertThat(existing.getDisplayName()).isEqualTo("Synthetic Bishan Worker");
         assertThat(existing.getRole()).isEqualTo(Role.WORKER);
     }
 
     @Test
+    void developerMappingPreservesAnOperatorDisabledStatus() {
+        AppUser existing = store(new AppUser(
+                "developer-one", FIRST_SUB, "Old Display", Role.SUPERVISOR));
+        existing.setStatus(UserStatus.INACTIVE);
+        properties.setDemoUsersJson(developerMapping());
+
+        seeder.run(null);
+
+        assertThat(existing.getStatus()).isEqualTo(UserStatus.INACTIVE);
+        assertThat(existing.getDisplayName()).isEqualTo("Developer One");
+    }
+
+    @Test
     void reconcilesMembershipsToExactlyTheReviewedSiteSet() {
         AppUser existing = store(new AppUser(
-                "demo-worker-bishan", FIRST_SUB, "Old Display", Role.WORKER));
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Old Display", Role.WORKER));
         storedMemberships.add(new SiteMembership(existing.getId(), campus.getId()));
         properties.setDemoUsersJson(firstMapping());
 
@@ -196,10 +216,24 @@ class DemoDataSeederReconciliationTest {
     }
 
     @Test
-    void removingAMappingDeactivatesItsLocalApplicationUser() {
+    void removingAMappingPreservesItsLocalApplicationUser() {
         AppUser existing = store(new AppUser(
-                "demo-worker-bishan", FIRST_SUB, "Synthetic Bishan Worker", Role.WORKER));
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Synthetic Bishan Worker", Role.WORKER));
         properties.setDemoUsersJson("[]");
+
+        seeder.run(null);
+
+        assertThat(existing.getStatus()).isEqualTo(UserStatus.ACTIVE);
+    }
+
+    @Test
+    void explicitDisabledStatusMakesTheMappedUserInactive() {
+        AppUser existing = store(new AppUser(
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Synthetic Bishan Worker", Role.WORKER));
+        properties.setDemoUsersJson(firstMapping().replace(
+                "\"desiredStatus\":\"enabled\"", "\"desiredStatus\":\"disabled\""));
 
         seeder.run(null);
 
@@ -215,12 +249,13 @@ class DemoDataSeederReconciliationTest {
     private static String firstMapping() {
         return """
                 [{
-                  "username":"demo-worker-bishan",
+                  "username":"worker.bishan@synthetic.crewsafe.invalid",
                   "cognitoSub":"%s",
                   "displayName":"Synthetic Bishan Worker",
                   "role":"WORKER",
                   "siteCodes":["bishan"],
-                  "identityKind":"synthetic-test"
+                  "identityKind":"synthetic-test",
+                  "desiredStatus":"enabled"
                 }]
                 """.formatted(FIRST_SUB);
     }
@@ -229,22 +264,38 @@ class DemoDataSeederReconciliationTest {
         return """
                 [
                   {
-                    "username":"demo-worker-bishan",
+                    "username":"worker.bishan@synthetic.crewsafe.invalid",
                     "cognitoSub":"%s",
                     "displayName":"Synthetic Bishan Worker",
                     "role":"WORKER",
                     "siteCodes":["bishan"],
-                    "identityKind":"synthetic-test"
+                    "identityKind":"synthetic-test",
+                    "desiredStatus":"enabled"
                   },
                   {
-                    "username":"demo-supervisor-campus",
+                    "username":"supervisor.campus@synthetic.crewsafe.invalid",
                     "cognitoSub":"%s",
                     "displayName":"Synthetic Campus Supervisor",
                     "role":"SUPERVISOR",
                     "siteCodes":["campus"],
-                    "identityKind":"synthetic-test"
+                    "identityKind":"synthetic-test",
+                    "desiredStatus":"enabled"
                   }
                 ]
                 """.formatted(FIRST_SUB, SECOND_SUB);
+    }
+
+    private static String developerMapping() {
+        return """
+                [{
+                  "username":"developer-one",
+                  "cognitoSub":"%s",
+                  "displayName":"Developer One",
+                  "role":"SUPERVISOR",
+                  "siteCodes":["bishan"],
+                  "identityKind":"developer",
+                  "desiredStatus":"preserve"
+                }]
+                """.formatted(FIRST_SUB);
     }
 }

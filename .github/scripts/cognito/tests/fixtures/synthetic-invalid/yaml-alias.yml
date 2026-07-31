@@ -1,0 +1,13 @@
+schema_version: 1
+accounts:
+  alice:
+    - &worker
+      key: demo-worker
+      username: synthetic-worker@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Worker
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - *worker

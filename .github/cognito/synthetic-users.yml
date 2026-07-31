@@ -1,0 +1,27 @@
+schema_version: 1
+accounts:
+  dev:
+    - key: demo-worker
+      username: synthetic-worker@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Worker
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - key: demo-supervisor
+      username: synthetic-supervisor@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Supervisor
+      role: SUPERVISOR
+      site_codes: [bishan, campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - key: demo-safety-manager
+      username: synthetic-safety-manager@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Safety Manager
+      role: SAFETY_MANAGER
+      site_codes: [bishan, campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:

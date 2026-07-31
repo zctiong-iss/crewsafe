@@ -6,6 +6,7 @@ subject="${3:-}"
 group="${4:-}"
 actor="${5:-${GITHUB_ACTOR:-}}"
 confirmation="${6:-}"
+synthetic_key="${7:-}"
 actor_lower="$(printf '%s' "$actor" | tr '[:upper:]' '[:lower:]')"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 registry="${CREWSAFE_AWS_ACCOUNTS_JSON:-}"
@@ -43,20 +44,39 @@ jq -e --arg a "$alias_name" --arg actor "$actor_lower" \
 case "$operation" in
   inspect|enable|disable|reset-password|global-sign-out|add-to-group|remove-from-group)
     [[ "$subject" =~ ^[^@[:space:]]{1,128}$ ]] || { echo "::error::Use an immutable non-email Cognito sub." >&2; exit 1; }
+    [[ -z "$synthetic_key" ]] || exit 1
     ;;
-  list-users|list-groups) [[ -z "$subject" ]] || exit 1 ;;
+  list-users|list-groups)
+    [[ -z "$subject" && -z "$synthetic_key" ]] || exit 1
+    ;;
+  reconcile-synthetic|rotate-synthetic|enable-synthetic|disable-synthetic)
+    [[ -z "$subject" && -z "$group" ]] || exit 1
+    [[ "$synthetic_key" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ || (
+      "$operation" == reconcile-synthetic && "$synthetic_key" == all
+    ) ]] || {
+      echo "::error::A valid synthetic key is required." >&2
+      exit 1
+    }
+    ;;
   *) echo "::error::Unsupported Cognito operation." >&2; exit 1 ;;
 esac
 case "$operation" in
   add-to-group|remove-from-group)
-    [[ "$group" == developers || "$group" == synthetic-test-users ]] || {
+    [[ "$group" == developers ]] || {
       echo "::error::Unknown Cognito group." >&2; exit 1;
     }
     ;;
+  reconcile-synthetic|rotate-synthetic|enable-synthetic|disable-synthetic) ;;
   *) [[ -z "$group" ]] || exit 1 ;;
 esac
 case "$operation" in
   inspect|list-users|list-groups) ;;
+  reconcile-synthetic|rotate-synthetic|enable-synthetic|disable-synthetic)
+    expected="${operation} ${alias_name} ${synthetic_key}"
+    [[ "$confirmation" == "$expected" ]] || {
+      echo "::error::Confirmation must be exactly: $expected" >&2; exit 1;
+    }
+    ;;
   *)
     expected="${operation} ${alias_name} ${subject}"
     [[ "$confirmation" == "$expected" ]] || {
@@ -65,8 +85,10 @@ case "$operation" in
     ;;
 esac
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-  printf 'operation=%s\nsubject=%s\ngroup=%s\nactor=%s\n' "$operation" "$subject" "$group" "$actor_lower" >>"$GITHUB_OUTPUT"
+  printf 'operation=%s\nsubject=%s\ngroup=%s\nactor=%s\nsynthetic_key=%s\n' \
+    "$operation" "$subject" "$group" "$actor_lower" "$synthetic_key" >>"$GITHUB_OUTPUT"
 else
   jq -n --arg operation "$operation" --arg subject "$subject" --arg group "$group" \
-    --arg actor "$actor_lower" '{operation:$operation,subject:$subject,group:$group,actor:$actor}'
+    --arg actor "$actor_lower" --arg synthetic_key "$synthetic_key" \
+    '{operation:$operation,subject:$subject,group:$group,actor:$actor,synthetic_key:$synthetic_key}'
 fi

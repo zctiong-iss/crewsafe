@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "infra/terraform/**"
+      - ".github/cognito/**"
+      - ".github/scripts/cognito/**"
       - ".github/terraform/**"
       - ".github/scripts/terraform/**"
+      - ".github/workflows/cognito-user-administration.yml"
       - ".github/workflows/terraform-validate.yml"
       - ".github/workflows/terraform-plan.yml"
       - ".github/workflows/terraform-apply.yml"
@@ -14,8 +17,11 @@ on:
     branches: [main]
     paths:
       - "infra/terraform/**"
+      - ".github/cognito/**"
+      - ".github/scripts/cognito/**"
       - ".github/terraform/**"
       - ".github/scripts/terraform/**"
+      - ".github/workflows/cognito-user-administration.yml"
       - ".github/workflows/terraform-validate.yml"
       - ".github/workflows/terraform-plan.yml"
       - ".github/workflows/terraform-apply.yml"
@@ -87,6 +93,14 @@ jobs:
           go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
           shellcheck -e SC1090,SC1091 .github/scripts/terraform/*.sh .github/scripts/terraform/tests/*.sh
           shellcheck -e SC1090,SC1091 .github/scripts/cognito/*.sh .github/scripts/cognito/tests/*.sh
+          ruby --version
+      - name: Validate Cognito contracts and guards
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+        run: |
+          for test_script in .github/scripts/cognito/tests/test-*.sh; do
+            "$test_script"
+          done
       - run: |
           .github/scripts/terraform/tests/test-account-and-oidc-guards.sh
           .github/scripts/terraform/tests/test-plan-metadata.sh

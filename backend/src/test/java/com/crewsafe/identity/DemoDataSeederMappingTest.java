@@ -16,7 +16,8 @@ class DemoDataSeederMappingTest {
               "displayName":"Developer One",
               "role":"SUPERVISOR",
               "siteCodes":["bishan"],
-              "identityKind":"developer"
+              "identityKind":"developer",
+              "desiredStatus":"preserve"
             }]
             """;
 
@@ -61,5 +62,37 @@ class DemoDataSeederMappingTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(
                         MAPPER, VALID.replace("\"bishan\"", "\"unknown-site\"")));
+    }
+
+    @Test
+    void acceptsSyntheticEmailNamespaceAndExplicitStatus() {
+        String synthetic = VALID
+                .replace("developer-one", "synthetic-worker@synthetic.crewsafe.invalid")
+                .replace("Developer One", "Synthetic Demo Worker")
+                .replace("\"developer\"", "\"synthetic-test\"")
+                .replace("\"preserve\"", "\"enabled\"")
+                .replace("\"SUPERVISOR\"", "\"WORKER\"");
+
+        assertThat(DemoDataSeeder.parseAndValidateMappings(MAPPER, synthetic))
+                .singleElement()
+                .satisfies(mapping -> {
+                    assertThat(mapping.identityKind()).isEqualTo("synthetic-test");
+                    assertThat(mapping.desiredStatus()).isEqualTo("enabled");
+                });
+    }
+
+    @Test
+    void rejectsMissingOrUnsupportedStatusAndCrossKindUsernames() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(
+                        MAPPER, VALID.replace(
+                                "\"desiredStatus\":\"preserve\"", "\"unexpected\":\"preserve\"")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(
+                        MAPPER, VALID.replace("\"preserve\"", "\"enabled\"")));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(
+                        MAPPER, VALID.replace("developer-one",
+                                "person@example.com")));
     }
 }
