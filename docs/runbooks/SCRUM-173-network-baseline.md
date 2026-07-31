@@ -35,7 +35,44 @@ In the single designated shared account, `network-shared-dev` creates **19 resou
 It creates **no** database, no compute, no load balancer, and no load balancer security
 group. Those belong to the components this one unblocks.
 
-## 2. Prerequisites
+## 2. Prerequisites and sequencing
+
+### The component must be on `main` before anything here runs
+
+Both Terraform workflows gate on the branch:
+
+```text
+terraform-plan.yml    jobs.plan.if:  github.ref == 'refs/heads/main'
+terraform-apply.yml   jobs.apply.if: github.ref == 'refs/heads/main'
+```
+
+The apply additionally verifies that the plan run it references had `head_branch == "main"`.
+A plan dispatched from a feature branch is therefore not merely useless — it is rejected as
+apply input.
+
+**Consequence: the pull request merges before this network has ever been planned against
+AWS.** The PR is reviewed on the strength of the code, the mocked test suite, and the
+automatic `Terraform Validation` run. The plan review in section 5 is a **separate gate that
+happens after merge**, and it is the only place two of the security properties can be
+checked at all. Do not treat a green PR as evidence the network is correct.
+
+Between merge and apply, `main` describes a network that does not exist. Nothing breaks — no
+other component reads this state — but do not leave that window open long.
+
+### Order of operations
+
+| # | Step | Where | Section |
+| ---: | --- | --- | --- |
+| 1 | Merge the SCRUM-173 pull request | — | — |
+| 2 | Attach the two IAM policies | AWS Console | [3](#3-attach-the-iam-policies) |
+| 3 | Dispatch the plan | Actions, from `main` | [4](#4-plan) |
+| 4 | Review the plan — three mandatory checks | Actions log | [5](#5-review-the-plan--three-mandatory-checks) |
+| 5 | Dispatch the apply | Actions, from `main` | [6](#6-apply) |
+| 6 | Re-plan and confirm "No changes" | Actions, from `main` | [7](#7-confirm-idempotency) |
+
+Step 2 may be done before the merge; it just has to precede step 3.
+
+### Also required
 
 1. The SCRUM-155 remote state backend exists in the target account.
 2. You know which account alias is the **designated shared account**. There is exactly one
@@ -103,17 +140,20 @@ policy uses.
 
 ## 4. Plan
 
-Dispatch the **Terraform State Plan** workflow:
+Dispatch the **Terraform State Plan** workflow **from `main`** (the job is skipped on any
+other ref):
 
 | Input | Value |
 | --- | --- |
 | `target_account_alias` | the designated shared account's alias |
 | `terraform_component` | `network-shared-dev` |
+| `operation` | `apply` |
 
 Expected: a clean plan, **19 to add, 0 to change, 0 to destroy**, against
 `crewsafe/network/shared-dev.tfstate`.
 
-Record the run id — the apply requires it.
+Record **both the run id and the run attempt number** — the apply requires each of them
+separately, and both must be integers.
 
 ## 5. Review the plan — three mandatory checks
 
@@ -134,26 +174,45 @@ Attach the plan summary and run id to the pull request.
 
 ## 6. Apply
 
-Dispatch **Terraform State Apply** from `main`:
+Dispatch **Terraform State Apply** from `main`. The workflow re-checks that the plan run you
+reference was itself dispatched from `main` and succeeded, so a plan produced any other way
+is refused here:
 
 | Input | Value |
 | --- | --- |
 | `target_account_alias` | same alias as the plan |
 | `terraform_component` | `network-shared-dev` |
+| `operation` | `apply` |
 | `plan_run_id` | the run id from section 4 |
-| Confirmation | typed `APPLY <alias>` |
+| `plan_run_attempt` | the run attempt number from section 4 |
+| `confirmation` | `APPLY <alias> <component>` — **three tokens** |
+
+The confirmation string is checked literally against `<ACTION> <alias> <component>`, so for
+account alias `shared-dev` it is exactly:
+
+```text
+APPLY shared-dev network-shared-dev
+```
+
+`APPLY shared-dev` alone is rejected. The component name is part of the string precisely so
+that a confirmation copied from another component's apply cannot be reused here.
 
 Expected: exactly the reviewed plan applies, in under 15 minutes.
 
-A mismatched account, a missing or foreign `plan_run_id`, or a wrong confirmation string
+A mismatched account, a missing or foreign `plan_run_id`, a `plan_run_attempt` that does not
+match the run, a plan run that was not dispatched from `main`, or a wrong confirmation string
 aborts before any mutation.
 
 ## 7. Confirm idempotency
 
-Re-dispatch **Terraform State Plan** with the same inputs.
+Re-dispatch **Terraform State Plan** from `main` with the same inputs as section 4.
 
 Expected: **"No changes."** This confirms the published outputs are stable, so consumers are
 not disrupted by a re-run.
+
+If this reports changes, do not apply them without understanding why. A drift immediately
+after a successful apply usually means a resource attribute is being computed differently on
+refresh than it was declared — investigate before reconciling.
 
 ## 8. Consuming the network
 
