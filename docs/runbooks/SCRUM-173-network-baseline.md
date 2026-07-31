@@ -276,3 +276,33 @@ are free, so either tier can grow without renumbering the other.
 
 **Adding a fourth component later**: `test-component-catalog.sh` pins the exact catalogue key
 set, so it needs a one-line update. That is expected, not a broken test.
+
+## 11. Recovering from a partial apply
+
+The first apply of this component failed midway: AWS rejected the application security
+group's description because it contained an apostrophe, a character outside the set EC2
+accepts. Sixteen of the nineteen resources were created before the error.
+
+**A partial apply is not a corrupt state.** Terraform recorded everything it created, so the
+recovery is to fix the configuration and run plan and apply again — the second plan proposes
+only the resources still missing. Do not destroy and rebuild, and do not edit state by hand.
+
+If it happens again:
+
+1. Read the apply log and note the last resource created and the one that failed.
+2. Confirm the failure direction is safe before doing anything else. In this case it was:
+   `aws_security_group.database` existed with **no ingress rule**, so it admitted nothing,
+   `aws_default_security_group.main` had already been stripped, and no compute existed to be
+   exposed. A partial apply that leaves a permissive rule in place would be urgent instead.
+3. Fix the configuration on a branch, get it merged, then re-run plan from `main`.
+4. Expect the new plan to add only the remainder — for this failure, 3 resources rather
+   than 19. Review it with the same three checks in section 5.
+5. The NAT gateway bills from the moment it is created, including through a failed apply.
+
+### Why plan could not have caught it
+
+Security group description characters are validated by the EC2 API at creation, not by
+Terraform. `validate`, the mocked test suite, and the plan output all accepted the value.
+A test assertion now enforces the allowed character set so this class of error fails at
+`terraform test` instead of mid-apply — but the general lesson holds: a clean plan is not a
+guarantee that every server-side constraint is met.
