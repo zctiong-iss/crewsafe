@@ -82,6 +82,14 @@ app:
   # pinned test-only emulator can expose JWKS on a random Testcontainers port. Against
   # deployed Cognito the two naturally coincide.
 
+  bedrock:
+    # Amazon Bedrock configuration for AI-driven mitigation generation (SCRUM-187 spike)
+    region: ${AWS_REGION:ap-southeast-1}
+    # Claude 3.5 Sonnet model ID for structured output support
+    model-id: ${BEDROCK_MODEL_ID:anthropic.claude-3-5-sonnet-20241022-v2:0}
+    max-tokens: ${BEDROCK_MAX_TOKENS:1024}
+    temperature: ${BEDROCK_TEMPERATURE:0.7}
+
 # Expose only what we need. Health is used by the container platform and the
 # smoke tests; everything else stays closed by default.
 management:
