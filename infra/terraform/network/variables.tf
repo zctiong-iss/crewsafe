@@ -53,10 +53,12 @@ variable "vpc_cidr_block" {
     error_message = "vpc_cidr_block must be a valid CIDR block."
   }
   validation {
-    condition = (
-      can(regex("^[0-9.]+/[0-9]{1,2}$", var.vpc_cidr_block))
-      && tonumber(split("/", var.vpc_cidr_block)[1]) >= 16
-      && tonumber(split("/", var.vpc_cidr_block)[1]) <= 20
+    # try() rather than && : Terraform evaluates both operands, so a value with
+    # no "/" raises an index error instead of failing validation cleanly.
+    condition = try(
+      tonumber(split("/", var.vpc_cidr_block)[1]) >= 16
+      && tonumber(split("/", var.vpc_cidr_block)[1]) <= 20,
+      false
     )
     error_message = "vpc_cidr_block must use a prefix between /16 and /20 so the per-tier /24 subnets fit."
   }

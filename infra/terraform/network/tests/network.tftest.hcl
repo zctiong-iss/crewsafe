@@ -17,61 +17,58 @@ override_data {
   values = { account_id = "123456789012" }
 }
 
-# Gateway ids are computed by AWS, so a route referencing them is "not yet known"
-# during plan and no assertion about routing could be evaluated. Pinning them
-# makes the routing posture assertable without an apply.
+# Ids are computed by AWS, so a resource referencing another is "not yet known"
+# and no cross-resource assertion could be evaluated. Pinning them makes the
+# routing posture, the boundary, and the output contract assertable.
+#
+# These run blocks use `command = apply` against the mocked provider: on
+# Terraform 1.10.5 (the version CI pins) overrides are not surfaced during the
+# plan phase, and the `override_during` argument that would change that does not
+# exist until a later release. A mocked apply creates nothing — it resolves
+# computed values so the assertions can run.
 override_resource {
-  target          = aws_vpc.main
-  override_during = plan
-  values          = { id = "vpc-0123456789abcdef0" }
+  target = aws_vpc.main
+  values = { id = "vpc-0123456789abcdef0" }
 }
 
 override_resource {
-  target          = aws_internet_gateway.main
-  override_during = plan
-  values          = { id = "igw-0123456789abcdef0" }
+  target = aws_internet_gateway.main
+  values = { id = "igw-0123456789abcdef0" }
 }
 
 override_resource {
-  target          = aws_subnet.public["ap-southeast-1a"]
-  override_during = plan
-  values          = { id = "subnet-public-1a" }
+  target = aws_subnet.public["ap-southeast-1a"]
+  values = { id = "subnet-public-1a" }
 }
 
 override_resource {
-  target          = aws_subnet.public["ap-southeast-1b"]
-  override_during = plan
-  values          = { id = "subnet-public-1b" }
+  target = aws_subnet.public["ap-southeast-1b"]
+  values = { id = "subnet-public-1b" }
 }
 
 override_resource {
-  target          = aws_subnet.private["ap-southeast-1a"]
-  override_during = plan
-  values          = { id = "subnet-private-1a" }
+  target = aws_subnet.private["ap-southeast-1a"]
+  values = { id = "subnet-private-1a" }
 }
 
 override_resource {
-  target          = aws_subnet.private["ap-southeast-1b"]
-  override_during = plan
-  values          = { id = "subnet-private-1b" }
+  target = aws_subnet.private["ap-southeast-1b"]
+  values = { id = "subnet-private-1b" }
 }
 
 override_resource {
-  target          = aws_nat_gateway.main
-  override_during = plan
-  values          = { id = "nat-0123456789abcdef0" }
+  target = aws_nat_gateway.main
+  values = { id = "nat-0123456789abcdef0" }
 }
 
 override_resource {
-  target          = aws_security_group.app
-  override_during = plan
-  values          = { id = "sg-0aaaaaaaaaaaaaaaa" }
+  target = aws_security_group.app
+  values = { id = "sg-0aaaaaaaaaaaaaaaa" }
 }
 
 override_resource {
-  target          = aws_security_group.database
-  override_during = plan
-  values          = { id = "sg-0bbbbbbbbbbbbbbbb" }
+  target = aws_security_group.database
+  values = { id = "sg-0bbbbbbbbbbbbbbbb" }
 }
 
 variables {
@@ -162,7 +159,7 @@ run "rejects_non_postgres_database_port" {
 # ---------------------------------------------------------------------------
 
 run "topology" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_vpc.main.cidr_block == "10.0.0.0/16"
@@ -247,7 +244,7 @@ run "rejects_mismatched_account" {
 # ---------------------------------------------------------------------------
 
 run "database_boundary" {
-  command = plan
+  command = apply
 
   assert {
     condition     = aws_vpc_security_group_ingress_rule.database_from_app.security_group_id == aws_security_group.database.id
@@ -331,7 +328,7 @@ run "database_boundary" {
 # ---------------------------------------------------------------------------
 
 run "producer_contract" {
-  command = plan
+  command = apply
 
   assert {
     condition     = output.vpc_id == aws_vpc.main.id

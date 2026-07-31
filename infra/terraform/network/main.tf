@@ -169,6 +169,15 @@ resource "aws_vpc_security_group_ingress_rule" "database_from_app" {
 # with the application runtime would otherwise hand the database.
 # Verified in the plan output, which a mocked test cannot observe.
 
+# SCRUM-173 deliberately allows unrestricted egress from the application runtime
+# so it can pull container images and reach approved external services such as
+# the NEA weather API without an allowlist that would need a pull request per
+# dependency. The alternative — egress restricted to 443 plus the database — was
+# considered and rejected during specification as too brittle for the sprint.
+#
+# This is the application group only. The database group has no egress rule at
+# all, so the finding does not extend to the data tier.
+#trivy:ignore:AWS-0104
 resource "aws_vpc_security_group_egress_rule" "app_all" {
   security_group_id = aws_security_group.app.id
   description       = "Unrestricted outbound for container image pulls, dependency retrieval, and approved external services such as the weather API, routed through the NAT gateway."
