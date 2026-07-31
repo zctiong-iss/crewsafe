@@ -14,6 +14,13 @@
       "backend_strategy": "remote",
       "state_key": "crewsafe/cognito/shared-dev.tfstate",
       "allow_destroy": true
+    },
+    "network-shared-dev": {
+      "jira_key": "SCRUM-173",
+      "root": "infra/terraform/network",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/network/shared-dev.tfstate",
+      "allow_destroy": false
     }
   }
 }
