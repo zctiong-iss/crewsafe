@@ -8,7 +8,7 @@ accounts:
       site_codes: [bishan]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub:
+      cognito_sub: 296a25dc-5031-706b-436d-7af82f3c5bee
     - key: demo-supervisor
       username: synthetic-supervisor@synthetic.crewsafe.invalid
       display_name: Synthetic Demo Supervisor
@@ -16,7 +16,7 @@ accounts:
       site_codes: [bishan, campus]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub:
+      cognito_sub: 890af5ec-a091-701b-b625-1dc8da6c53e6
     - key: demo-safety-manager
       username: synthetic-safety-manager@synthetic.crewsafe.invalid
       display_name: Synthetic Demo Safety Manager
@@ -24,4 +24,4 @@ accounts:
       site_codes: [bishan, campus]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub:
+      cognito_sub: f9ba55cc-6021-7089-8d31-3a5b824ecce3
