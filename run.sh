@@ -60,6 +60,7 @@ trap cleanup INT TERM
 
 [[ "$RESET_DB" == false ]] || "${COMPOSE_COMMAND[@]}" down -v >/dev/null 2>&1 || true
 services_to_start=(postgres backend)
+services_to_start+=(adminer)
 if [[ "$WITH_WEB" == true ]]; then
   services_to_start+=(web)
 fi
