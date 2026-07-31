@@ -92,6 +92,7 @@ run "shared_dev_contract" {
       && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:CreateSecret")
       && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DescribeSecret")
       && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:PutSecretValue")
+      && contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:TagResource")
       && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "cognito-idp:AdminDeleteUser")
       && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:GetSecretValue")
       && !contains(flatten([for statement in local.cognito_admin_policy.Statement : statement.Action]), "secretsmanager:DeleteSecret")

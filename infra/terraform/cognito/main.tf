@@ -34,7 +34,8 @@ locals {
         Action = [
           "secretsmanager:CreateSecret",
           "secretsmanager:DescribeSecret",
-          "secretsmanager:PutSecretValue"
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:TagResource"
         ]
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:crewsafe/${var.account_alias}/cognito/synthetic/*"
       }

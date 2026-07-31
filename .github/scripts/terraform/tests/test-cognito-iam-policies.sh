@@ -19,7 +19,7 @@ done
 for action in AdminCreateUser AdminGetUser AdminListGroupsForUser AdminSetUserPassword; do
   grep -Fq "\"cognito-idp:$action\"" "$main"
 done
-for action in GetRandomPassword CreateSecret DescribeSecret PutSecretValue; do
+for action in GetRandomPassword CreateSecret DescribeSecret PutSecretValue TagResource; do
   grep -Fq "\"secretsmanager:$action\"" "$main"
 done
 for denied in GetSecretValue DeleteSecret; do
