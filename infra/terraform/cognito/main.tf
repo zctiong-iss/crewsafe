@@ -149,6 +149,10 @@ resource "aws_iam_role_policy" "cognito_admin" {
       Action = [
         "cognito-idp:ListUsers",
         "cognito-idp:ListGroups",
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminGetUser",
+        "cognito-idp:AdminListGroupsForUser",
+        "cognito-idp:AdminSetUserPassword",
         "cognito-idp:AdminEnableUser",
         "cognito-idp:AdminDisableUser",
         "cognito-idp:AdminResetUserPassword",
@@ -157,6 +161,23 @@ resource "aws_iam_role_policy" "cognito_admin" {
         "cognito-idp:AdminRemoveUserFromGroup"
       ]
       Resource = aws_cognito_user_pool.shared_dev.arn
-    }]
+      },
+      {
+        Sid      = "GenerateSyntheticPasswords"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetRandomPassword"]
+        Resource = "*"
+      },
+      {
+        Sid    = "ManageSyntheticCredentialVersions"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:PutSecretValue"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:crewsafe/${var.account_alias}/cognito/synthetic/*"
+      }
+    ]
   })
 }

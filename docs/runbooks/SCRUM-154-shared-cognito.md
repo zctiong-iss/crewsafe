@@ -671,7 +671,21 @@ replace this mapping.
 If the invitation was not delivered or expired, use **Resend invitation** in
 AWS Console. Do not add `AdminCreateUser` to the GitHub role as a workaround.
 
-### 10.6 Add a synthetic demo user for end-to-end login testing
+### 10.6 Synthetic demo users (superseded by SCRUM-190)
+
+Do not follow the former Console/manual synthetic-user procedure below for new
+or existing identities. Synthetic users are now declared, reconciled, bound,
+rotated, enabled and disabled through the reviewed
+[SCRUM-190 synthetic-user runbook](SCRUM-190-synthetic-cognito-users.md).
+That workflow suppresses invitations, keeps generated credentials only in the
+selected account's Secrets Manager, reserves the
+`@synthetic.crewsafe.invalid` namespace, and prevents generic human operations
+from targeting synthetic identities.
+
+The remaining subsection text is retained temporarily as historical context
+for older SCRUM-154 environments only. It is not an approved operating
+procedure. Human/developer invitations in sections 10.1–10.5 remain
+AWS Console-only.
 
 A synthetic demo user is a real login identity in the shared Cognito user
 pool, but it must not represent a real worker or reuse a developer's personal
@@ -998,12 +1012,14 @@ before obtaining AWS credentials, and target users by immutable `sub`.
 | `disable` | required | blank | `disable zctiong <sub>` |
 | `reset-password` | required | blank | `reset-password zctiong <sub>` |
 | `global-sign-out` | required | blank | `global-sign-out zctiong <sub>` |
-| `add-to-group` | required | `developers` or `synthetic-test-users` | `add-to-group zctiong <sub>` |
-| `remove-from-group` | required | `developers` or `synthetic-test-users` | `remove-from-group zctiong <sub>` |
+| `add-to-group` | required | `developers` only | `add-to-group zctiong <sub>` |
+| `remove-from-group` | required | `developers` only | `remove-from-group zctiong <sub>` |
 
-The workflow cannot create or delete users, set a password, change user
-attributes, authenticate as a user, or change pool/client/domain/group
-definitions.
+Generic human operations cannot create or delete users, set a password, change
+user attributes, authenticate as a user, or change pool/client/domain/group
+definitions. The separate SCRUM-190 synthetic operations may create a
+reserved synthetic user and set or rotate its generated permanent password;
+they cannot read the password or delete the user/secret.
 
 ### 11.1 Offboard a developer
 

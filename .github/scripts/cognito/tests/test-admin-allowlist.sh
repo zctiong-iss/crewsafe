@@ -10,6 +10,9 @@ registry='{"alice":{"account_id":"123456789012"}}'
 valid='{"schema_version":1,"accounts":{"alice":["actor"]}}'
 CREWSAFE_AWS_ACCOUNTS_JSON="$registry" CREWSAFE_COGNITO_ADMINS_JSON="$valid" \
   "$resolver" alice list-users "" "" actor >/dev/null
+CREWSAFE_AWS_ACCOUNTS_JSON="$registry" CREWSAFE_COGNITO_ADMINS_JSON="$valid" \
+  "$resolver" alice reconcile-synthetic "" "" actor \
+  "reconcile-synthetic alice all" all >/dev/null
 
 for invalid in \
   '{"schema_version":1,"accounts":{"unknown":["actor"]}}' \
@@ -27,5 +30,12 @@ done
 if CREWSAFE_AWS_ACCOUNTS_JSON="$registry" CREWSAFE_COGNITO_ADMINS_JSON="$valid" \
   "$resolver" alice list-users "" "" intruder >/dev/null 2>&1; then
   echo "unallowlisted actor was accepted" >&2
+  exit 1
+fi
+
+if CREWSAFE_AWS_ACCOUNTS_JSON="$registry" CREWSAFE_COGNITO_ADMINS_JSON="$valid" \
+  "$resolver" alice add-to-group subject-123 synthetic-test-users actor \
+  "add-to-group alice subject-123" >/dev/null 2>&1; then
+  echo "generic human group operation accepted the synthetic group" >&2
   exit 1
 fi

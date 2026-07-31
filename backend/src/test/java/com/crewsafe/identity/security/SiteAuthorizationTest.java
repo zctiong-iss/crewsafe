@@ -17,6 +17,11 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -98,6 +103,46 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + workerAToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(siteA.getId().toString()));
+    }
+
+    @Test
+    void currentUserReturnsTheServerSideRoleAndOnlyAssignedSites() throws Exception {
+        mockMvc.perform(get("/api/v1/me")
+                        .header("Authorization", "Bearer " + workerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("WORKER"))
+                .andExpect(jsonPath("$.siteIds.length()").value(1))
+                .andExpect(jsonPath("$.siteIds[0]").value(siteA.getId().toString()));
+    }
+
+    @Test
+    void currentUserP95RemainsBelowOneSecondOnSeededData() throws Exception {
+        List<Long> durations = new ArrayList<>();
+        for (int request = 0; request < 20; request++) {
+            long started = System.nanoTime();
+            mockMvc.perform(get("/api/v1/me")
+                            .header("Authorization", "Bearer " + workerAToken))
+                    .andExpect(status().isOk());
+            durations.add(System.nanoTime() - started);
+        }
+        Collections.sort(durations);
+        Duration p95 = Duration.ofNanos(durations.get(18));
+
+        assertThat(p95).isLessThan(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void inactiveStatusIsVisibleToTheNextSessionWithinSixtySeconds() throws Exception {
+        Instant started = Instant.now();
+        workerA.setStatus(com.crewsafe.identity.domain.UserStatus.INACTIVE);
+        users.saveAndFlush(workerA);
+
+        mockMvc.perform(get("/api/v1/me")
+                        .header("Authorization", "Bearer " + workerAToken))
+                .andExpect(status().isUnauthorized());
+
+        assertThat(Duration.between(started, Instant.now()))
+                .isLessThan(Duration.ofSeconds(60));
     }
 
     @Test

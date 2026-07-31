@@ -1,0 +1,23 @@
+schema_version: 1
+accounts:
+  perf:
+    - {key: worker-01, username: worker-01@synthetic.crewsafe.invalid, display_name: Synthetic Worker 01, role: WORKER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-02, username: supervisor-02@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 02, role: SUPERVISOR, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-03, username: safety-manager-03@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 03, role: SAFETY_MANAGER, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-04, username: worker-04@synthetic.crewsafe.invalid, display_name: Synthetic Worker 04, role: WORKER, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-05, username: supervisor-05@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 05, role: SUPERVISOR, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-06, username: safety-manager-06@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 06, role: SAFETY_MANAGER, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-07, username: worker-07@synthetic.crewsafe.invalid, display_name: Synthetic Worker 07, role: WORKER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-08, username: supervisor-08@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 08, role: SUPERVISOR, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-09, username: safety-manager-09@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 09, role: SAFETY_MANAGER, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-10, username: worker-10@synthetic.crewsafe.invalid, display_name: Synthetic Worker 10, role: WORKER, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-11, username: supervisor-11@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 11, role: SUPERVISOR, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-12, username: safety-manager-12@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 12, role: SAFETY_MANAGER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-13, username: worker-13@synthetic.crewsafe.invalid, display_name: Synthetic Worker 13, role: WORKER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-14, username: supervisor-14@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 14, role: SUPERVISOR, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-15, username: safety-manager-15@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 15, role: SAFETY_MANAGER, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-16, username: worker-16@synthetic.crewsafe.invalid, display_name: Synthetic Worker 16, role: WORKER, site_codes: [campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-17, username: supervisor-17@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 17, role: SUPERVISOR, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: safety-manager-18, username: safety-manager-18@synthetic.crewsafe.invalid, display_name: Synthetic Safety Manager 18, role: SAFETY_MANAGER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: worker-19, username: worker-19@synthetic.crewsafe.invalid, display_name: Synthetic Worker 19, role: WORKER, site_codes: [bishan], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}
+    - {key: supervisor-20, username: supervisor-20@synthetic.crewsafe.invalid, display_name: Synthetic Supervisor 20, role: SUPERVISOR, site_codes: [bishan, campus], group: synthetic-test-users, desired_status: enabled, cognito_sub: null}

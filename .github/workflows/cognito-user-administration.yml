@@ -8,10 +8,11 @@ on:
         description: "Allowlisted administration operation"
         required: true
         type: choice
-        options: [inspect, list-users, list-groups, enable, disable, reset-password, global-sign-out, add-to-group, remove-from-group]
+        options: [inspect, list-users, list-groups, enable, disable, reset-password, global-sign-out, add-to-group, remove-from-group, reconcile-synthetic, rotate-synthetic, enable-synthetic, disable-synthetic]
       cognito_sub: { description: "Immutable Cognito sub; blank for list operations", required: false, type: string }
-      group: { description: "developers or synthetic-test-users for membership operations", required: false, type: string }
-      confirmation: { description: "<operation> <alias> <sub> for state changes", required: false, type: string }
+      group: { description: "developers for human membership operations", required: false, type: string }
+      synthetic_key: { description: "Synthetic key; use all only for reconcile-synthetic", required: false, type: string }
+      confirmation: { description: "<operation> <alias> <sub-or-synthetic-key> for state changes", required: false, type: string }
 
 concurrency:
   group: cognito-admin-${{ inputs.target_account_alias }}
@@ -26,7 +27,9 @@ jobs:
       operation: ${{ steps.guard.outputs.operation }}
       subject: ${{ steps.guard.outputs.subject }}
       group: ${{ steps.guard.outputs.group }}
+      synthetic_key: ${{ steps.guard.outputs.synthetic_key }}
       pool: ${{ steps.config.outputs.pool }}
+      manifest_checksum: ${{ steps.synthetic.outputs.manifest_checksum }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - id: guard
@@ -37,11 +40,13 @@ jobs:
           INPUT_GROUP: ${{ inputs.group }}
           INPUT_OPERATION: ${{ inputs.operation }}
           INPUT_SUBJECT: ${{ inputs.cognito_sub }}
+          INPUT_SYNTHETIC_KEY: ${{ inputs.synthetic_key }}
           WORKFLOW_ACTOR: ${{ github.actor }}
         run: |
           .github/scripts/cognito/resolve-admin-operation.sh \
             "$INPUT_ACCOUNT_ALIAS" "$INPUT_OPERATION" "$INPUT_SUBJECT" \
-            "$INPUT_GROUP" "$WORKFLOW_ACTOR" "$INPUT_CONFIRMATION"
+            "$INPUT_GROUP" "$WORKFLOW_ACTOR" "$INPUT_CONFIRMATION" \
+            "$INPUT_SYNTHETIC_KEY"
       - id: config
         env:
           CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
@@ -52,6 +57,25 @@ jobs:
               "$INPUT_ACCOUNT_ALIAS" | jq -r .user_pool_id
           )"
           printf 'pool=%s\n' "$pool" >>"$GITHUB_OUTPUT"
+      - id: synthetic
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+          INPUT_SYNTHETIC_KEY: ${{ inputs.synthetic_key }}
+        run: |
+          case "$INPUT_OPERATION" in
+            reconcile-synthetic|rotate-synthetic|enable-synthetic|disable-synthetic)
+              selection="$(
+                .github/scripts/cognito/resolve-synthetic-users.sh \
+                  "$INPUT_ACCOUNT_ALIAS" "$INPUT_SYNTHETIC_KEY"
+              )"
+              printf 'manifest_checksum=%s\n' \
+                "$(jq -r .manifest_checksum <<<"$selection")" >>"$GITHUB_OUTPUT"
+              ;;
+            *) printf 'manifest_checksum=\n' >>"$GITHUB_OUTPUT" ;;
+          esac
 
   administer:
     needs: authorize
@@ -78,9 +102,42 @@ jobs:
           OPERATION: ${{ needs.authorize.outputs.operation }}
           SUBJECT: ${{ needs.authorize.outputs.subject }}
           GROUP: ${{ needs.authorize.outputs.group }}
+          SYNTHETIC_KEY: ${{ needs.authorize.outputs.synthetic_key }}
           ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          EXPECTED_MANIFEST_CHECKSUM: ${{ needs.authorize.outputs.manifest_checksum }}
         run: |
           set -euo pipefail
+          case "$OPERATION" in
+            reconcile-synthetic|rotate-synthetic|enable-synthetic|disable-synthetic)
+              results="$(
+                .github/scripts/cognito/reconcile-synthetic-users.sh \
+                  "$ACCOUNT_ALIAS" "$OPERATION" "$SYNTHETIC_KEY" "$POOL"
+              )"
+              {
+                # Markdown backticks are intentionally single-quoted.
+                # shellcheck disable=SC2016
+                printf 'Actor: `%s`\nAccount: `%s`\nOperation: `%s`\nRun: `%s`\n\n' \
+                  "$GITHUB_ACTOR" "$ACCOUNT_ALIAS" "$OPERATION" "$GITHUB_RUN_ID"
+                while IFS= read -r result; do
+                  # jq interpolation is intentionally single-quoted.
+                  # shellcheck disable=SC2016
+                  jq -r '"Synthetic key: `\(.key)`\nSubject: `\(.cognito_sub // "unbound")`\nResult: `\(.result)`\n"' \
+                    <<<"$result"
+                done <<<"$results"
+              } >>"$GITHUB_STEP_SUMMARY"
+              exit 0
+              ;;
+          esac
+
+          case "$OPERATION" in
+            enable|disable|reset-password|global-sign-out|add-to-group|remove-from-group)
+              .github/scripts/cognito/guard-admin-target-kind.sh \
+                "$POOL" "$ACCOUNT_ALIAS" "$SUBJECT" "$OPERATION" "$GROUP" >/dev/null
+              ;;
+          esac
+
           # AWS CLI JMESPath literals require these single quotes.
           # shellcheck disable=SC2016
           case "$OPERATION" in

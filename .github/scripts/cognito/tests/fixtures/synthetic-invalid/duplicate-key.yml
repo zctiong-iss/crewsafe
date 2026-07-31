@@ -1,0 +1,19 @@
+schema_version: 1
+accounts:
+  alice:
+    - key: demo-worker
+      username: synthetic-worker@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Worker
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - key: demo-worker
+      username: synthetic-worker-two@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Worker Two
+      role: WORKER
+      site_codes: [campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:

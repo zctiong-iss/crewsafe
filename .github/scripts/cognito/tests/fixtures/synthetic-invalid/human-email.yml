@@ -1,0 +1,11 @@
+schema_version: 1
+accounts:
+  alice:
+    - key: demo-worker
+      username: person@example.com
+      display_name: Real Person
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:

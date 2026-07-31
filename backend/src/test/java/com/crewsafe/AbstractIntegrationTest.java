@@ -148,13 +148,13 @@ public abstract class AbstractIntegrationTest {
     private static String demoUsersJson() {
         return """
                 [
-                  {"username":"supervisor1","cognitoSub":"%s","displayName":"Aisyah (Supervisor)","role":"SUPERVISOR","siteCodes":["bishan"],"identityKind":"developer"},
-                  {"username":"supervisor2","cognitoSub":"%s","displayName":"Rajesh (Supervisor)","role":"SUPERVISOR","siteCodes":["campus"],"identityKind":"developer"},
-                  {"username":"worker1","cognitoSub":"%s","displayName":"Meng Hui (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
-                  {"username":"worker2","cognitoSub":"%s","displayName":"Siti (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
-                  {"username":"worker3","cognitoSub":"%s","displayName":"Kumar (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer"},
-                  {"username":"manager1","cognitoSub":"%s","displayName":"Wei Ling (Safety Manager)","role":"SAFETY_MANAGER","siteCodes":["bishan","campus"],"identityKind":"developer"},
-                  {"username":"admin1","cognitoSub":"%s","displayName":"System Administrator","role":"ADMIN","siteCodes":[],"identityKind":"developer"}
+                  {"username":"supervisor1","cognitoSub":"%s","displayName":"Aisyah (Supervisor)","role":"SUPERVISOR","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"supervisor2","cognitoSub":"%s","displayName":"Rajesh (Supervisor)","role":"SUPERVISOR","siteCodes":["campus"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"worker1","cognitoSub":"%s","displayName":"Meng Hui (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"worker2","cognitoSub":"%s","displayName":"Siti (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"worker3","cognitoSub":"%s","displayName":"Kumar (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"manager1","cognitoSub":"%s","displayName":"Wei Ling (Safety Manager)","role":"SAFETY_MANAGER","siteCodes":["bishan","campus"],"identityKind":"developer","desiredStatus":"preserve"},
+                  {"username":"admin1","cognitoSub":"%s","displayName":"System Administrator","role":"ADMIN","siteCodes":[],"identityKind":"developer","desiredStatus":"preserve"}
                 ]
                 """.formatted(
                 subFor("supervisor1"), subFor("supervisor2"), subFor("worker1"),

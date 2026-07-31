@@ -75,6 +75,22 @@ run "shared_dev_contract" {
     )
     error_message = "Groups must not become application roles or precedence controls."
   }
+  assert {
+    condition = (
+      strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminCreateUser")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminGetUser")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminListGroupsForUser")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminSetUserPassword")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:GetRandomPassword")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:CreateSecret")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:DescribeSecret")
+      && strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:PutSecretValue")
+      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "cognito-idp:AdminDeleteUser")
+      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:GetSecretValue")
+      && !strcontains(aws_iam_role_policy.cognito_admin.policy, "secretsmanager:DeleteSecret")
+    )
+    error_message = "Synthetic-user administration permissions are incomplete or overbroad."
+  }
 }
 
 run "reject_legacy_name_only_oidc_subject" {

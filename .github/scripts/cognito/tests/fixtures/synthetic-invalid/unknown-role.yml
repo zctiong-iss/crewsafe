@@ -1,0 +1,11 @@
+schema_version: 1
+accounts:
+  alice:
+    - key: demo-admin
+      username: synthetic-admin@synthetic.crewsafe.invalid
+      display_name: Synthetic Demo Admin
+      role: ADMIN
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
