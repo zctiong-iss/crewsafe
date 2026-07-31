@@ -10,6 +10,8 @@ public class BedrockProperties {
     private String modelId = "anthropic.claude-3-5-sonnet-20241022-v2:0";
     private int maxTokens = 1024;
     private double temperature = 0.7;
+    private String bedrockApiUrl = "http://localhost:8000";
+    private int bedrockTimeoutMs = 5000;
 
     public String getRegion() {
         return region;
@@ -41,5 +43,21 @@ public class BedrockProperties {
 
     public void setTemperature(double temperature) {
         this.temperature = temperature;
+    }
+
+    public String getBedrockApiUrl() {
+        return bedrockApiUrl;
+    }
+
+    public void setBedrockApiUrl(String bedrockApiUrl) {
+        this.bedrockApiUrl = bedrockApiUrl;
+    }
+
+    public int getBedrockTimeoutMs() {
+        return bedrockTimeoutMs;
+    }
+
+    public void setBedrockTimeoutMs(int bedrockTimeoutMs) {
+        this.bedrockTimeoutMs = bedrockTimeoutMs;
     }
 }
