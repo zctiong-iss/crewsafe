@@ -29,6 +29,17 @@ services:
       timeout: 5s
       retries: 10
 
+  adminer:
+    image: adminer:5.5.0
+    container_name: crewsafe-adminer
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   backend:
     image: maven:3.9.9-eclipse-temurin-17
     container_name: crewsafe-backend
