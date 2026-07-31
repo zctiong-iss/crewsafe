@@ -3,7 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 runner="$ROOT/run.sh"
 docker_runner="$ROOT/run-docker.sh"
-engine_resolver="$ROOT/infra/local/resolve-container-engine.sh"
+engine_resolver="$ROOT/local/resolve-container-engine.sh"
 
 [[ -x "$runner" && -x "$docker_runner" && -x "$engine_resolver" ]]
 [[ "$("$engine_resolver")" == podman ]]
@@ -29,7 +29,7 @@ if grep -En 'terraform|aws configure|sts get-caller-identity|cognito-local' \
   "$runner" "$docker_runner" "$engine_resolver"; then
   exit 1
 fi
-if grep -En 'cognito-local' "$ROOT/infra/local/compose.yaml"; then
+if grep -En 'cognito-local' "$ROOT/local/compose.yaml"; then
   exit 1
 fi
 if grep -En 'endpoint-override|localhost:9229' "$ROOT/backend/src/main/resources/application-local.yml"; then
