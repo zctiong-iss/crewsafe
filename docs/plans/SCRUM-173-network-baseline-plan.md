@@ -250,13 +250,27 @@ Thirteen `terraform test` run blocks against a mocked provider — no AWS accoun
 or network call. Nine reject malformed input, one asserts the topology, one proves the account
 precondition bites, one covers the database boundary, one covers the producer contract.
 
+### Use Terraform 1.10.5 locally — the version pinned in CI
+
+Every workflow pins `terraform_version: 1.10.5`. `versions.tf` permits `>= 1.10, < 2.0`,
+which is the constraint for the *configuration*, not a statement about what CI runs. Testing
+against a newer release will pass locally and fail in CI:
+
+- `override_during` on an `override_resource` block does not exist in 1.10.5.
+- `&&` evaluates both operands, so a regex guard does not protect a `split()` that follows
+  it; use `try(..., false)`.
+
+Because 1.10.5 does not surface mocked ids during the plan phase, the three assertion run
+blocks use `command = apply` against the mocked provider. A mocked apply creates nothing — it
+resolves the computed ids the cross-resource assertions need.
+
 ### The negative test is the point
 
 Under Constitution Principle II, security-sensitive behaviour needs negative tests. Because
 the two-tier decision leaves the security group as the sole boundary, that test was
 demonstrated **failing against a deliberately widened rule** before being trusted:
 
-```
+```text
 aws_vpc_security_group_ingress_rule.database_from_app.cidr_ipv4 is "0.0.0.0/0"
 → Database ingress must never use a CIDR source, and never 0.0.0.0/0 or ::/0 (FR-011)
 ```
@@ -264,6 +278,9 @@ aws_vpc_security_group_ingress_rule.database_from_app.cidr_ipv4 is "0.0.0.0/0"
 Only then was the rule narrowed to `referenced_security_group_id`. A test that would pass
 against a widened rule is the failure mode this guards against; observing it fail because
 resources did not yet exist proves only that the test runs, not that it discriminates.
+
+This was re-verified after the switch to `command = apply` rather than assumed to survive
+the change — the same widened rule still fails the same assertion on 1.10.5.
 
 ### Two things the mocked tests structurally cannot prove
 
