@@ -1,0 +1,63 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["backend/**"]
+  push:
+    branches: [main]
+    paths: ["backend/**"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: ./mvnw -B verify
+
+  publish-image:
+    name: Publish image
+    needs: build-test
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      vars.CREWSAFE_ECR_PUSH_ROLE_ARN != '' && vars.CREWSAFE_ECR_REPOSITORY_URL != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeBackendPublish-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region ap-southeast-1 \
+            | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}"
+      - name: Build and push
+        env:
+          REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker build -t "$REPO:$SHA" -t "$REPO:latest" backend
+          docker push "$REPO:$SHA"
+          docker push "$REPO:latest"
