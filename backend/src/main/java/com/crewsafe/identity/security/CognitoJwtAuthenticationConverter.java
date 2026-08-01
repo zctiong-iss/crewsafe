@@ -87,7 +87,7 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
         // SiteAccessEvaluator's ACCESS_DENIED record is a security decision and is
         // deliberately not treated this way.
         try {
-            audit.record(user.getId(), AuditEventType.TOKEN_FIRST_SEEN,
+            audit.record(user.getId(), AuditEventType.TOKEN_FIRST_SEEN, "USER", user.getId(),
                     "First authenticated request seen for this access token");
             // Marked as seen only once the write succeeded. Marking it before would make the
             // catch below pointless: the token would already count as audited, so the next
