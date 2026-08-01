@@ -98,8 +98,11 @@ attaching. It appears **twice**: in `ManageEngineLogGroup` and in `ManageNarrowi
 6. Confirm `CreateRdsServiceLinkedRole` is present, scoped to the exact
    `aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS` ARN, **and carries the
    `iam:AWSServiceName` condition**. See the second warning below.
-7. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
-8. Name the policy `CrewSafeDatabaseTerraformApply` and save.
+7. Confirm `UseDefaultManagedKeysThroughRdsAndSecretsManager` is present **and carries the
+   `kms:ViaService` condition naming both services**. The condition is what bounds it — see the
+   third warning below.
+8. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
+9. Name the policy `CrewSafeDatabaseTerraformApply` and save.
 
 Replace `<ACCOUNT_ID>` in **three** places: `ManageEngineLogGroup`, `CreateRdsServiceLinkedRole`,
 and `ManageNarrowingCredentialGrant`.
@@ -145,6 +148,28 @@ and `ManageNarrowingCredentialGrant`.
 > statement. That trades an automated bootstrap for another hand-applied per-account step, which is
 > the class of step this runbook already shows being forgotten.
 
+> **`Resource: "*"` on the KMS statement is required, and the condition is what makes it safe.**
+> The instance needs KMS twice over: once to encrypt storage with the `aws/rds` managed key, and
+> once for RDS to encrypt the service-managed password secret with `aws/secretsmanager`. **Neither
+> key's identifier is knowable in advance** — AWS-managed keys are created per account, and this
+> component deliberately creates no customer-managed key (FR-023). So the resource cannot be pinned.
+>
+> What bounds it is `kms:ViaService`: these permissions only work when the request arrives
+> **through RDS or Secrets Manager**, never when the CI role calls KMS directly. Dropping the
+> condition would turn a narrow delegation into blanket account-wide KMS access — so if you are
+> tempted to simplify this statement, that is the thing not to remove.
+>
+> Without it, `CreateDBInstance` fails with:
+>
+> ```text
+> KMSKeyNotAccessibleFault: The specified KMS key [null] either doesn't exist,
+> isn't enabled, or isn't accessible by the current user.
+> ```
+>
+> Note `[null]`: no key was specified, because both are defaults. The message reads as though a key
+> is missing or disabled, when the actual cause is that the caller may not use it. Apply run
+> 30703371845 failed on this.
+
 > **Neither policy grants `secretsmanager:GetSecretValue`, and neither ever should.** The CI roles
 > provision the instance; they can never read the credential the service manages. This is a
 > second, independent guarantee that a plan diff cannot contain a credential — it does not depend
@@ -158,6 +183,23 @@ and `ManageNarrowingCredentialGrant`.
 > component the apply role is at roughly **7,000** characters across five policies and the plan
 > role at roughly **3,400**. There is room, but the compute component (SCRUM-176) still has to
 > fit — if it is large, consider consolidating rather than discovering the limit mid-attachment.
+
+### 3.3 If a fourth permission gap appears
+
+Three apply cycles were spent discovering permissions one failure at a time. If another gap
+surfaces, stop guessing and read the record instead:
+
+1. In **CloudTrail → Event history**, filter by **Error code** `AccessDenied` and by the apply
+   role's session, over the window of the failed run.
+2. Each event names the exact `eventSource` and `eventName` that was refused — the action to add,
+   with no inference.
+3. Add only those actions, scoped as tightly as the service permits, and re-attach.
+
+**Do not resolve this by temporarily granting `rds:*`, `kms:*`, or `AdministratorAccess`.** A
+broad grant applied "just to get through" is exactly the kind of change that is never narrowed
+afterwards, and it would silently undo the least-privilege property every other statement in this
+policy exists to establish. The CloudTrail route takes one extra run and leaves the policy
+defensible.
 
 ## 4. Dispatch the plan
 
@@ -216,15 +258,21 @@ from `main` converges — expect a smaller "to add" count and zero destroys.
 If the log group was created but the instance was not, that is the safe failure direction: the
 group is empty, costs nothing, and the next apply adopts it because Terraform already tracks it.
 
-### Status: two applies failed partway, both on the apply policy (2026-08-01)
+### Status: three applies failed partway, all on the apply policy (2026-08-01)
 
-Both failures were IAM permissions, both surfaced only at apply, and **neither was catchable by
-any local or CI check** — see §3.2.
+Every failure was a missing or mis-scoped IAM permission, every one surfaced only at apply, and
+**none was detectable by any local or CI check** — see §3.2.
 
 | Run | Stopped at | Cause |
 | --- | --- | --- |
 | 30702539990 | `aws_cloudwatch_log_group` | `logs:DescribeLogGroups` scoped to an ARN; the action accepts none |
 | 30702976625 | `aws_db_instance` | No `iam:CreateServiceLinkedRole`; reported as `InvalidParameterValue` |
+| 30703371845 | `aws_db_instance` | No `kms:` grants for the two default managed keys; reported as `KMSKeyNotAccessibleFault ... [null]` |
+
+**The pattern is worth naming**: a hand-written least-privilege policy for a service the project has
+not used before cannot be derived from the Terraform source. Each cycle costs a merge plus a
+hand-applied policy update. Budget two or three for any new AWS service, and consider the
+CloudTrail approach in §3.3 if a fourth is needed.
 
 **Three of six resources now exist:**
 

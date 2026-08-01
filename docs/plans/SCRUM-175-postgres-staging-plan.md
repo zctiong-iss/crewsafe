@@ -307,12 +307,13 @@ Eighteen violations were planted, each caught, each reverted:
 
 ### What the tests could not catch
 
-**Two applies failed, both on the hand-applied apply policy, and neither was detectable locally.**
+**Three applies failed, all on the hand-applied apply policy, and none was detectable locally.**
 
 | Run | Stopped at | Cause |
 | --- | --- | --- |
 | 30702539990 | log group | `logs:DescribeLogGroups` scoped to an ARN pattern — the action accepts no resource scope, so AWS evaluated it against `log-group::log-stream:` and denied it |
 | 30702976625 | DB instance | No `iam:CreateServiceLinkedRole`. RDS needs `AWSServiceRoleForRDS`, which does not exist until an account's first instance |
+| 30703371845 | DB instance | No `kms:` grants. The instance needs the `aws/rds` key for storage and `aws/secretsmanager` for the service-managed secret; neither identifier is knowable in advance |
 
 `terraform validate`, `terraform test`, the source guard, and the plan **all accepted policies AWS
 rejects.** None of them models the IAM authorization engine: which actions support resource-level
@@ -343,10 +344,20 @@ permission fails identically.
    ECS and ELB both use service-linked roles, so SCRUM-176 will hit this twice. The grant is
    narrow — one action, one exact ARN under `aws-service-role/<service>/`, plus an
    `iam:AWSServiceName` condition.
-3. **Budget for two or three apply cycles when a component introduces a new AWS service.** The
-   permissions cannot be fully derived from the Terraform source, and each round trip costs a
-   merge plus a hand-applied policy update. SCRUM-173 needed one recovery cycle, this component
-   needed two.
+3. **A resource that encrypts anything needs KMS grants the caller cannot pin.** Storage
+   encryption and the service-managed secret each use an AWS-managed key whose identifier is
+   per-account and unknowable at authoring time, so `Resource: "*"` is unavoidable. What makes it
+   defensible is the `kms:ViaService` condition — the permission works only when the request
+   arrives through RDS or Secrets Manager, never when the CI role calls KMS directly. **The
+   condition is the control; the wildcard is not the problem.**
+4. **Budget three apply cycles when a component introduces a new AWS service, and use CloudTrail
+   after the second.** The permissions cannot be derived from the Terraform source, and each round
+   trip costs a merge plus a hand-applied policy update. SCRUM-173 needed one recovery cycle; this
+   component needed three, discovering permissions one failure at a time. Filtering CloudTrail for
+   `AccessDenied` on the apply role's session names every refused action at once. The runbook §3.3
+   documents this, and also why the tempting shortcut — a temporary `rds:*` or `AdministratorAccess`
+   grant — must not be taken: a broad grant applied "just to get through" is never narrowed
+   afterwards.
 
 ### Use Terraform 1.10.5 locally
 
