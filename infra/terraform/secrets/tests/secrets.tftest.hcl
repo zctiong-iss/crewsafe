@@ -69,11 +69,10 @@ override_resource {
 }
 
 variables {
-  expected_account_id  = "123456789012"
-  account_alias        = "shared-dev"
-  aws_region           = "ap-southeast-1"
-  database_username    = "crewsafe"
-  cors_allowed_origins = ["https://crewsafe.example.com"]
+  expected_account_id = "123456789012"
+  account_alias       = "shared-dev"
+  aws_region          = "ap-southeast-1"
+  database_username   = "crewsafe"
 }
 
 # ---------------------------------------------------------------------------
@@ -132,35 +131,6 @@ run "rejects_database_username_invalid_leading_character" {
   expect_failures = [var.database_username]
 }
 
-# The application's own default for this setting is a list of localhost
-# development servers. An empty list here must fail rather than silently
-# deploying with no origins configured.
-run "rejects_empty_cors_allowed_origins" {
-  command = plan
-  variables {
-    cors_allowed_origins = []
-  }
-  expect_failures = [var.cors_allowed_origins]
-}
-
-# A staging origin served over plain HTTP would let a network attacker read the
-# tokens the browser attaches to a cross-origin request.
-run "rejects_insecure_cors_origin" {
-  command = plan
-  variables {
-    cors_allowed_origins = ["http://crewsafe.example.com"]
-  }
-  expect_failures = [var.cors_allowed_origins]
-}
-
-run "rejects_cors_origin_with_path" {
-  command = plan
-  variables {
-    cors_allowed_origins = ["https://crewsafe.example.com/api"]
-  }
-  expect_failures = [var.cors_allowed_origins]
-}
-
 # 0 means immediate, irreversible deletion. FR-007 requires a recovery window,
 # and enforcing it in the type system is cheaper than enforcing it by convention.
 run "rejects_zero_secret_recovery_window" {
@@ -194,10 +164,10 @@ run "entry_shape" {
     error_message = "The secret must be named inside this component's naming scope, or the read policy will not reach it (FR-004)."
   }
 
-  # Seven, not thirteen: a value earns an entry only where the deployment must
+  # Six, not thirteen: a value earns an entry only where the deployment must
   # differ from the application's own default (FR-001, research.md R-008).
   assert {
-    condition     = length(aws_ssm_parameter.config) == 7
+    condition     = length(aws_ssm_parameter.config) == 6
     error_message = "The configuration entry set changed. Adding one is fine; restating an application default is not (FR-001)."
   }
 
@@ -223,12 +193,15 @@ run "entry_shape" {
     error_message = "Every entry must describe what it holds, who writes it, and who reads it (FR-008)."
   }
 
-  # The database URL is absent by design: its value does not exist until SCRUM-175
-  # creates the database, and FR-031 gives the entry to the producing component
-  # rather than declaring a placeholder here.
+  # Both are absent by design: neither value exists until the component that
+  # produces it does, and FR-031 gives the entry to that component rather than
+  # declaring a placeholder here.
   assert {
-    condition     = !contains(keys(aws_ssm_parameter.config), "db/url")
-    error_message = "The database URL entry belongs to the database component, not here (FR-031)."
+    condition = (
+      !contains(keys(aws_ssm_parameter.config), "db/url")
+      && !contains(keys(aws_ssm_parameter.config), "cors/allowed-origins")
+    )
+    error_message = "db/url belongs to the database component and cors/allowed-origins to whatever creates the web origin; neither is declared here (FR-031)."
   }
 }
 

@@ -48,17 +48,21 @@ locals {
 
   cognito = data.terraform_remote_state.cognito.outputs
 
-  # Seven entries. A value earns one only where the deployed environment must
-  # differ from the default the application already carries (FR-001, research.md
-  # R-008). The server port, the weather freshness thresholds, the ingestion
-  # interval, and the external weather API base URL all keep their application
-  # defaults and are deliberately absent.
+  # Six entries. A value earns one only where the deployed environment must differ
+  # from the default the application already carries (FR-001, research.md R-008).
+  # The server port, the weather freshness thresholds, the ingestion interval, and
+  # the external weather API base URL all keep their application defaults and are
+  # deliberately absent.
+  #
+  # Two more entries live under this prefix but are declared elsewhere, because
+  # their values do not exist until the component that produces them does (FR-031):
+  #   db/url               -> the database component (SCRUM-175)
+  #   cors/allowed-origins -> whatever creates the web application's public origin
   config_parameters = {
     "db/username"               = var.database_username
     "cognito/issuer-uri"        = local.cognito.issuer_uri
     "cognito/jwk-set-uri"       = local.cognito.jwks_uri
     "cognito/client-ids"        = join(",", [local.cognito.web_client_id, local.cognito.mobile_client_id, local.cognito.cli_client_id])
-    "cors/allowed-origins"      = join(",", var.cors_allowed_origins)
     "spring/profiles-active"    = "staging"
     "weather/ingestion-enabled" = "true"
   }
@@ -68,7 +72,6 @@ locals {
     "cognito/issuer-uri"        = "Cognito issuer the backend validates access tokens against. Sourced from the cognito-shared-dev component; read by the task execution role."
     "cognito/jwk-set-uri"       = "Cognito JWKS endpoint the backend fetches signing keys from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
-    "cors/allowed-origins"      = "Comma-separated origins the deployed API accepts cross-origin requests from. Written by Terraform from a reviewed variable; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
   }
