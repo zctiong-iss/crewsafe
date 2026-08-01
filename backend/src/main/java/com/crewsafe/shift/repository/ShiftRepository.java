@@ -12,7 +12,13 @@ import java.util.UUID;
  */
 public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
-    List<Shift> findBySiteIdOrderByCreatedAtDesc(UUID siteId);
+    /**
+     * {@code id} is a tiebreaker only, not a meaningful secondary order — two shifts can
+     * share a {@code createdAt} (same-millisecond creates), and without a deterministic
+     * tiebreaker the DB is free to return those rows in either order, making "most recently
+     * created first" flaky.
+     */
+    List<Shift> findBySiteIdOrderByCreatedAtDescIdDesc(UUID siteId);
 
     /** Scopes a shift lookup to its site, so a shift id from another site reads as 404. */
     Optional<Shift> findByIdAndSiteId(UUID id, UUID siteId);

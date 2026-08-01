@@ -264,6 +264,33 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .allMatch(e -> supervisorA.getId().equals(e.getActorId()));
     }
 
+    /**
+     * The audit write is deferred to after-commit precisely so this holds: a shift create
+     * that fails to persist (here, an assignment referencing a worker id with no matching
+     * {@code app_user} row, violating the {@code shift_assignment} foreign key) must not
+     * leave a "shift was created" audit trail behind for work that never actually landed.
+     */
+    @Test
+    void aShiftCreateThatFailsToPersistWritesNoAuditEvent() throws Exception {
+        long before = auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED).stream()
+                .filter(e -> supervisorA.getId().equals(e.getActorId()))
+                .count();
+
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt,
+                                List.of(assignmentBody(UUID.randomUUID(), null, "LIGHT", null))))
+                .andExpect(status().is5xxServerError());
+
+        long after = auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED).stream()
+                .filter(e -> supervisorA.getId().equals(e.getActorId()))
+                .count();
+
+        assertThat(after).isEqualTo(before);
+    }
+
     // --- validation ---
 
     @Test

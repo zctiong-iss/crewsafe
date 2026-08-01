@@ -147,5 +147,29 @@ site's shift list/detail stays open to any site member.
 
 ### Verification
 
-Full backend suite run twice (before and after the role-restriction change):
-`110/110` passing, no regressions.
+Full backend suite run repeatedly across the PR's iterations: `111/111` passing,
+no regressions.
+
+### Review fixes (GitHub Copilot PR review)
+
+Three findings, all genuine, all fixed:
+
+1. **Audit event could survive a rollback.** `AuditService.record` runs in
+   `REQUIRES_NEW`, so calling it inline inside `createShift`'s transaction would
+   commit the audit row immediately and independently — if the shift or an
+   assignment then failed to persist (e.g. a `workerId` with no matching
+   `app_user` row, violating the `shift_assignment` foreign key at commit time),
+   the audit event would outlive the rollback and falsely claim a shift was
+   created. Fixed by deferring the audit write to `afterCommit` via
+   `TransactionSynchronizationManager`. Proven with a new test that forces the FK
+   violation and asserts no audit event results.
+2. **`BadRequestException`'s message was being returned to the client**, which
+   quietly broke this file's own stated rule that no response ever carries an
+   exception's message. Safe today (the only caller passes a hardcoded string),
+   but fragile for whichever call site is added next. Now logged server-side only;
+   the client gets the same fixed `"Invalid request parameters"` every other 400
+   in this file already returns.
+3. **`listShifts` had no deterministic tiebreaker.** Two shifts created within the
+   same timestamp resolution could come back in either order, making "most
+   recently created first" flaky. Added `id` as a secondary sort key (not
+   semantically meaningful, purely for determinism).
