@@ -95,8 +95,14 @@ attaching. It appears **twice**: in `ManageEngineLogGroup` and in `ManageNarrowi
    pattern, not `*`.
 5. Confirm `ListLogGroupsApply` holds **exactly one action**, `logs:DescribeLogGroups`, on `*`.
    **Do not "tighten" this to an ARN.** See the warning below.
-6. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
-7. Name the policy `CrewSafeDatabaseTerraformApply` and save.
+6. Confirm `CreateRdsServiceLinkedRole` is present, scoped to the exact
+   `aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS` ARN, **and carries the
+   `iam:AWSServiceName` condition**. See the second warning below.
+7. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
+8. Name the policy `CrewSafeDatabaseTerraformApply` and save.
+
+Replace `<ACCOUNT_ID>` in **three** places: `ManageEngineLogGroup`, `CreateRdsServiceLinkedRole`,
+and `ManageNarrowingCredentialGrant`.
 
 > **`logs:DescribeLogGroups` accepts no resource scope, and scoping it fails the apply.** This
 > policy originally folded it into `ManageEngineLogGroup` alongside the mutating actions, scoped to
@@ -112,6 +118,32 @@ attaching. It appears **twice**: in `ManageEngineLogGroup` and in `ManageNarrowi
 > **Nothing in CI catches this.** `terraform validate`, the mocked tests, and the plan all accept a
 > policy AWS will reject, because none of them knows which actions support resource-level
 > permissions. It is a plan-review and first-apply discovery, which is why it is written down here.
+
+> **`iam:CreateServiceLinkedRole` is required, and the error if it is missing does not look like a
+> permissions error.** RDS needs the `AWSServiceRoleForRDS` service-linked role, which does not
+> exist in an account until its first RDS instance is created. Without permission to create it, the
+> `CreateDBInstance` call fails with:
+>
+> ```text
+> InvalidParameterValue: Unable to create the resource. Verify that you have
+> permission to create service linked role. Otherwise wait and try again later
+> ```
+>
+> That is an `InvalidParameterValue`, not an `AccessDenied`, and the "wait and try again later"
+> clause invites you to treat it as transient. It is not — retrying without the permission fails
+> identically. Apply run 30702976625 failed on exactly this.
+>
+> **This affects every teammate.** Each account is isolated (AGENTS.md §7), so each one creates this
+> role on its own first apply. The grant is therefore permanent in the policy rather than a
+> one-time manual step someone has to remember.
+>
+> The grant is narrow: one action, one exact role ARN under
+> `aws-service-role/rds.amazonaws.com/`, plus an `iam:AWSServiceName` condition. It cannot create
+> any other role. **If your team would rather keep all IAM writes out of CI**, the alternative is to
+> create the role once per account out of band —
+> `aws iam create-service-linked-role --aws-service-name rds.amazonaws.com` — and drop this
+> statement. That trades an automated bootstrap for another hand-applied per-account step, which is
+> the class of step this runbook already shows being forgotten.
 
 > **Neither policy grants `secretsmanager:GetSecretValue`, and neither ever should.** The CI roles
 > provision the instance; they can never read the credential the service manages. This is a
@@ -184,33 +216,43 @@ from `main` converges — expect a smaller "to add" count and zero destroys.
 If the log group was created but the instance was not, that is the safe failure direction: the
 group is empty, costs nothing, and the next apply adopts it because Terraform already tracks it.
 
-### Status: first apply failed partway (run 30702539990, 2026-08-01)
+### Status: two applies failed partway, both on the apply policy (2026-08-01)
 
-`logs:DescribeLogGroups` was scoped to an ARN pattern in the apply policy, which the CloudWatch
-Logs API rejects — see the warning in §3.2. **Two of six resources were created:**
+Both failures were IAM permissions, both surfaced only at apply, and **neither was catchable by
+any local or CI check** — see §3.2.
+
+| Run | Stopped at | Cause |
+| --- | --- | --- |
+| 30702539990 | `aws_cloudwatch_log_group` | `logs:DescribeLogGroups` scoped to an ARN; the action accepts none |
+| 30702976625 | `aws_db_instance` | No `iam:CreateServiceLinkedRole`; reported as `InvalidParameterValue` |
+
+**Three of six resources now exist:**
 
 | Resource | State |
 | --- | --- |
 | `aws_db_subnet_group.main` | **created**, tracked in state |
 | `aws_db_parameter_group.main` | **created**, tracked in state |
-| `aws_cloudwatch_log_group.postgresql` | not created — this is where it stopped |
-| `aws_db_instance.main` | not attempted |
-| `aws_ssm_parameter.db_url` | not attempted |
-| `aws_iam_role_policy.pinned_credential_read` | not attempted |
+| `aws_cloudwatch_log_group.postgresql` | **created**, tracked in state |
+| `aws_db_instance.main` | not created — this is where it stopped |
+| `aws_ssm_parameter.db_url` | not attempted (depends on the instance) |
+| `aws_iam_role_policy.pinned_credential_read` | not attempted (depends on the instance) |
 
-**The failure direction was safe.** No instance exists, so no data is at risk; no credential was
-created; nothing is billing beyond two free metadata resources. Terraform recorded both created
-resources, so the state is consistent rather than partial-and-unknown.
+**The failure direction stayed safe throughout.** No instance exists, so no data is at risk and no
+credential was ever created. The three resources that do exist are free metadata. Terraform
+recorded each one, so the state is consistent rather than partial-and-unknown — which is what
+makes this converge instead of needing a rebuild.
 
 **Recovery, in order:**
 
-1. Merge the corrected `apply-role-policy.json`.
-2. **Re-attach `CrewSafeDatabaseTerraformApply`** from the corrected document — the policy is
-   applied by hand, so merging alone changes nothing in AWS.
-3. Re-dispatch plan from `main`. Expect **4 to add, 0 to change, 0 to destroy** — the subnet group
-   and parameter group are already tracked and must not reappear as additions. If either shows as
-   an addition or a replacement, stop: the state does not match what the account holds.
-4. Review per §5 and apply.
+1. Merge the corrected `apply-role-policy.json` (both fixes).
+2. **Re-attach `CrewSafeDatabaseTerraformApply`** from the corrected document, substituting the
+   account id in **three** places. The policy is hand-applied, so merging alone changes nothing in
+   AWS — this is the step most likely to be skipped, and skipping it reproduces the same failure.
+3. Re-dispatch plan from `main`. Expect **3 to add, 0 to change, 0 to destroy**. The subnet group,
+   parameter group, and log group are already tracked and must not reappear as additions. **If any
+   of the three shows as an addition or a replacement, stop** — the state does not match what the
+   account holds.
+4. Review per §5 and apply. Instance creation takes several minutes; the step is not hung.
 
 ## 7. Verify after apply
 

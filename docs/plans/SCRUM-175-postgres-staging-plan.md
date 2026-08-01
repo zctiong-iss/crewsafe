@@ -307,22 +307,46 @@ Eighteen violations were planted, each caught, each reverted:
 
 ### What the tests could not catch
 
-The first apply (run 30702539990) failed after creating two of six resources: the apply policy
-scoped `logs:DescribeLogGroups` to a log-group ARN pattern, and **that action accepts no resource
-scope** — the CloudWatch Logs API evaluates it against `log-group::log-stream:` and denies the
-request.
+**Two applies failed, both on the hand-applied apply policy, and neither was detectable locally.**
 
-This is worth recording because it is a category, not a one-off. `terraform validate`, the mocked
-tests, the source guard, and the plan **all accepted a policy AWS rejects**, because none of them
-knows which IAM actions support resource-level permissions. It is the same shape as SCRUM-174's
-`ecr:GetAuthorizationToken` exemption, and this component reproduced the mistake that component
-had already documented.
+| Run | Stopped at | Cause |
+| --- | --- | --- |
+| 30702539990 | log group | `logs:DescribeLogGroups` scoped to an ARN pattern — the action accepts no resource scope, so AWS evaluated it against `log-group::log-stream:` and denied it |
+| 30702976625 | DB instance | No `iam:CreateServiceLinkedRole`. RDS needs `AWSServiceRoleForRDS`, which does not exist until an account's first instance |
 
-The fix isolates the action into its own single-action statement on `*`, so it cannot quietly
-acquire a second, while every mutating log action stays prefix-scoped. **The general lesson for
-SCRUM-176**: before scoping an IAM action to a resource ARN, confirm the service actually supports
-resource-level permissions for it. A tighter-looking policy that fails at apply is worse than a
-correct one, because the failure lands after resources have been created.
+`terraform validate`, `terraform test`, the source guard, and the plan **all accepted policies AWS
+rejects.** None of them models the IAM authorization engine: which actions support resource-level
+permissions, and which service-linked roles a resource needs before it can exist. This is a
+structural blind spot in the component's testing, not an oversight in any one check.
+
+**The second failure is the more instructive one**, because it does not look like a permissions
+problem at all:
+
+```text
+InvalidParameterValue: Unable to create the resource. Verify that you have
+permission to create service linked role. Otherwise wait and try again later
+```
+
+An `InvalidParameterValue` whose text invites you to wait and retry. Retrying without the
+permission fails identically.
+
+### Three lessons for SCRUM-176
+
+1. **Before scoping an IAM action to a resource ARN, confirm the service supports resource-level
+   permissions for it.** A tighter-looking policy that fails at apply is worse than a correct one,
+   because the failure lands *after* resources have been created. The corrected policy isolates
+   `logs:DescribeLogGroups` into its own single-action statement on `*` — the same containment
+   SCRUM-174 used for `ecr:GetAuthorizationToken`, whose lesson this component had available and
+   reproduced the mistake anyway.
+2. **A resource that needs a service-linked role needs permission to create one, in every
+   account.** Accounts are isolated per teammate (AGENTS.md §7), so each one bootstraps its own.
+   ECS and ELB both use service-linked roles, so SCRUM-176 will hit this twice. The grant is
+   narrow — one action, one exact ARN under `aws-service-role/<service>/`, plus an
+   `iam:AWSServiceName` condition.
+3. **Budget for two or three apply cycles when a component introduces a new AWS service.** The
+   permissions cannot be fully derived from the Terraform source, and each round trip costs a
+   merge plus a hand-applied policy update. SCRUM-173 needed one recovery cycle, this component
+   needed two.
 
 ### Use Terraform 1.10.5 locally
 
