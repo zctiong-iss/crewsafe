@@ -1,6 +1,7 @@
-# Build stage - same image local/compose.yaml already uses for dev, so this
-# introduces no new build-toolchain trust surface.
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+# Build stage - same digest-pinned image local/compose.yaml already uses for dev
+# (Temurin jdk-21.0.11+10), so this introduces no new build-toolchain trust surface.
+# Re-pin deliberately, together with local/compose.yaml, when moving to a newer JDK.
+FROM maven:3.9.16-eclipse-temurin-21@sha256:2b4496088e7b80ae10a8c9f74e574ea21380325a006ec684532ad6bad5bc7273 AS build
 WORKDIR /workspace
 COPY pom.xml mvnw ./
 COPY .mvn .mvn
@@ -9,8 +10,10 @@ COPY src src
 # them again here would just double the CI minutes for no additional safety.
 RUN ./mvnw -B -q clean package -DskipTests
 
-# Runtime stage - slim JRE only, no build toolchain.
-FROM eclipse-temurin:17-jre-jammy AS runtime
+# Runtime stage - slim JRE only, no build toolchain. Digest-pinned for the same
+# reason as the build stage: a floating tag lets the bundled JRE change on any
+# pull, with no diff to review.
+FROM eclipse-temurin:21-jre-jammy@sha256:d63bd8d9b171999cbed8576f2c76e874dd4856791a358536e5c4d407e77edc13 AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
