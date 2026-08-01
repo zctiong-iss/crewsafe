@@ -91,9 +91,27 @@ attaching. It appears **twice**: in `ManageEngineLogGroup` and in `ManageNarrowi
 3. Confirm `ManageNarrowingCredentialGrant` is scoped to
    `arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-*` with the real account id substituted,
    not `*`.
-4. Confirm `ManageEngineLogGroup` is scoped to the log-group ARN pattern, not `*`.
-5. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
-6. Name the policy `CrewSafeDatabaseTerraformApply` and save.
+4. Confirm `ManageEngineLogGroup` — the **mutating** log actions — is scoped to the log-group ARN
+   pattern, not `*`.
+5. Confirm `ListLogGroupsApply` holds **exactly one action**, `logs:DescribeLogGroups`, on `*`.
+   **Do not "tighten" this to an ARN.** See the warning below.
+6. Confirm it grants **no** `secretsmanager:GetSecretValue` and **no** `logs:GetLogEvents`.
+7. Name the policy `CrewSafeDatabaseTerraformApply` and save.
+
+> **`logs:DescribeLogGroups` accepts no resource scope, and scoping it fails the apply.** This
+> policy originally folded it into `ManageEngineLogGroup` alongside the mutating actions, scoped to
+> the log-group ARN pattern. That looked tighter and was simply wrong: the CloudWatch Logs API
+> evaluates the action against `log-group::log-stream:` rather than the named group, so the request
+> is denied. Apply run 30702539990 failed on exactly this, after creating the subnet group and the
+> parameter group.
+>
+> It is the same shape as SCRUM-174's `ecr:GetAuthorizationToken` exemption: an action the service
+> permits only on `*`, isolated into its own single-action statement so it cannot quietly acquire a
+> second. Every mutating log action stays prefix-scoped.
+>
+> **Nothing in CI catches this.** `terraform validate`, the mocked tests, and the plan all accept a
+> policy AWS will reject, because none of them knows which actions support resource-level
+> permissions. It is a plan-review and first-apply discovery, which is why it is written down here.
 
 > **Neither policy grants `secretsmanager:GetSecretValue`, and neither ever should.** The CI roles
 > provision the instance; they can never read the credential the service manages. This is a
@@ -159,12 +177,40 @@ count. Read each from the plan output:
 
 ### If the apply fails midway
 
-SCRUM-173's did. The recovery is the same: **do not destroy and rebuild, and do not hand-edit
-state.** Terraform recorded what it created, so re-running plan from `main` converges — expect a
-smaller "to add" count and zero destroys.
+SCRUM-173's did, and so did this component's first one. The recovery is the same: **do not destroy
+and rebuild, and do not hand-edit state.** Terraform recorded what it created, so re-running plan
+from `main` converges — expect a smaller "to add" count and zero destroys.
 
 If the log group was created but the instance was not, that is the safe failure direction: the
 group is empty, costs nothing, and the next apply adopts it because Terraform already tracks it.
+
+### Status: first apply failed partway (run 30702539990, 2026-08-01)
+
+`logs:DescribeLogGroups` was scoped to an ARN pattern in the apply policy, which the CloudWatch
+Logs API rejects — see the warning in §3.2. **Two of six resources were created:**
+
+| Resource | State |
+| --- | --- |
+| `aws_db_subnet_group.main` | **created**, tracked in state |
+| `aws_db_parameter_group.main` | **created**, tracked in state |
+| `aws_cloudwatch_log_group.postgresql` | not created — this is where it stopped |
+| `aws_db_instance.main` | not attempted |
+| `aws_ssm_parameter.db_url` | not attempted |
+| `aws_iam_role_policy.pinned_credential_read` | not attempted |
+
+**The failure direction was safe.** No instance exists, so no data is at risk; no credential was
+created; nothing is billing beyond two free metadata resources. Terraform recorded both created
+resources, so the state is consistent rather than partial-and-unknown.
+
+**Recovery, in order:**
+
+1. Merge the corrected `apply-role-policy.json`.
+2. **Re-attach `CrewSafeDatabaseTerraformApply`** from the corrected document — the policy is
+   applied by hand, so merging alone changes nothing in AWS.
+3. Re-dispatch plan from `main`. Expect **4 to add, 0 to change, 0 to destroy** — the subnet group
+   and parameter group are already tracked and must not reappear as additions. If either shows as
+   an addition or a replacement, stop: the state does not match what the account holds.
+4. Review per §5 and apply.
 
 ## 7. Verify after apply
 

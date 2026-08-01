@@ -305,6 +305,25 @@ Eighteen violations were planted, each caught, each reverted:
 | `null_resource` with `local-exec` running SQL | Source guard (FR-022) |
 | Cross-origin entry created here | Source guard (FR-019) |
 
+### What the tests could not catch
+
+The first apply (run 30702539990) failed after creating two of six resources: the apply policy
+scoped `logs:DescribeLogGroups` to a log-group ARN pattern, and **that action accepts no resource
+scope** — the CloudWatch Logs API evaluates it against `log-group::log-stream:` and denies the
+request.
+
+This is worth recording because it is a category, not a one-off. `terraform validate`, the mocked
+tests, the source guard, and the plan **all accepted a policy AWS rejects**, because none of them
+knows which IAM actions support resource-level permissions. It is the same shape as SCRUM-174's
+`ecr:GetAuthorizationToken` exemption, and this component reproduced the mistake that component
+had already documented.
+
+The fix isolates the action into its own single-action statement on `*`, so it cannot quietly
+acquire a second, while every mutating log action stays prefix-scoped. **The general lesson for
+SCRUM-176**: before scoping an IAM action to a resource ARN, confirm the service actually supports
+resource-level permissions for it. A tighter-looking policy that fails at apply is worse than a
+correct one, because the failure lands after resources have been created.
+
 ### Use Terraform 1.10.5 locally
 
 `versions.tf` permits `>= 1.10, < 2.0`, but that constrains the configuration, not what CI runs.
