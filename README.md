@@ -37,7 +37,9 @@ Services:
 ### Options
 
 - `--account <alias>` selects the shared Cognito account alias (default `dev`)
-- `--no-web` starts only PostgreSQL and the backend
+- `--no-web` starts PostgreSQL, the backend and adminer, but not the web container. It still
+  writes `web/.env.local` and leaves port 5173 free, so this is the flag to use when running
+  Vite yourself — see [web/README.md](web/README.md#path-b--vite-on-your-machine)
 - `--reset` deletes the local PostgreSQL volume before starting
 
 ### Logs and shutdown
@@ -94,6 +96,7 @@ Terraform runs in CI only — never locally. See
 
 ## More details
 
+- [web/README.md](web/README.md) — supervisor console: both run paths and its decisions
 - [local/README.md](local/README.md) — Compose stack layout and resolved environment
 - [docs/adr/](docs/adr/) — architecture decisions
 - [docs/plans/](docs/plans/) — Jira-keyed plans

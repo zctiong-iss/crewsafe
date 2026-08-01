@@ -41,7 +41,11 @@ services:
         condition: service_healthy
 
   backend:
-    image: maven:3.9.9-eclipse-temurin-17
+    # Digest-pinned: the floating `-21` tag lets the bundled JDK change on any pull, with no
+    # diff to review. This is the multi-arch index (amd64, arm64/v8, ppc64le, riscv64, s390x),
+    # so every architecture resolves to the same build; it currently carries Temurin
+    # jdk-21.0.11+10. Re-pin deliberately when moving to a newer JDK.
+    image: maven:3.9.16-eclipse-temurin-21@sha256:2b4496088e7b80ae10a8c9f74e574ea21380325a006ec684532ad6bad5bc7273
     container_name: crewsafe-backend
     working_dir: /workspace/backend
     command: ./mvnw -q -B spring-boot:run

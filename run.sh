@@ -76,16 +76,18 @@ for _ in $(seq 1 30); do
 done
 [[ "$postgres_ready" == true ]] || { echo "PostgreSQL did not become ready." >&2; exit 1; }
 
-if [[ "$WITH_WEB" == true ]]; then
-  {
-    printf 'VITE_COGNITO_AUTHORITY=%s\n' "$VITE_COGNITO_AUTHORITY"
-    printf 'VITE_COGNITO_CLIENT_ID=%s\n' "$VITE_COGNITO_CLIENT_ID"
-    printf 'VITE_COGNITO_HOSTED_UI_DOMAIN=%s\n' "$VITE_COGNITO_HOSTED_UI_DOMAIN"
-    printf 'VITE_REDIRECT_URI=%s\n' "$VITE_REDIRECT_URI"
-    printf 'VITE_POST_LOGOUT_REDIRECT_URI=%s\n' "$VITE_POST_LOGOUT_REDIRECT_URI"
-    printf 'VITE_API_BASE_URL=%s\n' "$VITE_API_BASE_URL"
-  } >web/.env.local
-fi
+# Written regardless of --no-web. The file exists so a developer can run Vite on the host
+# against this stack, which is precisely the --no-web case; gating it on WITH_WEB left that
+# developer with a backend and no configuration. It is regenerated on every run and holds no
+# secrets, so writing it when the web container is skipped costs nothing.
+{
+  printf 'VITE_COGNITO_AUTHORITY=%s\n' "$VITE_COGNITO_AUTHORITY"
+  printf 'VITE_COGNITO_CLIENT_ID=%s\n' "$VITE_COGNITO_CLIENT_ID"
+  printf 'VITE_COGNITO_HOSTED_UI_DOMAIN=%s\n' "$VITE_COGNITO_HOSTED_UI_DOMAIN"
+  printf 'VITE_REDIRECT_URI=%s\n' "$VITE_REDIRECT_URI"
+  printf 'VITE_POST_LOGOUT_REDIRECT_URI=%s\n' "$VITE_POST_LOGOUT_REDIRECT_URI"
+  printf 'VITE_API_BASE_URL=%s\n' "$VITE_API_BASE_URL"
+} >web/.env.local
 
 backend_ready=false
 for _ in $(seq 1 90); do
