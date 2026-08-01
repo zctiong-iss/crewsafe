@@ -65,6 +65,29 @@
       "Resource": "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/aws/rds/instance/crewsafe-shared-dev/*"
     },
     {
+      "Sid": "UseDefaultManagedKeysThroughRdsAndSecretsManager",
+      "Effect": "Allow",
+      "Action": [
+        "kms:CreateGrant",
+        "kms:Decrypt",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:GenerateDataKey",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:ReEncryptFrom",
+        "kms:ReEncryptTo"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:ViaService": [
+            "rds.ap-southeast-1.amazonaws.com",
+            "secretsmanager.ap-southeast-1.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
       "Sid": "CreateRdsServiceLinkedRole",
       "Effect": "Allow",
       "Action": [
