@@ -1,11 +1,13 @@
 package com.crewsafe.common.audit;
 
 /**
- * Audit event type constants.
+ * Controlled vocabulary for audit event types.
  *
  * String constants rather than an enum because the audit table must be able to store
  * event types written by future features without a schema change, while the types used
- * here stay checked at compile time.
+ * here stay checked at compile time. New values use uppercase snake case and describe an
+ * event that already happened, for example {@code SHIFT_CLOSED}; callers must add the
+ * constant here before writing the new event type.
  *
  * @author Jemilin Beulah
  */
@@ -23,6 +25,8 @@ public final class AuditEventType {
      * table must count tokens, not logins.
      */
     public static final String TOKEN_FIRST_SEEN = "TOKEN_FIRST_SEEN";
+
+    /** An authenticated user attempted to access a site outside their membership. */
     public static final String ACCESS_DENIED = "ACCESS_DENIED";
 
     private AuditEventType() {

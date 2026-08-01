@@ -1,5 +1,6 @@
 package com.crewsafe.common.audit;
 
+import com.crewsafe.common.web.RequestIdFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -28,21 +29,9 @@ public class AuditService {
         save(actorId, eventType, targetType, targetId, detail);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(UUID actorId, String eventType, String detail) {
-        save(actorId, eventType, null, null, detail);
-    }
-
-    /**
-     * Both public overloads delegate here rather than to each other.
-     *
-     * Calling one {@code @Transactional} method from another on {@code this} bypasses the
-     * Spring proxy, so the inner annotation is silently ignored. It happens to be harmless
-     * today because the outer call already opened a REQUIRES_NEW transaction — but it is
-     * the kind of arrangement that breaks quietly when someone edits one of the two.
-     */
     private void save(UUID actorId, String eventType, String targetType, UUID targetId, String detail) {
-        events.save(new AuditEvent(actorId, eventType, targetType, targetId, truncate(detail)));
+        events.save(new AuditEvent(actorId, eventType, targetType, targetId,
+                RequestIdFilter.current(), truncate(detail)));
     }
 
     /** The detail column is VARCHAR(500); an over-long value must not fail the write. */
