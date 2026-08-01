@@ -5,29 +5,86 @@ UI and reading everything else from the CrewSafe API.
 
 ## Running it
 
+Two ways, and they are not interchangeable. **Path A is the normal one** — reach for Path B
+only when you are editing `web/` and want hot reload.
+
+|                       | Path A — all in containers      | Path B — Vite on your machine    |
+| --------------------- | ------------------------------- | -------------------------------- |
+| Steps                 | one command                     | two, in order                    |
+| What runs             | postgres, backend, adminer, web | web on your host; backend from A |
+| `npm install` locally | no — the container runs it      | yes                              |
+
+### Which launcher
+
+Both paths start from the repository root, and the choice of script is **your container
+engine**, nothing else:
+
 ```bash
+./run.sh --account <alias>          # Podman
+./run-docker.sh --account <alias>   # Docker — the same script with
+                                    # CREWSAFE_CONTAINER_ENGINE=docker
+```
+
+`--account` defaults to `dev`. Stay with one engine: each only sees its own containers, so
+following up a `run.sh` stack with `docker compose` finds nothing. Logs and shutdown commands
+are in the [root README](../README.md#logs-and-shutdown).
+
+### Path A — containers
+
+```bash
+./run.sh --account dev          # Docker users: ./run-docker.sh --account dev
+```
+
+That is all of it. Web on `http://localhost:5173`, API on `:8080`, adminer on `:8081`,
+PostgreSQL on `:5434`. Nothing is installed on your machine.
+
+### Path B — Vite on your machine
+
+`--no-web` brings up everything except the web container, leaving port 5173 free for you —
+and it still writes `web/.env.local`, which is the configuration your dev server needs:
+
+```bash
+# 1 — database, backend and adminer up; 5173 left free; web/.env.local written
+./run.sh --account dev --no-web        # Docker: ./run-docker.sh --account dev --no-web
+
+# 2 — your own dev server
+cd web
 npm install
-cp .env.example .env.local     # then fill it in — see below
 npm run dev                    # http://localhost:5173
 ```
 
+Do not start Path A first and then try this — the web container will already hold 5173.
+If you have one running, stop it with `podman compose -f local/compose.yaml stop web`
+(or `docker compose`, matching the engine you launched with).
+
 The dev server port is pinned to **5173** on purpose. Cognito rejects any `redirect_uri`
 that is not registered on the app client, and `http://localhost:5173/callback` is what
-`infra/terraform/cognito` registers. A different port is a failed login.
+`infra/terraform/cognito` registers. A different port is a failed login. `vite.config.ts`
+sets `strictPort: true` so that this fails loudly at startup rather than quietly on the
+redirect — if something else holds 5173, `npm run dev` exits instead of sliding to 5174.
 
-### Filling in `.env.local`
+### What is in `.env.local`
 
-```bash
-./run.sh --account <registered-alias>
-```
+`run.sh` writes it from the validated `CREWSAFE_SHARED_COGNITO_JSON` repository variable and
+**rewrites it on every run** — so switch pools by re-running with a different `--account`,
+not by editing the file. `.env.example` documents each key.
 
 Use the same pool for `VITE_COGNITO_AUTHORITY` and the **web** client id. None of these are
 secrets — they travel in the address bar on every login — but they differ per environment,
 so they stay out of git.
 
+Vite substitutes these values into the bundle at transform time rather than reading them at
+runtime, so an edit to `.env.local` needs a dev-server restart before it takes effect.
+
 ### The backend has to agree
 
-Run it against the **same pool**, or it will reject the tokens this app obtains:
+Neither path above needs this — `run.sh` configures both sides from one source, which is the
+point of it. This is for the case where you run the backend yourself, against a pool the
+launcher does not know about.
+
+Run it against the **same pool** as this app, or it will reject the tokens this app obtains.
+It needs **JDK 21** on your host (`backend/pom.xml` targets release 21; a JDK 17 `JAVA_HOME`
+fails with `release version 21 not supported`):
 
 ```bash
 cd ../backend
