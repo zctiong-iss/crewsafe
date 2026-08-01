@@ -42,26 +42,18 @@ variable "database_username" {
   }
 }
 
-variable "cors_allowed_origins" {
-  description = "Origins the deployed API accepts cross-origin requests from. Deliberately has no default: the application's own default is a list of localhost development servers, which must never reach a deployed environment."
-  type        = list(string)
-  default     = []
-  validation {
-    condition     = length(var.cors_allowed_origins) > 0
-    error_message = "cors_allowed_origins must name at least one origin; a deployed environment must not inherit the application's localhost defaults."
-  }
-  validation {
-    # An origin is scheme + host + optional port. A path, a trailing slash, or a
-    # query string is not an origin and will never match a browser's Origin header.
-    # http:// is rejected outright: it would let a network attacker read the tokens
-    # the browser attaches to a cross-origin request.
-    condition = alltrue([
-      for origin in var.cors_allowed_origins :
-      can(regex("^https://[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]{1,5})?$", origin))
-    ])
-    error_message = "Every entry in cors_allowed_origins must be an https:// origin with no path, no trailing slash, and no query string."
-  }
-}
+# cors_allowed_origins is deliberately NOT a variable here.
+#
+# The permitted origin is the web application's own public address, which does not
+# exist yet — nothing in this project has a deployed origin, and the shared Cognito
+# pool's only reviewed web callback is http://localhost:5173/callback. A required
+# input whose value nobody can supply makes the component unappliable; a committed
+# placeholder is the pattern FR-031 exists to reject, and a wrong CORS origin is
+# either a broken application or an over-permissive one.
+#
+# So the entry follows the same rule as the database URL: the component that
+# creates the web origin declares /crewsafe/shared-dev/cors/allowed-origins under
+# the prefix this component publishes. See the obligations list in the runbook.
 
 variable "secret_recovery_window_days" {
   description = "Days a deleted secret stays recoverable before permanent removal. Seven is the minimum AWS permits above immediate deletion (R-006)."

@@ -8,11 +8,11 @@ SCRUM-142) · **Component**: `secrets-shared-dev` · **Runbook**:
 
 The fourth Terraform component. It defines **where every deployed credential and configuration
 value lives, and who may read it**: one empty Secrets Manager container for the weather API
-key, seven Parameter Store entries for non-secret configuration, and two IAM roles — a task
+key, six Parameter Store entries for non-secret configuration, and two IAM roles — a task
 execution identity and a task identity — whose read permissions are scoped to exactly those
 entries.
 
-The component is 12 resources of flat HCL. Its interesting property is not a resource but an
+The component is 11 resources of flat HCL. Its interesting property is not a resource but an
 **absence**: Terraform manages secret *containers* and never secret *versions*, so no credential
 value can enter Terraform state. Everything else in the design exists to make that absence
 provable.
@@ -91,7 +91,7 @@ nobody intended. **Cost**: the configuration set is incomplete until SCRUM-175 l
 application cannot start on this component alone. That is correct rather than a gap — it cannot
 start without a database either.
 
-### 4. Seven configuration entries, not thirteen
+### 4. Six configuration entries, not thirteen
 
 A value earns an entry only where the deployed environment must **differ from the default the
 application already carries**. The server port, the weather freshness thresholds, the ingestion
@@ -103,7 +103,6 @@ behavioural difference.
 | --- | --- |
 | `db/username` | The local default is not the deployed master user |
 | `cognito/issuer-uri`, `cognito/jwk-set-uri`, `cognito/client-ids` | Required; `application.yml` deliberately gives them no default so a deployment that forgets one dies at startup naming the property |
-| `cors/allowed-origins` | Defaults to localhost dev servers |
 | `spring/profiles-active` | Must not be `local` |
 | `weather/ingestion-enabled` | Defaults off so a developer machine never calls a live safety-data service |
 
@@ -159,12 +158,15 @@ the consuming issues inherit them explicitly rather than by hope.
    a password Terraform can see. A `random_password` there is exactly as damaging as one here,
    and it is the likeliest way this design is undone — because setting a password explicitly is
    the more obvious thing to write.
-5. **The database component MUST create the database URL entry under `config_parameter_prefix`.**
+5. **Whatever creates the web application's public origin MUST create
+   `<prefix>/cors/allowed-origins`.** Its value is that origin, which nothing in this project has
+   yet — the shared Cognito pool's only reviewed web callback is still `http://localhost:5173`.
+6. **The database component MUST create the database URL entry under `config_parameter_prefix`.**
    A different prefix is not covered by the read grant, and the application fails to start with
    what looks like a permissions bug rather than a naming one.
-6. **No image build step may accept a credential as a build argument.** Build arguments persist
+7. **No image build step may accept a credential as a build argument.** Build arguments persist
    in image metadata.
-7. **CI workflows must never echo a value.**
+8. **CI workflows must never echo a value.**
 
 ## Component registration
 
@@ -257,7 +259,7 @@ nothing; it resolves computed values so assertions can evaluate.
 ## Design constraints
 
 - **Flat, literal HCL.** One directory, no reusable module, no third-party module.
-- **12 resources** against a ~15 budget: 1 secret container, 7 parameters, 2 roles, 2 inline
+- **11 resources** against a ~15 budget: 1 secret container, 6 parameters, 2 roles, 2 inline
   role policies.
 - **Inline role policies, not managed policies with attachments.** An inline policy cannot be
   attached to another principal by accident and is deleted with its role.

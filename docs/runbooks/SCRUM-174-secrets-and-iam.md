@@ -16,12 +16,12 @@ secret value, and rotating it.
 | Resource | Count | Note |
 | --- | --- | --- |
 | Secrets Manager secret container | 1 | `crewsafe/shared-dev/weather-api-key`, **created empty** |
-| SSM parameters (type `String`) | 7 | Under `/crewsafe/shared-dev/` |
+| SSM parameters (type `String`) | 6 | Under `/crewsafe/shared-dev/` |
 | IAM roles | 2 | `crewsafe-shared-dev-task-execution`, `crewsafe-shared-dev-task` |
 | Inline role policies | 2 | One per role |
 
-**12 resources.** No KMS key, no secret version, no database URL parameter — each absent by
-design, not by omission.
+**11 resources.** No KMS key, no secret version, and neither the database URL nor the CORS
+origins parameter — each absent by design, not by omission (FR-031).
 
 ## 2. Prerequisites and sequencing
 
@@ -46,14 +46,64 @@ and check out the default branch. A component on a feature branch is invisible t
 
 ## 3. Attach the IAM policies
 
-Two hand-applied documents. They are **not** Terraform-managed.
+These are hand-applied documents, not Terraform-managed resources — the same manual step the
+SCRUM-154, SCRUM-155, and SCRUM-173 runbooks describe.
 
-- `infra/terraform/secrets/iam/plan-role-policy.json` → `CrewSafeGitHubTerraformPlanRole`
-- `infra/terraform/secrets/iam/apply-role-policy.json` → `CrewSafeGitHubTerraformApplyRole`
+| Role | Inline policy name | Document |
+| --- | --- | --- |
+| `CrewSafeGitHubTerraformPlanRole` | `CrewSafeSecretsTerraformPlan` | [`iam/plan-role-policy.json`](../../infra/terraform/secrets/iam/plan-role-policy.json) |
+| `CrewSafeGitHubTerraformApplyRole` | `CrewSafeSecretsTerraformApply` | [`iam/apply-role-policy.json`](../../infra/terraform/secrets/iam/apply-role-policy.json) |
+
+> **The policy name is load-bearing. Get it exactly right.** Attaching an inline policy is an
+> **upsert**: saving one whose name already exists silently *replaces* it, with no warning and no
+> error. Both roles are shared across every component and already carry
+> `CrewSafeCognitoTerraformPlan`/`Apply` (SCRUM-154), `CrewSafeNetworkTerraformPlan`/`Apply`
+> (SCRUM-173), and the SCRUM-155 state-backend policies. Reusing one of those names here deletes
+> that component's permissions, and the damage surfaces later as an unrelated-looking
+> `AccessDenied` on *its* next plan — not on anything you did.
+>
+> Nothing in CI validates these names; only the **role** names are enforced
+> (`resolve-terraform-account.sh:44-45` regex-matches the ARNs). The convention
+> `CrewSafe<Component>Terraform<Plan|Apply>` is the only thing keeping them distinct.
 
 Replace `<ACCOUNT_ID>` in the apply policy with the target account's twelve-digit id before
-attaching. Add them as **additional** inline policies alongside the existing per-component
-policies; do not replace what is already attached.
+attaching. It appears once, in the `ManageTaskIdentities` statement's resource.
+
+### 3.1 Update the plan role
+
+1. In the AWS Console, open **IAM → Roles**.
+2. Select `CrewSafeGitHubTerraformPlanRole`.
+3. Open **Permissions → Add permissions → Create inline policy**.
+4. Select the **JSON** editor.
+5. Copy the complete reviewed document from
+   `infra/terraform/secrets/iam/plan-role-policy.json`.
+6. Confirm it contains three read-only statements — `ReadSecretContainersPlan`,
+   `ReadConfigurationParametersPlan`, `ReadIdentitiesPlan` — and **no**
+   `secretsmanager:GetSecretValue`.
+7. Name the policy `CrewSafeSecretsTerraformPlan`.
+8. Save the policy.
+
+The plan role must not receive any create, update, delete, or tag permission on either store.
+
+### 3.2 Update the apply role
+
+1. Return to **IAM → Roles**.
+2. Select `CrewSafeGitHubTerraformApplyRole`.
+3. Open **Permissions → Add permissions → Create inline policy**.
+4. Select the **JSON** editor.
+5. Copy the complete reviewed document from
+   `infra/terraform/secrets/iam/apply-role-policy.json`.
+6. Confirm it contains the read statement plus `ManageSecretContainers`,
+   `ManageConfigurationParameters`, and `ManageTaskIdentities` — and **no**
+   `secretsmanager:GetSecretValue`.
+7. Confirm `ManageTaskIdentities` is scoped to
+   `arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-*` with the real account id substituted,
+   not `*`. This is the one statement here where a resource scope is both available and
+   meaningful, so it is used.
+8. Name the policy `CrewSafeSecretsTerraformApply`.
+9. Save the policy.
+
+Do not widen either policy to `secretsmanager:*` or `ssm:*`. Each action is a reviewed addition.
 
 > **Neither policy grants `secretsmanager:GetSecretValue`, and neither ever should.** The CI
 > roles create and describe containers; they can never read a value. This is a second,
@@ -65,6 +115,12 @@ policies; do not replace what is already attached.
 classification and Terraform must read them to detect drift. That asymmetry between the two
 stores is the point of the classification, not an oversight.
 
+> **Inline policy budget.** A role's inline policies share a 10,240-character limit. After this
+> component the apply role is at roughly **5,100** characters across four policies, the plan role
+> at roughly **2,500**. There is room, but the database and compute components still have to fit
+> — if the apply role approaches the limit, the fix is a customer-managed policy per component
+> attached to the role, not trimming a reviewed statement.
+
 ## 4. Plan
 
 Dispatch **Terraform State Plan** from `main`:
@@ -75,10 +131,16 @@ Dispatch **Terraform State Plan** from `main`:
 | `terraform_component` | `secrets-shared-dev` |
 | `operation` | `apply` |
 
-No extra variables are needed. `expected_account_id`, `account_alias`, and `aws_region` come
-from the account registry; everything else uses its declared default. To change
-`cors_allowed_origins`, commit an `.auto.tfvars` in the component root — safe, because none of
-these values is a secret.
+No extra variables are needed, and that is a deliberate property rather than a convenience.
+`expected_account_id`, `account_alias`, and `aws_region` come from the account registry;
+`database_username` and `secret_recovery_window_days` have working defaults.
+
+> An earlier version of this component had a required `cors_allowed_origins` whose default
+> (`[]`) could not pass its own validation, so **every dispatch failed** with
+> `Invalid value for variable`. The lesson generalises: a variable whose value is produced by a
+> component that does not exist yet must not be an input here at all — the entry belongs to the
+> producing component (FR-031). If you add a variable to this component, check that a dispatch
+> with no extra inputs still plans.
 
 Record the **run id**; the apply workflow requires it.
 
@@ -94,7 +156,7 @@ half-applied network. Read the plan output for these:
 3. **No credential-looking value anywhere in the output.** Read it; do not assume.
 4. **The account precondition resolved to the designated account.** The mocked tests pin a fake
    account id, so this is the first time the real one is checked.
-5. **Roughly 12 resources to add, 0 to change, 0 to destroy.** An unexpected addition is scope
+5. **11 resources to add, 0 to change, 0 to destroy.** An unexpected addition is scope
    creep the assertions cannot see.
 
 ## 6. Apply
@@ -189,6 +251,7 @@ data "terraform_remote_state" "secrets" {
 | Attach exactly these two roles; add no broad managed policy | Restores the account-wide access this component removes |
 | Create parameters under `config_parameter_prefix` only | Outside the read grant — the task fails to start |
 | The database component must enable the service-managed master password | A `random_password` there puts the credential in that component's state |
+| The component creating the web origin must create `<prefix>/cors/allowed-origins` | The deployed API grants no cross-origin access until it exists — correct today, wrong once a web app is deployed |
 | Never pass a credential as a container build argument | Build arguments persist in image metadata |
 
 ## 10. Destroy
