@@ -92,6 +92,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Amazon Bedrock SDK for AI-driven mitigation generation -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>bedrockruntime</artifactId>
+            <version>2.46.17</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
