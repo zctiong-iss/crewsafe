@@ -1,0 +1,81 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadContainerRuntimePlan",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:ListTaskDefinitions",
+        "ecs:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadLoadBalancerPlan",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:DescribeListenerAttributes",
+        "elasticloadbalancing:DescribeListeners",
+        "elasticloadbalancing:DescribeLoadBalancerAttributes",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTags",
+        "elasticloadbalancing:DescribeTargetGroupAttributes",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadDistributionPlan",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetCachePolicy",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetOriginRequestPolicy",
+        "cloudfront:GetVpcOrigin",
+        "cloudfront:ListCachePolicies",
+        "cloudfront:ListDistributions",
+        "cloudfront:ListOriginRequestPolicies",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:ListVpcOrigins"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadNetworkPlan",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeSecurityGroupRules",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadApplicationLogGroupPlan",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ReadCrossOriginParameterPlan",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:DescribeParameters",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:ListTagsForResource"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
