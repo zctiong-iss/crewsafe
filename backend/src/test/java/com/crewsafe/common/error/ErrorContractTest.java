@@ -2,6 +2,9 @@ package com.crewsafe.common.error;
 
 import com.crewsafe.AbstractIntegrationTest;
 import com.crewsafe.common.web.RequestIdFilter;
+import com.crewsafe.identity.domain.AppUser;
+import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.repository.AppUserRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -29,6 +32,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ErrorContractTest extends AbstractIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private AppUserRepository users;
+
+    private AppUser user(Role role) {
+        String username = "error-contract-" + UUID.randomUUID();
+        createCognitoUser(username);
+        return users.save(new AppUser(username, subFor(username), "Error Contract Test " + role, role));
+    }
 
     /** Written by the security chain, before any controller is reached. */
     @Test
@@ -60,7 +70,7 @@ class ErrorContractTest extends AbstractIntegrationTest {
      */
     @Test
     void malformedPathVariableIs400NotServerError() throws Exception {
-        String token = mintAccessToken("worker1");
+        String token = mintAccessToken(user(Role.WORKER).getUsername());
 
         mockMvc.perform(get("/api/v1/sites/not-a-uuid").header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
