@@ -1,0 +1,275 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Shift endpoints
+  version: "1.0"
+  description: >
+    Contract for SCRUM-159 (US-02: create a shift with workers, tasks and intensity).
+    Every operation is site-scoped: the caller must be a member of {siteId}
+    (ADMIN excepted), enforced the same way as the existing /api/v1/sites endpoints —
+    see SiteAccessEvaluator. A shift can be created with zero assignments and staffed
+    afterward via the assignments endpoint.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sites/{siteId}/shifts:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: listShifts
+      summary: List shifts for a site
+      responses:
+        "200":
+          description: Shifts for this site, most recently created first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Shift"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createShift
+      summary: Create a shift for this site
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftCreateRequest"
+      responses:
+        "201":
+          description: The created shift, status PLANNED, including any assignments given at creation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Caller is not a member of {siteId} — creating a shift for a site you do not
+            belong to is rejected the same way reading one is (SCRUM-156 / SCRUM-160).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    get:
+      operationId: getShift
+      summary: Read one shift, including its assignments
+      responses:
+        "200":
+          description: The shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/assignments:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: addShiftAssignment
+      summary: Assign one more worker to an existing shift
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftAssignmentCreate"
+      responses:
+        "201":
+          description: The full, updated shift with the new assignment included.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: The request body failed validation (e.g. endsAt before startsAt).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller is authenticated but not a member of {siteId}.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # Mirrors ErrorResponse.java exactly — every endpoint in this API, including these
+    # ones, returns errors in this one shape.
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    ShiftStatus:
+      type: string
+      enum: [PLANNED, ACTIVE, CLOSED]
+      description: Server-controlled. A client cannot set this directly at creation — every shift is created as PLANNED.
+
+    Intensity:
+      type: string
+      enum: [LIGHT, MODERATE, HEAVY]
+      description: >
+        Fixed set only — never free text. Drives the heat-rest policy engine
+        downstream, so an unrecognised value must be rejected, not guessed at.
+
+    ShiftAssignment:
+      type: object
+      required: [id, workerId, intensity]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        taskName:
+          type: string
+          nullable: true
+          maxLength: 120
+        intensity:
+          $ref: "#/components/schemas/Intensity"
+        acclimatisationDay:
+          type: integer
+          minimum: 1
+          maximum: 7
+          nullable: true
+          description: Which of the 7 required ramp-up days this worker is on. Omitted for a fully acclimatised worker.
+
+    ShiftAssignmentCreate:
+      type: object
+      required: [workerId, intensity]
+      properties:
+        workerId:
+          type: string
+          format: uuid
+        taskName:
+          type: string
+          maxLength: 120
+        intensity:
+          $ref: "#/components/schemas/Intensity"
+        acclimatisationDay:
+          type: integer
+          minimum: 1
+          maximum: 7
+
+    Shift:
+      type: object
+      required: [id, siteId, startsAt, endsAt, status, assignments]
+      properties:
+        id:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ShiftStatus"
+        assignments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShiftAssignment"
+
+    ShiftCreateRequest:
+      type: object
+      required: [startsAt, endsAt]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        assignments:
+          type: array
+          default: []
+          description: Optional. A shift may be created empty and staffed later via the assignments endpoint.
+          items:
+            $ref: "#/components/schemas/ShiftAssignmentCreate"
