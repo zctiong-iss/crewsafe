@@ -1,0 +1,260 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Shift view and readiness endpoints
+  version: "1.0"
+  description: >
+    Contract for SCRUM-162 (US-03: a worker views their shift and submits readiness
+    flags). Unlike docs/api/shift.yaml (SCRUM-159, the supervisor/web CRUD surface),
+    every operation here is scoped to the calling worker via the bearer token, not to
+    a {siteId} or {workerId} path parameter — a worker only ever sees or acts on their
+    own assignment. This is deliberate: neither endpoint accepts a workerId anywhere
+    in the request, so there is no field for one worker to submit on behalf of
+    another. See the 403 case on POST /shifts/{shiftId}/readiness below.
+
+    No field on the readiness request is free text. Every value is a boolean or a
+    fixed enum — see ReadinessSubmissionRequest. This is a hard safety requirement
+    (a worker must never be able to type an actual medical detail), not a style
+    preference.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/shifts/me:
+    get:
+      operationId: getMyShift
+      summary: The caller's current or next shift
+      description: >
+        Any authenticated WORKER. Not site-scoped — the server resolves the caller's
+        own assignment from the bearer token, the same way GET /api/v1/me does.
+        Returns the shift whose window contains now, or failing that the soonest
+        upcoming one. Includes only the caller's own task/intensity/acclimatisation
+        details, never other workers' assignments on the same shift.
+      responses:
+        "200":
+          description: >
+            The caller's current-or-next shift, or a null shift if none is scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyShiftResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is authenticated but not a WORKER.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/shifts/{shiftId}/readiness:
+    parameters:
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: submitReadiness
+      summary: Submit a readiness check for the caller's own assignment on this shift
+      description: >
+        Only the WORKER whose ShiftAssignment this shift belongs to may submit for
+        it — there is no workerId field to override that; the assignment is resolved
+        from shiftId plus the bearer token. Append-only: every call creates a new
+        submission, it never edits a prior one. The most recent submission for a
+        given shift/worker is what GET /api/v1/shifts/me.latestReadiness reflects
+        (latest-wins on read).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadinessSubmissionRequest"
+      responses:
+        "201":
+          description: The recorded submission, including its server-set submittedAt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessSubmission"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Caller is authenticated but either not a WORKER, or has no ShiftAssignment
+            on this shift — the same 403 covers "not your shift" and "you are trying
+            to submit for another worker's assignment" (e.g. worker B calling this for
+            a shift that only worker A is assigned to). The server never reveals which
+            case applies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No shift with this id exists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: The request body failed validation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # Duplicated from docs/api/shift.yaml rather than $ref'd across files: this file
+    # needs to stand alone and be mockable on its own (shift.yaml isn't even merged to
+    # main yet — see contract/scrum-159-shift-openapi), and the two contracts serve
+    # different audiences (web/supervisor CRUD vs. mobile/worker view+submit).
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    Intensity:
+      type: string
+      enum: [LIGHT, MODERATE, HEAVY]
+      description: >
+        Fixed set only — never free text. Mirrors docs/api/shift.yaml's Intensity
+        exactly; drives the heat-rest policy engine downstream.
+
+    MyShiftAssignmentView:
+      type: object
+      required: [taskName, intensity]
+      properties:
+        taskName:
+          type: string
+          nullable: true
+          maxLength: 120
+        intensity:
+          $ref: "#/components/schemas/Intensity"
+        acclimatisationDay:
+          type: integer
+          minimum: 1
+          maximum: 7
+          nullable: true
+          description: Which of the 7 required ramp-up days this worker is on. Omitted for a fully acclimatised worker.
+
+    MyShiftResponse:
+      type: object
+      properties:
+        shift:
+          type: object
+          nullable: true
+          description: Null when the caller has no current or upcoming shift.
+          allOf:
+            - type: object
+              required: [shiftId, siteId, startsAt, endsAt, status, assignment]
+              properties:
+                shiftId:
+                  type: string
+                  format: uuid
+                siteId:
+                  type: string
+                  format: uuid
+                startsAt:
+                  type: string
+                  format: date-time
+                endsAt:
+                  type: string
+                  format: date-time
+                status:
+                  type: string
+                  enum: [PLANNED, ACTIVE, CLOSED]
+                  description: Mirrors docs/api/shift.yaml's ShiftStatus. Server-controlled.
+                assignment:
+                  $ref: "#/components/schemas/MyShiftAssignmentView"
+                latestReadiness:
+                  type: object
+                  nullable: true
+                  description: The most recent readiness submission for this shift, or null if none yet.
+                  allOf:
+                    - $ref: "#/components/schemas/ReadinessSubmission"
+
+    SymptomFlag:
+      type: string
+      enum: [NONE, DIZZINESS, NAUSEA, HEADACHE, FATIGUE, MUSCLE_CRAMPS, OTHER]
+      description: >
+        Fixed, closed set — never free text. OTHER flags "something else, unspecified";
+        it never carries a detail string. NONE is mutually exclusive with every other
+        value in the same submission (enforced server-side, not expressible in this
+        schema alone).
+
+    ReadinessSubmissionRequest:
+      type: object
+      required: [fitToWork, adequateSleep, adequateHydration, symptoms]
+      properties:
+        fitToWork:
+          type: boolean
+          description: Self-declared overall fitness to work this shift.
+        adequateSleep:
+          type: boolean
+        adequateHydration:
+          type: boolean
+        symptoms:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/SymptomFlag"
+
+    ReadinessSubmission:
+      type: object
+      required: [id, shiftId, fitToWork, adequateSleep, adequateHydration, symptoms, submittedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        fitToWork:
+          type: boolean
+        adequateSleep:
+          type: boolean
+        adequateHydration:
+          type: boolean
+        symptoms:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymptomFlag"
+        submittedAt:
+          type: string
+          format: date-time
+          description: Server-set. Each submission is immutable and append-only — never overwritten.
