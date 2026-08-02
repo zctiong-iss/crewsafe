@@ -21,6 +21,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -92,7 +94,7 @@ class ActionDispatchControllerTest {
     @Test
     @WithMockUser(roles = "SUPERVISOR")
     void testDispatchAction_Success() throws Exception {
-        when(actionDispatchService.dispatchAction(eq(approvalId), eq(workerId), eq("REST_10_MIN"), any()))
+        when(actionDispatchService.dispatchAction(eq(approvalId), eq(workerId), eq("REST_10_MIN"), any(), any(CrewSafeUserPrincipal.class)))
                 .thenReturn(dispatch);
 
         DispatchActionRequest request = DispatchActionRequest.builder()
@@ -131,7 +133,7 @@ class ActionDispatchControllerTest {
     @WithMockUser(roles = "WORKER")
     void testAcknowledgeDispatch_Success() throws Exception {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
-        when(actionDispatchService.acknowledgeDispatch(eq(dispatchId))).thenReturn(dispatch);
+        when(actionDispatchService.acknowledgeDispatch(eq(dispatchId), any(CrewSafeUserPrincipal.class))).thenReturn(dispatch);
 
         mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/acknowledge"))
                 .andDo(print())
@@ -151,7 +153,7 @@ class ActionDispatchControllerTest {
     void testCompleteDispatch_Success() throws Exception {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
         dispatch.setEndTime(Instant.now());
-        when(actionDispatchService.completeDispatch(eq(dispatchId))).thenReturn(dispatch);
+        when(actionDispatchService.completeDispatch(eq(dispatchId), any(CrewSafeUserPrincipal.class))).thenReturn(dispatch);
 
         mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/complete"))
                 .andDo(print())
@@ -176,7 +178,7 @@ class ActionDispatchControllerTest {
     @Test
     @WithMockUser(roles = "WORKER")
     void testGetPendingDispatchesForWorker_Success() throws Exception {
-        when(actionDispatchService.getPendingDispatchesForWorker(eq(workerId)))
+        when(actionDispatchService.getPendingDispatchesForWorker(eq(workerId), any(CrewSafeUserPrincipal.class)))
                 .thenReturn(List.of(dispatch));
 
         mockMvc.perform(get("/api/action-dispatch/worker/" + workerId + "/pending"))
