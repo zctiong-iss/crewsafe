@@ -27,6 +27,38 @@ and you land in the tab set for that role.
 > **Your phone and your computer must be on the same Wi-Fi network.** That is the only
 > requirement for the mock path.
 
+### On an Android emulator
+
+```bash
+npm run android
+```
+
+Starts Metro and opens the app on whichever emulator `adb` can see. What you need first:
+
+- **Android Studio** with at least one AVD created, and that emulator **already running**
+  (`adb devices` should list it). Any recent Play-image device works.
+- **`ANDROID_HOME`** pointing at your SDK, and `platform-tools` on `PATH` so `adb` resolves.
+  Android Studio sets both on a standard install.
+
+Expo Go is installed onto the emulator automatically if it is missing. If it is present but
+**older than the project's SDK**, Expo replaces it — an Expo Go built for SDK 54 cannot run
+an SDK 57 project, and the reinstall is a one-off per emulator image.
+
+The emulator reaches Metro through `adb reverse`, which Expo sets up itself. Note that its
+address for your machine is **`10.0.2.2`**, not `localhost` — see
+[the backend section](#setup) if you point the app at a real API.
+
+### Why Metro runs on port 8082
+
+The `start`, `android` and `ios` scripts all pass `--port 8082`. Metro's default, 8081, is a
+crowded port — Apache ships on it in several bundles (XAMPP, and the `httpd` inside EDB
+Postgres Enterprise Manager) — and Metro loses that contest *silently*: it binds `[::]` in
+dual-stack mode, so a rival bound to `0.0.0.0:8081` takes IPv4 while Metro keeps IPv6. The
+device then talks to the wrong server and reports **"Failed to download remote update"**,
+which points at nothing useful.
+
+`web:pkce` deliberately stays on 5173, which is a registered Cognito callback.
+
 ### Verifying the build
 
 ```bash
@@ -307,10 +339,13 @@ derived from HTTP status.
 
 ## Known limitations
 
-- **Nothing here has been run on a device by me.** Verification is `tsc`, both platform
-  bundles, `expo-doctor`, and executable specs for the logic (idempotency, validation
-  boundaries, weather classification, persistence migration, race guards). Rendering,
-  gestures and animation *feel* are unverified.
+- **Verified to launch, not verified visually.** The app bundles and runs in Expo Go on an
+  Android emulator (SDK 57, Android 15). Beyond that, verification is `tsc`, both platform
+  bundles, `expo-doctor`, and executable specs for the logic — idempotency, validation
+  boundaries, weather classification, persistence migration, race guards. What remains
+  unchecked is judgement, not correctness: Gelasio's rendering at large text sizes, whether
+  the stop-work banner actually reads in direct sun, and whether the animation rates feel
+  right. iOS has never been run at all.
 - **Offline queueing is out of scope** (SCRUM-130). The idempotency key is the groundwork.
 - **Reactotron is not wired.** It needs host configuration to reach a phone; nothing in the
   app depends on it.
@@ -325,6 +360,9 @@ derived from HTTP status.
 
 | Symptom | Cause |
 |---|---|
+| *"Failed to download remote update"* in Expo Go | Something else owns Metro's port. The scripts use 8082 for this reason; if 8082 is also taken, pass another `--port`. `Get-NetTCPConnection -LocalPort 8082 -State Listen` names the owner on Windows |
+| Expo Go opens then immediately errors on the emulator | Expo Go is older than the project's SDK. Expo reinstalls it automatically — let it finish and it will not recur on that image |
+| `npm run android` says no devices | The emulator is not running yet. Start it from Android Studio's Device Manager first; `adb devices` must list it |
 | Network error in a Cognito mode | `EXPO_PUBLIC_API_BASE_URL` is `localhost`. Use your LAN IP |
 | *"Account not set up"* right after a correct password | Cognito accepted you but there is no `app_user` row. The account needs provisioning |
 | *"This account still has its temporary password"* | Every account starts admin-created. Set a permanent password in the AWS Console first |

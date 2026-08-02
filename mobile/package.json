@@ -62,10 +62,20 @@
       "react-native-worklets": "$react-native-worklets"
     }
   },
+  "//port": [
+    "Metro runs on 8082, not its default 8081.",
+    "8081 is a crowded port — Apache ships on it in several bundles (XAMPP, and the httpd",
+    "inside EDB Postgres Enterprise Manager), and Metro loses that fight silently rather",
+    "than loudly: it binds [::] in dual-stack mode, so a rival bound to 0.0.0.0:8081 takes",
+    "IPv4 while Metro keeps IPv6. A phone or emulator then reaches the wrong server and",
+    "reports 'Failed to download remote update', which points at nothing useful.",
+    "Moving off 8081 costs nothing and removes the whole class of problem.",
+    "web:pkce is deliberately NOT moved — see its own note below."
+  ],
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "start": "expo start --port 8082",
+    "android": "expo start --android --port 8082",
+    "ios": "expo start --ios --port 8082",
     "web": "expo start --web",
     "//web:pkce": "Port 5173 is not cosmetic — it is the callback already registered on the Cognito web client, so AUTH_MODE=cognito-pkce works here with no infrastructure change.",
     "web:pkce": "expo start --web --port 5173",
