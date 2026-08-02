@@ -27,6 +27,38 @@ and you land in the tab set for that role.
 > **Your phone and your computer must be on the same Wi-Fi network.** That is the only
 > requirement for the mock path.
 
+### Running Metro
+
+`--port 8082` is already in the scripts, so no flag is needed — plain `npm start` is enough.
+[Why 8082](#why-metro-runs-on-port-8082) matters more than it looks.
+
+| Command | Does |
+|---|---|
+| `npm start` | Metro on 8082. Then press **`a`** for Android, or scan the QR with Expo Go |
+| `npm run android` | Metro on 8082 **and** launches the emulator, in one step |
+| `npm run ios` | Same, for an iOS simulator (macOS only) |
+
+Once Metro is running, in that terminal:
+
+| Key | |
+|---|---|
+| `a` | Open on Android |
+| `r` | Reload the app |
+| `j` | Open the debugger |
+| `Ctrl+C` | Stop Metro |
+
+`Ctrl+M` inside the emulator window opens the React Native dev menu.
+
+**If Metro says the port is in use**, something else took 8082. Name the owner:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8082 -State Listen |
+  ForEach-Object { Get-Process -Id $_.OwningProcess }
+```
+
+Metro will also simply offer the next free port, and accepting that is fine — it only
+changes the URL the device connects to, and Expo rewrites the QR code to match.
+
 ### On an Android emulator
 
 ```bash
