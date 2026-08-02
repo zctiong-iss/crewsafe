@@ -89,10 +89,15 @@ Hand-applied documents, not Terraform-managed resources — the same manual step
 SCRUM-155, SCRUM-173, SCRUM-174, and SCRUM-175 runbooks describe. **Merging this component changes
 nothing in AWS until these are attached**; a plan dispatched before them fails with `AccessDenied`.
 
-| Role | Inline policy name | Document |
-| --- | --- | --- |
-| `CrewSafeGitHubTerraformPlanRole` | `CrewSafeComputeTerraformPlan` | [`iam/plan-role-policy.json`](../../infra/terraform/compute/iam/plan-role-policy.json) |
-| `CrewSafeGitHubTerraformApplyRole` | `CrewSafeComputeTerraformApply` | [`iam/apply-role-policy.json`](../../infra/terraform/compute/iam/apply-role-policy.json) |
+| Role | Policy name | Attach as | Document |
+| --- | --- | --- | --- |
+| `CrewSafeGitHubTerraformPlanRole` | `CrewSafeComputeTerraformPlan` | **inline** | [`iam/plan-role-policy.json`](../../infra/terraform/compute/iam/plan-role-policy.json) |
+| `CrewSafeGitHubTerraformApplyRole` | `CrewSafeComputeTerraformApply` | **customer-managed** | [`iam/apply-role-policy.json`](../../infra/terraform/compute/iam/apply-role-policy.json) |
+
+**The two are attached differently, and that is not an oversight — see the budget note below.** The
+apply document was the one that exhausted the role's inline-policy budget, so it is attached as a
+customer-managed policy instead. The document is unchanged either way; only the attachment
+mechanism differs.
 
 > **The policy name is load-bearing. Get it exactly right.** Attaching an inline policy is an
 > **upsert**: saving one whose name already exists silently *replaces* it, with no warning and no
@@ -113,11 +118,35 @@ attaching. It appears eight times**, across `ManageApplicationLogGroup` (twice),
 `ManageCrossOriginParameter`, `PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the
 three service-linked-role statements. The plan policy contains no account id.
 
-> **Inline policy budget.** A role's inline policies share a 10,240-character limit. This component
-> adds ~2.2 KB to the plan role and ~6.2 KB to the apply role, which is the largest single
-> contribution so far — it manages three AWS services the project has not used before. If the apply
-> role is near its limit, convert the older components' policies to customer-managed policies rather
-> than trimming this one.
+> **Inline policy budget — this component is the one that broke it.** A role's inline policies share
+> a **10,240 non-whitespace character** limit, counted across *all* of them. Attaching this
+> component's apply document inline was rejected with *"Your policy exceeds the non-whitespace
+> character limit of 10240."*
+>
+> Measured across the six components: compute **4,624**, database 2,226, network 1,540, cognito
+> 1,288, secrets 1,197, bootstrap/state 1,038 — **11,913 total**, over by 1,673. Compute is 39% of it
+> alone, because it manages four services the project had not used before. The plan role is
+> unaffected at 4,833.
+>
+> **Resolution: the apply document is attached as a customer-managed policy, not inline.** Managed
+> policies do not count toward the inline budget; each gets its own 6,144-char limit and a role can
+> carry ten. That puts inline back to **7,289 / 10,240** and compute at **4,624 / 6,144**.
+>
+> Trimming compute was rejected. Reaching 10,240 needs a third of the document cut, and the only
+> compressible part is the enumerated read-only verbs — collapsing them to `ec2:Describe*` and
+> friends widens read access across every resource in the account to buy back characters. It also
+> only defers the problem: the next component re-breaks a budget sitting at 7,289.
+>
+> **The remaining 7,289 is still finite.** When the next component cannot fit, convert an existing
+> apply policy to customer-managed rather than trimming — the mechanical change below, applied to
+> whichever document is largest.
+
+> **Managed attachment does not have the silent-upsert failure mode.** The warning above about
+> name collisions destroying another component's permissions applies to **inline** policies only.
+> Creating a customer-managed policy whose name already exists **fails with an error** instead of
+> replacing it. Managed and inline names live in separate namespaces, so this component's
+> `…TerraformPlan` (inline) and `…TerraformApply` (managed) coexist without conflict — but they are
+> **removed** differently: detach-then-delete for the managed one, delete for the inline one.
 
 ### 3.1 Update the plan role
 
@@ -133,8 +162,12 @@ three service-linked-role statements. The plan policy contains no account id.
 
 ### 3.2 Update the apply role
 
-1. Return to **IAM → Roles** and select `CrewSafeGitHubTerraformApplyRole`.
-2. Create an inline policy from `infra/terraform/compute/iam/apply-role-policy.json`.
+This one is **customer-managed**, so it is created first and attached second. Do not use **Create
+inline policy** here — it will be rejected on the character limit.
+
+1. Open **IAM → Policies → Create policy**, then the **JSON** editor.
+2. Paste the complete reviewed document from `infra/terraform/compute/iam/apply-role-policy.json`,
+   with `<ACCOUNT_ID>` already substituted.
 3. Confirm `PassOnlyTheTwoRolesTheSecretsComponentPublished` names the **two exact role ARNs** the
    secrets component published — not a wildcard — **and carries the `iam:PassedToService` condition
    naming `ecs-tasks.amazonaws.com`**. Without the condition, the apply role can hand those roles to
@@ -150,7 +183,12 @@ three service-linked-role statements. The plan policy contains no account id.
    warning below.
 8. Confirm it grants **no** `secretsmanager:GetSecretValue`, **no** `logs:GetLogEvents`, and **no**
    `ecs:ExecuteCommand`.
-9. Name the policy `CrewSafeComputeTerraformApply` and save.
+9. Name the policy `CrewSafeComputeTerraformApply` and create it.
+10. Go to **IAM → Roles → `CrewSafeGitHubTerraformApplyRole` → Add permissions → Attach policies**,
+    filter by **Customer managed**, select `CrewSafeComputeTerraformApply`, and attach.
+11. Confirm on the role's **Permissions** tab that it now appears under attached policies. Creating
+    the policy without attaching it leaves the role unchanged, and the first plan still fails with
+    `AccessDenied` — with nothing on the policy itself to indicate why.
 
 > **`logs:DescribeLogGroups` accepts no resource scope, and scoping it fails the apply.** Inherited
 > verbatim from SCRUM-175, which lost apply run 30702539990 to exactly this. The CloudWatch Logs API
@@ -353,6 +391,27 @@ Resolution, decided at the plan review: this component publishes **`cluster_arn`
 Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
 
 When SCRUM-191 lands, delete this section.
+
+### Two accepted Trivy exemptions
+
+The `security` job scans `infra/terraform` at HIGH,CRITICAL and fails the build. Two findings on
+this component are suppressed inline with `#trivy:ignore:` and the reasoning beside them in
+`infra/terraform/compute/main.tf` — the same convention `network` and `bootstrap/state` already use.
+Neither is a scanner false positive; both are decisions.
+
+| Finding | Where | Why it is accepted |
+| --- | --- | --- |
+| `AWS-0054` — listener does not use HTTPS | `aws_lb_listener.backend` | The rule reads `protocol` without reading `internal`. What it asks for is unobtainable: no publicly trusted certificate can be issued for the `*.elb.amazonaws.com` name this listener answers on. That constraint is the reason the load balancer is internal and the reason the edge is a CloudFront VPC origin. **If the load balancer ever becomes public this exemption is wrong** — the source guard forbids `internal = false` to keep the two from drifting apart. |
+| `AWS-0011` — distribution has no WAF | `aws_cloudfront_distribution.main` | Production edge control, per-account monthly cost, rule set needs tuning against real traffic. This is a single-task dev environment whose only client is the team; an untuned managed rule group buys a green scan and false blocks. Revisit when a production environment is specified. |
+
+The third finding the scan first raised, `AWS-0052` (invalid header fields), was **fixed rather than
+suppressed** — `drop_invalid_header_fields = true`, asserted in the `boundary` run block. The
+distribution forwards viewer headers verbatim under `Managed-AllViewerExceptHostHeader`, so this is
+the last hop that can reject a malformed one before the task sees it.
+
+Adding a resource that trips a new HIGH or CRITICAL means either fixing it or adding a third row
+here with the same standard of reasoning. `trivy config --severity CRITICAL,HIGH --exit-code 1
+infra/terraform/` reproduces the CI job locally and needs no AWS credentials.
 
 ---
 
