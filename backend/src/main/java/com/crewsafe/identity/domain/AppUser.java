@@ -9,6 +9,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -23,13 +25,23 @@ import java.util.UUID;
  * PostgreSQL and {@code org.springframework.security.core.userdetails.User} already occupies
  * the obvious name.
  *
+ * <p>{@code @Builder} (backed by {@code @AllArgsConstructor}) exists alongside the business
+ * constructor below for test code that needs to stub a partially-populated instance (e.g.
+ * only {@code id} and {@code role}) rather than a fully-formed, persistable one — the same
+ * {@code @NoArgsConstructor @AllArgsConstructor @Builder} pattern already used by {@code
+ * Approval}, {@code Recommendation} and {@code ActionDispatch}. It does not replace the
+ * constructor: production code that creates a real user should keep using it, since that is
+ * what applies the {@code status = ACTIVE} default.
+ *
  * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "app_user")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class AppUser {
 
     @Id
