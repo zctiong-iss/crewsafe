@@ -28,14 +28,18 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * SCRUM-160: create/list/read a shift and add an assignment to one, plus the site
- * scoping and audit behaviour called for in the implementation plan.
+ * scoping and audit behaviour called for in the implementation plan. Extended by
+ * SCRUM-159/160-fix with the two gaps found building SCRUM-161 against the original
+ * contract: correct/delete a shift, correct/remove an assignment.
  *
  * <p>{@link #supervisorFromAnotherSiteCannotCreateAShift()} is the negative *write* test
  * SCRUM-156 formally moved here (see the SCRUM-156↔SCRUM-160 Jira link): SCRUM-156 only
@@ -114,11 +118,56 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         return body;
     }
 
+    /** ShiftAssignmentUpdateRequest has no workerId field at all, unlike the create shape. */
+    private Map<String, Object> assignmentUpdateBody(String taskName, String intensity,
+                                                       Integer acclimatisationDay) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (taskName != null) {
+            body.put("taskName", taskName);
+        }
+        if (intensity != null) {
+            body.put("intensity", intensity);
+        }
+        if (acclimatisationDay != null) {
+            body.put("acclimatisationDay", acclimatisationDay);
+        }
+        return body;
+    }
+
     private ResultActions postJson(String url, String token, Object body) throws Exception {
         return mockMvc.perform(post(url)
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(body)));
+    }
+
+    private ResultActions patchJson(String url, String token, Object body) throws Exception {
+        return mockMvc.perform(patch(url)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)));
+    }
+
+    private ResultActions deleteAuthenticated(String url, String token) throws Exception {
+        return mockMvc.perform(delete(url).header("Authorization", "Bearer " + token));
+    }
+
+    private String createShift(Instant startsAt, Instant endsAt) throws Exception {
+        return objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                                        shiftBody(startsAt, endsAt, List.of()))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("id").asText();
+    }
+
+    private String addAssignment(String shiftId, String intensity) throws Exception {
+        return objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments",
+                                        supervisorAToken, assignmentBody(workerA.getId(), "Original task", intensity, null))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("assignments").get(0).get("id").asText();
     }
 
     // --- create / read round-trip ---
@@ -329,5 +378,241 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID() + "/assignments",
                         supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
                 .andExpect(status().isNotFound());
+    }
+
+    // --- SCRUM-159/160-fix: correct a shift ---
+
+    @Test
+    void supervisorCorrectsAShiftsTimes() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        Instant correctedStartsAt = startsAt.plus(1, ChronoUnit.HOURS);
+        Instant correctedEndsAt = endsAt.plus(1, ChronoUnit.HOURS);
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorAToken,
+                        shiftBody(correctedStartsAt, correctedEndsAt, null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(shiftId))
+                .andExpect(jsonPath("$.startsAt").value(correctedStartsAt.toString()))
+                .andExpect(jsonPath("$.endsAt").value(correctedEndsAt.toString()));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_UPDATED))
+                .anyMatch(e -> UUID.fromString(shiftId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    @Test
+    void correctingAShiftWithEndsAtBeforeStartsAtIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorAToken,
+                        shiftBody(endsAt, startsAt, null))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void correctingAnUnknownShiftIs404() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID(), supervisorAToken,
+                        shiftBody(startsAt, endsAt, null))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void workerIsForbiddenFromCorrectingAShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, workerAToken,
+                        shiftBody(startsAt, endsAt, null))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorFromAnotherSiteCannotCorrectAShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorBToken,
+                        shiftBody(startsAt, endsAt, null))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-159/160-fix: delete a shift ---
+
+    @Test
+    void supervisorDeletesAShiftAndItsAssignments() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        addAssignment(shiftId, "LIGHT");
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorAToken)
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId)
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isNotFound());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_DELETED))
+                .anyMatch(e -> UUID.fromString(shiftId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    @Test
+    void deletingAnUnknownShiftIs404() throws Exception {
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID(), supervisorAToken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void workerIsForbiddenFromDeletingAShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, workerAToken)
+                .andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-159/160-fix: correct an assignment ---
+
+    @Test
+    void supervisorCorrectsAnAssignmentsTaskAndIntensity() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments/" + assignmentId,
+                        supervisorAToken, assignmentUpdateBody("Corrected task", "HEAVY", 2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignments.length()").value(1))
+                .andExpect(jsonPath("$.assignments[0].id").value(assignmentId))
+                .andExpect(jsonPath("$.assignments[0].workerId").value(workerA.getId().toString()))
+                .andExpect(jsonPath("$.assignments[0].taskName").value("Corrected task"))
+                .andExpect(jsonPath("$.assignments[0].intensity").value("HEAVY"))
+                .andExpect(jsonPath("$.assignments[0].acclimatisationDay").value(2));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_UPDATED))
+                .anyMatch(e -> UUID.fromString(assignmentId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    @Test
+    void correctingAnAssignmentWithoutIntensityIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments/" + assignmentId,
+                        supervisorAToken, assignmentUpdateBody("Corrected task", null, null))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void correctingAnUnknownAssignmentIs404() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments/" + UUID.randomUUID(),
+                        supervisorAToken, assignmentUpdateBody(null, "LIGHT", null))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void correctingAnAssignmentOnAnUnknownShiftIs404() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID() + "/assignments/" + assignmentId,
+                        supervisorAToken, assignmentUpdateBody(null, "LIGHT", null))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void workerIsForbiddenFromCorrectingAnAssignment() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments/" + assignmentId,
+                        workerAToken, assignmentUpdateBody(null, "LIGHT", null))
+                .andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-159/160-fix: remove an assignment ---
+
+    @Test
+    void supervisorRemovesAnAssignment() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId
+                        + "/assignments/" + assignmentId, supervisorAToken)
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId)
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignments.length()").value(0));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_REMOVED))
+                .anyMatch(e -> UUID.fromString(assignmentId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    @Test
+    void removingAnUnknownAssignmentIs404() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId
+                        + "/assignments/" + UUID.randomUUID(), supervisorAToken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void removingAnAssignmentFromAnUnknownShiftIs404() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID()
+                        + "/assignments/" + assignmentId, supervisorAToken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void workerIsForbiddenFromRemovingAnAssignment() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String assignmentId = addAssignment(shiftId, "MODERATE");
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId
+                        + "/assignments/" + assignmentId, workerAToken)
+                .andExpect(status().isForbidden());
     }
 }

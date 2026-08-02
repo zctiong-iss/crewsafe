@@ -2,10 +2,12 @@ package com.crewsafe.operation.domain;
 
 import com.crewsafe.identity.domain.AppUser;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -17,10 +19,11 @@ import java.util.UUID;
  */
 @Entity
 @Table(name = "action_dispatch")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
+@Getter
+@Setter
 @Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor
 public class ActionDispatch {
     @Id
     private UUID id;

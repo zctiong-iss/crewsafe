@@ -1,5 +1,6 @@
 package com.crewsafe.operation.api;
 
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.service.ActionDispatchService;
 import jakarta.validation.Valid;
@@ -8,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,14 +32,16 @@ public class ActionDispatchController {
     @PostMapping
     @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<ActionDispatchResponse> dispatchAction(
-            @Valid @RequestBody DispatchActionRequest request) {
+            @Valid @RequestBody DispatchActionRequest request,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         log.info("Dispatching action: {} to worker: {}", request.getActionCode(), request.getWorkerId());
 
         ActionDispatch dispatch = actionDispatchService.dispatchAction(
                 request.getApprovalId(),
                 request.getWorkerId(),
                 request.getActionCode(),
-                request.getInstruction()
+                request.getInstruction(),
+                principal
         );
 
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -47,20 +51,22 @@ public class ActionDispatchController {
     @PostMapping("/{dispatchId}/acknowledge")
     @PreAuthorize("hasRole('WORKER')")
     public ResponseEntity<ActionDispatchResponse> acknowledgeDispatch(
-            @PathVariable UUID dispatchId) {
+            @PathVariable UUID dispatchId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         log.info("Acknowledging action dispatch: {}", dispatchId);
 
-        ActionDispatch dispatch = actionDispatchService.acknowledgeDispatch(dispatchId);
+        ActionDispatch dispatch = actionDispatchService.acknowledgeDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));
     }
 
     @PostMapping("/{dispatchId}/complete")
     @PreAuthorize("hasRole('WORKER')")
     public ResponseEntity<ActionDispatchResponse> completeDispatch(
-            @PathVariable UUID dispatchId) {
+            @PathVariable UUID dispatchId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         log.info("Completing action dispatch: {}", dispatchId);
 
-        ActionDispatch dispatch = actionDispatchService.completeDispatch(dispatchId);
+        ActionDispatch dispatch = actionDispatchService.completeDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));
     }
 
@@ -81,10 +87,11 @@ public class ActionDispatchController {
     @GetMapping("/worker/{workerId}/pending")
     @PreAuthorize("hasRole('WORKER')")
     public ResponseEntity<List<ActionDispatchResponse>> getPendingDispatchesForWorker(
-            @PathVariable UUID workerId) {
+            @PathVariable UUID workerId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         log.info("Fetching pending dispatches for worker: {}", workerId);
 
-        List<ActionDispatch> dispatches = actionDispatchService.getPendingDispatchesForWorker(workerId);
+        List<ActionDispatch> dispatches = actionDispatchService.getPendingDispatchesForWorker(workerId, principal);
         List<ActionDispatchResponse> responses = dispatches.stream()
                 .map(ActionDispatchResponse::fromEntity)
                 .toList();

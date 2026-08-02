@@ -1,12 +1,17 @@
 package com.crewsafe.operation.service;
 
 import com.crewsafe.common.audit.AuditService;
+import com.crewsafe.identity.domain.AppUser;
+import com.crewsafe.identity.repository.AppUserRepository;
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.ApprovalRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +32,12 @@ public class ActionDispatchService {
 
     private final ActionDispatchRepository actionDispatchRepository;
     private final ApprovalRepository approvalRepository;
+    private final AppUserRepository appUserRepository;
     private final AuditService auditService;
 
     @Transactional
-    public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction) {
+    public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
+                                         @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         Approval approval = approvalRepository.findById(approvalId)
                 .orElseThrow(() -> new IllegalArgumentException("Approval not found: " + approvalId));
 
@@ -38,10 +45,13 @@ public class ActionDispatchService {
             throw new IllegalArgumentException("Can only dispatch actions from approved decisions");
         }
 
+        AppUser worker = appUserRepository.findById(workerId)
+                .orElseThrow(() -> new IllegalArgumentException("Worker not found: " + workerId));
+
         ActionDispatch dispatch = ActionDispatch.builder()
                 .id(UUID.randomUUID())
                 .approval(approval)
-                .worker(approval.getApprover()) // Placeholder: will be resolved properly from AppUser repo
+                .worker(worker)
                 .actionCode(actionCode)
                 .instruction(instruction)
                 .status(ActionDispatch.ActionDispatchStatus.PENDING)
@@ -49,7 +59,7 @@ public class ActionDispatchService {
                 .build();
 
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(null, "ACTION_DISPATCHED", "action_dispatch", saved.getId(),
+        auditService.record(principal.getId(), "ACTION_DISPATCHED", "action_dispatch", saved.getId(),
                 "Action dispatched: " + actionCode + " to worker: " + workerId);
         log.info("Action dispatched: {} to worker: {}", actionCode, workerId);
 
@@ -57,9 +67,14 @@ public class ActionDispatchService {
     }
 
     @Transactional
-    public ActionDispatch acknowledgeDispatch(UUID dispatchId) {
+    public ActionDispatch acknowledgeDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
                 .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+
+        // Authorization: verify the worker owns this dispatch
+        if (!dispatch.getWorker().getId().equals(principal.getId())) {
+            throw new AccessDeniedException("Worker can only acknowledge their own dispatches");
+        }
 
         // Idempotent: if already acknowledged, return existing state
         if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED) {
@@ -68,8 +83,9 @@ public class ActionDispatchService {
         }
 
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
+        dispatch.setStartTime(Instant.now());
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(null, "ACTION_ACKNOWLEDGED", "action_dispatch", saved.getId(),
+        auditService.record(principal.getId(), "ACTION_ACKNOWLEDGED", "action_dispatch", saved.getId(),
                 "Action acknowledged: " + dispatchId);
         log.info("Action dispatch acknowledged: {}", dispatchId);
 
@@ -77,9 +93,14 @@ public class ActionDispatchService {
     }
 
     @Transactional
-    public ActionDispatch completeDispatch(UUID dispatchId) {
+    public ActionDispatch completeDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
                 .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+
+        // Authorization: verify the worker owns this dispatch
+        if (!dispatch.getWorker().getId().equals(principal.getId())) {
+            throw new AccessDeniedException("Worker can only complete their own dispatches");
+        }
 
         // Idempotent: if already completed, return existing state
         if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.COMPLETED) {
@@ -90,7 +111,7 @@ public class ActionDispatchService {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
         dispatch.setEndTime(Instant.now());
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(null, "ACTION_COMPLETED", "action_dispatch", saved.getId(),
+        auditService.record(principal.getId(), "ACTION_COMPLETED", "action_dispatch", saved.getId(),
                 "Action completed: " + dispatchId);
         log.info("Action dispatch completed: {}", dispatchId);
 
@@ -101,7 +122,12 @@ public class ActionDispatchService {
         return actionDispatchRepository.findByApprovalId(approvalId);
     }
 
-    public List<ActionDispatch> getPendingDispatchesForWorker(UUID workerId) {
+    public List<ActionDispatch> getPendingDispatchesForWorker(UUID workerId,
+                                                               @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+        // Authorization: workers can only see their own dispatches
+        if (!workerId.equals(principal.getId()) && !principal.getRole().name().equals("ADMIN")) {
+            throw new AccessDeniedException("Workers can only view their own pending dispatches");
+        }
         return actionDispatchRepository.findPendingByWorkerId(workerId);
     }
 

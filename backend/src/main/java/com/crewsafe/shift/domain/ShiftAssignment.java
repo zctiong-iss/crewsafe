@@ -58,6 +58,17 @@ public class ShiftAssignment {
         this.acclimatisationDay = acclimatisationDay;
     }
 
+    /**
+     * The only correction path an assignment has (SCRUM-159/160-fix). {@code workerId} is
+     * deliberately not settable here — reassigning to a different worker is remove this
+     * assignment, add a new one, not an in-place change.
+     */
+    public void correct(String taskName, Intensity intensity, Integer acclimatisationDay) {
+        this.taskName = taskName;
+        this.intensity = intensity;
+        this.acclimatisationDay = acclimatisationDay;
+    }
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
