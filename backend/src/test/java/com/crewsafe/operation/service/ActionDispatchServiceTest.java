@@ -2,6 +2,9 @@ package com.crewsafe.operation.service;
 
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.identity.domain.AppUser;
+import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.repository.AppUserRepository;
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
@@ -36,24 +39,36 @@ class ActionDispatchServiceTest {
     private ApprovalRepository approvalRepository;
 
     @Mock
+    private AppUserRepository appUserRepository;
+
+    @Mock
     private AuditService auditService;
 
     private ActionDispatchService service;
     private UUID approvalId;
     private UUID workerId;
     private UUID dispatchId;
+    private UUID supervisorId;
     private Approval approval;
     private ActionDispatch dispatch;
+    private CrewSafeUserPrincipal principal;
 
     @BeforeEach
     void setUp() {
-        service = new ActionDispatchService(actionDispatchRepository, approvalRepository, auditService);
+        service = new ActionDispatchService(actionDispatchRepository, approvalRepository, appUserRepository, auditService);
         approvalId = UUID.randomUUID();
         workerId = UUID.randomUUID();
+        supervisorId = UUID.randomUUID();
         dispatchId = UUID.randomUUID();
 
+        // Create mock principal for supervisor
+        principal = mock(CrewSafeUserPrincipal.class);
+        when(principal.getId()).thenReturn(supervisorId);
+        when(principal.getRole()).thenReturn(Role.SUPERVISOR);
+
         AppUser approver = AppUser.builder()
-                .id(UUID.randomUUID())
+                .id(supervisorId)
+                .role(Role.SUPERVISOR)
                 .build();
 
         Recommendation recommendation = Recommendation.builder()
@@ -71,6 +86,7 @@ class ActionDispatchServiceTest {
 
         AppUser worker = AppUser.builder()
                 .id(workerId)
+                .role(Role.WORKER)
                 .build();
 
         dispatch = ActionDispatch.builder()
@@ -86,15 +102,17 @@ class ActionDispatchServiceTest {
 
     @Test
     void testDispatchAction_Success() {
+        AppUser worker = AppUser.builder().id(workerId).role(Role.WORKER).build();
         when(approvalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        when(appUserRepository.findById(workerId)).thenReturn(Optional.of(worker));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
 
-        ActionDispatch result = service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take a 10 minute rest");
+        ActionDispatch result = service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take a 10 minute rest", principal);
 
         assertNotNull(result);
         assertEquals("REST_10_MIN", result.getActionCode());
         assertEquals(ActionDispatch.ActionDispatchStatus.PENDING, result.getStatus());
-        verify(auditService).record(isNull(), eq("ACTION_DISPATCHED"), eq("action_dispatch"), eq(result.getId()), any());
+        verify(auditService).record(eq(supervisorId), eq("ACTION_DISPATCHED"), eq("action_dispatch"), eq(result.getId()), any());
     }
 
     @Test
@@ -102,7 +120,7 @@ class ActionDispatchServiceTest {
         when(approvalRepository.findById(approvalId)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest"));
+                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", principal));
     }
 
     @Test
@@ -115,43 +133,53 @@ class ActionDispatchServiceTest {
         when(approvalRepository.findById(approvalId)).thenReturn(Optional.of(unapprovedApproval));
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest"));
+                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", principal));
     }
 
     @Test
     void testAcknowledgeDispatch_Idempotent() {
+        // Create a worker principal
+        CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(workerPrincipal.getId()).thenReturn(workerId);
+        when(workerPrincipal.getRole()).thenReturn(Role.WORKER);
+
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
 
         // First acknowledgement
-        ActionDispatch first = service.acknowledgeDispatch(dispatchId);
+        ActionDispatch first = service.acknowledgeDispatch(dispatchId, workerPrincipal);
         assertEquals(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED, first.getStatus());
 
         // Second acknowledgement - should be idempotent
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
-        ActionDispatch second = service.acknowledgeDispatch(dispatchId);
+        ActionDispatch second = service.acknowledgeDispatch(dispatchId, workerPrincipal);
         assertEquals(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED, second.getStatus());
 
         // Only one audit event should be recorded for the first acknowledgement
-        verify(auditService).record(isNull(), eq("ACTION_ACKNOWLEDGED"), eq("action_dispatch"), eq(dispatchId), any());
+        verify(auditService).record(eq(workerId), eq("ACTION_ACKNOWLEDGED"), eq("action_dispatch"), eq(dispatchId), any());
     }
 
     @Test
     void testCompleteDispatch_Idempotent() {
+        // Create a worker principal
+        CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(workerPrincipal.getId()).thenReturn(workerId);
+        when(workerPrincipal.getRole()).thenReturn(Role.WORKER);
+
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
 
         // First completion
-        ActionDispatch first = service.completeDispatch(dispatchId);
+        ActionDispatch first = service.completeDispatch(dispatchId, workerPrincipal);
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, first.getStatus());
 
         // Second completion - should be idempotent
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
-        ActionDispatch second = service.completeDispatch(dispatchId);
+        ActionDispatch second = service.completeDispatch(dispatchId, workerPrincipal);
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, second.getStatus());
 
         // Only one audit event should be recorded
-        verify(auditService).record(isNull(), eq("ACTION_COMPLETED"), eq("action_dispatch"), eq(dispatchId), any());
+        verify(auditService).record(eq(workerId), eq("ACTION_COMPLETED"), eq("action_dispatch"), eq(dispatchId), any());
     }
 
     @Test
