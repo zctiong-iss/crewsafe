@@ -102,3 +102,74 @@ touched by this PR; each needs its own fix.
 Builds on the already-merged SCRUM-159 (`docs/api/shift.yaml`, PR #42) and SCRUM-160
 (shift backend, PR #43). Both are on `main`; this branch was cut from a fresh `main`
 pull, not from either of those branches.
+
+## Implementation
+
+**2026-08-02 — shipped, PR #49.**
+
+File by file, in plain English:
+
+- **`docs/api/shift.yaml`** — the contract, bumped `1.0` → `1.1`. Added the 5 new
+  routes (`PATCH`/`DELETE` on a shift, `PATCH`/`DELETE` on an assignment,
+  `GET /sites/{siteId}/workers`) and 3 new schemas (`ShiftUpdateRequest`,
+  `ShiftAssignmentUpdateRequest`, `SiteWorker`). Purely additive — nothing existing
+  changed shape.
+- **`Shift.java`** — added `correctTimes(startsAt, endsAt)`. Deliberately narrow: it
+  can only change the time range, not `siteId` or `status` — those stay untouchable
+  through this method on purpose, matching how `SiteMembership` and other entities in
+  this codebase avoid blanket setters.
+- **`ShiftAssignment.java`** — added `correct(taskName, intensity,
+  acclimatisationDay)`. Same idea, and `workerId` is pointedly excluded — reassigning
+  a shift to a different worker is "remove this assignment, add a new one" through
+  the endpoints that already existed from SCRUM-160, not an in-place edit.
+- **`ShiftAssignmentRepository.java`** — two new lookups: `findByIdAndShiftId` (so an
+  assignment id from a different shift correctly comes back "not found" instead of
+  leaking across shifts) and `deleteByShiftId` (bulk-remove every assignment on a
+  shift in one query, used by the shift-delete path).
+- **`AppUserRepository.java`** — one new query, `findBySiteIdAndRoleAndStatus`: given
+  a site, returns only the `AppUser`s who are `ACTIVE` and have role `WORKER` there,
+  sorted by display name. This is the query behind the new worker-picker endpoint.
+- **`ShiftService.java`** — added `updateShift`, `deleteShift`, `updateAssignment`,
+  `removeAssignment`, all `@Transactional`. Two things worth calling out:
+  - `deleteShift` deletes a shift's assignments *before* the shift itself, in the
+    same transaction — `shift_assignment.shift_id` has no `ON DELETE CASCADE`, so the
+    app has to do the deletion in the right order or the shift delete would fail on
+    the foreign key.
+  - The "only write the audit entry after the transaction actually commits" logic
+    that SCRUM-160's Copilot review introduced (an audit entry written inline could
+    otherwise survive a rollback and falsely claim work that never happened) was
+    pulled out into one shared `afterCommit(...)` helper, so all four new
+    write-methods reuse it instead of each repeating the same
+    `TransactionSynchronizationManager` boilerplate.
+- **`ShiftController.java`** — 4 new REST endpoints: `PATCH`/`DELETE .../shifts/
+  {shiftId}`, `PATCH`/`DELETE .../shifts/{shiftId}/assignments/{assignmentId}`. Same
+  rule as shift creation: only `SUPERVISOR`/`SAFETY_MANAGER`/`ADMIN` can call them,
+  and only for a site they belong to (`@siteAccess.canAccess`).
+- **`SiteController.java`** — added `GET /{siteId}/workers`, gated the same way
+  (supervisor/safety-manager/admin only — a worker doesn't need this list). Calls the
+  new repository query and returns just `id` + `displayName`, nothing else, so the
+  picker never receives a row it would have to hide client-side.
+- **`AuditEventType.java`** — 4 new constants: `SHIFT_UPDATED`, `SHIFT_DELETED`,
+  `SHIFT_ASSIGNMENT_UPDATED`, `SHIFT_ASSIGNMENT_REMOVED`.
+- **`ShiftControllerTest.java`** — 18 new cases: correct/delete a shift and correct/
+  remove an assignment, each with a happy path (including an audit-row assertion),
+  a bad-request case, 404 on both the shift leg and the assignment leg, a
+  wrong-role case, and one cross-site-forbidden case representative of the shared
+  `@siteAccess` check.
+- **`SiteWorkersTest.java`** (new file) — 6 cases: role+status filtering,
+  alphabetical ordering, an empty site returns `[]` not an error, a supervisor from
+  another site is forbidden, a worker calling it is forbidden, and unauthenticated
+  is rejected.
+
+### Verification
+
+Full relevant suite run repeatedly across the PR's iterations: `153/153` passing
+(excluding the pre-existing, unrelated `ActionDispatchControllerTest` compile
+failure — see "Two unrelated bugs" above).
+
+### Outcome
+
+PR #49, shipped 2026-08-02. The `AppUser.builder()` fix that blocked local
+verification was pulled out to its own PR (#48), then closed once it turned out
+PR #47 — a separate, pre-existing, unmerged PR — already contained the identical
+fix as part of a larger change set.
