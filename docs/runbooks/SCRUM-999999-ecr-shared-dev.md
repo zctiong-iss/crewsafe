@@ -177,10 +177,10 @@ data "terraform_remote_state" "ecr" {
 
 ## 10. Operational notes and known limitations
 
-- **`image_tag_mutability` is `MUTABLE`**, not `IMMUTABLE`. Every push writes both a commit-SHA
-  tag and `latest` to the same image; `latest` must be rewritable on every subsequent push. This
-  is an accepted trade-off, not an oversight — if per-tag immutability exclusion becomes
-  available and worth the added complexity, revisit.
+- **`image_tag_mutability` is `IMMUTABLE`.** `backend-ci.yml` tags images by commit SHA only —
+  there is no floating `latest`, since an immutable repository rejects a re-push of an existing
+  tag. A consumer that wants "the newest image" resolves it by listing images and sorting on
+  push time, not by pulling a fixed tag.
 - **One statement uses `Resource: "*"`**: `ecr:GetAuthorizationToken`, which the ECR API accepts
   no resource scope for. It is held to one action in one statement, and `ecr.tftest.hcl`'s
   `iam_boundary` run asserts all three of those facts.

@@ -74,15 +74,17 @@ locals {
 # ---------------------------------------------------------------------------
 # Registry
 #
-# One repository. MUTABLE tag mutability is a deliberate trade-off: every push
-# writes both an immutable-in-practice commit-SHA tag and a genuinely mutable
-# `latest` tag to the same image, so the repository as a whole cannot be set to
-# IMMUTABLE without the `latest` tag failing on every push after the first.
+# One repository. IMMUTABLE tags: once a commit-SHA tag is pushed, it can never
+# be silently overwritten - required for AWS-0031 (this repo's Trivy config scan
+# gates on it) and, independent of that gate, the right property for a deployment
+# artifact anyway (a tag always names the exact bytes it named on first push). The
+# CI workflow tags images by commit SHA only - no floating `latest`, which an
+# IMMUTABLE repository would reject on every push after the first.
 # ---------------------------------------------------------------------------
 
 resource "aws_ecr_repository" "backend" {
   name                 = local.repository_name
-  image_tag_mutability = "MUTABLE"
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true

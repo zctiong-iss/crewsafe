@@ -116,6 +116,11 @@ run "entry_shape" {
   }
 
   assert {
+    condition     = aws_ecr_repository.backend.image_tag_mutability == "IMMUTABLE"
+    error_message = "Tags must be immutable, or a pushed image can be silently replaced (AWS-0031)."
+  }
+
+  assert {
     condition     = length(jsondecode(aws_ecr_lifecycle_policy.backend.policy).rules) == 2
     error_message = "The lifecycle policy's rule count changed — review the retention/expiry behavior before accepting."
   }
