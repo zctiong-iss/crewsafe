@@ -58,6 +58,5 @@ jobs:
           REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
           SHA: ${{ github.sha }}
         run: |
-          docker build -t "$REPO:$SHA" -t "$REPO:latest" backend
+          docker build -t "$REPO:$SHA" backend
           docker push "$REPO:$SHA"
-          docker push "$REPO:latest"
