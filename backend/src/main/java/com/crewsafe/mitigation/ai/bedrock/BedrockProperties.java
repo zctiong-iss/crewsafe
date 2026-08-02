@@ -1,9 +1,7 @@
 package com.crewsafe.mitigation.ai.bedrock;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
-@Component
 @ConfigurationProperties(prefix = "crewsafe.bedrock")
 public class BedrockProperties {
     private String region = "ap-southeast-1";
