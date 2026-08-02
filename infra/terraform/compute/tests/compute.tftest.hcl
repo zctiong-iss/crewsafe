@@ -251,6 +251,13 @@ run "boundary" {
     error_message = "The internal load balancer belongs in the private subnets (FR-021)."
   }
 
+  # The distribution forwards viewer headers verbatim, so the load balancer is the
+  # last hop that can reject a malformed one before the application sees it.
+  assert {
+    condition     = aws_lb.main.drop_invalid_header_fields == true
+    error_message = "Non-conforming header fields must be dropped at the load balancer, not passed through to the task."
+  }
+
   # The one rule this component writes into an upstream resource. SCRUM-173 left
   # the application security group with no inbound rule and said so in the
   # resource's own description: load balancer ingress belongs here.

@@ -264,6 +264,13 @@ resource "aws_lb" "main" {
 
   enable_deletion_protection = true
 
+  # Strip headers that do not conform to RFC 7230 before they reach the task. The
+  # distribution forwards viewer headers verbatim under Managed-AllViewerExceptHostHeader,
+  # so without this the load balancer is a pass-through for anything a viewer sends.
+  # Dropping them here means the application never has to be the first thing that
+  # decides a malformed header is malformed.
+  drop_invalid_header_fields = true
+
   tags = { Name = "${local.name_prefix}-backend" }
 }
 
@@ -303,6 +310,14 @@ resource "aws_lb_target_group" "backend" {
 # Plaintext on 80 is correct HERE and is not a public plaintext listener: the load
 # balancer is internal and unreachable from the internet. TLS is terminated at the
 # distribution, which redirects plaintext viewers (FR-025).
+#
+# AWS-0054 fires on protocol = "HTTP" without inspecting `internal`. The finding is
+# accepted, not worked around: the alternative it asks for is unreachable, because a
+# publicly trusted certificate cannot be issued for the *.elb.amazonaws.com name this
+# listener answers on — the same constraint that produced internal = true above. If
+# this load balancer ever becomes public, this exemption becomes wrong, which is why
+# the source guard forbids `internal = false` outright.
+#trivy:ignore:AWS-0054
 resource "aws_lb_listener" "backend" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
@@ -333,6 +348,15 @@ resource "aws_cloudfront_vpc_origin" "backend" {
   }
 }
 
+# AWS-0011 (no web ACL) is accepted for shared-dev. A WAF is a production edge
+# control with a per-account monthly cost and a rule set that has to be tuned against
+# real traffic; this distribution fronts a single-task development environment whose
+# only client is the team. Attaching an untuned managed rule group here would buy a
+# passing scan and a source of false blocks, not protection. The controls this
+# environment actually depends on are structural and are in this file: the origin is
+# unreachable except through the distribution, every route requires a Cognito-issued
+# token, and authorization is enforced server-side per object and site.
+#trivy:ignore:AWS-0011
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
   comment         = "crewsafe shared-dev backend API. Origin is an internal load balancer with no public address (SCRUM-176)."
