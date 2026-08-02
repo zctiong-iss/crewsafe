@@ -3,6 +3,7 @@
 **Status:** Accepted
 **Date:** 2026-08-02
 **Jira:** SCRUM-177
+**Author:** Jemilin Beulah
 
 ## Context
 

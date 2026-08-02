@@ -5,13 +5,7 @@
 
 **ADR**: [0007-container-registry-ecr-over-ghcr.md](../adr/0007-container-registry-ecr-over-ghcr.md)
 
-> **Known gap — placeholder Jira key.** `SCRUM-999999` is not a real Jira issue. It exists
-> only because `components.schema.json` requires `jira_key` to match `^SCRUM-[0-9]+$`, and no
-> infra ticket for this component existed when it was built (SCRUM-177 is the CI pipeline that
-> *consumes* this registry, not the registry itself; a Jira search confirmed no registry ticket
-> exists as of 2026-08-02). **Once a real ticket is created**, update all of: this file's name
-> and header, the `Jira` tag in `infra/terraform/ecr/versions.tf`, and the `jira_key` in
-> `.github/terraform/components.json`.
+**Author**: Jemilin Beulah
 
 > **Never run Terraform against a real account from a workstation.** Everything that touches
 > AWS here is either a CI dispatch or a single scoped AWS CLI call / Console action.

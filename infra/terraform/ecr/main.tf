@@ -1,16 +1,14 @@
+# Author: Jemilin Beulah
+
 data "aws_caller_identity" "current" {}
 
 locals {
-  # Must live under crewsafe/* - the secrets component's task-execution role already
-  # grants ecr:BatchCheckLayerAvailability/BatchGetImage/GetDownloadUrlForLayer scoped
-  # to arn:aws:ecr:<region>:<account>:repository/crewsafe/*. Naming this repository
-  # outside that prefix would silently leave it outside that existing pull grant.
+  # Must stay under crewsafe/* - that's the prefix the secrets component's task
+  # role already has pull access to.
   repository_name = "crewsafe/backend"
 
   push_role_name = "crewsafe-shared-dev-ecr-push"
 
-  # FR: image-push is scoped to this repository and nothing else, so a compromised
-  # workflow run cannot touch any other repository in the account.
   repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
 
   ecr_push_assume_role_policy = jsonencode({
@@ -33,12 +31,9 @@ locals {
     ]
   })
 
-  # Composed as an HCL object and rendered with jsonencode() rather than built with
-  # data "aws_iam_policy_document" - under mock_provider a data source's `json`
-  # attribute is fabricated, so an assertion about its content would check invented
-  # data. A jsonencode() of configuration is pure Terraform computation, identical
-  # under a mock and against the real provider (same reasoning the secrets
-  # component documents for its own policies).
+  # jsonencode() instead of aws_iam_policy_document - under mock_provider the
+  # data source's json attribute gets faked, so tests would end up asserting on
+  # data that was never really rendered.
   ecr_push_policy = {
     Version = "2012-10-17"
     Statement = [
@@ -56,12 +51,8 @@ locals {
         Resource = local.repository_arn
       },
       {
-        # The one grant in this component reaching outside its own repository scope.
-        # ecr:GetAuthorizationToken does not support resource-level permissions - the
-        # ECR API accepts nothing but "*" for it, which is why AWS's own
-        # AmazonEC2ContainerRegistryPowerUser policy is written the same way. Held to
-        # exactly one action in exactly one statement so it cannot quietly acquire a
-        # second (asserted by the iam_boundary test).
+        # GetAuthorizationToken doesn't support resource-level perms, only "*".
+        # Kept in its own statement so it can't quietly pick up more actions.
         Sid      = "GetRegistryAuthorizationToken"
         Effect   = "Allow"
         Action   = ["ecr:GetAuthorizationToken"]
@@ -74,12 +65,9 @@ locals {
 # ---------------------------------------------------------------------------
 # Registry
 #
-# One repository. IMMUTABLE tags: once a commit-SHA tag is pushed, it can never
-# be silently overwritten - required for AWS-0031 (this repo's Trivy config scan
-# gates on it) and, independent of that gate, the right property for a deployment
-# artifact anyway (a tag always names the exact bytes it named on first push). The
-# CI workflow tags images by commit SHA only - no floating `latest`, which an
-# IMMUTABLE repository would reject on every push after the first.
+# IMMUTABLE tags: once a commit-SHA tag is pushed it can't be overwritten.
+# Required by the Trivy config scan (AWS-0031), and CI only ever tags by
+# commit SHA anyway, so there's no floating `latest` to break.
 # ---------------------------------------------------------------------------
 
 resource "aws_ecr_repository" "backend" {
@@ -98,10 +86,8 @@ resource "aws_ecr_repository" "backend" {
   }
 }
 
-# Bounds storage cost: every push to main produces a new image. Untagged images
-# (left behind by a failed or partial push) expire quickly; the newest 20 tagged
-# images are kept regardless of tag, which is comfortably more than SCRUM-176's
-# compute runtime would ever need to roll back across.
+# Untagged images (left over from a failed push) expire after a day; keep the
+# newest 20 tagged images, more than enough to roll back across.
 resource "aws_ecr_lifecycle_policy" "backend" {
   repository = aws_ecr_repository.backend.name
 
@@ -135,12 +121,10 @@ resource "aws_ecr_lifecycle_policy" "backend" {
 # ---------------------------------------------------------------------------
 # Push identity
 #
-# Assumable by a GitHub Actions run on this repository's main branch, and by
-# nothing else - no wildcard principal, no other ref, no other repository. This
-# is deliberately independent of CREWSAFE_AWS_ACCOUNTS_JSON's plan_role_arn /
-# apply_role_arn: those two roles manage Terraform state and must not also carry
-# image-push permissions for an unrelated purpose. Mirrors the proven pattern in
-# infra/terraform/cognito/main.tf's aws_iam_role.cognito_admin.
+# Assumable only by GitHub Actions running on this repo's main branch - no
+# wildcard principal, no other ref. Kept separate from
+# CREWSAFE_AWS_ACCOUNTS_JSON's plan/apply roles, which manage Terraform state
+# and shouldn't also carry image-push permissions.
 # ---------------------------------------------------------------------------
 
 resource "aws_iam_role" "ecr_push" {

@@ -23,7 +23,7 @@
       "allow_destroy": false
     },
     "ecr-shared-dev": {
-      "jira_key": "SCRUM-999999",
+      "jira_key": "SCRUM-192",
       "root": "infra/terraform/ecr",
       "backend_strategy": "remote",
       "state_key": "crewsafe/ecr/shared-dev.tfstate",

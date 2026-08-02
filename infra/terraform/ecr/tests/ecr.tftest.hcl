@@ -1,25 +1,15 @@
-# Infrastructure tests for the crewsafe shared-dev ECR registry and image-push
-# role component.
+# Author: Jemilin Beulah
 #
-# Every run plans or applies against a mocked provider, so no AWS account,
-# credential, or network call is involved. The "iam_boundary" run is load-bearing:
-# this component's entire purpose is that the push role can push exactly one
-# repository and nothing else, and a widened resource scope is the single most
-# likely regression in an IAM policy.
-#
-# The IAM assertions decode the policy JSON actually attached to the role, not a
-# local — the document that would really be sent to AWS. This works under a
-# mocked provider only because the policy is a jsonencode() of configuration
-# rather than a rendered data "aws_iam_policy_document", whose json attribute the
-# mock would fabricate (same reasoning the secrets and cognito components use).
+# Tests for the ecr-shared-dev component. Everything runs against a mocked
+# provider, so no real AWS account or network call is involved. iam_boundary
+# is the important one — the whole point of this component is that the push
+# role can touch exactly one repository and nothing else.
 
 mock_provider "aws" {}
 
-# The mocked provider fabricates a random account id, which would trip the
-# repository's account precondition in every run. Pin it once here so each run
-# exercises what it is actually about; "rejects_mismatched_account" varies
-# expected_account_id against this fixed identity to prove the precondition
-# still bites.
+# The mock fabricates a random account id, which would trip the repository's
+# account precondition. Pin it here; rejects_mismatched_account varies
+# expected_account_id against this to prove the precondition still fires.
 override_data {
   target = data.aws_caller_identity.current
   values = { account_id = "123456789012" }
@@ -96,10 +86,9 @@ run "rejects_non_main_ref_oidc_subject" {
 # ---------------------------------------------------------------------------
 # The registry itself
 #
-# These runs use `command = apply` against the mocked provider: on the
-# Terraform version this repo pins, overrides are not surfaced during the plan
-# phase. A mocked apply creates nothing — it resolves computed values so the
-# assertions can run.
+# These use `command = apply` since overrides aren't surfaced during plan on
+# this Terraform version. A mocked apply creates nothing, just resolves
+# computed values so the assertions have something to check.
 # ---------------------------------------------------------------------------
 
 run "entry_shape" {

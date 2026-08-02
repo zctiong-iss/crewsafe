@@ -1,3 +1,5 @@
+# Author: Jemilin Beulah
+
 variable "expected_account_id" {
   description = "Twelve-digit AWS account the caller must be authenticated against. Supplied at dispatch; never committed."
   type        = string
@@ -27,7 +29,7 @@ variable "aws_region" {
 }
 
 variable "github_oidc_main_subject" {
-  description = "Exact immutable owner/repository-ID OIDC subject issued for this repository's main branch. Scopes the image-push role so only a workflow run on main can assume it - pull requests never push images."
+  description = "Exact owner/repository-ID OIDC subject for this repo's main branch, so only a workflow run on main can assume the push role."
   type        = string
   validation {
     condition     = can(regex("^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:ref:refs/heads/main$", var.github_oidc_main_subject))
