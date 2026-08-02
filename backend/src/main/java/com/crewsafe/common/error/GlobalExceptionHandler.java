@@ -19,7 +19,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * tell an attacker about internals they should have to guess. Each response does carry a
  * {@code requestId}, which is how a report of "it broke" becomes findable in the logs.
  *
- * @author Jemilin Beulah
+ * @author Jemilin Beulah and Abu Bakar
  */
 @RestControllerAdvice
 @Slf4j
