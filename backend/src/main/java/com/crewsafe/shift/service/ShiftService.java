@@ -22,8 +22,8 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Create/list/read a shift and add an assignment to one (SCRUM-160, implementing
- * {@code docs/api/shift.yaml}).
+ * Create/list/read/correct/delete a shift, and add/correct/remove an assignment on one
+ * (SCRUM-160, extended by SCRUM-159/160-fix), implementing {@code docs/api/shift.yaml}.
  *
  * @author Abu Bakar
  */
@@ -43,13 +43,6 @@ public class ShiftService {
      * {@code assignmentInputs} may be empty — a shift can be created unstaffed and staffed
      * later via {@link #addAssignment}. Emits {@link AuditEventType#SHIFT_CREATED} exactly
      * once per call, regardless of how many assignments were given.
-     *
-     * <p>The audit write is deferred to {@code afterCommit}, not called inline. {@link
-     * AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would commit the
-     * audit row immediately, independent of this method's own transaction — if the shift or
-     * an assignment then failed to persist (e.g. a bad {@code workerId} violating the
-     * {@code shift_assignment} foreign key at flush time), the audit event would survive a
-     * rollback and falsely claim a shift was created that never was.
      */
     @Transactional
     public Shift createShift(UUID siteId, UUID actorId, Instant startsAt, Instant endsAt,
@@ -66,15 +59,101 @@ public class ShiftService {
         }
 
         UUID shiftId = shift.getId();
+        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId,
+                "Created shift for site " + siteId));
+
+        return shift;
+    }
+
+    /**
+     * Data-entry correction of {@code startsAt}/{@code endsAt} only (SCRUM-159/160-fix) —
+     * not a status transition, which has no correction path yet. Empty when no shift with
+     * this id exists under this site — the caller renders 404.
+     */
+    @Transactional
+    public Optional<Shift> updateShift(UUID siteId, UUID actorId, UUID shiftId, Instant startsAt, Instant endsAt) {
+        if (!endsAt.isAfter(startsAt)) {
+            throw new BadRequestException("endsAt must be after startsAt");
+        }
+
+        return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            shift.correctTimes(startsAt, endsAt);
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId,
+                    "Corrected shift times for site " + siteId));
+            return shift;
+        });
+    }
+
+    /**
+     * Removes the shift and every assignment on it (SCRUM-159/160-fix). Assignments are
+     * deleted first: {@code shift_assignment.shift_id} has no {@code ON DELETE CASCADE}, so
+     * the shift row cannot be removed while assignments still reference it. Returns
+     * {@code false} when no shift with this id exists under this site — the caller renders
+     * 404.
+     */
+    @Transactional
+    public boolean deleteShift(UUID siteId, UUID actorId, UUID shiftId) {
+        return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            assignments.deleteByShiftId(shiftId);
+            shifts.delete(shift);
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_DELETED, "SHIFT", shiftId,
+                    "Deleted shift for site " + siteId));
+            return true;
+        }).orElse(false);
+    }
+
+    /**
+     * Corrects an assignment's task/intensity/acclimatisation day (SCRUM-159/160-fix).
+     * {@code workerId} is not settable here by design — see {@link
+     * ShiftAssignment#correct}. Empty when no shift with this id exists under this site, or
+     * no assignment with this id exists on that shift; the caller renders 404 either way,
+     * the same as {@link #addAssignment}'s 404.
+     */
+    @Transactional
+    public Optional<Shift> updateAssignment(UUID siteId, UUID actorId, UUID shiftId, UUID assignmentId,
+                                             String taskName, Intensity intensity, Integer acclimatisationDay) {
+        return shifts.findByIdAndSiteId(shiftId, siteId).flatMap(shift ->
+                assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
+                    assignment.correct(taskName, intensity, acclimatisationDay);
+                    afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_UPDATED,
+                            "SHIFT_ASSIGNMENT", assignmentId, "Corrected assignment on shift " + shiftId));
+                    return shift;
+                }));
+    }
+
+    /**
+     * Takes a worker off a shift (SCRUM-159/160-fix). Returns {@code false} when no shift
+     * with this id exists under this site, or no assignment with this id exists on that
+     * shift — the caller renders 404 either way.
+     */
+    @Transactional
+    public boolean removeAssignment(UUID siteId, UUID actorId, UUID shiftId, UUID assignmentId) {
+        if (shifts.findByIdAndSiteId(shiftId, siteId).isEmpty()) {
+            return false;
+        }
+
+        return assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
+            assignments.delete(assignment);
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_REMOVED,
+                    "SHIFT_ASSIGNMENT", assignmentId, "Removed assignment from shift " + shiftId));
+            return true;
+        }).orElse(false);
+    }
+
+    /**
+     * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would
+     * commit the audit row immediately, independent of the caller's own transaction — if the
+     * rest of that transaction then failed to persist, the audit event would survive a
+     * rollback and falsely claim work that never happened. Every audit write in this class
+     * goes through here instead, deferred until the transaction actually commits.
+     */
+    private void afterCommit(Runnable action) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId,
-                        "Created shift for site " + siteId);
+                action.run();
             }
         });
-
-        return shift;
     }
 
     public List<Shift> listShifts(UUID siteId) {

@@ -1,6 +1,9 @@
 package com.crewsafe.site.api;
 
+import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.domain.UserStatus;
+import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.site.domain.Site;
@@ -35,6 +38,7 @@ public class SiteController {
 
     private final SiteRepository sites;
     private final SiteMembershipRepository memberships;
+    private final AppUserRepository users;
 
     public record SiteResponse(UUID id, String name, BigDecimal latitude, BigDecimal longitude, String timezone) {
         static SiteResponse from(Site site) {
@@ -44,6 +48,12 @@ public class SiteController {
     }
 
     public record SiteDashboardResponse(UUID siteId, String name, String status) {
+    }
+
+    public record SiteWorkerResponse(UUID id, String displayName) {
+        static SiteWorkerResponse from(AppUser user) {
+            return new SiteWorkerResponse(user.getId(), user.getDisplayName());
+        }
     }
 
     /**
@@ -98,5 +108,18 @@ public class SiteController {
         return sites.findById(siteId)
                 .map(site -> ResponseEntity.ok(new SiteDashboardResponse(site.getId(), site.getName(), "OK")))
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Candidates for {@code assignments[].workerId} on the shift-create/staff endpoints
+     * (SCRUM-159/160-fix) — a worker picker needs to know who it can offer, and nothing
+     * previously returned that. Same role gate as shift creation: this is a supervisor-tool
+     * query, not something a worker needs to see about their own site.
+     */
+    @GetMapping("/{siteId}/workers")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<List<SiteWorkerResponse>> listSiteWorkers(@PathVariable UUID siteId) {
+        List<AppUser> workers = users.findBySiteIdAndRoleAndStatus(siteId, Role.WORKER, UserStatus.ACTIVE);
+        return ResponseEntity.ok(workers.stream().map(SiteWorkerResponse::from).toList());
     }
 }

@@ -33,6 +33,21 @@ public final class AuditEventType {
      * how many assignments were given at creation time. */
     public static final String SHIFT_CREATED = "SHIFT_CREATED";
 
+    /** A shift's startsAt/endsAt was corrected (SCRUM-159/160-fix). Not used for a status
+     * transition — status has no correction path yet. */
+    public static final String SHIFT_UPDATED = "SHIFT_UPDATED";
+
+    /** A shift and all of its assignments were removed (SCRUM-159/160-fix). */
+    public static final String SHIFT_DELETED = "SHIFT_DELETED";
+
+    /** An assignment's task, intensity or acclimatisation day was corrected
+     * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
+     * through this event's originating endpoint. */
+    public static final String SHIFT_ASSIGNMENT_UPDATED = "SHIFT_ASSIGNMENT_UPDATED";
+
+    /** A worker was taken off a shift (SCRUM-159/160-fix). */
+    public static final String SHIFT_ASSIGNMENT_REMOVED = "SHIFT_ASSIGNMENT_REMOVED";
+
     private AuditEventType() {
     }
 }

@@ -57,6 +57,16 @@ public class Shift {
         this.status = ShiftStatus.PLANNED;
     }
 
+    /**
+     * The only correction path a shift has (SCRUM-159/160-fix): a data-entry fix for the
+     * time range, not a status transition. Deliberately narrower than a blanket
+     * {@code @Setter} — {@code siteId} and {@code status} stay untouchable here.
+     */
+    public void correctTimes(Instant startsAt, Instant endsAt) {
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+    }
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {

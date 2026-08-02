@@ -4,6 +4,7 @@ import com.crewsafe.shift.domain.ShiftAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -15,4 +16,12 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
 
     /** Batch fetch for listing shifts, so rendering N shifts does not cost N queries. */
     List<ShiftAssignment> findByShiftIdIn(List<UUID> shiftIds);
+
+    /** Scopes an assignment lookup to its shift, so an assignment id from another shift
+     * reads as 404 rather than silently updating/removing the wrong shift's row. */
+    Optional<ShiftAssignment> findByIdAndShiftId(UUID id, UUID shiftId);
+
+    /** Used to clear a shift's assignments before the shift itself is deleted — the
+     * shift_assignment.shift_id foreign key has no ON DELETE CASCADE. */
+    void deleteByShiftId(UUID shiftId);
 }

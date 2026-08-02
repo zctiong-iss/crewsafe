@@ -1,13 +1,23 @@
 openapi: 3.0.3
 info:
   title: WBGT CrewSafe SG API — Shift endpoints
-  version: "1.0"
+  version: "1.1"
   description: >
     Contract for SCRUM-159 (US-02: create a shift with workers, tasks and intensity).
     Every operation is site-scoped: the caller must be a member of {siteId}
     (ADMIN excepted), enforced the same way as the existing /api/v1/sites endpoints —
     see SiteAccessEvaluator. A shift can be created with zero assignments and staffed
     afterward via the assignments endpoint.
+
+    Extended for the SCRUM-159/160-fix: two gaps found building SCRUM-161 (the
+    create-shift form) against the original contract. (1) Shifts and assignments were
+    create/read/add-only — no way to correct a mistaken entry or remove one. PATCH/DELETE
+    on a shift and PATCH/DELETE on an assignment close that; workerId is deliberately not
+    patchable on an assignment — reassigning to a different worker is DELETE the wrong
+    assignment, POST the right one, since that path already exists. (2) Nothing returned
+    a site's workers, so a create-shift form had no way to populate a worker picker.
+    GET /sites/{siteId}/workers closes that — it lives here rather than a separate site
+    contract because its only consumer today is this form.
 
 servers:
   - url: /
@@ -88,6 +98,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateShift
+      summary: Correct a shift's start/end times
+      description: >
+        Data-entry correction only, not a status transition — status stays
+        server-controlled (see ShiftStatus) and is not settable here. Both fields are
+        required, same as create, so the request is always a complete, valid time range
+        rather than a partial patch that could combine with the existing value to
+        produce an invalid one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftUpdateRequest"
+      responses:
+        "200":
+          description: The corrected shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteShift
+      summary: Remove a shift created in error
+      description: Removes the shift and every assignment on it.
+      responses:
+        "204":
+          description: The shift (and its assignments) no longer exist.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /api/v1/sites/{siteId}/shifts/{shiftId}/assignments:
     parameters:
@@ -122,6 +183,85 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/sites/{siteId}/shifts/{shiftId}/assignments/{assignmentId}:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+      - $ref: "#/components/parameters/AssignmentId"
+    patch:
+      operationId: updateShiftAssignment
+      summary: Correct a worker's task, intensity or acclimatisation day on this shift
+      description: >
+        workerId is deliberately not part of this request — if the wrong worker was
+        assigned, DELETE this assignment and POST the correct one via the assignments
+        endpoint rather than reassigning in place. intensity is required, same as on
+        create: it is never silently defaulted or left unchanged by omission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftAssignmentUpdateRequest"
+      responses:
+        "200":
+          description: The full, updated shift with the corrected assignment included.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site, or no assignment with this id exists on this shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: removeShiftAssignment
+      summary: Take a worker off this shift
+      responses:
+        "204":
+          description: The assignment no longer exists.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site, or no assignment with this id exists on this shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/workers:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: listSiteWorkers
+      summary: The site's active WORKER-role members, for a worker-picker UI
+      description: >
+        Candidates for assignments[].workerId — not every member of the site, only
+        those with role WORKER, and only ACTIVE ones (an offboarded worker cannot be
+        newly assigned, though existing assignments referencing them are untouched).
+      responses:
+        "200":
+          description: The site's assignable workers, alphabetical by display name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SiteWorker"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -139,6 +279,13 @@ components:
         format: uuid
     ShiftId:
       name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssignmentId:
+      name: assignmentId
       in: path
       required: true
       schema:
@@ -273,3 +420,41 @@ components:
           description: Optional. A shift may be created empty and staffed later via the assignments endpoint.
           items:
             $ref: "#/components/schemas/ShiftAssignmentCreate"
+
+    ShiftUpdateRequest:
+      type: object
+      required: [startsAt, endsAt]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+
+    ShiftAssignmentUpdateRequest:
+      type: object
+      required: [intensity]
+      description: >
+        Same fields as ShiftAssignmentCreate minus workerId, which this request
+        deliberately cannot change.
+      properties:
+        taskName:
+          type: string
+          maxLength: 120
+        intensity:
+          $ref: "#/components/schemas/Intensity"
+        acclimatisationDay:
+          type: integer
+          minimum: 1
+          maximum: 7
+
+    SiteWorker:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
