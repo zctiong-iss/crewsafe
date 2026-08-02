@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
   "accounts": {
-    "dev": ["zctiong-iss"]
+    "dev": ["zctiong-iss", "Jemilin-code"]
   }
 }
