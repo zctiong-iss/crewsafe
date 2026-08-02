@@ -29,7 +29,7 @@ import java.util.UUID;
  * the system will rely on. The weather, shift and recommendation endpoints follow exactly
  * this shape.
  *
- * @author Jemilin Beulah
+ * @author Jemilin Beulah and Abu Bakar
  */
 @RestController
 @RequestMapping("/api/v1/sites")

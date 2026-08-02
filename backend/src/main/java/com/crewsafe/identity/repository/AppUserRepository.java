@@ -12,7 +12,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * @author Jemilin Beulah
+ * @author Jemilin Beulah and Abu Bakar
  */
 public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
