@@ -29,6 +29,10 @@ public final class AuditEventType {
     /** An authenticated user attempted to access a site outside their membership. */
     public static final String ACCESS_DENIED = "ACCESS_DENIED";
 
+    /** A shift was created (SCRUM-160). Recorded once per successful create, regardless of
+     * how many assignments were given at creation time. */
+    public static final String SHIFT_CREATED = "SHIFT_CREATED";
+
     private AuditEventType() {
     }
 }

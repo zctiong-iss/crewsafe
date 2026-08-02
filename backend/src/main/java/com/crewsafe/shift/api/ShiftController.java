@@ -1,0 +1,131 @@
+package com.crewsafe.shift.api;
+
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import com.crewsafe.shift.domain.Intensity;
+import com.crewsafe.shift.domain.Shift;
+import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.service.ShiftService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Shift endpoints (SCRUM-160), implementing {@code docs/api/shift.yaml} field for field.
+ *
+ * Every method is site-scoped the same way {@link com.crewsafe.site.api.SiteController}
+ * is: {@code @PreAuthorize("@siteAccess.canAccess(#siteId)")}. Creating a shift or
+ * staffing one is additionally role-gated to SUPERVISOR/SAFETY_MANAGER/ADMIN, the same
+ * role group {@code SiteController}'s dashboard uses — a worker may read their site's
+ * shifts but not plan them.
+ *
+ * @author Abu Bakar
+ */
+@RestController
+@RequestMapping("/api/v1/sites/{siteId}/shifts")
+@RequiredArgsConstructor
+public class ShiftController {
+
+    private final ShiftService shiftService;
+
+    public record ShiftAssignmentResponse(UUID id, UUID workerId, String taskName, String intensity,
+                                           Integer acclimatisationDay) {
+        static ShiftAssignmentResponse from(ShiftAssignment assignment) {
+            return new ShiftAssignmentResponse(assignment.getId(), assignment.getWorkerId(),
+                    assignment.getTaskName(), assignment.getIntensity().name(),
+                    assignment.getAcclimatisationDay());
+        }
+    }
+
+    public record ShiftResponse(UUID id, UUID siteId, Instant startsAt, Instant endsAt, String status,
+                                 List<ShiftAssignmentResponse> assignments) {
+        static ShiftResponse from(Shift shift, List<ShiftAssignment> assignments) {
+            return new ShiftResponse(shift.getId(), shift.getSiteId(), shift.getStartsAt(),
+                    shift.getEndsAt(), shift.getStatus().name(),
+                    assignments.stream().map(ShiftAssignmentResponse::from).toList());
+        }
+    }
+
+    public record ShiftAssignmentCreateRequest(
+            @NotNull UUID workerId,
+            @Size(max = 120) String taskName,
+            @NotNull Intensity intensity,
+            @Min(1) @Max(7) Integer acclimatisationDay) {
+
+        ShiftService.AssignmentInput toInput() {
+            return new ShiftService.AssignmentInput(workerId, taskName, intensity, acclimatisationDay);
+        }
+    }
+
+    public record ShiftCreateRequest(
+            @NotNull Instant startsAt,
+            @NotNull Instant endsAt,
+            List<@Valid ShiftAssignmentCreateRequest> assignments) {
+
+        List<ShiftAssignmentCreateRequest> assignmentsOrEmpty() {
+            return assignments == null ? List.of() : assignments;
+        }
+    }
+
+    @GetMapping
+    @PreAuthorize("@siteAccess.canAccess(#siteId)")
+    public ResponseEntity<List<ShiftResponse>> listShifts(@PathVariable UUID siteId) {
+        List<Shift> siteShifts = shiftService.listShifts(siteId);
+        Map<UUID, List<ShiftAssignment>> byShift = shiftService.assignmentsGroupedByShiftId(
+                siteShifts.stream().map(Shift::getId).toList());
+
+        return ResponseEntity.ok(siteShifts.stream()
+                .map(shift -> ShiftResponse.from(shift, byShift.getOrDefault(shift.getId(), List.of())))
+                .toList());
+    }
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> createShift(@PathVariable UUID siteId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal,
+            @Valid @RequestBody ShiftCreateRequest request) {
+
+        Shift shift = shiftService.createShift(siteId, principal.getId(), request.startsAt(), request.endsAt(),
+                request.assignmentsOrEmpty().stream().map(ShiftAssignmentCreateRequest::toInput).toList());
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
+    }
+
+    @GetMapping("/{shiftId}")
+    @PreAuthorize("@siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> getShift(@PathVariable UUID siteId, @PathVariable UUID shiftId) {
+        return shiftService.getShift(siteId, shiftId)
+                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{shiftId}/assignments")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @Valid @RequestBody ShiftAssignmentCreateRequest request) {
+
+        return shiftService.addAssignment(siteId, shiftId, request.toInput())
+                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
+                .map(body -> ResponseEntity.status(HttpStatus.CREATED).body(body))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+}

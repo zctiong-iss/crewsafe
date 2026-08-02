@@ -31,6 +31,18 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
     }
 
+    /**
+     * The message is logged, not returned — this file's rule is no exception message ever
+     * reaches the caller, and {@link BadRequestException} is a general-purpose type any
+     * future call site could construct from data that isn't actually safe to echo back.
+     */
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException e) {
+        log.debug("Bad request: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
