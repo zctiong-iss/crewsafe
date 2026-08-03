@@ -335,6 +335,78 @@ run "iam_boundary" {
     error_message = "Both roles must trust only ecs-tasks.amazonaws.com, with no wildcard principal and no external account (FR-013)."
   }
 
+  # SCRUM-191 FR-001, FR-002 — confused-deputy source conditions.
+  #
+  # Four assertions, not one loop over both roles. The assertion above deliberately
+  # loops, and that is why it names neither role when it fails; these must name the
+  # role AND the key, because the two roles are assumed at different moments in a
+  # task's life and a failure has to say which one broke.
+  #
+  # Each reads the resource attribute rather than local.ecs_tasks_assume_role_policy:
+  # the attribute is the document that would reach AWS, the local is an intermediate.
+  # Same reasoning this file already records for the grant policies.
+  #
+  # Each compares the VALUE, not just the key's presence. A presence-only assertion
+  # passes against a condition naming the wrong account, which is the failure mode
+  # that would matter.
+  #
+  # The expected ARN is rebuilt here from the test's own variables rather than read
+  # from local.ecs_source_arn_pattern. Referencing the local would be tautological:
+  # changing the local changes both the policy and the expectation, so the assertion
+  # would pass against any value including a wrong account. The first draft of these
+  # assertions did exactly that and a mutation run caught it.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role.task_execution.assume_role_policy).Statement :
+      try(s.Condition.ArnLike["aws:SourceArn"], null) == "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:*"
+    ])
+    error_message = "The EXECUTION role's trust policy must carry an ArnLike condition on aws:SourceArn naming this account and region (SCRUM-191 FR-001)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role.task.assume_role_policy).Statement :
+      try(s.Condition.ArnLike["aws:SourceArn"], null) == "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:*"
+    ])
+    error_message = "The TASK role's trust policy must carry an ArnLike condition on aws:SourceArn naming this account and region (SCRUM-191 FR-002)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role.task_execution.assume_role_policy).Statement :
+      try(s.Condition.StringEquals["aws:SourceAccount"], null) == var.expected_account_id
+    ])
+    error_message = "The EXECUTION role's trust policy must carry a StringEquals condition on aws:SourceAccount naming this account (SCRUM-191 FR-001)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role.task.assume_role_policy).Statement :
+      try(s.Condition.StringEquals["aws:SourceAccount"], null) == var.expected_account_id
+    ])
+    error_message = "The TASK role's trust policy must carry a StringEquals condition on aws:SourceAccount naming this account (SCRUM-191 FR-002)."
+  }
+
+  # SCRUM-191 FR-032 — the strict operators, never the ...IfExists variants.
+  #
+  # ArnLikeIfExists and StringEqualsIfExists evaluate TRUE when the key is absent
+  # from the request context. That removes the fail-closed risk and, with it, any
+  # way to tell an enforced condition from an unenforced one: a healthy task would
+  # prove nothing. A control that cannot be distinguished from its own absence is
+  # close to no control, so the weaker form is forbidden rather than merely unused.
+  assert {
+    condition = alltrue([
+      for doc in [
+        jsondecode(aws_iam_role.task_execution.assume_role_policy),
+        jsondecode(aws_iam_role.task.assume_role_policy)
+        ] : alltrue([
+          for s in doc.Statement :
+          length([for op in keys(try(s.Condition, {})) : op if endswith(op, "IfExists")]) == 0
+      ])
+    ])
+    error_message = "Neither trust policy may use an ...IfExists condition operator; it evaluates true on a missing key and makes the control unverifiable (SCRUM-191 FR-032, SC-023)."
+  }
+
   # FR-010 — two distinct identities, not one used twice.
   assert {
     condition     = aws_iam_role.task_execution.name != aws_iam_role.task.name

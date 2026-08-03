@@ -46,6 +46,14 @@ locals {
   ecr_repository_arn_pattern = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/crewsafe/*"
   log_group_arn_pattern      = "arn:aws:logs:${var.aws_region}:${var.expected_account_id}:log-group:${local.parameter_path_prefix}/*"
 
+  # SCRUM-191 — the source scope the two task identities may be assumed on behalf of.
+  # Built from the same two variables as every pattern above, so there is one
+  # definition of "which account and region" rather than two that can drift.
+  #
+  # The trailing :* is the documented form, not a placeholder awaiting a tighter
+  # value. See the trust policy below for why it cannot be narrowed.
+  ecs_source_arn_pattern = "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:*"
+
   cognito = data.terraform_remote_state.cognito.outputs
 
   # Six entries. A value earns one only where the deployed environment must differ
@@ -237,10 +245,39 @@ locals {
   # FR-013 — assumable by the container runtime and by nothing else. No wildcard
   # principal, no external account, no other service.
   #
-  # A production-grade hardening would add an aws:SourceArn condition pinning this
-  # to a specific ECS cluster. That cluster does not exist yet — the compute
-  # component creates it — and writing a placeholder would repeat the mistake
-  # FR-031 exists to prevent. Recorded as a follow-up for the compute component.
+  # SCRUM-191 — the condition below closes a confused-deputy gap, and its shape is
+  # not what this component originally planned for. Read this before tightening it.
+  #
+  # The deferral this replaces said a "production-grade hardening would add an
+  # aws:SourceArn condition pinning this to a specific ECS cluster", once a cluster
+  # existed. A cluster now exists. The pin does not, because AWS does not support
+  # it. From the ECS task IAM role documentation, verbatim:
+  #
+  #   "Using the aws:SourceArn condition key to specify a specific cluster is not
+  #    currently supported, you should use the wildcard to specify all clusters."
+  #
+  # https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html
+  #
+  # So the trailing :* is the documented form, not laziness and not a placeholder.
+  # A value naming a cluster would not fail loudly at apply — IAM accepts any
+  # syntactically valid trust policy — it would simply never match, denying every
+  # assumption and stopping tasks from starting.
+  #
+  # WHAT THIS CLOSES: a cross-account confused deputy. aws:SourceArn and
+  # aws:SourceAccount are populated only when a service acts on behalf of a
+  # resource owner, so these two keys stop another account's ECS service principal
+  # being induced to assume these roles.
+  #
+  # WHAT IT DOES NOT CLOSE: a second ECS cluster in THIS account can still assume
+  # both roles, and no trust policy can prevent that. Bounded today because the
+  # account holds one cluster and Terraform is CI-only. Whoever creates a second
+  # cluster must give its tasks their own identities — see the SCRUM-174 runbook.
+  #
+  # Both operators are strict on purpose. ArnLikeIfExists and StringEqualsIfExists
+  # evaluate true when the key is absent, which would remove the risk of denying a
+  # legitimate assumption at the cost of making the control unverifiable: a healthy
+  # task would prove nothing about whether the condition is enforced. The test suite
+  # asserts the ...IfExists forms stay absent.
   ecs_tasks_assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -249,6 +286,10 @@ locals {
         Effect    = "Allow"
         Principal = { Service = "ecs-tasks.amazonaws.com" }
         Action    = "sts:AssumeRole"
+        Condition = {
+          ArnLike      = { "aws:SourceArn" = local.ecs_source_arn_pattern }
+          StringEquals = { "aws:SourceAccount" = var.expected_account_id }
+        }
       },
     ]
   })
