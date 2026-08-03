@@ -9,7 +9,7 @@ package com.crewsafe.common.audit;
  * event that already happened, for example {@code SHIFT_CLOSED}; callers must add the
  * constant here before writing the new event type.
  *
- * @author Jemilin Beulah
+ * @author Jemilin Beulah and Abu Bakar
  */
 public final class AuditEventType {
 
