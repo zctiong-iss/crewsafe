@@ -1,0 +1,367 @@
+{
+  "common": {
+    "appName": "CrewSafe",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "save": "Save",
+    "retry": "Try again",
+    "close": "Close",
+    "loading": "Loading",
+    "back": "Back",
+    "none": "None",
+    "optional": "Optional",
+    "requestReference": "Reference: {{requestId}}"
+  },
+
+  "errors": {
+    "unauthenticated": "Your session has ended. Sign in to continue.",
+    "not-provisioned": "Your sign-in worked, but this account has not been set up for CrewSafe yet. Ask your site administrator to add you.",
+    "forbidden": "You do not have access to this. If you think you should, ask your site administrator.",
+    "not-found": "That record does not exist.",
+    "bad-request": "That request was not valid.",
+    "conflict": "Someone else changed this first. Reload and try again.",
+    "server": "Something went wrong on our end. Try again in a moment.",
+    "network": "Cannot reach CrewSafe. Check your connection and try again.",
+    "configMissing": "The app is not configured. Missing: {{keys}}",
+    "unknown": "Something went wrong. Try again."
+  },
+
+  "auth": {
+    "signInTitle": "Sign in",
+    "signInSubtitle": "Heat-stress safety for outdoor crews",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "Enter your username",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "signInButton": "Sign in",
+    "signUpButton": "Request an account",
+    "signOutButton": "Sign out",
+    "signingIn": "Signing you in",
+    "pkceHint": "You will be taken to the secure CrewSafe sign-in page in your browser.",
+    "modeLabel": "Sign-in mode (development only)",
+    "modeMock": "Demo user",
+    "modeCognitoPassword": "Cognito (password)",
+    "modeCognitoPkce": "Cognito (hosted UI)",
+    "demoUserLabel": "Choose a demo user",
+    "notProvisionedTitle": "Account not set up",
+    "sessionExpired": "Your session has ended.",
+    "validation": {
+      "usernameRequired": "Enter your username.",
+      "passwordRequired": "Enter your password.",
+      "passwordTooShort": "Your password is at least {{min}} characters."
+    },
+    "cognito": {
+      "invalidCredentials": "That username or password is not right.",
+      "newPasswordRequired": "This account still has its temporary password. Set a permanent one in the AWS Console before signing in here.",
+      "userDisabled": "This account has been disabled.",
+      "tooManyAttempts": "Too many attempts. Wait a moment and try again.",
+      "pkceUnavailableInExpoGo": "Hosted UI sign-in needs a development build on a phone, because Expo Go cannot open a crewsafe:// link. Run the app with `npx expo start --web --port 5173` to test this flow, or use another mode.",
+      "cancelled": "Sign-in was cancelled."
+    }
+  },
+
+  "signUp": {
+    "title": "Request an account",
+    "intro": "CrewSafe accounts are created by your site administrator. Fill this in and we will show you exactly what to send them.",
+    "fullNameLabel": "Full name",
+    "fullNamePlaceholder": "Your name as it appears on site records",
+    "usernameLabel": "Preferred username",
+    "usernamePlaceholder": "lowercase, no spaces",
+    "emailLabel": "Work email",
+    "emailPlaceholder": "you@example.com",
+    "siteLabel": "Which site do you work at?",
+    "roleNotice": "Only Worker accounts can be requested here. Supervisor, Safety Manager and Administrator accounts are created by an administrator.",
+    "submitButton": "Prepare request",
+    "successTitle": "Request ready",
+    "successBody": "Send these details to your site administrator. They will create your account and you will receive an invitation by email.",
+    "copyButton": "Copy details",
+    "copiedButton": "Copied",
+    "editButton": "Change details",
+    "backToSignIn": "Back to sign in",
+    "requestHeading": "CrewSafe account request",
+    "roleLine": "Requested role: Worker",
+    "validation": {
+      "fullNameRequired": "Enter your full name.",
+      "fullNameTooShort": "Enter at least {{min}} characters.",
+      "fullNameTooLong": "Use at most {{max}} characters.",
+      "usernameRequired": "Choose a username.",
+      "usernameFormat": "Use lowercase letters and numbers, separated by . _ or - only.",
+      "usernameTooLong": "Use at most {{max}} characters.",
+      "emailRequired": "Enter your work email.",
+      "emailInvalid": "That does not look like an email address.",
+      "emailTooLong": "Use at most {{max}} characters.",
+      "singleLineOnly": "Remove line breaks and special formatting characters.",
+      "siteRequired": "Choose your site."
+    }
+  },
+
+  "roles": {
+    "WORKER": "Worker",
+    "SUPERVISOR": "Site Supervisor",
+    "SAFETY_MANAGER": "Safety Manager",
+    "ADMIN": "Administrator"
+  },
+
+  "tabs": {
+    "shift": "My shift",
+    "inbox": "Inbox",
+    "weather": "Weather",
+    "shifts": "Shifts",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "changeLanguage": "Change language",
+    "textSize": "Text size",
+    "textSizeSmall": "Small",
+    "textSizeDefault": "Default",
+    "textSizeLarge": "Large",
+    "textSizeExtraLarge": "Extra large",
+    "textSizePreview": "The quick brown fox jumps over the lazy dog.",
+    "highContrast": "High contrast",
+    "highContrastHint": "Stronger colours and thicker outlines, for reading the screen in direct sunlight.",
+    "reduceMotion": "Reduce motion",
+    "reduceMotionHint": "Stops icons animating. Already on if your device has Reduce Motion enabled.",
+    "accessibility": "Accessibility",
+    "display": "Display",
+    "about": "About",
+    "aboutVersion": "Version {{version}}",
+    "aboutBody": "Heat-stress safety for outdoor crews in Singapore."
+  },
+
+  "profile": {
+    "title": "Profile",
+    "role": "Role",
+    "sites": "Sites",
+    "username": "Username",
+    "changePhoto": "Change photo",
+    "addPhoto": "Add a photo",
+    "photoSheetTitle": "Profile photo",
+    "takePhoto": "Take a photo",
+    "chooseFromLibrary": "Choose from library",
+    "removePhoto": "Remove photo",
+    "photoLocalOnly": "Your photo is stored on this phone only. It is not sent to CrewSafe and your supervisor will not see it.",
+    "permissionDeniedTitle": "Permission needed",
+    "cameraDeniedBody": "CrewSafe needs camera access to take a photo. You can turn it on in your device settings.",
+    "libraryDeniedBody": "CrewSafe needs photo access to choose a picture. You can turn it on in your device settings.",
+    "photoUpdatedToast": "Photo updated",
+    "photoRemovedToast": "Photo removed"
+  },
+
+  "shifts": {
+    "site": "Site",
+    "emptyTitle": "No shifts yet",
+    "emptyBody": "Shifts you plan for this site will appear here.",
+    "noSitesTitle": "No site assigned",
+    "noSitesBody": "You are not assigned to a site yet. Ask your administrator to add you.",
+    "createButton": "Plan a shift",
+    "assignmentCount_one": "{{count}} worker",
+    "assignmentCount_other": "{{count}} workers",
+    "unstaffed": "No workers assigned",
+    "window": "{{start}} to {{end}}",
+    "status": {
+      "PLANNED": "Planned",
+      "ACTIVE": "Active",
+      "CLOSED": "Closed"
+    },
+    "detailTitle": "Shift",
+    "assignments": "Crew",
+    "worker": "Worker",
+    "unknownWorker": "Worker no longer on this site",
+    "task": "Task",
+    "noTask": "No task recorded",
+    "intensity": "Intensity",
+    "acclimatisation": "Acclimatisation day {{day}} of 7",
+    "deleteButton": "Delete this shift",
+    "deleteTitle": "Delete this shift?",
+    "deleteBody": "This removes the shift and everything assigned to it. It cannot be undone.",
+    "deleteConfirm": "Delete",
+    "deleting": "Deleting",
+    "deletedToast": "Shift deleted",
+    "deleteFailedTitle": "Shift not deleted",
+
+    "form": {
+      "timesSection": "When",
+      "startsAt": "Starts",
+      "endsAt": "Ends",
+      "pickDateTime": "Choose a date and time",
+      "crewSection": "Who is working",
+      "crewHint": "Choose the workers for this shift. You can also create the shift now and add people later.",
+      "noWorkers": "This site has no assignable workers yet.",
+      "assignmentsSection": "Task and intensity",
+      "taskLabel": "Task",
+      "taskPlaceholder": "What they will be doing",
+      "taskHint": "Optional. Up to {{max}} characters.",
+      "intensityLabel": "Work intensity",
+      "acclimatisationLabel": "Acclimatisation day",
+      "acclimatisationPlaceholder": "1 to 7",
+      "acclimatisationHint": "Only for a worker in their first seven days, or returning after more than a week.",
+      "removeWorker": "Remove from shift",
+      "submit": "Create shift",
+      "submitting": "Creating",
+      "createdToast": "Shift created",
+      "unstaffedNotice": "This shift will be created with nobody assigned. You can staff it later."
+    },
+
+    "validation": {
+      "startRequired": "Choose when the shift starts.",
+      "endRequired": "Choose when the shift ends.",
+      "endNotAfterStart": "The end time must be after the start time.",
+      "taskTooLong": "Keep the task under {{max}} characters.",
+      "intensityRequired": "Choose a work intensity.",
+      "acclimatisationRange": "Enter a whole number from 1 to 7, or leave it blank.",
+      "checkFields": "Some details above need attention. The fields with a red outline show what to fix."
+    }
+  },
+
+  "weather": {
+    "title": "Conditions",
+    "site": "Site",
+    "noSitesTitle": "No site assigned",
+    "noSitesBody": "You are not assigned to a site yet. Ask your site administrator to add you.",
+    "feelsLike": "Wet-bulb globe temperature",
+    "airTemp": "Air temperature",
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "rainfall": "Rainfall",
+    "station": "Station {{id}}",
+    "observedAt": "Observed {{time}}",
+    "ingestedAt": "Received {{time}}",
+    "night": "After dark",
+    "condition": {
+      "FAIR": "Fair",
+      "PARTLY_CLOUDY": "Partly cloudy",
+      "CLOUDY": "Cloudy",
+      "WINDY": "Windy",
+      "RAIN": "Rain",
+      "THUNDERY_SHOWERS": "Thundery showers"
+    }
+  },
+
+  "inbox": {
+    "emptyTitle": "Nothing to acknowledge",
+    "emptyBody": "Approved actions from your supervisor will appear here.",
+    "pending": "Awaiting your acknowledgement",
+    "acknowledged": "Acknowledged at {{time}}",
+    "dispatchedAt": "Sent {{time}}",
+    "acknowledgeButton": "Acknowledge",
+    "acknowledging": "Sending",
+    "retryButton": "Try again",
+    "failed": "Could not send your acknowledgement.",
+    "safeToRetry": "Tapping again is safe — it will not acknowledge twice.",
+    "noInstruction": "No further detail given."
+  },
+
+  "lightning": {
+    "stopWorkTitle": "STOP WORK",
+    "stopWorkBody": "Lightning near this site. Seek proper shelter immediately.",
+    "advisoryTitle": "Lightning advisory",
+    "advisoryBody": "Lightning detected near this site. Be ready to stop work.",
+    "clearTitle": "No lightning risk",
+    "clearBody": "Assessed clear at {{time}}.",
+    "expiredTitle": "Lightning warning expired",
+    "expiredBody": "The warning lapsed at {{time}}. Resume work only when your supervisor confirms the all-clear.",
+    "nearestStrike": "Nearest strike {{km}} km away",
+    "observedAt": "Observed {{time}}",
+    "validUntil": "Valid until {{time}}",
+    "expiresInMinutes": "Expires in {{minutes}} min",
+    "expiresInSeconds": "Expires in {{seconds}} s",
+    "overrideNotice": "Heat plan suspended while stop-work is in effect."
+  },
+
+  "wbgt": {
+    "title": "Heat conditions",
+    "reading": "WBGT",
+    "noReading": "No reading available",
+    "superseded": "Superseded by the lightning stop-work",
+    "forecast": "Next hour: {{band}}",
+    "observedAt": "Observed {{time}}",
+    "temperature": "Air temp",
+    "humidity": "Humidity",
+    "wind": "Wind",
+    "band": {
+      "BELOW_31": "Below 31°C",
+      "31_TO_BELOW_32": "31 to 32°C",
+      "32_TO_BELOW_33": "32 to 33°C",
+      "33_AND_ABOVE": "33°C and above"
+    }
+  },
+
+  "guidance": {
+    "title": "What you must do",
+    "advisoryTitle": "Also recommended",
+    "suspended": "Suspended — lightning stop-work overrides the heat plan",
+    "rule": "Rule {{ref}}",
+    "policyVersion": "Policy {{version}}",
+    "none": "No heat actions required right now."
+  },
+
+  "actions": {
+    "HYDRATE_REGULARLY": "Drink water regularly",
+    "HYDRATE_HOURLY": "Drink water at least once an hour",
+    "SHADE_RECOVERY": "Take recovery breaks in the shade",
+    "RESCHEDULE_HEAVY_WORK": "Reschedule heavy work if you can",
+    "REST_10_MIN_HOURLY": "Rest 10 minutes without a break, every hour",
+    "REST_15_MIN_HOURLY": "Rest 15 minutes without a break, every hour",
+    "CLOSE_MONITORING": "Watch yourself and your crew closely for heat illness",
+
+    "REST_10_MIN": "Rest for 10 minutes",
+    "REST_15_MIN": "Rest for 15 minutes",
+    "HYDRATE": "Drink water now",
+    "STOP_WORK": "Stop work",
+    "SEEK_SHADE": "Move into shade",
+    "RESUME_WORK": "Resume work"
+  },
+
+  "shift": {
+    "title": "Your shift",
+    "task": "Task",
+    "intensity": "Work intensity",
+    "window": "{{start}} to {{end}}",
+    "acclimatisation": "Acclimatisation day {{day}} of 7",
+    "noTask": "No task recorded",
+    "noShiftTitle": "No shift scheduled",
+    "noShiftBody": "You have no current or upcoming shift. Check with your supervisor."
+  },
+
+  "intensity": {
+    "LIGHT": "Light",
+    "MODERATE": "Moderate",
+    "HEAVY": "Heavy"
+  },
+
+  "freshness": {
+    "LIVE": "Live",
+    "DELAYED": "Delayed",
+    "STALE": "Stale",
+    "SIMULATED": "Simulated",
+    "simulatedNotice": "Simulated data. Not a real reading — no lightning or conditions endpoint exists yet.",
+    "staleWarning": "This reading is too old to rely on. Do not treat it as current — follow your site's procedure or ask your supervisor for a confirmed reading.",
+    "delayedWarning": "This reading arrived later than expected. Conditions may have changed since it was taken."
+  },
+
+  "dev": {
+    "scenarioLabel": "Lightning scenario (development only)",
+    "freshnessLabel": "Data freshness (development only)",
+    "lostResponseLabel": "Simulate a lost response (development only)",
+    "lostResponseHint": "The server commits the acknowledgement, then the reply is dropped. Retry and the count below must stay at 1.",
+    "serverAckCount": "Server-side acknowledgements for this action: {{total}}",
+    "resetInbox": "Reset inbox",
+    "weatherLabel": "Weather scenario (development only)",
+    "weatherHint": "Sets the underlying rainfall, wind and humidity — the condition is still classified from those numbers, not set directly.",
+    "nightLabel": "Observed after dark",
+    "forbiddenLabel": "Simulate a cross-site 403 (development only)",
+    "forbiddenHint": "The story's 403 case is otherwise unreachable — the picker only offers sites you belong to. You should stay signed in and see an explanation.",
+    "scenarioClear": "Clear",
+    "scenarioAdvisory": "Advisory",
+    "scenarioStopWork": "Stop work"
+  },
+
+  "placeholder": {
+    "comingSoon": "Coming soon",
+    "screenPending": "This screen is next in the build order."
+  }
+}

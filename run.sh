@@ -36,7 +36,14 @@ ACCOUNT="$(
 
 export APP_COGNITO_ISSUER_URI="$(jq -r .issuer_uri <<<"$ACCOUNT")"
 export APP_COGNITO_JWK_SET_URI="$(jq -r .jwks_uri <<<"$ACCOUNT")"
-export APP_COGNITO_CLIENT_IDS="$(jq -r '[.web_client_id,.mobile_client_id] | join(",")' <<<"$ACCOUNT")"
+# cli_client_id is included so the mobile app's dev-only USER_PASSWORD_AUTH sign-in
+# (mobile/src/auth/cognitoPasswordAuth.ts) yields tokens this backend will accept. Expo Go
+# cannot complete the Hosted UI redirect — the mobile client's callback is pinned to
+# crewsafe://callback, a scheme only a native build registers — so a device cannot obtain a
+# mobile-client token at all. The CLI client's ALLOW_USER_PASSWORD_AUTH flow needs no
+# redirect and works from Expo Go. Staging already allows all three the same way; see
+# infra/terraform/secrets/main.tf. Local development only.
+export APP_COGNITO_CLIENT_IDS="$(jq -r '[.web_client_id,.mobile_client_id,.cli_client_id] | join(",")' <<<"$ACCOUNT")"
 export APP_COGNITO_DEMO_USERS_JSON="$(
   CREWSAFE_AWS_ACCOUNTS_JSON="$ACCOUNT_REGISTRY" \
   CREWSAFE_SHARED_COGNITO_JSON="$CONFIG" \
