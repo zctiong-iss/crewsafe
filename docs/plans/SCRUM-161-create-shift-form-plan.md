@@ -13,23 +13,31 @@ in the app with real behaviour behind it.
 
 ## Starting-state findings
 
-Read against `main` before planning. Three things the ticket does not mention.
+Read against `main` before planning. Three things the ticket did not mention. **Two were
+raised with Abu Bakar on 2 Aug and closed by PR #49 the same afternoon** — recorded here
+because the design below was shaped by them.
 
-**1 — Nothing returns the workers of a site (W-20, raised with Abu Bakar 2 Aug).**
-`assignments[].workerId` is a required UUID and no endpoint supplies candidates;
-`GET /sites/{siteId}/dashboard` excludes workers by design
-([`SiteController.java:92`](../../backend/src/main/java/com/crewsafe/site/api/SiteController.java)).
-`SiteMembershipRepository` has `findSiteIdsByUserId` — the mirror (site → users, joined to
-`AppUser`) is what's needed.
+**1 — Nothing returned the workers of a site (W-20). CLOSED, PR #49.**
+`assignments[].workerId` is a required UUID and nothing supplied candidates. Now
+`GET /api/v1/sites/{siteId}/workers` returns `SiteWorker { id, displayName }` — only members
+with `role = WORKER` **and** `status = ACTIVE`, alphabetical, behind the same role gate as
+shift creation. Two consequences for the picker: an offboarded worker never appears as a
+candidate, and a supervisor cannot assign themselves.
 
-This blocks rather than inconveniences: `AppUser.id` has no `@GeneratedValue` and demo users
-are reconciled from the Cognito manifest at seed time, so **worker UUIDs are not stable across
-environments**. A hardcoded stub list would break for anyone else pulling this branch.
+*The proposal was only partly accepted.* `username` was argued for on the grounds that two
+people on a site can share a display name; it was not included. That risk is real and now
+unmitigated — see *Known limitations*.
 
-**2 — Shifts and assignments have no correction path (W-19, raised with Abu Bakar 2 Aug).**
-`ShiftController` exposes list, create, read and add-assignment only — no `PATCH`, `PUT` or
-`DELETE` on either. A mis-entered intensity cannot be corrected and a worker cannot be
-unassigned. Accepted for this ticket; see *Explicitly out of scope*.
+**2 — Shifts and assignments had no correction path (W-19). CLOSED, PR #49.**
+`PATCH` and `DELETE` now exist on both `/shifts/{shiftId}` and
+`/shifts/{shiftId}/assignments/{assignmentId}`. Deletes are hard (`204`), and deleting a shift
+removes its assignments with it.
+
+One design detail worth carrying into the UI: `ShiftAssignmentUpdateRequest` **deliberately
+cannot change `workerId`**. A wrong worker means `DELETE` then `POST`, not reassignment in
+place — an assignment is a fact about a person on a shift, not a mutable slot, and rewriting
+it silently is what SCRUM-183's append-only audit trail exists to prevent. `intensity` stays
+required on update, never left unchanged by omission.
 
 **3 — Per-field validation errors are not achievable end to end (W-08).**
 `ErrorResponse` is `{error, message, requestId}` with no per-field channel, and
@@ -39,11 +47,11 @@ what this ticket can promise — see *Known limitations*.
 
 ## Approved design
 
-- **The worker lookup lives behind `fetchSiteWorkers(siteId): Promise<Worker[]>`** in
-  `web/src/api/`, following the shape of `fetchAccessibleSites()` in `identity.ts`. Today its
-  body returns a local fixture; when W-20 lands, only that body changes. **A function seam
-  over an inline fixture in the component, because** the signature is what makes the swap a
-  one-file change instead of a refactor of everything that consumes it.
+- **The worker lookup lives behind `fetchSiteWorkers(siteId): Promise<SiteWorker[]>`** in
+  `web/src/api/`, one line over `apiFetch`, following the shape of `fetchAccessibleSites()` in
+  `identity.ts`. The type is named `SiteWorker` to mirror `SiteController.SiteWorkerResponse`
+  exactly — **a mirror over a locally-invented name, because** once a real DTO exists the
+  local type stops being a negotiation and starts being a contract.
 - **Validation is client-side first.** Everything the contract can express — date order, the
   intensity enum, `taskName` ≤ 120, `acclimatisationDay` 1–7 — is caught before a request is
   sent. **Client-side over server-round-trip because** W-08 means a server rejection currently
@@ -92,12 +100,15 @@ no longer, a member of, *when* the API returns 403, *then* the request **was** s
 **remains signed in**, everything they entered is retained, and `messageFor(error)` is
 displayed with the request id. No automatic redirect.
 
-**AC-5 — stubbed worker source.** The worker list is supplied by a local fixture, not the API.
-`fetchSiteWorkers(siteId)` is **in scope and blocked on W-20** — not deferred. Everything
-downstream ships as final: picker, validation, request body, submit, error handling. While the
-fixture is in use the form displays `Demo worker list — not live data`, and a production build
-of the fixture module throws. Met when `fetchSiteWorkers` calls the live endpoint and the
-banner is removed in the same change.
+**AC-5 — WITHDRAWN 2 Aug, evening.** This criterion described a stubbed worker source behind a
+fixture, with an on-form `Demo worker list` banner and a production build guard, because no
+worker endpoint existed. **PR #49 shipped the endpoint, so there is nothing left to stub** —
+no fixture, no banner, no guard. Withdrawn rather than renumbered so AC-6 and the references
+to it elsewhere still resolve.
+
+The reasoning is kept because the discipline generalises: when a stand-in is unavoidable, put
+the guard in the file that must die rather than the file that survives, so it leaves with the
+thing it was guarding. It was not needed here in the end.
 
 **AC-6 — empty shift.** *Given* no assignments have been added, *when* the supervisor submits,
 *then* `assignments` is sent as `[]` and the shift is created. An inline, non-blocking note
@@ -115,58 +126,59 @@ before Sprint 2 closes.
 
 ## In scope, blocked
 
-Building now with a stand-in, to be completed when the dependency clears. **Not** deferred
-work.
-
-| Item | Blocked on | Tripwires |
-|---|---|---|
-| `fetchSiteWorkers(siteId)` calling the real endpoint | W-20 | This document; the on-form banner; production build of the fixture throws |
-
-Three tripwires because each covers a different failure: this file protects against
-forgetting, the banner against a teammate or demo viewer mistaking fixture data for real, and
-the build guard against it reaching users. The banner is the only one that fires during
-testing; the build guard is the only one that is mechanical.
-
-The build guard is `import.meta.env.PROD` throwing at module load, which white-screens the page
-in a production build. A CI check that greps the built bundle for the fixture import would be
-strictly better — it refuses to produce the artefact rather than breaking at runtime. Worth
-adding once SCRUM-177's pipeline is in place.
+**None — cleared 2 Aug, evening.** This section held one item, the stubbed worker source, and
+PR #49 removed the dependency it was waiting on. Kept as a heading so the plan's shape is
+readable against its own history.
 
 ## Explicitly out of scope
 
-- **Editing or removing an assignment, and editing or deleting a shift** — W-19. No endpoint
-  exists and none is ticketed. **No disabled or greyed-out edit control will be built**: a
-  disabled control is a promise the backend has not made, and if W-19 slips it reads as a bug
-  for weeks. Design intent for editing belongs in a wireframe, not in shipped code.
+- **Editing or removing an assignment, and editing or deleting a shift.** The endpoints now
+  exist (PR #49), so the original reason for excluding this — *no backend to build against* —
+  is void. **It stays out of scope for a different and weaker reason: SCRUM-161's stated scope
+  is create, validate, submit, and a shift list/detail view.** Editing is not named in the
+  ticket. That is a scoping judgement rather than a technical constraint, so it is worth
+  confirming rather than assuming — a supervisor who can create a wrong shift and not correct
+  it in the same screen will report that as a bug regardless of what the ticket says.
 - **Shift status transitions** — no endpoints exist (`PLANNED` only).
 - **The conditions screen and anything SSE** — SCRUM-169, blocked on W-03/W-04.
 
 ## Known limitations
 
-**Server-side rejections cannot be attributed to a field (W-08).** If the API returns 400 —
-most likely a stale `workerId` from another environment while AC-5's fixture is in use — the
-UI can only show the generic `"That request was not valid."` from
+**Server-side rejections cannot be attributed to a field (W-08). Still open after PR #49.**
+`ErrorResponse` is unchanged — `{error, message, requestId}`, no `fieldErrors` — so any 400
+surfaces only as the generic `"That request was not valid."` from
 [`errors.ts:56`](../../web/src/api/errors.ts). Not fixable inside this ticket: it needs a
-`fieldErrors` channel on `ErrorResponse` **and** a change to `client.ts` to stop discarding the
-response body. Raise separately with the owner of `ErrorResponse.java`.
+`fieldErrors` channel on `ErrorResponse` **and** a change to `client.ts:58-60` to stop
+discarding the response body. Two of the three gaps raised on 2 Aug were closed; this was not
+one of them. Raise separately with the owner of `ErrorResponse.java`.
+
+**Two active workers with the same display name are indistinguishable in the picker.**
+`SiteWorker` carries `id` and `displayName` only. `username` was proposed for exactly this
+reason and not included in PR #49. Client-side disambiguation does not rescue it: the only
+other field available is a UUID, and showing `Ahmad Bin Ali (a3f8…)` distinguishes two rows
+without telling a supervisor which is which — the appearance of a fix, which is worse than a
+named gap. Assigning heat guidance to the wrong person is the failure this product exists to
+prevent, so this is recorded as a limitation and put back to Abu with the concrete case:
+`AppUser.username` already exists and is unique by database constraint.
 
 ## Delivery sequence
 
-1. `Worker` type and `fetchSiteWorkers(siteId)` in `web/src/api/`, fixture-backed, with the
-   production build guard.
+1. `SiteWorker` type and `fetchSiteWorkers(siteId)` in `web/src/api/` — one call over
+   `apiFetch` against `GET /api/v1/sites/{siteId}/workers`.
 2. Shift types and `createShift(siteId, body)` mirroring the contract's `ShiftCreateRequest`.
 3. Form component: dates, then the assignment rows (worker, intensity, task, acclimatisation).
 4. Client-side validation — AC-2, AC-3.
 5. Submit, success display, and error handling — AC-1, AC-4.
-6. Empty-shift note and the fixture banner — AC-5, AC-6.
+6. Empty-shift note — AC-6.
 7. Tests against each AC. `web/src/app/navigation.test.ts` is the nearest existing pattern.
 
 ## Dependencies
 
-- **Depends on**: SCRUM-159 (`docs/api/shift.yaml`) and SCRUM-160 (endpoints) — both merged to
-  `main`. W-20 for AC-5 to be met.
-- **Blocked by, partially**: W-20 (worker endpoint), W-08 (per-field errors).
-- **Related**: W-19 (correction path), out of scope here but the same conversation with Abu.
+- **Depends on**: SCRUM-159 (`docs/api/shift.yaml`), SCRUM-160 (endpoints) and the
+  SCRUM-159/160-fix in PR #49 (worker endpoint, correction path) — all merged to `main`.
+- **Blocked by**: nothing. W-19 and W-20 both closed 2 Aug.
+- **Constrained by**: W-08 (no per-field errors) and the duplicate display-name gap — neither
+  blocks delivery; both are recorded under *Known limitations*.
 
 ## Handoff note
 
@@ -176,5 +188,17 @@ Read [`docs/api/shift.yaml`](../api/shift.yaml) first — it is the spec, not a 
 [`navigation.ts:18-20`](../../web/src/app/navigation.ts) explains why client-side filtering is
 never the reason a check can be skipped.
 
-Backend tests are known to be failing as of 2 Aug, owned by a teammate and unrelated to this
-work. Do not treat the suite as a gate for this ticket.
+**Suite status, verified 2 Aug evening: `162 tests, 0 failures, 16 errors`.** Treat the suite
+as a gate for this ticket — the endpoints this form consumes are green. `ShiftControllerTest`
+and `SiteWorkersTest` both pass, including everything PR #49 added.
+
+All 16 errors are quarantined to two classes in the action-dispatch lane
+(`ActionDispatchControllerTest`, `ActionDispatchServiceTest`), are test-only rather than
+production defects, and are owned elsewhere. If those two are still red, that is not this
+ticket regressing.
+
+**One environment note that is not a code problem.** `JAVA_HOME` must point at Temurin 21 or
+Maven fails with `release version 21 not supported` before a single test runs. `~/.zshrc` is
+not read by non-interactive shells, so an IDE or tool-spawned build can pick up a different
+JDK than your terminal does; set `JAVA_HOME` in `~/.zshenv` instead. Note `.sdkmanrc` pins
+`21.0.12-tem` but only helps if sdkman is actually installed.
