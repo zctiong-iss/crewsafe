@@ -126,7 +126,7 @@
       "Resource": "*"
     },
     {
-      "Sid": "ManageCrossOriginParameter",
+      "Sid": "ManageTheTwoParametersThisComponentCreates",
       "Effect": "Allow",
       "Action": [
         "ssm:AddTagsToResource",
@@ -138,7 +138,10 @@
         "ssm:PutParameter",
         "ssm:RemoveTagsFromResource"
       ],
-      "Resource": "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cors/allowed-origins"
+      "Resource": [
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cors/allowed-origins",
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cognito/demo-users-json"
+      ]
     },
     {
       "Sid": "PassOnlyTheTwoRolesTheSecretsComponentPublished",

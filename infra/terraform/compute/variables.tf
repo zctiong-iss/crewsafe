@@ -156,3 +156,33 @@ variable "cors_allowed_origins" {
     error_message = "cors_allowed_origins must be a non-empty explicit list of origins and must not contain a wildcard."
   }
 }
+
+variable "demo_users_json" {
+  description = <<-EOT
+    Reviewed synthetic application-user mappings, as the application's
+    APP_COGNITO_DEMO_USERS_JSON. Fictional identities only; the project uses no real
+    worker data. Not a credential — usernames, immutable Cognito subject identifiers,
+    roles and site codes.
+
+    The default is an EMPTY ARRAY, meaning "no users to reconcile", which the
+    application treats as a valid no-op. That is deliberate: this component cannot know
+    the mappings. They are derived from the shared Cognito configuration, which reaches
+    Terraform through no channel — the plan and apply workflows pass four TF_VAR_*
+    values and none of them carries it.
+
+    The application's DemoDataSeeder runs under the staging profile and requires this
+    property to be PRESENT. It is unconstrained on the properties class, which reads as
+    optional, but a null value throws rather than seeding nothing — so an absent
+    parameter fails the task 60 seconds into startup, after Flyway and after the port is
+    bound. Supplying "[]" is what makes staging start.
+
+    Whoever administers the synthetic users owns the real value and writes it out of
+    band. Terraform ignores changes to it afterwards, so an apply cannot revert it.
+  EOT
+  type        = string
+  default     = "[]"
+  validation {
+    condition     = can(jsondecode(var.demo_users_json)) && startswith(trimspace(var.demo_users_json), "[")
+    error_message = "demo_users_json must be a valid JSON array. The application parses it as a list of mappings, and a malformed value fails the task at startup rather than at plan time."
+  }
+}

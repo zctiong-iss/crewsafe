@@ -30,7 +30,7 @@ client ──443/TLS──> CloudFront distribution
                     RDS PostgreSQL (SCRUM-175)
 ```
 
-Fourteen resources. Everything the application needs is resolved **by reference** at task start
+Fifteen resources. Everything the application needs is resolved **by reference** at task start
 using the two roles `secrets-shared-dev` published — nothing is baked into the image, and no
 credential is in Terraform source, state, a plan artifact, or a log.
 
@@ -114,9 +114,10 @@ mechanism differs.
 > first it adds `CrewSafeEcrTerraformPlan`/`Apply` to the same two roles.
 
 **Replace `<ACCOUNT_ID>` in the apply policy with the target account's twelve-digit id before
-attaching. It appears eight times**, across `ManageApplicationLogGroup` (twice),
-`ManageCrossOriginParameter`, `PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the
-three service-linked-role statements. The plan policy contains no account id.
+attaching. It appears nine times**, across `ManageApplicationLogGroup` (twice),
+`ManageTheTwoParametersThisComponentCreates` (twice — one per parameter),
+`PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the three service-linked-role
+statements. The plan policy contains no account id.
 
 > **Inline policy budget — this component is the one that broke it.** A role's inline policies share
 > a **10,240 non-whitespace character** limit, counted across *all* of them. Attaching this
@@ -176,8 +177,10 @@ inline policy** here — it will be rejected on the character limit.
    log-group ARN forms, not `*`.
 5. Confirm `ListLogGroupsApply` holds **exactly one action**, `logs:DescribeLogGroups`, on `*`.
    **Do not "tighten" this to an ARN** — see the first warning below.
-6. Confirm `ManageCrossOriginParameter` is scoped to the single parameter ARN, not the prefix and
-   not `*`. This component creates exactly one configuration entry.
+6. Confirm `ManageTheTwoParametersThisComponentCreates` names **both** exact parameter ARNs —
+   `cors/allowed-origins` and `cognito/demo-users-json` — and neither the prefix nor `*`. It was a
+   single ARN until 2026-08-03; the second entry supplies the synthetic-user mappings the staging
+   profile requires (see §10).
 7. Confirm all **three** service-linked-role statements are present, each scoped to its exact
    `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
    warning below.
@@ -394,7 +397,7 @@ each of these by reading the plan output:
 | 9 | Exactly **one** new ingress rule targets the application security group | |
 | 10 | Security group descriptions contain **no apostrophe** | EC2 rejects it at create time, not at plan — **this is what broke SCRUM-173's first apply** |
 | 11 | Distribution minimum protocol is `TLSv1.2_2021`, cache policy is `CachingDisabled` | Without the explicit minimum the default certificate implies TLS 1.0 |
-| 12 | Resource count is at or under 22 | |
+| 12 | Resource count is at or under 23 | Was 22 before the synthetic-user mappings parameter was added |
 
 ---
 
@@ -432,7 +435,15 @@ aws logs tail /crewsafe/shared-dev/backend --since 15m \
 Take the elapsed time from the first Flyway line to `Started CrewSafeApplication`, add the JVM cold
 start, set the variable's default to roughly twice the total, and record the measurement here.
 
-> **Measured cold start:** *to be filled in on the first apply*
+> **Measured cold start: 62.4 seconds.** First successful start, 2026-08-03 —
+> `Started CrewSafeApplication in 62.411 seconds (process running for 66.496)`. Flyway validated five
+> migrations against schema v5 in under a second, so the time is JVM start plus Spring context
+> initialisation, not migrations.
+>
+> **The 180-second default needs no change.** It is roughly 3x the measured start, which is the
+> margin this setting wants — a cold image pull, slower task placement, or one added migration all
+> fit inside it. Re-measure if the application gains eager initialisation or the image grows
+> substantially.
 
 ---
 
@@ -505,6 +516,58 @@ Resolution, decided at the plan review: this component publishes **`cluster_arn`
 Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
 
 When SCRUM-191 lands, delete this section.
+
+### The synthetic-user mappings parameter, and why this component creates it
+
+`/crewsafe/shared-dev/cognito/demo-users-json`, seeded with `[]`.
+
+The first task to start cleanly got all the way to `Started CrewSafeApplication in 62.411 seconds`
+and then died:
+
+```text
+IllegalArgumentException: Mapping JSON is malformed.
+Caused by: IllegalArgumentException: argument "content" is null
+```
+
+`DemoDataSeeder` is `@Profile({"local","staging"})` and this deployment runs the **staging** profile,
+so it executes. It reads `app.cognito.demo-users-json`, which carries **no** `@NotBlank` on
+`CognitoProperties` — reading as optional — but a null value throws rather than seeding nothing.
+
+Three things about this are worth knowing before touching it:
+
+**Only one of the four `APP_COGNITO_*` values was missing, not all four.** `ISSUER_URI`,
+`JWK_SET_URI` and `CLIENT_IDS` were already wired as parameter references from the start, sourced
+from what `secrets-shared-dev` publishes out of the cognito component's state. They resolved
+correctly, which is why their `@NotBlank` constraints never fired. The failure was confined to the
+one property with no constraint.
+
+**The failure lands 60 seconds in, after the port is bound.** Flyway had already validated, Tomcat
+had already started, and the log reads like an application defect rather than absent configuration.
+Anything that reaches `Started` and then throws is worth checking against the parameter list first.
+
+**This component creates the parameter rather than referencing one the secrets component owns.** That
+is the FR-033 rule applied deliberately: a `secrets` reference to a parameter that does not exist
+fails the *container start* outright — the same reason `NEA_API_KEY` is still absent from the task
+definition. Wiring a reference to a not-yet-created parameter would have replaced a 60-second failure
+with a task that never starts at all. Creating it here makes the parameter and its consumer arrive in
+the same apply, with no window between them. It sits under the prefix `secrets-shared-dev` publishes,
+so the execution role's **prefix-scoped** read grant covers it with no change to that component.
+
+> **Terraform seeds the value once and then stops tracking it** — `ignore_changes = [value]`. The real
+> mappings belong to whoever administers the synthetic users; without this, an apply would silently
+> revert staging's seeded users to `[]`, a data change presenting as an empty diff.
+
+`[]` means "no users to reconcile" and is the tested no-op — `DemoDataSeederMappingTest` asserts it
+parses to empty. This component cannot know the real mappings: they derive from the shared Cognito
+configuration, which reaches Terraform through no channel, since the plan and apply workflows pass
+four `TF_VAR_*` values and none carries it.
+
+> **A backend fix is still worth making, and it is not in this component.** `demoUsersJson` has no
+> constraint, which reads as optional, yet a null throws. Any environment that forgets the property
+> loses a minute of startup to an error that names Jackson rather than the missing configuration.
+> Treating null or blank as "nothing to seed" would make the contract match the annotation. Raise it
+> against whoever owns `DemoDataSeeder` — the parameter above is the deployment-side fix, not a
+> reason to leave the landmine.
 
 ### The container root filesystem is writable, and on Fargate that is forced
 

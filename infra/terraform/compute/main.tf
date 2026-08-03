@@ -123,14 +123,15 @@ locals {
   # the platform's secret resolution. Adding it later is a task-definition change,
   # not just a secret write (FR-033).
   parameter_secrets = {
-    DB_URL                    = local.database.db_url_parameter_name
-    DB_USERNAME               = "${local.secrets.config_parameter_prefix}/db/username"
-    APP_COGNITO_ISSUER_URI    = "${local.secrets.config_parameter_prefix}/cognito/issuer-uri"
-    APP_COGNITO_JWK_SET_URI   = "${local.secrets.config_parameter_prefix}/cognito/jwk-set-uri"
-    APP_COGNITO_CLIENT_IDS    = "${local.secrets.config_parameter_prefix}/cognito/client-ids"
-    SPRING_PROFILES_ACTIVE    = "${local.secrets.config_parameter_prefix}/spring/profiles-active"
-    WEATHER_INGESTION_ENABLED = "${local.secrets.config_parameter_prefix}/weather/ingestion-enabled"
-    CORS_ALLOWED_ORIGINS      = aws_ssm_parameter.cors_allowed_origins.name
+    DB_URL                      = local.database.db_url_parameter_name
+    DB_USERNAME                 = "${local.secrets.config_parameter_prefix}/db/username"
+    APP_COGNITO_ISSUER_URI      = "${local.secrets.config_parameter_prefix}/cognito/issuer-uri"
+    APP_COGNITO_JWK_SET_URI     = "${local.secrets.config_parameter_prefix}/cognito/jwk-set-uri"
+    APP_COGNITO_CLIENT_IDS      = "${local.secrets.config_parameter_prefix}/cognito/client-ids"
+    SPRING_PROFILES_ACTIVE      = "${local.secrets.config_parameter_prefix}/spring/profiles-active"
+    WEATHER_INGESTION_ENABLED   = "${local.secrets.config_parameter_prefix}/weather/ingestion-enabled"
+    CORS_ALLOWED_ORIGINS        = aws_ssm_parameter.cors_allowed_origins.name
+    APP_COGNITO_DEMO_USERS_JSON = aws_ssm_parameter.demo_users_json.name
   }
 
   # The trailing "::" is load-bearing, not cosmetic. The format is
@@ -419,6 +420,41 @@ resource "aws_ssm_parameter" "cors_allowed_origins" {
   type        = "String"
   value       = var.cors_allowed_origins
   description = "Browser origins permitted to call the backend. Read by the task execution role at task start. Not a credential. Replaced by whichever issue deploys the web client."
+}
+
+# The second configuration entry, and it exists because the application requires the
+# property to be PRESENT rather than merely valid.
+#
+# DemoDataSeeder is @Profile({"local","staging"}) and this deployment runs the staging
+# profile, so it executes. It reads app.cognito.demo-users-json, which carries no
+# @NotBlank on CognitoProperties — reading as optional — but a null value throws
+# `Mapping JSON is malformed` instead of seeding nothing. The failure therefore lands
+# 60 seconds into startup, AFTER Flyway has validated and AFTER the port is bound, so
+# it looks like an application defect rather than absent configuration. `[]` is the
+# tested no-op value (DemoDataSeederMappingTest asserts it parses to empty).
+#
+# This component cannot know the real mappings. They come from the shared Cognito
+# configuration, which reaches Terraform through no channel — the plan and apply
+# workflows pass four TF_VAR_* values and none carries it.
+#
+# It is created HERE rather than referenced from the secrets component on purpose: a
+# `secrets` reference to a parameter that does not exist fails the container start
+# outright (FR-033, the reason NEA_API_KEY is still absent). Creating it in the same
+# component that references it makes the parameter and its consumer arrive together,
+# so there is no window in which the task definition points at nothing.
+resource "aws_ssm_parameter" "demo_users_json" {
+  name        = "${local.secrets.config_parameter_prefix}/cognito/demo-users-json"
+  type        = "String"
+  value       = var.demo_users_json
+  description = "Reviewed synthetic application-user mappings. Fictional identities only; not a credential. Terraform seeds an empty array and then stops tracking the value — whoever administers the synthetic users owns it."
+
+  # Terraform seeds this once and never again. The real mappings are owned by whoever
+  # administers the synthetic users, and without this an apply would silently revert
+  # staging's seeded users to the empty default — a data change disguised as a no-op
+  # diff. Same reasoning as the service's ignore_changes on task_definition.
+  lifecycle {
+    ignore_changes = [value]
+  }
 }
 
 # ---------------------------------------------------------------------------
