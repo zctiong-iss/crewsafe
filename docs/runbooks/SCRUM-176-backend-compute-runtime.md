@@ -249,6 +249,35 @@ service-linked-role grants: read-only, attributable to the one API call that fai
 include now than to discover one failed apply at a time. Both are `Describe` verbs — neither grants
 any mutation.
 
+**Round 2 — run [30796767337](https://github.com/zctiong-iss/crewsafe/actions/runs/30796767337),
+`aws_cloudfront_vpc_origin.backend`:**
+
+```text
+operation error CloudFront: CreateVpcOrigin, StatusCode: 403
+AccessDenied: Access Denied.
+```
+
+**No action is named, unlike round 1** — CloudFront returns a bare denial, so the log alone cannot
+tell you what to add. The cause was `CreateCloudFrontVpcOriginServiceLinkedRole` naming the wrong
+service principal in both places:
+
+| | Was (wrong) | Is |
+| --- | --- | --- |
+| `Resource` path | `aws-service-role/cloudfront.amazonaws.com/…` | `aws-service-role/vpcorigin.cloudfront.amazonaws.com/…` |
+| `iam:AWSServiceName` | `cloudfront.amazonaws.com` | `vpcorigin.cloudfront.amazonaws.com` |
+
+`AWSServiceRoleForCloudFrontVPCOrigin` is trusted by **`vpcorigin.cloudfront.amazonaws.com`**, a
+distinct principal from CloudFront's own — see
+[Use service-linked roles for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-service-linked-roles.html).
+Both the ARN and the condition failed to match, `iam:CreateServiceLinkedRole` was denied, and
+CloudFront surfaced that as a generic 403 on its own API. `ap-southeast-1` is on the supported-Region
+list, so the Region was not the cause.
+
+> **When a denial names no action, read the service's service-linked-role documentation before
+> widening anything.** This looked like a missing `cloudfront:*` action and was not — every CloudFront
+> action needed was already granted. Guessing would have added permissions that were never the
+> problem and left the real one in place.
+
 > **The apply was partial, and that is normal.** Nine of fourteen resources were created before the
 > denial: the log group, the configuration entry, the task definition, the target group, the load
 > balancer security group, all three security group rules, and the cluster. They are in state and the

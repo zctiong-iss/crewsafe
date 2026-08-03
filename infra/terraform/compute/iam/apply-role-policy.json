@@ -188,10 +188,10 @@
       "Action": [
         "iam:CreateServiceLinkedRole"
       ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/cloudfront.amazonaws.com/AWSServiceRoleForCloudFrontVPCOrigin",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/vpcorigin.cloudfront.amazonaws.com/AWSServiceRoleForCloudFrontVPCOrigin",
       "Condition": {
         "StringLike": {
-          "iam:AWSServiceName": "cloudfront.amazonaws.com"
+          "iam:AWSServiceName": "vpcorigin.cloudfront.amazonaws.com"
         }
       }
     }
