@@ -1,6 +1,7 @@
 package com.crewsafe.operation.service;
 
 import com.crewsafe.common.audit.AuditService;
+import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.repository.AppUserRepository;
@@ -114,7 +115,8 @@ class ActionDispatchServiceTest {
         assertNotNull(result);
         assertEquals("REST_10_MIN", result.getActionCode());
         assertEquals(ActionDispatch.ActionDispatchStatus.PENDING, result.getStatus());
-        verify(auditService).record(eq(supervisorId), eq("ACTION_DISPATCHED"), eq("action_dispatch"), eq(result.getId()), any());
+        verify(auditService).record(eq(supervisorId), eq(AuditEventType.ACTION_DISPATCHED),
+                eq("ACTION_DISPATCH"), eq(result.getId()), any());
     }
 
     @Test
@@ -157,7 +159,8 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED, second.getStatus());
 
         // Only one audit event should be recorded for the first acknowledgement
-        verify(auditService).record(eq(workerId), eq("ACTION_ACKNOWLEDGED"), eq("action_dispatch"), eq(dispatchId), any());
+        verify(auditService).record(eq(workerId), eq(AuditEventType.ACTION_ACKNOWLEDGED),
+                eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
     @Test
@@ -179,7 +182,8 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, second.getStatus());
 
         // Only one audit event should be recorded
-        verify(auditService).record(eq(workerId), eq("ACTION_COMPLETED"), eq("action_dispatch"), eq(dispatchId), any());
+        verify(auditService).record(eq(workerId), eq(AuditEventType.ACTION_COMPLETED),
+                eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
     @Test

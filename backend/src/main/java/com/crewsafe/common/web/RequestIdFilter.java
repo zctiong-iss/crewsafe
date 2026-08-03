@@ -46,6 +46,18 @@ public class RequestIdFilter extends OncePerRequestFilter {
         return requestId != null ? requestId : "unknown";
     }
 
+    /**
+     * Returns the current request id, or creates one for work running outside an HTTP
+     * request. Audit records must always carry a useful correlation id, including events
+     * emitted by future schedulers or message consumers.
+     */
+    public static String currentOrGenerated() {
+        String requestId = MDC.get(MDC_KEY);
+        return requestId != null && !requestId.isBlank()
+                ? requestId
+                : UUID.randomUUID().toString();
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {

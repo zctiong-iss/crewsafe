@@ -31,7 +31,7 @@ public class AuditService {
 
     private void save(UUID actorId, String eventType, String targetType, UUID targetId, String detail) {
         events.save(new AuditEvent(actorId, eventType, targetType, targetId,
-                RequestIdFilter.current(), truncate(detail)));
+                RequestIdFilter.currentOrGenerated(), truncate(detail)));
     }
 
     /** The detail column is VARCHAR(500); an over-long value must not fail the write. */
