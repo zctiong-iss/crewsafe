@@ -138,16 +138,6 @@ variable "log_retention_days" {
   }
 }
 
-variable "tmpfs_size_mib" {
-  description = "Writable scratch mounted at /tmp. Required, not optional: the container runs with a read-only root filesystem, and the JVM writes performance-counter files while the embedded servlet container allocates a temp directory. Without this the task fails during startup, before the first application log line."
-  type        = number
-  default     = 64
-  validation {
-    condition     = var.tmpfs_size_mib >= 16 && var.tmpfs_size_mib <= 1024
-    error_message = "tmpfs_size_mib must be between 16 and 1024."
-  }
-}
-
 variable "cors_allowed_origins" {
   description = <<-EOT
     Browser origins permitted to call the API, as the application's CORS_ALLOWED_ORIGINS.
