@@ -16,12 +16,13 @@ import type { FC } from "react";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
-import AppText from "../texts/AppText";
+import AppText, { lineHeightFor } from "../texts/AppText";
 import AppButton from "../buttons/AppButton";
 import AnimatedIcon from "../feedback/AnimatedIcon";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
 import { formatTime } from "@/helpers/dateTime";
+import { humaniseActionCode } from "@/helpers/actionCodes";
 import type { ActionDispatch } from "@/types/domain";
 
 interface DispatchCardProps {
@@ -47,6 +48,14 @@ const DispatchCard: FC<DispatchCardProps> = ({
 
   const acknowledged = acknowledgedAt !== null;
 
+  // Both scale with the device and with the user's text setting, so the icon stays on the
+  // title's first line on a 320dp phone at 0.85x and a tablet at 1.5x alike.
+  const iconSize = s(22);
+  const iconTopOffset = Math.max(
+    0,
+    (lineHeightFor("subtitle", theme.fontScale) - iconSize) / 2,
+  );
+
   return (
     <View
       style={[
@@ -55,24 +64,38 @@ const DispatchCard: FC<DispatchCardProps> = ({
         { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
       ]}
     >
+      {/*
+        The icon holds the first line's axis, whatever the title does.
+
+        With `alignItems: "center"` the icon was centred against the *whole* title block, so
+        a one-line title looked right and a two-line one (an untranslated code such as
+        ROTATE_TO_LIGHT_DUTY) dropped the icon into the gap between the lines. Top-aligning
+        and nudging down by half the difference between the line box and the icon puts it on
+        the first line's optical centre instead.
+
+        The offset is derived from `lineHeightFor`, not hardcoded, so it stays correct across
+        device scaling (`s()`) and the user's own text-size setting — the two things that
+        would otherwise silently break it on a smaller or larger phone.
+      */}
       <View style={styles.headerRow}>
         <AnimatedIcon
           name={acknowledged ? "checkmark-circle" : "arrow-forward-circle"}
-          size={s(22)}
+          size={iconSize}
           color={acknowledged ? theme.colors.success : theme.colors.textPrimary}
           // Pops once when it flips to acknowledged, then stays still. A pending action does
           // not pulse: three of them pulsing at once would be a nervous screen, and the
           // urgency lives in the lightning banner, not here.
           motion={acknowledged ? "pop" : "none"}
-          style={styles.headerIcon}
+          style={[styles.headerIcon, { marginTop: iconTopOffset }]}
         />
         {/* flex:1 so a long action title wraps rather than pushing the timestamp away. */}
         <AppText variant="subtitle" style={styles.title}>
-          {/* Falls back to the raw code: `action_code` is deliberately not CHECK-constrained
-              server-side (see V3__domain_schema.sql), so the catalogue can grow ahead of
-              this app's translations. An untranslated instruction is recoverable; a blank
-              one is not. */}
-          {t(`actions.${dispatch.actionCode}`, { defaultValue: dispatch.actionCode })}
+          {/* Falls back to a humanised form of the code rather than the raw code — see
+              `humaniseActionCode`. An untranslated instruction is recoverable; a blank one
+              is not, and a mid-word break with an orphaned letter reads as broken. */}
+          {t(`actions.${dispatch.actionCode}`, {
+            defaultValue: humaniseActionCode(dispatch.actionCode),
+          })}
         </AppText>
       </View>
 
@@ -155,7 +178,9 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
+    // Not "center": that would centre the icon against a multi-line title. See the note at
+    // the call site.
+    alignItems: "flex-start",
   },
   headerIcon: {
     marginEnd: s(10),

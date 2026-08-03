@@ -374,7 +374,7 @@ derived from HTTP status.
 
 - **Exercised on an Android emulator; never on iOS.** The worker screens have been driven on
   a Pixel 9 / API 35 emulator — sign-in, the stop-work banner, the inbox, and a successful
-  one-tap acknowledgement. Four bugs found that way are written up above. Beyond that,
+  one-tap acknowledgement. Six bugs found that way are written up above. Beyond that,
   verification is `tsc`, both platform bundles, `expo-doctor`, and executable specs for the
   logic. **iOS has never been run at all**, and the supervisor screens have not been driven
   end to end on a device.
@@ -408,11 +408,15 @@ derived from HTTP status.
 
 ## Problems found on the emulator, and how they were diagnosed
 
-Four bugs were found by running the app on an Android emulator (Pixel 9, API 35) that
+Six bugs were found by running the app on an Android emulator (Pixel 9, API 35) that
 **nothing in the static checks could catch** — `tsc` passed, both platform bundles built,
 `expo-doctor` reported 20/20, and every executable spec passed the whole time. Two were
-JS↔native problems that only exist at runtime; one was an environment collision; one was a
-layout bug that only appears once real text is measured on a real screen.
+JS↔native problems that only exist at runtime; one was an environment collision; three were
+layout bugs that only appear once real text is measured on a real screen.
+
+The layout ones share a root cause worth naming: **a style can be type-correct and still be
+wrong**, and nothing in the toolchain measures pixels. Every one of them came back to a
+container guessing a child's height or width instead of being told it.
 
 They are written up in full because the *technique* transfers, and because each one looked
 like something it wasn't.
@@ -560,6 +564,65 @@ second line rendered outside the row's measured box and the next sibling drew ov
 (`flexShrink: 0`) and a status column (`flex: 1`) with a real width to wrap inside — plus
 `alignItems: "flex-start"` so both labels sit on the same horizontal axis, and margin on
 both sides of the gap rather than one.
+
+---
+
+### Problem 5 — Title and icon out of line on an untranslated action code
+
+**Symptom.** On the inbox card, `ROTATE_TO_LIGHT_DUTY` wrapped to two lines, the icon sat in
+the gap between them, and the second line was a single orphaned `Y`. Cards whose code *is*
+translated ("Drink water now") looked fine.
+
+**Two separate causes, and the first fix only addressed one of them.** Worth recording,
+because the first attempt looked plausible and did not fix what was actually being
+complained about.
+
+**Cause A — the icon.** `headerRow` used `alignItems: "center"`, which centres the icon
+against the *whole* title block. One line looked right; two lines dropped the icon into the
+gap. Fixed by top-aligning and nudging down by half the difference between the line box and
+the icon, putting it on the first line's optical centre.
+
+That offset is **derived, not hardcoded**:
+
+```ts
+const iconTopOffset = (lineHeightFor("subtitle", theme.fontScale) - iconSize) / 2;
+```
+
+`lineHeightFor` is exported from `AppText` so the calculation uses the same numbers the text
+itself does. A literal `marginTop: 3` would look correct on one device and drift silently on
+a 320dp phone or at 1.5× text — and nothing type-checks a visual offset.
+
+**Cause B — the real one.** `ROTATE_TO_LIGHT_DUTY` contains no spaces, so there is nowhere
+to wrap: Android breaks it mid-word. Untranslated codes are now humanised
+(`helpers/actionCodes.ts`) to `Rotate to light duty`, which is shorter, usually fits on one
+line, and has real word boundaries when it does not. Applied to both fallbacks —
+`DispatchCard` and `HeatGuidance`.
+
+This path exists because `action_code` is deliberately not CHECK-constrained server-side, so
+the catalogue can grow ahead of this app's translations. The fallback is expected to be hit.
+
+---
+
+### Problem 6 — Profile rows wrapped to two lines
+
+**Symptom.** `synthetic-worker@synthetic.crewsafe.invalid` wrapped under the "Username"
+label, so the label and its value stopped reading as a pair and that row was visibly taller
+than "Role" and "Sites".
+
+**Root cause.** The value was `flexShrink: 1` with no line limit, so it wrapped instead of
+truncating — and row height therefore varied with the length of whatever the server returned.
+
+**Fix.** `numberOfLines={1}` with `ellipsizeMode="middle"`, label `flexShrink: 0`, value
+`flex: 1`. Every row is now exactly one line on any screen at any text scale.
+
+`middle` rather than `tail` because these values are identifiers: the informative parts of
+`synthetic-worker@synthetic.crewsafe.invalid` are the name at the front and the domain at
+the end, and tail truncation would eat the domain entirely. The trade-off is real — a long
+username is no longer readable in full, and if that matters the row should become a
+label-above-value stack rather than reverting to wrapping.
+
+> `ellipsizeMode="middle"` is one of the props where iOS and Android differ most in
+> rendering. **iOS has never been run**, so this row is worth checking first on a simulator.
 
 ---
 

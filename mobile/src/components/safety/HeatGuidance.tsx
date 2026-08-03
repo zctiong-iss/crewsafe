@@ -23,6 +23,7 @@ import { s, vs } from "react-native-size-matters";
 import AppText from "../texts/AppText";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
+import { humaniseActionCode } from "@/helpers/actionCodes";
 import type { PolicyAction, PolicyEvaluation } from "@/types/domain";
 
 interface HeatGuidanceProps {
@@ -51,7 +52,7 @@ const HeatGuidance: FC<HeatGuidanceProps> = ({ policy, suspended }) => {
               is open-ended (REST_10_MIN, HYDRATE, STOP_WORK, ...) and the backend can add
               one before this app ships a translation for it. An untranslated instruction is
               recoverable; a silently missing one is not. */}
-          {t(`actions.${item.code}`, { defaultValue: item.code })}
+          {t(`actions.${item.code}`, { defaultValue: humaniseActionCode(item.code) })}
         </AppText>
         <AppText variant="caption" tone="secondary" style={styles.rule}>
           {t("guidance.rule", { ref: item.ruleReference })}

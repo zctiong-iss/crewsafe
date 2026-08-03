@@ -31,6 +31,24 @@ const VARIANTS: Record<AppTextVariant, { size: number; family: string }> = {
   caption: { size: 12, family: AppFonts.regular },
 };
 
+/**
+ * Gelasio is a serif with tall ascenders; RN's default line height clips descenders on
+ * Android at larger scales, so every variant is given this much room.
+ */
+export const LINE_HEIGHT_RATIO = 1.35;
+
+/**
+ * The rendered line height of a variant, in the same units a sibling's `marginTop` uses.
+ *
+ * Exported so that a caller aligning something *next to* text — an icon that must sit on the
+ * first line's axis, say — can derive the offset instead of hardcoding a magic number that
+ * silently stops matching when the variant, the device scale or the user's text size
+ * changes. See `DispatchCard`'s header.
+ */
+export function lineHeightFor(variant: AppTextVariant, fontScale: number): number {
+  return s(VARIANTS[variant].size) * fontScale * LINE_HEIGHT_RATIO;
+}
+
 interface AppTextProps extends TextProps {
   children: ReactNode;
   variant?: AppTextVariant;

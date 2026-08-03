@@ -111,9 +111,26 @@ export default function ProfileScreen() {
               <AppText variant="label" tone="secondary" style={styles.rowLabel}>
                 {row.label}
               </AppText>
-              {/* flexShrink so a long username wraps inside the card rather than pushing
-                  the value off its right edge. */}
-              <AppText variant="body" style={styles.rowValue}>
+              {/*
+                One line, truncated in the middle rather than wrapped.
+
+                Wrapping let a long value push its second line below the label, so the two
+                stopped reading as a pair and the row's height changed per user — a
+                47-character synthetic username took two lines while "Worker" took one.
+                Pinning to a single line keeps every row the same height on any screen size
+                and at any text scale.
+
+                `middle` rather than `tail` because these values are identifiers: for
+                `synthetic-worker@synthetic.crewsafe.invalid` the informative parts are the
+                name at the front and the domain at the end, and tail truncation would eat
+                the domain entirely.
+              */}
+              <AppText
+                variant="body"
+                style={styles.rowValue}
+                numberOfLines={1}
+                ellipsizeMode="middle"
+              >
                 {row.value}
               </AppText>
             </View>
@@ -179,16 +196,23 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    // Both on the same axis. With a single-line value this also vertically centres the
+    // pair, which "flex-start" would not once the label and value differ in size.
+    alignItems: "center",
     justifyContent: "space-between",
     paddingVertical: vs(12),
     paddingHorizontal: s(14),
   },
   rowLabel: {
+    // Never squeezed: "Username" is short and fixed, and shrinking it would truncate the
+    // label before the value it describes.
+    flexShrink: 0,
     marginEnd: s(12),
   },
   rowValue: {
-    flexShrink: 1,
+    // Takes whatever the label leaves and truncates inside it, so the row is exactly one
+    // line wide on a 320dp phone and a tablet alike.
+    flex: 1,
     textAlign: "right",
   },
   action: {
