@@ -98,5 +98,7 @@ Terraform runs in CI only — never locally. See
 
 - [web/README.md](web/README.md) — supervisor console: both run paths and its decisions
 - [local/README.md](local/README.md) — Compose stack layout and resolved environment
+- [SCRUM-111 weather ingestion](docs/runbooks/SCRUM-111-weather-ingestion.md) — external
+  data.gov.sg endpoints, live and fixture modes, scheduling, and troubleshooting
 - [docs/adr/](docs/adr/) — architecture decisions
 - [docs/plans/](docs/plans/) — Jira-keyed plans

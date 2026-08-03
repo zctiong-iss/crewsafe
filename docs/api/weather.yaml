@@ -1,0 +1,103 @@
+openapi: 3.0.3
+info:
+  title: CrewSafe Weather API
+  version: 1.0.0
+  description: >-
+    Reads site weather snapshots already validated and stored by SCRUM-111 ingestion.
+    The HTTP request never calls data.gov.sg directly.
+paths:
+  /api/v1/sites/{siteId}/weather/latest:
+    get:
+      summary: Get the latest stored weather for a site
+      operationId: getLatestSiteWeather
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          description: Site the signed-in user is allowed to access.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The newest stored weather snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LatestWeather"
+        "401":
+          description: The request has no valid access token.
+        "403":
+          description: The signed-in user cannot access this site.
+        "404":
+          description: Ingestion has not stored weather for this site yet.
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    LatestWeather:
+      type: object
+      required:
+        - id
+        - siteId
+        - wbgt
+        - temperature
+        - humidity
+        - windSpeed
+        - rainfall
+        - observedAt
+        - ingestedAt
+        - source
+        - qualityStatus
+      properties:
+        id:
+          type: string
+          format: uuid
+        siteId:
+          type: string
+          format: uuid
+        wbgt:
+          type: number
+          format: double
+          nullable: true
+          description: Wet-bulb globe temperature in degrees Celsius.
+        temperature:
+          type: number
+          format: double
+          nullable: true
+          description: Air temperature in degrees Celsius.
+        humidity:
+          type: number
+          format: double
+          nullable: true
+          description: Relative humidity as a percentage.
+        windSpeed:
+          type: number
+          format: double
+          nullable: true
+          description: Wind speed in knots.
+        rainfall:
+          type: number
+          format: double
+          nullable: true
+          description: Rainfall in millimetres.
+        observedAt:
+          type: string
+          format: date-time
+        ingestedAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [NEA, MANUAL, CACHED]
+        qualityStatus:
+          type: string
+          enum: [LIVE, DELAYED, STALE, SIMULATED]
+        stationId:
+          type: string
+          nullable: true

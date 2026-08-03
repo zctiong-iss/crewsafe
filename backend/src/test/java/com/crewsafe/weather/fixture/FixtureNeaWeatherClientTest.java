@@ -5,12 +5,16 @@ import com.crewsafe.weather.nea.NeaObservation;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.Resource;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class FixtureNeaWeatherClientTest {
 
@@ -51,12 +55,42 @@ class FixtureNeaWeatherClientTest {
         assertThat(same).isEqualTo(first);
     }
 
+    @Test
+    void rejectsFixtureWithoutScenarioDescription() {
+        String fixtureWithoutDescription = """
+                {
+                  "capturedAt": "2026-07-30T08:45:00Z",
+                  "frames": [{}]
+                }
+                """;
+
+        assertThatThrownBy(() -> clientFromJson(fixtureWithoutDescription))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("capturedAt, description, and at least one frame");
+    }
+
     private FixtureNeaWeatherClient client(boolean loop) {
         WeatherFixtureProperties properties = new WeatherFixtureProperties();
         properties.setResource("classpath:weather/fixtures/nea-demo-replay.json");
         properties.setLoop(loop);
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         return new FixtureNeaWeatherClient(objectMapper, new DefaultResourceLoader(), properties);
+    }
+
+    private FixtureNeaWeatherClient clientFromJson(String fixtureJson) {
+        WeatherFixtureProperties properties = new WeatherFixtureProperties();
+        properties.setResource("memory:weather-fixture.json");
+        properties.setLoop(false);
+        Resource fixtureResource = new ByteArrayResource(
+                fixtureJson.getBytes(StandardCharsets.UTF_8), "weather-fixture.json");
+        DefaultResourceLoader resourceLoader = new DefaultResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                return fixtureResource;
+            }
+        };
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        return new FixtureNeaWeatherClient(objectMapper, resourceLoader, properties);
     }
 
     private void assertFrame(List<NeaObservation> frame, String observedAt, String wbgt) {
