@@ -61,10 +61,12 @@ class ActionDispatchServiceTest {
         supervisorId = UUID.randomUUID();
         dispatchId = UUID.randomUUID();
 
-        // Create mock principal for supervisor
+        // Create mock principal for supervisor. Not every test exercises both stubs below
+        // (e.g. tests that fail before reaching the role/id check, or that use their own
+        // worker principal instead), so they're lenient rather than duplicated per test.
         principal = mock(CrewSafeUserPrincipal.class);
-        when(principal.getId()).thenReturn(supervisorId);
-        when(principal.getRole()).thenReturn(Role.SUPERVISOR);
+        lenient().when(principal.getId()).thenReturn(supervisorId);
+        lenient().when(principal.getRole()).thenReturn(Role.SUPERVISOR);
 
         AppUser approver = AppUser.builder()
                 .id(supervisorId)
@@ -141,7 +143,6 @@ class ActionDispatchServiceTest {
         // Create a worker principal
         CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
         when(workerPrincipal.getId()).thenReturn(workerId);
-        when(workerPrincipal.getRole()).thenReturn(Role.WORKER);
 
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
@@ -164,7 +165,6 @@ class ActionDispatchServiceTest {
         // Create a worker principal
         CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
         when(workerPrincipal.getId()).thenReturn(workerId);
-        when(workerPrincipal.getRole()).thenReturn(Role.WORKER);
 
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);

@@ -455,14 +455,10 @@ resource "aws_ecs_task_definition" "backend" {
     cpu_architecture        = "X86_64"
   }
 
-  # Writable scratch for the read-only root filesystem below. Required, not
-  # optional: the JVM writes /tmp/hsperfdata_<user> at startup and embedded Tomcat
-  # allocates a temp directory there. A read-only root WITHOUT this mount fails
-  # during startup, before the first application log line — so the symptom is an
-  # opaque exit code rather than a diagnosable error (FR-013).
-  volume {
-    name = "tmp"
-  }
+  # NO volume is declared, and that is deliberate — see the note on
+  # readonlyRootFilesystem below. A bind mount at /tmp would SHADOW the image's
+  # writable /tmp with a root-owned 0755 directory and reintroduce the exact startup
+  # failure it looks like it prevents.
 
   container_definitions = jsonencode([
     {
@@ -481,15 +477,34 @@ resource "aws_ecs_task_definition" "backend" {
         },
       ]
 
-      readonlyRootFilesystem = true
-
-      mountPoints = [
-        {
-          sourceVolume  = "tmp"
-          containerPath = "/tmp"
-          readOnly      = false
-        },
-      ]
+      # false, and on Fargate this is forced rather than chosen.
+      #
+      # The application needs writable scratch: the JVM writes /tmp/hsperfdata_<user>
+      # at startup and embedded Tomcat allocates a temp directory there. On Fargate
+      # there is no way to give a NON-ROOT container writable scratch alongside a
+      # read-only root:
+      #
+      #   - tmpfs is not supported on Fargate at all.
+      #   - A bind mount IS supported, but Fargate creates it root-owned at 0755, so
+      #     uid 1000 cannot write to it. aws/containers-roadmap#938 is still open;
+      #     the Fargate 1.3.0 workaround was removed in 1.4.0.
+      #   - Managed EBS volumes do support non-root, but a per-task EBS volume for a
+      #     scratch directory costs money and adds attach latency to every cold start.
+      #
+      # So read-only root and non-root user are mutually exclusive here, and the
+      # non-root user is the stronger control — a compromised process confined to an
+      # unprivileged uid beats one running as root against a read-only mount it can
+      # still subvert through the writable volume it needs. Decided 2026-08-03 after
+      # the first task failed with:
+      #
+      #   WebServerException: Unable to create tempDir. java.io.tmpdir is set to /tmp
+      #   Caused by: java.nio.file.AccessDeniedException: /tmp/tomcat.8080.<n>
+      #
+      # DO NOT "restore hardening" by adding a volume and a mountPoint at /tmp. That
+      # is what was here before and it is what caused the failure above. If this
+      # control has to come back, it needs a managed EBS volume or a root init
+      # container that chowns the mount — both are their own decision, not a tidy-up.
+      readonlyRootFilesystem = false
 
       # Explicitly empty rather than omitted, so the source guard has something to
       # assert against and any future addition is a visible diff. Every value the

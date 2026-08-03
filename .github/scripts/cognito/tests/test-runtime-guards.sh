@@ -25,8 +25,27 @@ if grep -En 'gh variable get|spring-boot:run|npm run dev|compose .* up' "$docker
   exit 1
 fi
 
-if grep -En 'terraform|aws configure|sts get-caller-identity|cognito-local' \
-  "$runner" "$docker_runner" "$engine_resolver"; then
+# A comment that NAMES one of these tools is not an invocation of it, so comments are
+# stripped before scanning. Same reasoning and the same sed idiom as
+# .github/scripts/terraform/tests/test-compute-source-guard.sh: prose explaining where a
+# thing lives must not trip the guard enforcing that it is not done here. Without this, a
+# cross-reference to a file under infra/terraform/ fails the build, which is what happened
+# once run.sh gained one.
+#
+# `#` opens a comment only at line start or after whitespace, so parameter expansions such
+# as ${ACCOUNT#prefix} survive the strip. Line numbers are attached before concatenation so
+# a failure still reports the exact file and line.
+scan_runners() {
+  local f rel
+  for f in "$runner" "$docker_runner" "$engine_resolver"; do
+    rel="${f#"$ROOT"/}"
+    sed -E 's/(^|[[:space:]])#.*$//' "$f" | grep -n '' | sed "s|^|$rel:|"
+  done
+}
+
+if scan_runners | grep -E 'terraform|aws configure|sts get-caller-identity|cognito-local'; then
+  echo "A local runner invokes Terraform, configures AWS, or uses cognito-local." >&2
+  echo "Those belong in CI, not on a workstation (AGENTS.md §3)." >&2
   exit 1
 fi
 if grep -En 'cognito-local' "$ROOT/local/compose.yaml"; then

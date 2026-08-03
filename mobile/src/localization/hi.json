@@ -1,0 +1,367 @@
+{
+  "common": {
+    "appName": "CrewSafe",
+    "cancel": "रद्द करें",
+    "confirm": "पुष्टि करें",
+    "save": "सहेजें",
+    "retry": "फिर कोशिश करें",
+    "close": "बंद करें",
+    "loading": "लोड हो रहा है",
+    "back": "वापस",
+    "none": "कोई नहीं",
+    "optional": "वैकल्पिक",
+    "requestReference": "संदर्भ: {{requestId}}"
+  },
+
+  "errors": {
+    "unauthenticated": "आपका सत्र समाप्त हो गया है। जारी रखने के लिए साइन इन करें।",
+    "not-provisioned": "साइन-इन हो गया, लेकिन यह खाता अभी CrewSafe में सक्रिय नहीं है। अपने साइट प्रशासक से इसे जोड़ने को कहें।",
+    "forbidden": "आपके पास इसकी अनुमति नहीं है। यदि यह गलत लगे तो अपने साइट प्रशासक से संपर्क करें।",
+    "not-found": "यह रिकॉर्ड मौजूद नहीं है।",
+    "bad-request": "यह अनुरोध मान्य नहीं था।",
+    "conflict": "किसी और ने पहले बदलाव कर दिया है। पुनः लोड करके कोशिश करें।",
+    "server": "हमारी ओर से कुछ गड़बड़ हुई। थोड़ी देर बाद कोशिश करें।",
+    "network": "CrewSafe तक नहीं पहुँच पा रहे। अपना कनेक्शन जाँचकर फिर कोशिश करें।",
+    "configMissing": "ऐप कॉन्फ़िगर नहीं है। अनुपस्थित: {{keys}}",
+    "unknown": "कुछ गड़बड़ हुई। फिर कोशिश करें।"
+  },
+
+  "auth": {
+    "signInTitle": "साइन इन",
+    "signInSubtitle": "बाहर काम करने वालों के लिए गर्मी सुरक्षा",
+    "usernameLabel": "उपयोगकर्ता नाम",
+    "usernamePlaceholder": "अपना उपयोगकर्ता नाम दर्ज करें",
+    "passwordLabel": "पासवर्ड",
+    "passwordPlaceholder": "अपना पासवर्ड दर्ज करें",
+    "signInButton": "साइन इन",
+    "signUpButton": "खाते का अनुरोध करें",
+    "signOutButton": "साइन आउट",
+    "signingIn": "साइन इन किया जा रहा है",
+    "pkceHint": "आपको ब्राउज़र में CrewSafe के सुरक्षित साइन-इन पेज पर ले जाया जाएगा।",
+    "modeLabel": "साइन-इन मोड (केवल विकास हेतु)",
+    "modeMock": "डेमो उपयोगकर्ता",
+    "modeCognitoPassword": "Cognito (पासवर्ड)",
+    "modeCognitoPkce": "Cognito (होस्टेड UI)",
+    "demoUserLabel": "डेमो उपयोगकर्ता चुनें",
+    "notProvisionedTitle": "खाता सक्रिय नहीं है",
+    "sessionExpired": "आपका सत्र समाप्त हो गया है।",
+    "validation": {
+      "usernameRequired": "अपना उपयोगकर्ता नाम दर्ज करें।",
+      "passwordRequired": "अपना पासवर्ड दर्ज करें।",
+      "passwordTooShort": "पासवर्ड कम से कम {{min}} अक्षरों का होना चाहिए।"
+    },
+    "cognito": {
+      "invalidCredentials": "उपयोगकर्ता नाम या पासवर्ड सही नहीं है।",
+      "newPasswordRequired": "इस खाते पर अभी अस्थायी पासवर्ड है। यहाँ साइन इन करने से पहले AWS कंसोल में स्थायी पासवर्ड सेट करें।",
+      "userDisabled": "यह खाता निष्क्रिय कर दिया गया है।",
+      "tooManyAttempts": "बहुत अधिक प्रयास। थोड़ी देर रुककर फिर कोशिश करें।",
+      "pkceUnavailableInExpoGo": "फ़ोन पर होस्टेड UI साइन-इन के लिए डेवलपमेंट बिल्ड चाहिए, क्योंकि Expo Go crewsafe:// लिंक नहीं खोल सकता। इस प्रवाह को जाँचने के लिए `npx expo start --web --port 5173` चलाएँ, या कोई दूसरा मोड चुनें।",
+      "cancelled": "साइन-इन रद्द कर दिया गया।"
+    }
+  },
+
+  "signUp": {
+    "title": "खाते का अनुरोध करें",
+    "intro": "CrewSafe खाते आपके साइट प्रशासक बनाते हैं। यह भरें और हम बता देंगे कि उन्हें क्या भेजना है।",
+    "fullNameLabel": "पूरा नाम",
+    "fullNamePlaceholder": "साइट रिकॉर्ड के अनुसार आपका नाम",
+    "usernameLabel": "पसंदीदा उपयोगकर्ता नाम",
+    "usernamePlaceholder": "छोटे अक्षर, बिना खाली स्थान",
+    "emailLabel": "कार्य ईमेल",
+    "emailPlaceholder": "you@example.com",
+    "siteLabel": "आप किस साइट पर काम करते हैं?",
+    "roleNotice": "यहाँ केवल वर्कर खाते का अनुरोध किया जा सकता है। सुपरवाइज़र, सेफ़्टी मैनेजर और प्रशासक खाते प्रशासक ही बनाते हैं।",
+    "submitButton": "अनुरोध तैयार करें",
+    "successTitle": "अनुरोध तैयार है",
+    "successBody": "ये विवरण अपने साइट प्रशासक को भेजें। वे आपका खाता बनाएँगे और आपको ईमेल पर निमंत्रण मिलेगा।",
+    "copyButton": "विवरण कॉपी करें",
+    "copiedButton": "कॉपी हो गया",
+    "editButton": "विवरण बदलें",
+    "backToSignIn": "साइन इन पर वापस",
+    "requestHeading": "CrewSafe खाता अनुरोध",
+    "roleLine": "अनुरोधित भूमिका: वर्कर",
+    "validation": {
+      "fullNameRequired": "अपना पूरा नाम दर्ज करें।",
+      "fullNameTooShort": "कम से कम {{min}} अक्षर दर्ज करें।",
+      "fullNameTooLong": "अधिकतम {{max}} अक्षर ही लिखें।",
+      "usernameRequired": "उपयोगकर्ता नाम चुनें।",
+      "usernameFormat": "केवल छोटे अक्षर और अंक, बीच में . _ या - ही उपयोग करें।",
+      "usernameTooLong": "अधिकतम {{max}} अक्षर ही लिखें।",
+      "emailRequired": "अपना कार्य ईमेल दर्ज करें।",
+      "emailInvalid": "यह ईमेल पते जैसा नहीं लगता।",
+      "emailTooLong": "अधिकतम {{max}} अक्षर ही लिखें।",
+      "singleLineOnly": "कृपया लाइन ब्रेक और विशेष फ़ॉर्मैटिंग वर्ण हटाएँ।",
+      "siteRequired": "अपनी साइट चुनें।"
+    }
+  },
+
+  "roles": {
+    "WORKER": "वर्कर",
+    "SUPERVISOR": "साइट सुपरवाइज़र",
+    "SAFETY_MANAGER": "सेफ़्टी मैनेजर",
+    "ADMIN": "प्रशासक"
+  },
+
+  "tabs": {
+    "shift": "मेरी शिफ़्ट",
+    "inbox": "इनबॉक्स",
+    "weather": "मौसम",
+    "shifts": "शिफ़्ट",
+    "profile": "प्रोफ़ाइल",
+    "settings": "सेटिंग"
+  },
+
+  "settings": {
+    "title": "सेटिंग",
+    "language": "भाषा",
+    "changeLanguage": "भाषा बदलें",
+    "textSize": "अक्षर आकार",
+    "textSizeSmall": "छोटा",
+    "textSizeDefault": "सामान्य",
+    "textSizeLarge": "बड़ा",
+    "textSizeExtraLarge": "बहुत बड़ा",
+    "textSizePreview": "गर्मी अधिक है — पानी पीते रहें और छाया में विश्राम करें।",
+    "highContrast": "उच्च कंट्रास्ट",
+    "highContrastHint": "गहरे रंग और मोटी रेखाएँ, ताकि धूप में स्क्रीन पढ़ी जा सके।",
+    "reduceMotion": "एनिमेशन कम करें",
+    "reduceMotionHint": "आइकन की हलचल बंद कर देता है। यदि आपके डिवाइस में Reduce Motion चालू है तो यह पहले से लागू है।",
+    "accessibility": "सुगम्यता",
+    "display": "प्रदर्शन",
+    "about": "ऐप के बारे में",
+    "aboutVersion": "संस्करण {{version}}",
+    "aboutBody": "सिंगापुर में बाहर काम करने वालों के लिए गर्मी सुरक्षा।"
+  },
+
+  "profile": {
+    "title": "प्रोफ़ाइल",
+    "role": "भूमिका",
+    "sites": "साइट",
+    "username": "उपयोगकर्ता नाम",
+    "changePhoto": "फ़ोटो बदलें",
+    "addPhoto": "फ़ोटो जोड़ें",
+    "photoSheetTitle": "प्रोफ़ाइल फ़ोटो",
+    "takePhoto": "फ़ोटो लें",
+    "chooseFromLibrary": "गैलरी से चुनें",
+    "removePhoto": "फ़ोटो हटाएँ",
+    "photoLocalOnly": "आपकी फ़ोटो केवल इसी फ़ोन में रहती है। यह CrewSafe को नहीं भेजी जाती और आपका सुपरवाइज़र इसे नहीं देख सकता।",
+    "permissionDeniedTitle": "अनुमति चाहिए",
+    "cameraDeniedBody": "फ़ोटो लेने के लिए CrewSafe को कैमरे की अनुमति चाहिए। इसे डिवाइस सेटिंग में चालू करें।",
+    "libraryDeniedBody": "फ़ोटो चुनने के लिए CrewSafe को गैलरी की अनुमति चाहिए। इसे डिवाइस सेटिंग में चालू करें।",
+    "photoUpdatedToast": "फ़ोटो अपडेट हो गई",
+    "photoRemovedToast": "फ़ोटो हटा दी गई"
+  },
+
+  "shifts": {
+    "site": "साइट",
+    "emptyTitle": "अभी कोई शिफ़्ट नहीं",
+    "emptyBody": "इस साइट के लिए बनाई गई शिफ़्टें यहाँ दिखेंगी।",
+    "noSitesTitle": "कोई साइट नहीं सौंपी गई",
+    "noSitesBody": "आपको अभी किसी साइट पर नहीं रखा गया है। प्रशासक से जोड़ने को कहें।",
+    "createButton": "शिफ़्ट बनाएँ",
+    "assignmentCount_one": "{{count}} वर्कर",
+    "assignmentCount_other": "{{count}} वर्कर",
+    "unstaffed": "कोई वर्कर नहीं जोड़ा गया",
+    "window": "{{start}} से {{end}}",
+    "status": {
+      "PLANNED": "नियोजित",
+      "ACTIVE": "चालू",
+      "CLOSED": "समाप्त"
+    },
+    "detailTitle": "शिफ़्ट",
+    "assignments": "क्रू",
+    "worker": "वर्कर",
+    "unknownWorker": "यह वर्कर अब इस साइट पर नहीं है",
+    "task": "काम",
+    "noTask": "कोई काम दर्ज नहीं",
+    "intensity": "तीव्रता",
+    "acclimatisation": "अनुकूलन का दिन {{day}} / 7",
+    "deleteButton": "यह शिफ़्ट हटाएँ",
+    "deleteTitle": "यह शिफ़्ट हटाएँ?",
+    "deleteBody": "इससे शिफ़्ट और उससे जुड़ी सभी नियुक्तियाँ हट जाएँगी। इसे वापस नहीं लाया जा सकता।",
+    "deleteConfirm": "हटाएँ",
+    "deleting": "हटाया जा रहा है",
+    "deletedToast": "शिफ़्ट हटा दी गई",
+    "deleteFailedTitle": "शिफ़्ट नहीं हटाई गई",
+
+    "form": {
+      "timesSection": "कब",
+      "startsAt": "शुरू",
+      "endsAt": "समाप्त",
+      "pickDateTime": "तारीख़ और समय चुनें",
+      "crewSection": "कौन काम करेगा",
+      "crewHint": "इस शिफ़्ट के लिए वर्कर चुनें। आप शिफ़्ट अभी बनाकर बाद में भी लोग जोड़ सकते हैं।",
+      "noWorkers": "इस साइट पर अभी कोई वर्कर उपलब्ध नहीं है।",
+      "assignmentsSection": "काम और तीव्रता",
+      "taskLabel": "काम",
+      "taskPlaceholder": "वे क्या करेंगे",
+      "taskHint": "वैकल्पिक। अधिकतम {{max}} अक्षर।",
+      "intensityLabel": "काम की तीव्रता",
+      "acclimatisationLabel": "अनुकूलन का दिन",
+      "acclimatisationPlaceholder": "1 से 7",
+      "acclimatisationHint": "केवल पहले सात दिनों के वर्कर, या एक सप्ताह से अधिक बाद लौटने वालों के लिए।",
+      "removeWorker": "शिफ़्ट से हटाएँ",
+      "submit": "शिफ़्ट बनाएँ",
+      "submitting": "बनाई जा रही है",
+      "createdToast": "शिफ़्ट बन गई",
+      "unstaffedNotice": "यह शिफ़्ट बिना किसी वर्कर के बनेगी। आप बाद में लोग जोड़ सकते हैं।"
+    },
+
+    "validation": {
+      "startRequired": "शिफ़्ट शुरू होने का समय चुनें।",
+      "endRequired": "शिफ़्ट समाप्त होने का समय चुनें।",
+      "endNotAfterStart": "समाप्ति का समय शुरू होने के बाद होना चाहिए।",
+      "taskTooLong": "काम का विवरण {{max}} अक्षरों से कम रखें।",
+      "intensityRequired": "काम की तीव्रता चुनें।",
+      "acclimatisationRange": "1 से 7 के बीच पूर्ण संख्या भरें, या खाली छोड़ें।",
+      "checkFields": "ऊपर कुछ विवरण ठीक करने हैं। लाल किनारे वाले फ़ील्ड ही सुधारने हैं।"
+    }
+  },
+
+  "weather": {
+    "title": "मौसम की स्थिति",
+    "site": "साइट",
+    "noSitesTitle": "कोई साइट नहीं सौंपी गई",
+    "noSitesBody": "आपको अभी किसी साइट पर नहीं रखा गया है। अपने साइट प्रशासक से जोड़ने को कहें।",
+    "feelsLike": "वेट-बल्ब ग्लोब तापमान",
+    "airTemp": "हवा का तापमान",
+    "humidity": "नमी",
+    "wind": "हवा",
+    "rainfall": "वर्षा",
+    "station": "स्टेशन {{id}}",
+    "observedAt": "{{time}} पर दर्ज",
+    "ingestedAt": "{{time}} पर प्राप्त",
+    "night": "अँधेरे के बाद",
+    "condition": {
+      "FAIR": "साफ़",
+      "PARTLY_CLOUDY": "आंशिक बादल",
+      "CLOUDY": "बादल",
+      "WINDY": "तेज़ हवा",
+      "RAIN": "बारिश",
+      "THUNDERY_SHOWERS": "गरज के साथ बौछार"
+    }
+  },
+
+  "inbox": {
+    "emptyTitle": "पुष्टि के लिए कुछ नहीं",
+    "emptyBody": "सुपरवाइज़र द्वारा स्वीकृत निर्देश यहाँ दिखाई देंगे।",
+    "pending": "आपकी पुष्टि की प्रतीक्षा है",
+    "acknowledged": "{{time}} पर पुष्टि की गई",
+    "dispatchedAt": "{{time}} पर भेजा गया",
+    "acknowledgeButton": "पुष्टि करें",
+    "acknowledging": "भेजा जा रहा है",
+    "retryButton": "फिर कोशिश करें",
+    "failed": "आपकी पुष्टि नहीं भेजी जा सकी।",
+    "safeToRetry": "दोबारा टैप करना सुरक्षित है — पुष्टि दो बार दर्ज नहीं होगी।",
+    "noInstruction": "और कोई विवरण नहीं दिया गया।"
+  },
+
+  "lightning": {
+    "stopWorkTitle": "काम तुरंत रोकें",
+    "stopWorkBody": "साइट के पास बिजली गिर रही है। तुरंत सुरक्षित आश्रय में जाएँ।",
+    "advisoryTitle": "बिजली की चेतावनी",
+    "advisoryBody": "साइट के पास बिजली दर्ज हुई है। काम रोकने के लिए तैयार रहें।",
+    "clearTitle": "बिजली का कोई ख़तरा नहीं",
+    "clearBody": "{{time}} पर सुरक्षित आँका गया।",
+    "expiredTitle": "बिजली की चेतावनी समाप्त",
+    "expiredBody": "चेतावनी {{time}} पर समाप्त हो गई। काम तभी शुरू करें जब आपका सुपरवाइज़र पुष्टि करे।",
+    "nearestStrike": "निकटतम बिजली {{km}} किमी दूर",
+    "observedAt": "{{time}} पर दर्ज",
+    "validUntil": "{{time}} तक मान्य",
+    "expiresInMinutes": "{{minutes}} मिनट में समाप्त",
+    "expiresInSeconds": "{{seconds}} सेकंड में समाप्त",
+    "overrideNotice": "काम रुका रहने तक गर्मी सम्बन्धी योजना स्थगित है।"
+  },
+
+  "wbgt": {
+    "title": "गर्मी की स्थिति",
+    "reading": "WBGT",
+    "noReading": "कोई रीडिंग उपलब्ध नहीं",
+    "superseded": "बिजली के कारण काम रोकने का आदेश लागू — यह रीडिंग अब मान्य नहीं",
+    "forecast": "अगले घंटे: {{band}}",
+    "observedAt": "{{time}} पर दर्ज",
+    "temperature": "तापमान",
+    "humidity": "नमी",
+    "wind": "हवा",
+    "band": {
+      "BELOW_31": "31°C से कम",
+      "31_TO_BELOW_32": "31 से 32°C",
+      "32_TO_BELOW_33": "32 से 33°C",
+      "33_AND_ABOVE": "33°C या अधिक"
+    }
+  },
+
+  "guidance": {
+    "title": "यह करना ज़रूरी है",
+    "advisoryTitle": "यह भी सुझाया जाता है",
+    "suspended": "स्थगित — बिजली के कारण काम रोकना गर्मी योजना पर भारी है",
+    "rule": "नियम {{ref}}",
+    "policyVersion": "नीति {{version}}",
+    "none": "अभी गर्मी सम्बन्धी कोई कार्रवाई ज़रूरी नहीं।"
+  },
+
+  "actions": {
+    "HYDRATE_REGULARLY": "नियमित रूप से पानी पिएँ",
+    "HYDRATE_HOURLY": "हर घंटे कम से कम एक बार पानी पिएँ",
+    "SHADE_RECOVERY": "छाया में विश्राम करें",
+    "RESCHEDULE_HEAVY_WORK": "हो सके तो भारी काम किसी और समय करें",
+    "REST_10_MIN_HOURLY": "हर घंटे लगातार 10 मिनट विश्राम करें",
+    "REST_15_MIN_HOURLY": "हर घंटे लगातार 15 मिनट विश्राम करें",
+    "CLOSE_MONITORING": "अपने और साथियों में गर्मी से बीमारी के लक्षण ध्यान से देखें",
+
+    "REST_10_MIN": "10 मिनट विश्राम करें",
+    "REST_15_MIN": "15 मिनट विश्राम करें",
+    "HYDRATE": "अभी पानी पिएँ",
+    "STOP_WORK": "काम रोकें",
+    "SEEK_SHADE": "छाया में जाएँ",
+    "RESUME_WORK": "काम फिर शुरू करें"
+  },
+
+  "shift": {
+    "title": "आपकी शिफ़्ट",
+    "task": "काम",
+    "intensity": "काम की तीव्रता",
+    "window": "{{start}} से {{end}}",
+    "acclimatisation": "अनुकूलन का दिन {{day}} / 7",
+    "noTask": "कोई काम दर्ज नहीं",
+    "noShiftTitle": "कोई शिफ़्ट निर्धारित नहीं",
+    "noShiftBody": "आपकी कोई चालू या आगामी शिफ़्ट नहीं है। अपने सुपरवाइज़र से पूछें।"
+  },
+
+  "intensity": {
+    "LIGHT": "हल्का",
+    "MODERATE": "मध्यम",
+    "HEAVY": "भारी"
+  },
+
+  "freshness": {
+    "LIVE": "लाइव",
+    "DELAYED": "विलंबित",
+    "STALE": "पुराना",
+    "SIMULATED": "नकली",
+    "simulatedNotice": "नकली डेटा, वास्तविक रीडिंग नहीं — बिजली और मौसम का एंडपॉइंट अभी बना नहीं है।",
+    "staleWarning": "यह रीडिंग बहुत पुरानी है, इस पर भरोसा न करें। इसे मौजूदा स्थिति न मानें — साइट की प्रक्रिया अपनाएँ या सुपरवाइज़र से पुष्ट रीडिंग माँगें।",
+    "delayedWarning": "यह रीडिंग अपेक्षा से देर से आई है। तब से स्थिति बदल चुकी हो सकती है।"
+  },
+
+  "dev": {
+    "scenarioLabel": "बिजली परिदृश्य (केवल विकास हेतु)",
+    "freshnessLabel": "डेटा की ताज़गी (केवल विकास हेतु)",
+    "lostResponseLabel": "उत्तर खो जाने की नकल करें (केवल विकास हेतु)",
+    "lostResponseHint": "सर्वर पुष्टि दर्ज कर लेता है, फिर उत्तर गिरा दिया जाता है। दोबारा कोशिश करने पर नीचे की गिनती 1 ही रहनी चाहिए।",
+    "serverAckCount": "इस निर्देश के लिए सर्वर पर दर्ज पुष्टियाँ: {{total}}",
+    "resetInbox": "इनबॉक्स रीसेट करें",
+    "weatherLabel": "मौसम परिदृश्य (केवल विकास हेतु)",
+    "weatherHint": "वर्षा, हवा और नमी के मान सेट करता है — स्थिति अब भी इन्हीं मानों से तय होती है, सीधे नहीं दी जाती।",
+    "nightLabel": "अँधेरे के बाद दर्ज",
+    "forbiddenLabel": "क्रॉस-साइट 403 की नकल करें (केवल विकास हेतु)",
+    "forbiddenHint": "यह स्थिति सामान्यतः नहीं आती — चयनकर्ता केवल आपकी साइटें दिखाता है। ऐसा होने पर आप साइन इन रहेंगे और स्पष्टीकरण दिखेगा।",
+    "scenarioClear": "सुरक्षित",
+    "scenarioAdvisory": "चेतावनी",
+    "scenarioStopWork": "काम रोकें"
+  },
+
+  "placeholder": {
+    "comingSoon": "जल्द आ रहा है",
+    "screenPending": "यह स्क्रीन अभी बनाई जा रही है।"
+  }
+}

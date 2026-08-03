@@ -219,18 +219,132 @@ inline policy** here — it will be rejected on the character limit.
 > broaden a `Resource` to `*` to get past it — that is how a least-privilege policy quietly becomes
 > an administrative one.
 
+### 3.3 Actions discovered by a failed apply
+
+The prediction above came true on the first apply. Keep this log — the next component managing a new
+AWS service will hit the same class of thing, and the pattern is more useful than the individual
+actions.
+
+**Round 1 — run [30795727320](https://github.com/zctiong-iss/crewsafe/actions/runs/30795727320),
+`aws_lb.main`:**
+
+```text
+AccessDenied: not authorized to perform: ec2:DescribeAccountAttributes
+```
+
+`CreateLoadBalancer` calls it internally to read the account's Elastic Load Balancing limits before
+allocating. It is an account-wide read with no resource-level form, so `Resource: "*"` is not a
+widening here — there is no narrower way to express it.
+
+Added to `ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule`:
+
+| Action | Basis |
+| --- | --- |
+| `ec2:DescribeAccountAttributes` | **Proven** — the exact action the apply was denied |
+| `ec2:DescribeAvailabilityZones` | Pre-emptive — AWS documents it as a `CreateLoadBalancer` prerequisite |
+| `ec2:DescribeInternetGateways` | Pre-emptive — same, and called even for an internal load balancer |
+
+The two pre-emptive additions follow the same reasoning already applied to the three
+service-linked-role grants: read-only, attributable to the one API call that failed, and cheaper to
+include now than to discover one failed apply at a time. Both are `Describe` verbs — neither grants
+any mutation.
+
+**Round 2 — run [30796767337](https://github.com/zctiong-iss/crewsafe/actions/runs/30796767337),
+`aws_cloudfront_vpc_origin.backend`:**
+
+```text
+operation error CloudFront: CreateVpcOrigin, StatusCode: 403
+AccessDenied: Access Denied.
+```
+
+**No action is named, unlike round 1** — CloudFront returns a bare denial, so the log alone cannot
+tell you what to add. The cause was `CreateCloudFrontVpcOriginServiceLinkedRole` naming the wrong
+service principal in both places:
+
+| | Was (wrong) | Is |
+| --- | --- | --- |
+| `Resource` path | `aws-service-role/cloudfront.amazonaws.com/…` | `aws-service-role/vpcorigin.cloudfront.amazonaws.com/…` |
+| `iam:AWSServiceName` | `cloudfront.amazonaws.com` | `vpcorigin.cloudfront.amazonaws.com` |
+
+`AWSServiceRoleForCloudFrontVPCOrigin` is trusted by **`vpcorigin.cloudfront.amazonaws.com`**, a
+distinct principal from CloudFront's own — see
+[Use service-linked roles for CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-service-linked-roles.html).
+Both the ARN and the condition failed to match, `iam:CreateServiceLinkedRole` was denied, and
+CloudFront surfaced that as a generic 403 on its own API. `ap-southeast-1` is on the supported-Region
+list, so the Region was not the cause.
+
+> **When a denial names no action, read the service's service-linked-role documentation before
+> widening anything.** This looked like a missing `cloudfront:*` action and was not — every CloudFront
+> action needed was already granted. Guessing would have added permissions that were never the
+> problem and left the real one in place.
+
+> **The apply was partial, and that is normal.** Nine of fourteen resources were created before the
+> denial: the log group, the configuration entry, the task definition, the target group, the load
+> balancer security group, all three security group rules, and the cluster. They are in state and the
+> next apply continues from there rather than starting over. Do **not** try to clean up first.
+>
+> **You cannot re-apply the same plan.** The `Reject reused reviewed plan` step in the apply workflow
+> refuses a consumed `plan_run_id`, and the policy change invalidates the plan regardless. Attach the
+> updated policy, then dispatch a **fresh plan**, re-run the §6 checks against it — the remaining
+> five resources this time, not twenty-two — and apply that.
+
+#### Updating the managed policy after the first attachment
+
+`CrewSafeComputeTerraformApply` already exists and is attached, so each round is an **edit**, not a
+create. Do not create a second policy.
+
+1. **IAM → Policies**, filter **Customer managed**, open `CrewSafeComputeTerraformApply`.
+2. **Edit** → the **JSON** tab → paste the updated document with `<ACCOUNT_ID>` substituted.
+3. **Next** → **Save changes**. Leave *"Set this new version as the default"* checked, or the role
+   keeps using the old version and the next apply fails identically.
+4. No re-attachment is needed — the role references the policy, so a new default version takes effect
+   immediately.
+
+A managed policy keeps up to **five** versions. Rounds three and beyond may need an old version
+deleted first, which is also the audit trail of what was added and when — worth reading before
+deleting anything.
+
 ---
 
 ## 4. Ordering — what must happen before the first apply
 
-Only the **apply** waits on SCRUM-177. Everything offline runs today.
+Only the **apply** waited on SCRUM-177. **All four steps are now done**; this section is kept as the
+record of what had to be true, not as work outstanding.
 
-1. **#40 merges** → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_REPOSITORY_URL` and
-   `CREWSAFE_ECR_PUSH_ROLE_ARN` repository variables, so #41's `publish-image` job stops skipping.
-2. **#41 merges** → first image published to `crewsafe/backend`.
-3. Set `var.initial_image_tag`'s default to that image's commit SHA and rebase this branch onto
-   `main`, resolving `components.json` and `test-component-catalog.sh` against #40's entry.
-4. Plan, review, apply (§5–§7).
+| | Step | Status |
+| --- | --- | --- |
+| 1 | **#40 merges** → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_REPOSITORY_URL` and `CREWSAFE_ECR_PUSH_ROLE_ARN` repository variables, so #41's `publish-image` job stops skipping | ✅ merged and applied |
+| 2 | **#41 merges** → first image published to `crewsafe/backend` | ✅ pushed 2026-08-03 |
+| 3 | Pin `var.initial_image_tag`'s default to that image's commit SHA | ✅ see below |
+| 4 | Plan, review, apply (§5–§7) | ⬜ ready to dispatch |
+
+Step 3's second half — *"rebase this branch onto `main`, resolving `components.json` and
+`test-component-catalog.sh` against #40's entry"* — **no longer applies.** Both catalogues landed on
+`main` together, `ecr-shared-dev` is registered, and the catalogue test already asserts its state key
+and `allow_destroy == false`. There was no conflict to resolve.
+
+### The pinned image tag
+
+```text
+af7727812ee82bb74afc172fa6e5d4b865752152
+```
+
+Merge commit for #52 (the change that added `workflow_dispatch` to backend CI, which is what allowed
+the manual publish). Pushed by Backend CI run
+[30793342633](https://github.com/zctiong-iss/crewsafe/actions/runs/30793342633), digest
+`sha256:cadab448069f94a1480e50645d97bf47678537f1820556141b0aec2231796905`.
+
+> **Nothing offline catches a wrong value here.** The validation accepts any 7–40 lowercase hex
+> characters, so the previous placeholder — forty zeros — passed `validate`, `test`, the source
+> guard, **and plan-review check 8**, which asks only that the reference is hex and not `latest`. The
+> apply then succeeds in full and the *task* fails to pull, surfacing as the image-pull row in §9 one
+> complete apply later. Confirm the tag against the registry by eye before dispatching; no automated
+> check will do it for you.
+>
+> The tag does not need refreshing as the backend moves on — it is read once, at initial task
+> definition creation, after which `ignore_changes` hands the deployed image to SCRUM-145. It does
+> need to still **exist**: SCRUM-177 retains the newest twenty images, so re-pin if twenty pushes
+> land before the first apply.
 
 ---
 
@@ -274,7 +388,7 @@ each of these by reading the plan output:
 | 3 | Task definition `environment` has **no** credential and **no** Flyway/DDL variable | |
 | 4 | Every `valueFrom` ends with the ARN, a JSON key, and **two colons** | A pinned version turns credential rotation into an outage |
 | 5 | `NEA_API_KEY` does **not** appear | The secret has no version; referencing it fails the task start |
-| 6 | `readonlyRootFilesystem = true` **and** a `tmpfs` mount at `/tmp` | **Both, or the task will not start** — the JVM writes `hsperfdata` and Tomcat allocates scratch there, and the failure happens before the first log line |
+| 6 | `readonlyRootFilesystem = false`, **no** `volume`, and **no** mount at `/tmp` | Inverted on 2026-08-03 — see §10. All three are required *absences*; a mount at `/tmp` is root-owned on Fargate and stops the non-root process writing scratch |
 | 7 | Log group name begins `/crewsafe/shared-dev/` | Outside that scope the execution role's grant does not cover it |
 | 8 | Image reference is `<repo>:<40-hex>`, not `latest` | |
 | 9 | Exactly **one** new ingress rule targets the application security group | |
@@ -361,7 +475,7 @@ Everything lands in `/crewsafe/shared-dev/backend`. There is no other diagnosis 
 
 | Symptom | Likely cause |
 | --- | --- |
-| Exit before any application log line | Read-only root filesystem with no writable `/tmp` (check 6 above) |
+| `Unable to create tempDir` / `AccessDeniedException: /tmp/tomcat.8080.<n>` | A `volume` and a mount at `/tmp` have been reintroduced. Fargate creates that mount root-owned at 0755 and it shadows the image's writable `/tmp` — see §10 and check 6 |
 | `ResourceNotFoundException` on a secret | A reference to a versionless secret — most likely `NEA_API_KEY` was added before its value was written |
 | Image pull failure | The pinned tag was never pushed, or it aged out of the twenty-image retention window |
 | Authorization error resolving a parameter or secret | A name outside `/crewsafe/shared-dev/*` or `crewsafe/*` — reads as a permissions bug, is actually a naming one |
@@ -391,6 +505,43 @@ Resolution, decided at the plan review: this component publishes **`cluster_arn`
 Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
 
 When SCRUM-191 lands, delete this section.
+
+### The container root filesystem is writable, and on Fargate that is forced
+
+`readonlyRootFilesystem = false`. This reverses what SCRUM-176 was specified and reviewed with, and
+the reversal is a decision made against evidence rather than a relaxation for convenience.
+
+The first task to start failed before serving anything:
+
+```text
+WebServerException: Unable to create tempDir. java.io.tmpdir is set to /tmp
+Caused by: java.nio.file.AccessDeniedException: /tmp/tomcat.8080.17318107971028029764
+```
+
+The application needs writable scratch — the JVM writes `/tmp/hsperfdata_<user>` at startup and
+embedded Tomcat allocates a temp directory there. On Fargate, a **non-root** container cannot have
+that alongside a read-only root:
+
+| Approach | Why it does not work here |
+| --- | --- |
+| `tmpfs` mount | Not supported on Fargate at any platform version |
+| Bind mount at `/tmp` | Supported, but Fargate creates it **root-owned at 0755**, so uid 1000 cannot write to it. [aws/containers-roadmap#938](https://github.com/aws/containers-roadmap/issues/938) is still open; the Fargate 1.3.0 workaround was removed in 1.4.0 |
+| Managed EBS volume | Does support non-root since Nov 2025, but a per-task EBS volume for a scratch directory costs money and adds attach latency to every cold start |
+| Root init container that `chown`s the mount | Works, but adds a root-privileged startup step and a second container — which the source guard forbids for unrelated reasons (out-of-band migrations) |
+
+Read-only root and non-root user are therefore mutually exclusive, and **the non-root user is the
+control that was kept**. A process confined to an unprivileged uid is a stronger position than one
+running as root against a read-only mount it can still subvert through the writable volume it needs.
+
+> **The dangerous edit is the one that looks like a fix.** Adding a `volume` and a mount at `/tmp`
+> reads as restoring hardening and instead reproduces the outage above, because the mount shadows the
+> image's writable `/tmp`. Three things now fail if anyone tries: the `container_hardening` run block
+> asserts `readonlyRootFilesystem == false`, that no mount targets `/tmp`, and that no volume is
+> declared; and the source guard forbids `containerPath … "/tmp"` outright. All four assertions are
+> *absences*, which a diff cannot show — that is why they are tested rather than commented.
+
+If the hardening has to come back, it needs the EBS volume or the init container, each with its own
+decision and its own Jira issue. It is not a tidy-up.
 
 ### Two accepted Trivy exemptions
 

@@ -402,22 +402,36 @@ run "credentials_by_reference" {
 run "container_hardening" {
   command = apply
 
-  # All three together, because the failure mode is having two of them.
   assert {
     condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].user == "1000"
     error_message = "The container must run as a non-root user (FR-014, SC-015)."
   }
 
+  # These two assert an ABSENCE, and the absence is the fix rather than an omission.
+  #
+  # On Fargate a non-root container cannot have both a read-only root filesystem and
+  # writable scratch: tmpfs is unsupported, and a bind mount is created root-owned at
+  # 0755 so uid 1000 cannot write to it (aws/containers-roadmap#938, still open). The
+  # earlier version of this component asserted BOTH and the first task died with
+  # `AccessDeniedException: /tmp/tomcat.8080.<n>` before serving anything.
+  #
+  # The pair below is what keeps a well-meaning "restore the hardening" edit from
+  # reintroducing that outage: adding either one back fails here.
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].readonlyRootFilesystem == true
-    error_message = "The container must run with a read-only root filesystem (FR-013, SC-015)."
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].readonlyRootFilesystem == false
+    error_message = "readonlyRootFilesystem must stay false while the container runs as non-root on Fargate — see the note in main.tf. Restoring it needs a managed EBS volume or a root init container, which is its own decision."
   }
 
   assert {
     condition = length([
-      for mount in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].mountPoints : mount if mount.containerPath == "/tmp"
-    ]) == 1
-    error_message = "A read-only root filesystem WITHOUT writable scratch at /tmp fails startup before the first log line — the JVM writes hsperfdata and Tomcat allocates a temp directory there (FR-013, SC-015)."
+      for mount in try(jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].mountPoints, []) : mount if mount.containerPath == "/tmp"
+    ]) == 0
+    error_message = "No bind mount may be placed at /tmp. Fargate creates it root-owned at 0755, which SHADOWS the image's writable /tmp and stops the JVM and Tomcat from allocating scratch — the exact startup failure this looks like it prevents."
+  }
+
+  assert {
+    condition     = length(aws_ecs_task_definition.backend.volume) == 0
+    error_message = "No volume should be declared. The only one this component ever needed was the /tmp scratch mount that Fargate cannot make writable for a non-root user."
   }
 
   assert {

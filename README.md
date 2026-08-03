@@ -97,6 +97,8 @@ Terraform runs in CI only — never locally. See
 ## More details
 
 - [web/README.md](web/README.md) — supervisor console: both run paths and its decisions
+- [mobile/README.md](mobile/README.md) — Expo app: the three sign-in modes, why Expo Go
+  cannot use the Hosted UI, and every backend gap it works around
 - [local/README.md](local/README.md) — Compose stack layout and resolved environment
 - [docs/adr/](docs/adr/) — architecture decisions
 - [docs/plans/](docs/plans/) — Jira-keyed plans

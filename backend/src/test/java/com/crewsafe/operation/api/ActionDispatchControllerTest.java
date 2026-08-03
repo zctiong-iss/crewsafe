@@ -1,7 +1,9 @@
 package com.crewsafe.operation.api;
 
+import com.crewsafe.AbstractIntegrationTest;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
@@ -11,10 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -35,15 +35,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * @author Surya Kumaraguru
  */
-@SpringBootTest
 @AutoConfigureMockMvc
-class ActionDispatchControllerTest {
+class ActionDispatchControllerTest extends AbstractIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AppUserRepository users;
 
     @MockBean
     private ActionDispatchService actionDispatchService;
@@ -52,17 +54,25 @@ class ActionDispatchControllerTest {
     private UUID workerId;
     private UUID dispatchId;
     private ActionDispatch dispatch;
+    private String supervisorToken;
+    private String workerToken;
+
+    private AppUser user(Role role) {
+        String username = "action-dispatch-" + role + "-" + UUID.randomUUID();
+        createCognitoUser(username);
+        return users.save(new AppUser(username, subFor(username), "Action Dispatch Test " + role, role));
+    }
 
     @BeforeEach
     void setUp() {
-        approvalId = UUID.randomUUID();
-        workerId = UUID.randomUUID();
-        dispatchId = UUID.randomUUID();
+        AppUser approver = user(Role.SUPERVISOR);
+        AppUser worker = user(Role.WORKER);
+        workerId = worker.getId();
+        supervisorToken = mintAccessToken(approver.getUsername());
+        workerToken = mintAccessToken(worker.getUsername());
 
-        AppUser approver = AppUser.builder()
-                .id(UUID.randomUUID())
-                .role(Role.SUPERVISOR)
-                .build();
+        approvalId = UUID.randomUUID();
+        dispatchId = UUID.randomUUID();
 
         Recommendation recommendation = Recommendation.builder()
                 .id(UUID.randomUUID())
@@ -73,11 +83,6 @@ class ActionDispatchControllerTest {
                 .recommendation(recommendation)
                 .approver(approver)
                 .decision(Approval.ApprovalDecision.APPROVED)
-                .build();
-
-        AppUser worker = AppUser.builder()
-                .id(workerId)
-                .role(Role.WORKER)
                 .build();
 
         dispatch = ActionDispatch.builder()
@@ -92,7 +97,6 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "SUPERVISOR")
     void testDispatchAction_Success() throws Exception {
         when(actionDispatchService.dispatchAction(eq(approvalId), eq(workerId), eq("REST_10_MIN"), any(), any(CrewSafeUserPrincipal.class)))
                 .thenReturn(dispatch);
@@ -105,6 +109,7 @@ class ActionDispatchControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/action-dispatch")
+                .header("Authorization", "Bearer " + supervisorToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andDo(print())
@@ -115,7 +120,6 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "WORKER")
     void testDispatchAction_ForbiddenForWorker() throws Exception {
         DispatchActionRequest request = DispatchActionRequest.builder()
                 .approvalId(approvalId)
@@ -124,18 +128,19 @@ class ActionDispatchControllerTest {
                 .build();
 
         mockMvc.perform(post("/api/action-dispatch")
+                .header("Authorization", "Bearer " + workerToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "WORKER")
     void testAcknowledgeDispatch_Success() throws Exception {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
         when(actionDispatchService.acknowledgeDispatch(eq(dispatchId), any(CrewSafeUserPrincipal.class))).thenReturn(dispatch);
 
-        mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/acknowledge"))
+        mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/acknowledge")
+                .header("Authorization", "Bearer " + workerToken))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(dispatchId.toString()))
@@ -149,13 +154,13 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "WORKER")
     void testCompleteDispatch_Success() throws Exception {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
         dispatch.setEndTime(Instant.now());
         when(actionDispatchService.completeDispatch(eq(dispatchId), any(CrewSafeUserPrincipal.class))).thenReturn(dispatch);
 
-        mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/complete"))
+        mockMvc.perform(post("/api/action-dispatch/" + dispatchId + "/complete")
+                .header("Authorization", "Bearer " + workerToken))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(dispatchId.toString()))
@@ -163,12 +168,12 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "SUPERVISOR")
     void testGetDispatchesForApproval_Success() throws Exception {
         when(actionDispatchService.getDispatchesForApproval(eq(approvalId)))
                 .thenReturn(List.of(dispatch));
 
-        mockMvc.perform(get("/api/action-dispatch/approval/" + approvalId))
+        mockMvc.perform(get("/api/action-dispatch/approval/" + approvalId)
+                .header("Authorization", "Bearer " + supervisorToken))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(dispatchId.toString()))
@@ -176,12 +181,12 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "WORKER")
     void testGetPendingDispatchesForWorker_Success() throws Exception {
         when(actionDispatchService.getPendingDispatchesForWorker(eq(workerId), any(CrewSafeUserPrincipal.class)))
                 .thenReturn(List.of(dispatch));
 
-        mockMvc.perform(get("/api/action-dispatch/worker/" + workerId + "/pending"))
+        mockMvc.perform(get("/api/action-dispatch/worker/" + workerId + "/pending")
+                .header("Authorization", "Bearer " + workerToken))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(dispatchId.toString()))
@@ -189,11 +194,11 @@ class ActionDispatchControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "SUPERVISOR")
     void testGetDispatch_Success() throws Exception {
         when(actionDispatchService.getDispatch(eq(dispatchId))).thenReturn(dispatch);
 
-        mockMvc.perform(get("/api/action-dispatch/" + dispatchId))
+        mockMvc.perform(get("/api/action-dispatch/" + dispatchId)
+                .header("Authorization", "Bearer " + supervisorToken))
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(dispatchId.toString()));
