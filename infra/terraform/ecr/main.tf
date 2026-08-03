@@ -1,0 +1,141 @@
+# Author: Jemilin Beulah
+
+data "aws_caller_identity" "current" {}
+
+locals {
+  # Must stay under crewsafe/* - that's the prefix the secrets component's task
+  # role already has pull access to.
+  repository_name = "crewsafe/backend"
+
+  push_role_name = "crewsafe-shared-dev-ecr-push"
+
+  repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
+
+  ecr_push_assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowGitHubActionsMainBranchToAssume"
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+          }
+        }
+      },
+    ]
+  })
+
+  # jsonencode() instead of aws_iam_policy_document - under mock_provider the
+  # data source's json attribute gets faked, so tests would end up asserting on
+  # data that was never really rendered.
+  ecr_push_policy = {
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "PushContainerImage"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:BatchGetImage",
+        ]
+        Resource = local.repository_arn
+      },
+      {
+        # GetAuthorizationToken doesn't support resource-level perms, only "*".
+        # Kept in its own statement so it can't quietly pick up more actions.
+        Sid      = "GetRegistryAuthorizationToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+    ]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Registry
+#
+# IMMUTABLE tags: once a commit-SHA tag is pushed it can't be overwritten.
+# Required by the Trivy config scan (AWS-0031), and CI only ever tags by
+# commit SHA anyway, so there's no floating `latest` to break.
+# ---------------------------------------------------------------------------
+
+resource "aws_ecr_repository" "backend" {
+  name                 = local.repository_name
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "Authenticated AWS account does not match the expected account for this dispatch."
+    }
+  }
+}
+
+# Untagged images (left over from a failed push) expire after a day; keep the
+# newest 20 tagged images, more than enough to roll back across.
+resource "aws_ecr_lifecycle_policy" "backend" {
+  repository = aws_ecr_repository.backend.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the newest 20 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 20
+        }
+        action = { type = "expire" }
+      },
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Push identity
+#
+# Assumable only by GitHub Actions running on this repo's main branch - no
+# wildcard principal, no other ref. Kept separate from
+# CREWSAFE_AWS_ACCOUNTS_JSON's plan/apply roles, which manage Terraform state
+# and shouldn't also carry image-push permissions.
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_role" "ecr_push" {
+  name        = local.push_role_name
+  description = "Assumed by GitHub Actions on this repository's main branch to push the backend container image. Holds push permissions on the crewsafe/backend repository and nothing else."
+
+  assume_role_policy = local.ecr_push_assume_role_policy
+}
+
+resource "aws_iam_role_policy" "ecr_push" {
+  name   = "${local.push_role_name}-push"
+  role   = aws_iam_role.ecr_push.id
+  policy = jsonencode(local.ecr_push_policy)
+}
