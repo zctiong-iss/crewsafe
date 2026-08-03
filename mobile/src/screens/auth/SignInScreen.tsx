@@ -23,7 +23,6 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { Ionicons } from "@expo/vector-icons";
-import { SheetManager } from "react-native-actions-sheet";
 import { s, vs } from "react-native-size-matters";
 
 import AppSafeView from "@/components/views/AppSafeView";
@@ -38,7 +37,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { signIn, signOut } from "@/store/reducers/authSlice";
 import { getAuthMode, setAuthMode } from "@/auth/authMode";
 import { DEMO_USERS } from "@/auth/demoUsers";
-import { LANGUAGE_SHEET_ID } from "@/components/sheets";
+import LanguageSheet from "@/components/sheets/LanguageSheet";
 import type { AuthMode } from "@/constants/config";
 import type { AuthStackParamList } from "@/navigation/types";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
@@ -65,6 +64,7 @@ export default function SignInScreen() {
 
   const [mode, setMode] = useState<AuthMode>(getAuthMode());
   const [demoUserId, setDemoUserId] = useState<string>(DEMO_USERS[0].id);
+  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
   const passwordRef = useRef<TextInput>(null);
 
@@ -244,7 +244,12 @@ export default function SignInScreen() {
             variant="secondary"
             style={styles.secondaryButton}
             icon={<Ionicons name="language" size={s(18)} color={theme.colors.textPrimary} />}
-            onPress={() => void SheetManager.show(LANGUAGE_SHEET_ID)}
+            onPress={() => setLanguageSheetOpen(true)}
+          />
+
+          <LanguageSheet
+            visible={languageSheetOpen}
+            onClose={() => setLanguageSheetOpen(false)}
           />
         </View>
 

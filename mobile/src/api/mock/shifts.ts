@@ -124,18 +124,33 @@ const shifts: Shift[] = [
   seedShift(DEMO_SITES.bishan.id, hours(22), hours(30), "PLANNED", []),
 ];
 
+/**
+ * Deep-copied on the way out, for the reason spelled out in `api/mock/dispatch.ts`: a real
+ * HTTP client deserializes a fresh object per response, and handing back the store's own
+ * objects lets Immer freeze them once they reach Redux — after which the mock can no longer
+ * write to its own data. Nothing mutates a shift today, so this has not bitten here; it is
+ * copied anyway so that the first person to add an update does not rediscover it the hard
+ * way.
+ */
+function copyShift(shift: Shift): Shift {
+  return { ...shift, assignments: shift.assignments.map((a) => ({ ...a })) };
+}
+
 export function mockListShifts(siteId: string): Shift[] {
   assertAllowed();
   // Most recently created first, matching the controller. Never sorted by start time — the
   // server's order is the contract, and the response has no field to reconstruct it from.
-  return shifts.filter((s) => s.siteId === siteId).reverse();
+  return shifts
+    .filter((s) => s.siteId === siteId)
+    .reverse()
+    .map(copyShift);
 }
 
 export function mockGetShift(siteId: string, shiftId: string): Shift {
   assertAllowed();
   const shift = shifts.find((s) => s.id === shiftId && s.siteId === siteId);
   if (!shift) throw new ApiError("not-found", "No such shift under this site", 404, null);
-  return shift;
+  return copyShift(shift);
 }
 
 export function mockListSiteWorkers(siteId: string): SiteWorker[] {
@@ -163,5 +178,5 @@ export function mockCreateShift(
   assertAllowed();
   const created = seedShift(siteId, startsAt, endsAt, "PLANNED", assignments);
   shifts.push(created);
-  return created;
+  return copyShift(created);
 }

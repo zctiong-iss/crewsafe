@@ -80,14 +80,28 @@ const DispatchCard: FC<DispatchCardProps> = ({
         {dispatch.instruction ?? t("inbox.noInstruction")}
       </AppText>
 
+      {/*
+        Two fixed columns, top-aligned — not a wrapping row.
+
+        `flexWrap` here relied on the row measuring the height of a child whose *own* text
+        wrapped internally, and on Android that came out one line short: "acknowledgement"
+        rendered below the row's measured box and the Acknowledge button drew straight over
+        it. Two columns with an explicit `flex` remove the guesswork — the status column has
+        a real width to wrap inside, so the row's height is the height of its tallest child
+        and nothing renders outside it.
+
+        `alignItems: "flex-start"` is what puts both labels on the same horizontal axis, so
+        "Sent 07:48" and "Awaiting your acknowledgement" start on the same line however many
+        lines the second one runs to.
+      */}
       <View style={styles.metaRow}>
-        <AppText variant="caption" tone="secondary" style={styles.meta}>
+        <AppText variant="caption" tone="secondary" style={styles.metaSent}>
           {t("inbox.dispatchedAt", { time: formatTime(dispatch.dispatchedAt, locale) })}
         </AppText>
         <AppText
           variant="caption"
           tone={acknowledged ? "success" : "secondary"}
-          style={styles.meta}
+          style={styles.metaStatus}
         >
           {acknowledged
             ? t("inbox.acknowledged", { time: formatTime(acknowledgedAt, locale) })
@@ -154,12 +168,24 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    // Both labels start on the same horizontal axis regardless of how many lines the
+    // status text runs to.
+    alignItems: "flex-start",
     marginTop: vs(10),
+    // Clearance below the row as well as above the button. Belt and braces: a single
+    // margin on one side is one measurement away from overlapping again.
+    marginBottom: vs(6),
   },
-  meta: {
-    marginEnd: s(14),
-    marginTop: vs(2),
+  metaSent: {
+    // Never shrinks — a timestamp is short and fixed, and squeezing it would wrap
+    // "Sent 07:48" onto two lines before the status text had run out of room.
+    flexShrink: 0,
+    marginEnd: s(12),
+  },
+  metaStatus: {
+    // Takes the remaining width, so its text wraps inside its own column rather than
+    // pushing the row wider than the card.
+    flex: 1,
   },
   failure: {
     marginTop: vs(10),

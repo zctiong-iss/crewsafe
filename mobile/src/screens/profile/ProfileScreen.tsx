@@ -10,11 +10,11 @@
  *
  * The photo is the one exception, and it never leaves the device. See `profileSlice`.
  */
+import { useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { SheetManager } from "react-native-actions-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
 
@@ -22,7 +22,7 @@ import AppSafeView from "@/components/views/AppSafeView";
 import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import Avatar from "@/components/profile/Avatar";
-import { AVATAR_SHEET_ID } from "@/components/sheets";
+import AvatarSheet from "@/components/sheets/AvatarSheet";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { signOut } from "@/store/reducers/authSlice";
@@ -42,6 +42,9 @@ export default function ProfileScreen() {
     user ? (state.profile.avatars[user.id] ?? null) : null,
   );
 
+  // Declared before the early return below: hooks must run unconditionally on every render.
+  const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
+
   // Only ever mounts inside a signed-in tab tree, so this is unreachable — but rendering
   // nothing beats crashing if that stops being true.
   if (!user) return null;
@@ -58,7 +61,7 @@ export default function ProfileScreen() {
         <View style={styles.header}>
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => void SheetManager.show(AVATAR_SHEET_ID)}
+            onPress={() => setAvatarSheetOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={avatarUri ? t("profile.changePhoto") : t("profile.addPhoto")}
             style={styles.avatarTarget}
@@ -135,6 +138,8 @@ export default function ProfileScreen() {
           onPress={() => void dispatch(signOut())}
           style={styles.action}
         />
+
+        <AvatarSheet visible={avatarSheetOpen} onClose={() => setAvatarSheetOpen(false)} />
       </ScrollView>
     </AppSafeView>
   );

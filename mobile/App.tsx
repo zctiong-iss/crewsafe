@@ -26,7 +26,6 @@ import { StatusBar } from "expo-status-bar";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { I18nextProvider } from "react-i18next";
-import { SheetProvider } from "react-native-actions-sheet";
 import * as SplashScreen from "expo-splash-screen";
 import {
   useFonts,
@@ -42,9 +41,6 @@ import LanguageSync from "@/localization/LanguageSync";
 import { ThemeProvider } from "@/theme/ThemeProvider";
 import RootNavigator from "@/navigation/RootNavigator";
 import Toast from "@/components/feedback/Toast";
-// Side-effect import: registers every sheet by id. Without it `SheetManager.show(...)`
-// resolves to nothing and the sheet silently never appears.
-import "@/components/sheets";
 import { installSessionBridge } from "@/auth/sessionBridge";
 
 // Called in global scope, not in a hook: by the time an effect runs the splash may already
@@ -90,11 +86,12 @@ export default function App() {
                 <StatusBar style="dark" />
                 {/* Inside the store and i18n providers, because a sheet's content reads
                     both — the language picker is itself translated. */}
-                <SheetProvider>
-                  <NavigationContainer>
-                    <RootNavigator />
-                  </NavigationContainer>
-                </SheetProvider>
+                {/* Sheets are rendered by the screens that own them, as ordinary
+                    components with a `visible` prop — there is no provider to install.
+                    See `components/sheets/BottomSheet.tsx`. */}
+                <NavigationContainer>
+                  <RootNavigator />
+                </NavigationContainer>
                 {/* Outside the navigator on purpose: a toast is usually triggered by an
                     action that navigates away, and one owned by a screen would unmount
                     before it could be read. */}

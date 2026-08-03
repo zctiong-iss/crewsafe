@@ -108,15 +108,33 @@ const dispatches = new Map<string, ActionDispatch>(SEED.map((d) => [d.id, { ...d
  * from the server's answer entirely. Reproducing that here rather than quietly returning
  * everything is what forces the client to solve it properly — see the inbox slice.
  */
+/*
+ * ── EVERY READ RETURNS COPIES ───────────────────────────────────────────────────────────
+ * This is not defensive style, it is a correctness requirement, and getting it wrong
+ * produced a genuinely confusing bug: acknowledging always failed on the first tap and
+ * succeeded on the second.
+ *
+ * A real HTTP client deserializes a fresh object per response, so nothing the server holds
+ * can ever be reached by the caller. A mock that hands back its own objects breaks that
+ * assumption. Those objects go into Redux, where Immer deep-freezes state in development —
+ * so the mock's own store silently becomes read-only. The next write threw
+ * `TypeError: Cannot assign to read only property`, which is not an `ApiError`, so it
+ * surfaced as the generic "Something went wrong" rather than anything diagnosable.
+ *
+ * It failed only on the *first* tap because the ledger entry was written before the throw,
+ * so the retry took the replay branch and returned without writing. The idempotency demo
+ * still looked correct, which is what made it hard to spot.
+ */
 export function mockPendingDispatches(workerId: string): ActionDispatch[] {
   return [...dispatches.values()]
     .filter((d) => d.workerId === workerId && d.status === "PENDING")
-    .sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt));
+    .sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt))
+    .map((d) => ({ ...d }));
 }
 
 export function mockAcknowledge(dispatchId: string, idempotencyKey: string): ActionDispatch {
-  const dispatch = dispatches.get(dispatchId);
-  if (!dispatch) {
+  const existing = dispatches.get(dispatchId);
+  if (!existing) {
     throw new ApiError("not-found", "No such dispatch", 404, null);
   }
 
@@ -125,14 +143,21 @@ export function mockAcknowledge(dispatchId: string, idempotencyKey: string): Act
   if (seen) {
     // Replay. Nothing is written; the original result is returned. This is the branch the
     // acceptance criterion exercises.
-    return { ...dispatch };
+    return { ...existing };
   }
 
   const acknowledgedAt = new Date().toISOString();
   LEDGER.set(idempotencyKey, { dispatchId, acknowledgedAt });
 
-  dispatch.status = "ACKNOWLEDGED";
-  dispatch.startTime = acknowledgedAt;
+  // Replaced rather than mutated. Even if a reference did escape into frozen state, this
+  // writes a new object into the Map instead of assigning through the old one — so the
+  // store cannot be poisoned by whatever a caller did with a previous response.
+  const updated: ActionDispatch = {
+    ...existing,
+    status: "ACKNOWLEDGED",
+    startTime: acknowledgedAt,
+  };
+  dispatches.set(dispatchId, updated);
 
   if (lostResponseEnabled) {
     // Committed above, then the response never arrives. The client cannot distinguish this
@@ -140,7 +165,7 @@ export function mockAcknowledge(dispatchId: string, idempotencyKey: string): Act
     throw new ApiError("network", "Response lost after the server committed", null, null);
   }
 
-  return { ...dispatch };
+  return { ...updated };
 }
 
 /** Dev only: put the seed data back so the flow can be run again without a reload. */

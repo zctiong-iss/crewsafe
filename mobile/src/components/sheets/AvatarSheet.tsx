@@ -9,13 +9,14 @@
  * device settings and nobody guesses that on their own.
  */
 import { useState } from "react";
-import { Alert, StyleSheet, View } from "react-native";
-import ActionSheet, { SheetManager, type SheetProps } from "react-native-actions-sheet";
+import { Alert, StyleSheet } from "react-native";
+import type { FC } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
 
+import BottomSheet from "./BottomSheet";
 import AppText from "../texts/AppText";
 import AppButton from "../buttons/AppButton";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -23,8 +24,6 @@ import { avatarCleared, avatarSet } from "@/store/reducers/profileSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { deleteAvatar, persistAvatar } from "@/helpers/avatarStorage";
 import { useTheme } from "@/theme/ThemeProvider";
-
-export const AVATAR_SHEET_ID = "avatar-sheet";
 
 /** Square, and modest. A 4000px photo behind a 96pt circle is wasted storage on a work phone. */
 const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
@@ -34,7 +33,12 @@ const PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   quality: 0.7,
 };
 
-export default function AvatarSheet(props: SheetProps<"avatar-sheet">) {
+interface AvatarSheetProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+const AvatarSheet: FC<AvatarSheetProps> = ({ visible, onClose }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const dispatch = useAppDispatch();
@@ -45,8 +49,6 @@ export default function AvatarSheet(props: SheetProps<"avatar-sheet">) {
   );
 
   const [busy, setBusy] = useState(false);
-
-  const close = () => void SheetManager.hide(props.sheetId);
 
   const apply = async (result: ImagePicker.ImagePickerResult) => {
     if (result.canceled || !user) return;
@@ -73,7 +75,7 @@ export default function AvatarSheet(props: SheetProps<"avatar-sheet">) {
         return;
       }
       await apply(await ImagePicker.launchCameraAsync(PICKER_OPTIONS));
-      close();
+      onClose();
     } finally {
       setBusy(false);
     }
@@ -90,7 +92,7 @@ export default function AvatarSheet(props: SheetProps<"avatar-sheet">) {
         return;
       }
       await apply(await ImagePicker.launchImageLibraryAsync(PICKER_OPTIONS));
-      close();
+      onClose();
     } finally {
       setBusy(false);
     }
@@ -101,69 +103,50 @@ export default function AvatarSheet(props: SheetProps<"avatar-sheet">) {
     deleteAvatar(currentUri);
     dispatch(avatarCleared(user.id));
     dispatch(showToast({ messageKey: "profile.photoRemovedToast", tone: "success" }));
-    close();
+    onClose();
   };
 
   return (
-    <ActionSheet
-      id={props.sheetId}
-      gestureEnabled
-      containerStyle={{
-        backgroundColor: theme.colors.surface,
-        borderTopLeftRadius: theme.metrics.radius * 2,
-        borderTopRightRadius: theme.metrics.radius * 2,
-      }}
-      indicatorStyle={{ backgroundColor: theme.colors.border }}
-    >
-      <View style={styles.container}>
-        <AppText variant="subtitle">{t("profile.photoSheetTitle")}</AppText>
+    <BottomSheet visible={visible} onClose={onClose} title={t("profile.photoSheetTitle")}>
+      {/* Said here, where the choice is being made, rather than only on the screen behind.
+          A worker should know the photo stays on the phone *before* they take it. */}
+      <AppText variant="caption" tone="secondary" style={styles.notice}>
+        {t("profile.photoLocalOnly")}
+      </AppText>
 
-        {/* Said here, where the choice is being made, rather than only on the screen
-            behind. A worker should know the photo stays on the phone *before* they take it. */}
-        <AppText variant="caption" tone="secondary" style={styles.notice}>
-          {t("profile.photoLocalOnly")}
-        </AppText>
+      <AppButton
+        title={t("profile.takePhoto")}
+        onPress={() => void onTakePhoto()}
+        loading={busy}
+        icon={<Ionicons name="camera" size={s(18)} color={theme.colors.onPrimary} />}
+        style={styles.action}
+      />
 
+      <AppButton
+        title={t("profile.chooseFromLibrary")}
+        variant="secondary"
+        onPress={() => void onChooseFromLibrary()}
+        loading={busy}
+        icon={<Ionicons name="images" size={s(18)} color={theme.colors.textPrimary} />}
+        style={styles.action}
+      />
+
+      {currentUri ? (
         <AppButton
-          title={t("profile.takePhoto")}
-          onPress={() => void onTakePhoto()}
-          loading={busy}
-          icon={<Ionicons name="camera" size={s(18)} color={theme.colors.onPrimary} />}
+          title={t("profile.removePhoto")}
+          variant="danger"
+          onPress={onRemove}
           style={styles.action}
         />
-
-        <AppButton
-          title={t("profile.chooseFromLibrary")}
-          variant="secondary"
-          onPress={() => void onChooseFromLibrary()}
-          loading={busy}
-          icon={<Ionicons name="images" size={s(18)} color={theme.colors.textPrimary} />}
-          style={styles.action}
-        />
-
-        {currentUri ? (
-          <AppButton
-            title={t("profile.removePhoto")}
-            variant="danger"
-            onPress={onRemove}
-            style={styles.action}
-          />
-        ) : null}
-      </View>
-    </ActionSheet>
+      ) : null}
+    </BottomSheet>
   );
-}
+};
+
+export default AvatarSheet;
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: s(16),
-    paddingTop: vs(8),
-    // A sheet sits below every SafeAreaProvider in the tree, so it cannot read insets the
-    // way a screen does — this clears the home indicator by hand.
-    paddingBottom: vs(28),
-  },
   notice: {
-    marginTop: vs(6),
     marginBottom: vs(14),
   },
   action: {

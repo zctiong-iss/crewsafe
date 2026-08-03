@@ -365,19 +365,22 @@ derived from HTTP status.
 | Lottie weather/banner icons | Ionicons + `Animated` | Hand-authored Lottie per state is unverifiable in review and would not match the app's other icons. `WeatherIcon` documents the swap; `AppLoader` still uses Lottie |
 | "react-safe-area" | `react-native-size-matters` + `react-native-safe-area-context` | Scaling and insets are two different libraries |
 | Committed Gelasio `.ttf` | `@expo-google-fonts/gelasio` | Same binaries, out of git, family names as constants |
+| `react-native-actions-sheet` | React Native `Modal` | **Removed after it crashed the app** — see [Problem 2](#problem-2--expo-go-keeps-stopping). Its latest release targets worklets 0.7 while SDK 57 ships 0.10; no configuration reconciles that |
 | EAS APK build | *(dropped at your request)* | Testing in Expo Go |
 
 ---
 
 ## Known limitations
 
-- **Verified to launch, not verified visually.** The app bundles and runs in Expo Go on an
-  Android emulator (SDK 57, Android 15). Beyond that, verification is `tsc`, both platform
-  bundles, `expo-doctor`, and executable specs for the logic — idempotency, validation
-  boundaries, weather classification, persistence migration, race guards. What remains
-  unchecked is judgement, not correctness: Gelasio's rendering at large text sizes, whether
-  the stop-work banner actually reads in direct sun, and whether the animation rates feel
-  right. iOS has never been run at all.
+- **Exercised on an Android emulator; never on iOS.** The worker screens have been driven on
+  a Pixel 9 / API 35 emulator — sign-in, the stop-work banner, the inbox, and a successful
+  one-tap acknowledgement. Four bugs found that way are written up above. Beyond that,
+  verification is `tsc`, both platform bundles, `expo-doctor`, and executable specs for the
+  logic. **iOS has never been run at all**, and the supervisor screens have not been driven
+  end to end on a device.
+- **Still unverified by eye:** Gelasio at the largest text setting, whether the stop-work
+  banner reads in direct sun, and whether the animation rates feel right rather than merely
+  work.
 - **Offline queueing is out of scope** (SCRUM-130). The idempotency key is the groundwork.
 - **Reactotron is not wired.** It needs host configuration to reach a phone; nothing in the
   app depends on it.
@@ -401,10 +404,168 @@ derived from HTTP status.
 | `redirect_mismatch` from Cognito | `cognito-pkce` on a phone. Use `npm run web:pkce`, or a dev build |
 | Sign-in works but every request 401s | Backend and app on different Cognito accounts. Re-run `./run.sh --account <alias>` |
 
-### About the npm `override`
+---
 
-`react-native-actions-sheet@10` depends on `react-native-worklets ^0.7.1`, while SDK 57's
-Reanimated needs 0.10.x. A caret on a `0.x` version does not span minors, so npm installs a
-**second nested copy** — two copies of a native module, which breaks native builds in a way
-that is painful to diagnose. The `overrides` block pins it to the root version using
-`$react-native-worklets`, so it cannot drift on upgrade.
+## Problems found on the emulator, and how they were diagnosed
+
+Four bugs were found by running the app on an Android emulator (Pixel 9, API 35) that
+**nothing in the static checks could catch** — `tsc` passed, both platform bundles built,
+`expo-doctor` reported 20/20, and every executable spec passed the whole time. Two were
+JS↔native problems that only exist at runtime; one was an environment collision; one was a
+layout bug that only appears once real text is measured on a real screen.
+
+They are written up in full because the *technique* transfers, and because each one looked
+like something it wasn't.
+
+---
+
+### Problem 1 — "Failed to download remote update"
+
+**Symptom.** Scanning the QR code in Expo Go fails immediately. No JS ever runs, so there is
+nothing in the Metro log and no red screen.
+
+**Looked like** a network or firewall problem. It was neither.
+
+**How it was diagnosed.**
+
+```powershell
+Get-NetConnectionProfile                  # Private, so Windows was not blocking inbound
+Get-NetTCPConnection -LocalPort 8081 -State Listen
+#   0.0.0.0    8081   PID 5300  httpd     ← Apache holds IPv4
+#   ::         8081   PID 32180 node      ← Metro holds IPv6
+```
+
+**Root cause.** Metro binds `[::]` in **dual-stack** mode, which normally serves IPv4 too.
+But a rival bound to the *specific* address `0.0.0.0:8081` wins the IPv4 route. The
+offender here was `PEMHTTPD-x64` — the Apache bundled with **EDB Postgres Enterprise
+Manager**, `StartMode: Auto`, so it reclaims the port on every boot. The device speaks IPv4,
+reached Apache, and got something that was not an Expo manifest.
+
+Nothing errors in this scenario, which is what makes it expensive: both servers are running
+correctly, just not the one you are talking to.
+
+**Fix.** Metro moved to **8082** in the `start`, `android` and `ios` scripts. Freeing 8081
+instead would need an elevated `Stop-Service PEMHTTPD-x64` plus `Set-Service … -StartupType
+Manual`, and would have to be repeated on every machine with a service on that port.
+
+---
+
+### Problem 2 — "Expo Go keeps stopping"
+
+**Symptom.** The app bundles successfully, then Expo Go dies before rendering anything.
+Android shows its own *"Expo Go keeps stopping"* dialog — an app-level crash, not a JS error.
+
+**Looked like** the app's own code. It was a dependency.
+
+**How it was diagnosed.** A JS error appears in Metro; a *native* crash does not, so read
+Android's dedicated crash buffer instead:
+
+```powershell
+adb logcat -b crash -d
+```
+
+```
+signal 11 (SIGSEGV), thread: mqt_v_js        ← the JS thread
+  #02  libhermesvm.so
+  #08  libworklets.so                        ← the culprit
+  #09  libhermesvm.so
+```
+
+That names the library. To confirm it was *loading* that package rather than anything the
+app did with it, the package was made unresolvable and the app relaunched — the segfault
+became an ordinary red-screen resolution error, which is proof.
+
+> An earlier attempt removed `SheetProvider` from `App.tsx` and the crash persisted, which
+> looked exonerating but was not: three screens still imported `SheetManager`, so the module
+> still loaded. **Removing a provider is not the same as removing an import.**
+
+**Root cause.** `react-native-actions-sheet@10.1.2` — the latest release — declares
+`react-native-worklets: ^0.7.1`, while Expo SDK 57 ships worklets **0.10** natively. Inside
+Expo Go the native `libworklets.so` is fixed at whatever Expo Go was built with, so the
+library's JS called an ABI it was not written against.
+
+**This was not fixable by configuration.** An npm `overrides` block pinning worklets to
+0.10 is what the project had, and pinning it back to 0.7 only moves which side is wrong —
+the native half is not ours to change.
+
+**Fix.** Removed `react-native-actions-sheet` and replaced both sheets with React Native's
+built-in `Modal` (`components/sheets/BottomSheet.tsx`). That also removed
+`react-native-reanimated` and `react-native-worklets`, which were in the tree *only* to
+satisfy it — every animation in this app uses the built-in `Animated` API — along with the
+`overrides` block that existed solely to referee the conflict.
+
+---
+
+### Problem 3 — Acknowledging always failed on the first tap
+
+**Symptom.** Tapping **Acknowledge** always showed *"Something went wrong. Try again."*
+A second tap succeeded. Reproducible on every card, every time.
+
+**Looked like** a network or idempotency bug. It was neither.
+
+**How it was diagnosed.** The message was the clue: *"Something went wrong"* is
+`errors.unknown`, not `errors.network`. That rules out the lost-response simulator
+immediately and says something is throwing a **non-`ApiError`** — before reading any code.
+
+The only thing that differs between the first and second attempt is that the idempotency key
+is minted on the first and reused on the second, which pointed straight at the write path.
+
+**Root cause.** The mock returned the **same object references** it held in its own store:
+
+```ts
+return [...dispatches.values()].filter(...)   // same refs, not copies
+```
+
+Those objects reach Redux, where **Immer deep-freezes state in development**. The mock's own
+store silently became read-only, so the next write —
+
+```ts
+dispatch.status = "ACKNOWLEDGED";
+```
+
+— threw `TypeError` (ES modules are strict mode). Not an `ApiError`, hence the generic
+message. The *second* tap "worked" because the ledger entry is written **before** the throw,
+so the retry took the replay branch and returned without writing.
+
+**The dangerous half.** On that second tap the row was still `PENDING`. The client recorded
+an acknowledgement the server never made, and the idempotency counter still read `1`, so the
+demo looked correct. That is the part that would have survived into a real backend
+integration unnoticed.
+
+**Fix.** Two independent changes, either of which alone would have prevented it:
+
+1. Mock reads return **copies** — a real HTTP client deserializes a fresh object per
+   response, so nothing the server holds is ever reachable by the caller.
+2. Mock writes **replace** rather than mutate (`store.set(id, {...existing, ...changes})`),
+   so an escaped reference cannot poison the store.
+
+The same treatment was applied to `api/mock/shifts.ts`, which had the identical latent
+hazard and had simply not been hit yet.
+
+---
+
+### Problem 4 — Status text overlapping the Acknowledge button
+
+**Symptom.** On the inbox card, *"Awaiting your acknowledgement"* wrapped to a second line
+that rendered **underneath** the Acknowledge button.
+
+**How it was diagnosed.** Visible in a device screenshot; it does not reproduce in a type
+check or a bundle, because it only exists once real text is measured at a real width.
+
+**Root cause.** The meta row used `flexWrap` and relied on the row measuring the height of a
+child whose *own* text wrapped internally. On Android that came out one line short, so the
+second line rendered outside the row's measured box and the next sibling drew over it.
+
+**Fix.** Replaced the wrapping row with two explicit columns — a fixed-width timestamp
+(`flexShrink: 0`) and a status column (`flex: 1`) with a real width to wrap inside — plus
+`alignItems: "flex-start"` so both labels sit on the same horizontal axis, and margin on
+both sides of the gap rather than one.
+
+---
+
+### What this says about the checks
+
+Static verification caught none of these. It is good at contracts and shapes and useless at
+ABI compatibility, port ownership, framework freezing behaviour, and text measurement. The
+lesson worth keeping: **get it onto a device before believing it works**, and when something
+native fails, read `adb logcat -b crash -d` rather than reasoning about the JS.

@@ -16,9 +16,9 @@
  * All four are persisted (see `persistConfig`): a worker who set the app up for sunlight
  * must not have to do it again every morning.
  */
+import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { SheetManager } from "react-native-actions-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { s, vs } from "react-native-size-matters";
@@ -34,7 +34,7 @@ import {
   setHighContrast,
   setReduceMotion,
 } from "@/store/reducers/preferencesSlice";
-import { LANGUAGE_SHEET_ID } from "@/components/sheets";
+import LanguageSheet from "@/components/sheets/LanguageSheet";
 import { languagesArr } from "@/localization/languagesList";
 import { FONT_SCALE_STEPS } from "@/styles/theme";
 import { useReduceMotion } from "@/hooks/useReduceMotion";
@@ -58,6 +58,8 @@ export default function SettingsScreen() {
   const fontScale = useAppSelector((state) => state.preferences.fontScale);
   const highContrast = useAppSelector((state) => state.preferences.highContrast);
   const reduceMotionPreference = useAppSelector((state) => state.preferences.reduceMotion);
+
+  const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
   // The effective value, which may be true because the *device* says so.
   const reduceMotionEffective = useReduceMotion();
@@ -87,9 +89,14 @@ export default function SettingsScreen() {
             title={t("settings.changeLanguage")}
             subtitle={currentLanguageLabel}
             selected={false}
-            onPress={() => void SheetManager.show(LANGUAGE_SHEET_ID)}
+            onPress={() => setLanguageSheetOpen(true)}
           />
         </View>
+
+        <LanguageSheet
+          visible={languageSheetOpen}
+          onClose={() => setLanguageSheetOpen(false)}
+        />
 
         {/* ───────────────────────── Display ────────────────────────── */}
         <AppText variant="subtitle" style={styles.sectionTitle}>
