@@ -219,6 +219,62 @@ inline policy** here — it will be rejected on the character limit.
 > broaden a `Resource` to `*` to get past it — that is how a least-privilege policy quietly becomes
 > an administrative one.
 
+### 3.3 Actions discovered by a failed apply
+
+The prediction above came true on the first apply. Keep this log — the next component managing a new
+AWS service will hit the same class of thing, and the pattern is more useful than the individual
+actions.
+
+**Round 1 — run [30795727320](https://github.com/zctiong-iss/crewsafe/actions/runs/30795727320),
+`aws_lb.main`:**
+
+```text
+AccessDenied: not authorized to perform: ec2:DescribeAccountAttributes
+```
+
+`CreateLoadBalancer` calls it internally to read the account's Elastic Load Balancing limits before
+allocating. It is an account-wide read with no resource-level form, so `Resource: "*"` is not a
+widening here — there is no narrower way to express it.
+
+Added to `ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule`:
+
+| Action | Basis |
+| --- | --- |
+| `ec2:DescribeAccountAttributes` | **Proven** — the exact action the apply was denied |
+| `ec2:DescribeAvailabilityZones` | Pre-emptive — AWS documents it as a `CreateLoadBalancer` prerequisite |
+| `ec2:DescribeInternetGateways` | Pre-emptive — same, and called even for an internal load balancer |
+
+The two pre-emptive additions follow the same reasoning already applied to the three
+service-linked-role grants: read-only, attributable to the one API call that failed, and cheaper to
+include now than to discover one failed apply at a time. Both are `Describe` verbs — neither grants
+any mutation.
+
+> **The apply was partial, and that is normal.** Nine of fourteen resources were created before the
+> denial: the log group, the configuration entry, the task definition, the target group, the load
+> balancer security group, all three security group rules, and the cluster. They are in state and the
+> next apply continues from there rather than starting over. Do **not** try to clean up first.
+>
+> **You cannot re-apply the same plan.** The `Reject reused reviewed plan` step in the apply workflow
+> refuses a consumed `plan_run_id`, and the policy change invalidates the plan regardless. Attach the
+> updated policy, then dispatch a **fresh plan**, re-run the §6 checks against it — the remaining
+> five resources this time, not twenty-two — and apply that.
+
+#### Updating the managed policy after the first attachment
+
+`CrewSafeComputeTerraformApply` already exists and is attached, so each round is an **edit**, not a
+create. Do not create a second policy.
+
+1. **IAM → Policies**, filter **Customer managed**, open `CrewSafeComputeTerraformApply`.
+2. **Edit** → the **JSON** tab → paste the updated document with `<ACCOUNT_ID>` substituted.
+3. **Next** → **Save changes**. Leave *"Set this new version as the default"* checked, or the role
+   keeps using the old version and the next apply fails identically.
+4. No re-attachment is needed — the role references the policy, so a new default version takes effect
+   immediately.
+
+A managed policy keeps up to **five** versions. Rounds three and beyond may need an old version
+deleted first, which is also the audit trail of what was added and when — worth reading before
+deleting anything.
+
 ---
 
 ## 4. Ordering — what must happen before the first apply
