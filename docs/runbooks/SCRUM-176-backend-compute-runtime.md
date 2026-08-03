@@ -388,7 +388,7 @@ each of these by reading the plan output:
 | 3 | Task definition `environment` has **no** credential and **no** Flyway/DDL variable | |
 | 4 | Every `valueFrom` ends with the ARN, a JSON key, and **two colons** | A pinned version turns credential rotation into an outage |
 | 5 | `NEA_API_KEY` does **not** appear | The secret has no version; referencing it fails the task start |
-| 6 | `readonlyRootFilesystem = true` **and** a `tmpfs` mount at `/tmp` | **Both, or the task will not start** — the JVM writes `hsperfdata` and Tomcat allocates scratch there, and the failure happens before the first log line |
+| 6 | `readonlyRootFilesystem = false`, **no** `volume`, and **no** mount at `/tmp` | Inverted on 2026-08-03 — see §10. All three are required *absences*; a mount at `/tmp` is root-owned on Fargate and stops the non-root process writing scratch |
 | 7 | Log group name begins `/crewsafe/shared-dev/` | Outside that scope the execution role's grant does not cover it |
 | 8 | Image reference is `<repo>:<40-hex>`, not `latest` | |
 | 9 | Exactly **one** new ingress rule targets the application security group | |
@@ -475,7 +475,7 @@ Everything lands in `/crewsafe/shared-dev/backend`. There is no other diagnosis 
 
 | Symptom | Likely cause |
 | --- | --- |
-| Exit before any application log line | Read-only root filesystem with no writable `/tmp` (check 6 above) |
+| `Unable to create tempDir` / `AccessDeniedException: /tmp/tomcat.8080.<n>` | A `volume` and a mount at `/tmp` have been reintroduced. Fargate creates that mount root-owned at 0755 and it shadows the image's writable `/tmp` — see §10 and check 6 |
 | `ResourceNotFoundException` on a secret | A reference to a versionless secret — most likely `NEA_API_KEY` was added before its value was written |
 | Image pull failure | The pinned tag was never pushed, or it aged out of the twenty-image retention window |
 | Authorization error resolving a parameter or secret | A name outside `/crewsafe/shared-dev/*` or `crewsafe/*` — reads as a permissions bug, is actually a naming one |
@@ -505,6 +505,43 @@ Resolution, decided at the plan review: this component publishes **`cluster_arn`
 Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
 
 When SCRUM-191 lands, delete this section.
+
+### The container root filesystem is writable, and on Fargate that is forced
+
+`readonlyRootFilesystem = false`. This reverses what SCRUM-176 was specified and reviewed with, and
+the reversal is a decision made against evidence rather than a relaxation for convenience.
+
+The first task to start failed before serving anything:
+
+```text
+WebServerException: Unable to create tempDir. java.io.tmpdir is set to /tmp
+Caused by: java.nio.file.AccessDeniedException: /tmp/tomcat.8080.17318107971028029764
+```
+
+The application needs writable scratch — the JVM writes `/tmp/hsperfdata_<user>` at startup and
+embedded Tomcat allocates a temp directory there. On Fargate, a **non-root** container cannot have
+that alongside a read-only root:
+
+| Approach | Why it does not work here |
+| --- | --- |
+| `tmpfs` mount | Not supported on Fargate at any platform version |
+| Bind mount at `/tmp` | Supported, but Fargate creates it **root-owned at 0755**, so uid 1000 cannot write to it. [aws/containers-roadmap#938](https://github.com/aws/containers-roadmap/issues/938) is still open; the Fargate 1.3.0 workaround was removed in 1.4.0 |
+| Managed EBS volume | Does support non-root since Nov 2025, but a per-task EBS volume for a scratch directory costs money and adds attach latency to every cold start |
+| Root init container that `chown`s the mount | Works, but adds a root-privileged startup step and a second container — which the source guard forbids for unrelated reasons (out-of-band migrations) |
+
+Read-only root and non-root user are therefore mutually exclusive, and **the non-root user is the
+control that was kept**. A process confined to an unprivileged uid is a stronger position than one
+running as root against a read-only mount it can still subvert through the writable volume it needs.
+
+> **The dangerous edit is the one that looks like a fix.** Adding a `volume` and a mount at `/tmp`
+> reads as restoring hardening and instead reproduces the outage above, because the mount shadows the
+> image's writable `/tmp`. Three things now fail if anyone tries: the `container_hardening` run block
+> asserts `readonlyRootFilesystem == false`, that no mount targets `/tmp`, and that no volume is
+> declared; and the source guard forbids `containerPath … "/tmp"` outright. All four assertions are
+> *absences*, which a diff cannot show — that is why they are tested rather than commented.
+
+If the hardening has to come back, it needs the EBS volume or the init container, each with its own
+decision and its own Jira issue. It is not a tidy-up.
 
 ### Two accepted Trivy exemptions
 

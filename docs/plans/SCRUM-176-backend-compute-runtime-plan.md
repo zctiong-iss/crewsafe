@@ -214,7 +214,7 @@ Ordering is forced by SCRUM-177; only the apply waits.
 4. Dispatch **Terraform State Plan** for `compute-shared-dev`.
 5. **Mandatory plan-review checks** — the local quickstart §3, twelve items. A clean plan does not prove
    every server-side constraint; items 10 (no apostrophe in a security group description) and 6
-   (read-only root *and* the tmpfs mount) are the two that have a track record of failing after a
+   (writable root, no volume, no `/tmp` mount — **inverted 2026-08-03**, see the runbook §10) are the two that have a track record of failing after a
    clean plan.
 6. Dispatch **Terraform State Apply** with the reviewed `plan_run_id` and the typed confirmation.
 7. Post-apply verification — the local quickstart §4, SC-001 to SC-010.
