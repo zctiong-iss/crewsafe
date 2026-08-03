@@ -48,12 +48,29 @@ variable "initial_image_tag" {
     therefore does not govern what is running, and ignore_changes keeps a later apply from
     disturbing the service.
 
-    Set this to the commit SHA of an image SCRUM-177's publish job has already pushed. The
-    validation rejects `latest` deliberately: a mutable tag makes a rollback ambiguous, and
-    re-pushing the same tag does not by itself cause a task to be replaced.
+    The value must be the commit SHA of an image SCRUM-177's publish job has ALREADY pushed.
+    The validation cannot check that — any 40 hex characters satisfy it, including a
+    placeholder that names nothing — so a wrong value here survives validate, test, the
+    source guard, and a clean plan, and first surfaces as an image-pull failure after a
+    complete apply. The default below is a real published tag for exactly that reason.
+
+    The validation rejects `latest` deliberately: a mutable tag makes a rollback ambiguous,
+    and re-pushing the same tag does not by itself cause a task to be replaced.
   EOT
   type        = string
-  default     = "0000000000000000000000000000000000000000"
+
+  # Merge commit for #52, published to crewsafe/backend by Backend CI run 30793342633
+  # (digest sha256:cadab448069f94a1480e50645d97bf47678537f1820556141b0aec2231796905).
+  #
+  # This is a default rather than a dispatch input because the shared plan and apply
+  # workflows pass exactly four TF_VAR_* values, none of them per-component — so there is no
+  # override path and this committed value IS the value the first task definition gets.
+  #
+  # It does not need updating as the backend moves on: it is read once, at initial task
+  # definition creation, after which ignore_changes hands the deployed image to SCRUM-145.
+  # It does need to still EXIST in the registry when the first apply runs — SCRUM-177 retains
+  # the newest twenty images, so re-pin if twenty pushes land before that apply.
+  default = "af7727812ee82bb74afc172fa6e5d4b865752152"
   validation {
     condition     = can(regex("^[0-9a-f]{7,40}$", var.initial_image_tag))
     error_message = "initial_image_tag must be a commit SHA: 7 to 40 lowercase hexadecimal characters. 'latest' and branch names are rejected."

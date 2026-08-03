@@ -223,14 +223,43 @@ inline policy** here — it will be rejected on the character limit.
 
 ## 4. Ordering — what must happen before the first apply
 
-Only the **apply** waits on SCRUM-177. Everything offline runs today.
+Only the **apply** waited on SCRUM-177. **All four steps are now done**; this section is kept as the
+record of what had to be true, not as work outstanding.
 
-1. **#40 merges** → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_REPOSITORY_URL` and
-   `CREWSAFE_ECR_PUSH_ROLE_ARN` repository variables, so #41's `publish-image` job stops skipping.
-2. **#41 merges** → first image published to `crewsafe/backend`.
-3. Set `var.initial_image_tag`'s default to that image's commit SHA and rebase this branch onto
-   `main`, resolving `components.json` and `test-component-catalog.sh` against #40's entry.
-4. Plan, review, apply (§5–§7).
+| | Step | Status |
+| --- | --- | --- |
+| 1 | **#40 merges** → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_REPOSITORY_URL` and `CREWSAFE_ECR_PUSH_ROLE_ARN` repository variables, so #41's `publish-image` job stops skipping | ✅ merged and applied |
+| 2 | **#41 merges** → first image published to `crewsafe/backend` | ✅ pushed 2026-08-03 |
+| 3 | Pin `var.initial_image_tag`'s default to that image's commit SHA | ✅ see below |
+| 4 | Plan, review, apply (§5–§7) | ⬜ ready to dispatch |
+
+Step 3's second half — *"rebase this branch onto `main`, resolving `components.json` and
+`test-component-catalog.sh` against #40's entry"* — **no longer applies.** Both catalogues landed on
+`main` together, `ecr-shared-dev` is registered, and the catalogue test already asserts its state key
+and `allow_destroy == false`. There was no conflict to resolve.
+
+### The pinned image tag
+
+```text
+af7727812ee82bb74afc172fa6e5d4b865752152
+```
+
+Merge commit for #52 (the change that added `workflow_dispatch` to backend CI, which is what allowed
+the manual publish). Pushed by Backend CI run
+[30793342633](https://github.com/zctiong-iss/crewsafe/actions/runs/30793342633), digest
+`sha256:cadab448069f94a1480e50645d97bf47678537f1820556141b0aec2231796905`.
+
+> **Nothing offline catches a wrong value here.** The validation accepts any 7–40 lowercase hex
+> characters, so the previous placeholder — forty zeros — passed `validate`, `test`, the source
+> guard, **and plan-review check 8**, which asks only that the reference is hex and not `latest`. The
+> apply then succeeds in full and the *task* fails to pull, surfacing as the image-pull row in §9 one
+> complete apply later. Confirm the tag against the registry by eye before dispatching; no automated
+> check will do it for you.
+>
+> The tag does not need refreshing as the backend moves on — it is read once, at initial task
+> definition creation, after which `ignore_changes` hands the deployed image to SCRUM-145. It does
+> need to still **exist**: SCRUM-177 retains the newest twenty images, so re-pin if twenty pushes
+> land before the first apply.
 
 ---
 
