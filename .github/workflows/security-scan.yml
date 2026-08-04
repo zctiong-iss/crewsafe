@@ -144,9 +144,43 @@ jobs:
         #
         # sonar.qualitygate.wait=true is what makes this a gate at all. Without
         # it the step exits 0 regardless of the Quality Gate result.
+        #
+        # sonar-project.properties is loaded explicitly below and passed as -D
+        # flags. The Maven Sonar plugin does NOT read that file itself -- that
+        # format is a sonar-scanner-CLI convention only, and it being silently
+        # ignored was the root cause of a "must define sonar.organization"
+        # failure here (SCRUM-178, 2026-08-06): every property in that file,
+        # including the analysed-paths list, was invisible to this step.
+        #
+        # sonar.projectBaseDir is required because paths in that file are
+        # written relative to the REPO ROOT (so they can reach web/ and
+        # mobile/, which sit outside the backend/ Maven module), while this
+        # step's working directory is backend/. Without it, every path would
+        # resolve relative to backend/ and silently match nothing outside it
+        # -- a passing gate that quietly analyses less than it claims to.
         run: |
+          set -euo pipefail
+          props_file="${GITHUB_WORKSPACE}/sonar-project.properties"
+          if [ ! -f "$props_file" ]; then
+            echo "::error::sonar-project.properties not found at repo root"
+            exit 1
+          fi
+
+          args=()
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              ''|'#'*) continue ;;
+            esac
+            key="${line%%=*}"
+            value="${line#*=}"
+            [ -n "$key" ] || continue
+            args+=("-D${key}=${value}")
+          done <"$props_file"
+
           ./mvnw -B -DskipTests compile \
             org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
+            "${args[@]}" \
+            -Dsonar.projectBaseDir="${GITHUB_WORKSPACE}" \
             -Dsonar.qualitygate.wait=true \
             -Dsonar.qualitygate.timeout=600
 
