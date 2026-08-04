@@ -10,11 +10,10 @@
 #      group and nothing else. Membership of that group is the ONLY thing granting
 #      database access; a task placed elsewhere fails with a connection timeout
 #      rather than an authorization error, which is far harder to diagnose.
-#   2. "boundary" — recovery after apply run 30880087606. The existing load
-#      balancer must stay internal and in the private subnets while the surviving
-#      VPC origin references it. Its restored ingress uses the VPC CIDR; the single
-#      inbound rule this component writes into the network component's application
-#      group still references the load-balancer group by id.
+#   2. "boundary" — the public ALB must stay in public subnets while accepting
+#      port 80 only from CloudFront's managed origin-facing prefix list. Its
+#      application-group ingress and egress stay restricted to port 8080 by
+#      security-group reference.
 #   3. "credentials" — every credential appears under the container definition's
 #      secrets list and never its environment list, with no version pinned. A
 #      pinned reference turns the managed service's own credential rotation into an
@@ -125,13 +124,6 @@ override_data {
       repository_arn = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/backend"
     }
   }
-}
-
-# The mock fabricates a random string for cidr_block, which fails provider
-# validation before assertions run. Pin the deployed VPC's representative CIDR.
-override_data {
-  target = data.aws_vpc.main
-  values = { cidr_block = "10.0.0.0/16" }
 }
 
 # AWS-published. Preparation assertions prove this managed identifier is the

@@ -37,7 +37,6 @@
         "cloudfront:GetCachePolicy",
         "cloudfront:GetDistribution",
         "cloudfront:GetOriginRequestPolicy",
-        "cloudfront:GetVpcOrigin",
         "cloudfront:ListCachePolicies",
         "cloudfront:ListDistributions",
         "cloudfront:ListOriginRequestPolicies",

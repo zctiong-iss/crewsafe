@@ -169,6 +169,19 @@ already-deployed policies retain them through cleanup refresh/deletion. Immediat
 reconcile and verify the live plan inline policy and apply customer-managed policy from the
 narrower reviewed files.
 
+The cleanup source removes exactly the legacy `aws_cloudfront_vpc_origin.rebuilt`, internal
+`aws_lb.main`, `aws_lb_listener.backend`, `aws_lb_target_group.backend`, legacy load-balancer
+security group and its three connectivity rules, and the legacy ECS target-group attachment. The
+reviewed plan may destroy only that set and may update the existing ECS service only to remove the
+legacy attachment. It must not change or replace the public ALB/security boundary, CloudFront
+distribution, ECS cluster/task definition, application runtime configuration, network, database,
+secrets, or `staging_base_url`. Any action outside this boundary rejects the plan.
+
+The final topology is CloudFront's existing `backend` custom origin over HTTP/80 to
+`aws_lb.public`, fenced by `com.amazonaws.global.cloudfront.origin-facing`; the public listener
+forwards to `aws_lb_target_group.public`, and the private ECS service has exactly that one target
+group attachment. Backend Cognito authentication and site/object authorization remain unchanged.
+
 Repeat every cutover check, then dispatch a fresh plan. The required result is:
 
 ```text
