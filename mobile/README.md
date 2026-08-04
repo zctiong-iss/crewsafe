@@ -1071,14 +1071,35 @@ bug has been latent since the button was written and needed a two-word label to 
 which localisation duly provided. Every other locale had been lucky: Hindi and Chinese labels
 are long, but the button had not yet met one that *could* break cleanly in the middle.
 
-**Fix.** Give the row a definite width — `width: "100%"` in place of `flexShrink: 1` — so the
-available width is the button's content box, known before the label is measured and identical
-in every cell. The label wraps instead of clipping, and `minHeight` (rather than `height`)
-lets the button grow to fit. The title keeps `flexShrink: 1`, which now governs *wrapping*
-inside a known width rather than deciding whether the text survives at all.
+**Fix, in two parts.** The first attempt gave the row a definite width — `width: "100%"` in
+place of `flexShrink: 1` — so the available width became the button's content box, known
+before the label is measured and identical in every cell. **That was not sufficient on its
+own:** the bug persisted on a Pixel 10 Pro XL while a Pixel 10 Pro Fold rendered correctly
+from the same bundle, which is the signature of a measurement path that varies with screen
+geometry rather than one that had been made deterministic.
+
+The second part removes the actual defect. The shrinking node is now a `View` wrapper, and
+the `Text` has **no flex properties at all**:
+
+```jsx
+<View style={styles.titleWrap}>   {/* flexShrink: 1 — Views shrink correctly */}
+  <AppText …>{title}</AppText>    {/* no flex props — inherits a settled width, wraps */}
+</View>
+```
+
+A `Text` that is itself the shrinking node does not wrap under pressure on Android — it
+clips, at a word boundary, silently. A `View` shrinks correctly, and a `Text` with no flex
+properties of its own wraps inside whatever width its parent settled on. `minHeight` rather
+than `height` on the button lets it grow to fit a wrapped label.
 
 This touches all 25 `AppButton` call sites, so it is worth an eye on the long ones — "Request
-an account" in Hindi is the widest label in the app.
+an account" in Hindi (`खाते का अनुरोध करें`) is the widest label in the app and the best
+stress test.
+
+> **Verify on more than one device.** This bug was invisible on one emulator and reproducible
+> on another with the same code. A single-device pass would have signed it off twice: once
+> because English has no space to break at, and once because the Fold is wide enough not to
+> care.
 
 > The general lesson is the one worth keeping: **a label that renders correctly in English is
 > not evidence the layout is correct.** Truncation bugs hide behind single-word labels, and a

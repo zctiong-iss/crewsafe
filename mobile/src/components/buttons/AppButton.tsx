@@ -92,16 +92,27 @@ const AppButton: FC<AppButtonProps> = ({
         ) : (
           icon && <View style={styles.icon}>{icon}</View>
         )}
-        <AppText
-          variant="label"
-          style={[
-            styles.title,
-            { color: isInactive ? theme.colors.onDisabled : active.text },
-            styleTitle,
-          ]}
-        >
-          {title}
-        </AppText>
+        {/*
+          The shrinking happens on this View, never on the Text.
+
+          A `Text` that is itself the flex-shrinking node does not wrap when the row runs out
+          of room on Android — it *clips*, at a word boundary, with no ellipsis to show that
+          anything was lost. A `View` shrinks correctly, and a Text with no flex properties
+          of its own simply wraps inside whatever width its parent ended up with. Same
+          layout, deterministic outcome.
+        */}
+        <View style={styles.titleWrap}>
+          <AppText
+            variant="label"
+            style={[
+              styles.title,
+              { color: isInactive ? theme.colors.onDisabled : active.text },
+              styleTitle,
+            ]}
+          >
+            {title}
+          </AppText>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -148,11 +159,16 @@ const styles = StyleSheet.create({
      */
     width: "100%",
   },
+  titleWrap: {
+    // The only shrinking node in the button. See the note at the call site for why this is
+    // a View and not the Text itself.
+    flexShrink: 1,
+  },
   title: {
     textAlign: "center",
-    // Still shrinkable, but now within a definite width — so this governs wrapping rather
-    // than deciding whether the text survives at all.
-    flexShrink: 1,
+    // Deliberately no flex properties. Giving the Text `flexShrink` is what caused it to
+    // clip mid-label instead of wrapping; it now inherits a settled width from `titleWrap`
+    // and wraps inside it.
   },
   icon: {
     marginEnd: s(8),
