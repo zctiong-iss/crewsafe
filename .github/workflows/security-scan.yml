@@ -1,0 +1,225 @@
+name: Security Scan
+
+# SCRUM-178. Deliberately NOT path-filtered: a secret can be committed anywhere,
+# and the existing gitleaks step lives inside the path-filtered Terraform
+# workflow, so a backend-only pull request currently gets no secret scan at all.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # Weekly full-history sweep (FR-002a), midnight Sunday Singapore time
+    # (UTC+8). cron: is always UTC on GitHub Actions, so 00:00 SGT Sunday is
+    # 16:00 UTC the preceding Saturday. GitHub disables scheduled workflows
+    # after 60 days of repository inactivity -- a quiet period is not a clean
+    # sweep. See docs/runbooks/SCRUM-178-sast-and-secret-scanning.md.
+    - cron: "0 16 * * 6"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # Full history: required for merge-base resolution on pull requests
+          # and for the full-history sweep on main and on schedule.
+          fetch-depth: 0
+
+      - name: Install scanners
+        run: .github/scripts/security/install-scanners.sh
+
+      # github context values reach the shell only through env vars, never
+      # through ${{ }} interpolation inside run:. A branch name is
+      # attacker-influenced text; interpolating it directly would let it be
+      # parsed as shell (SEC-002).
+      - name: Scan for secrets
+        id: scan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set +e
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            .github/scripts/security/scan-secrets.sh \
+              --mode range \
+              --base "origin/${BASE_REF}" \
+              --out "${RUNNER_TEMP}/secret-findings.json"
+          else
+            .github/scripts/security/scan-secrets.sh \
+              --mode full \
+              --out "${RUNNER_TEMP}/secret-findings.json"
+          fi
+          status=$?
+          set -e
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            echo "scope=pull request commit range" >> "$GITHUB_OUTPUT"
+          else
+            echo "scope=full repository history" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Report findings
+        if: always()
+        env:
+          SCAN_SCOPE: ${{ steps.scan.outputs.scope }}
+          SCAN_STATUS: ${{ steps.scan.outputs.status }}
+        run: |
+          .github/scripts/security/report-findings.sh \
+            --in "${RUNNER_TEMP}/secret-findings.json" \
+            --tool gitleaks \
+            --scope "${SCAN_SCOPE}" \
+            --status "${SCAN_STATUS:-2}"
+
+      # Fail closed. Exit 1 (findings) and exit 2 (scanner could not run) both
+      # fail the check; the summary above says which. A green check must never
+      # mean "the scanner did not run".
+      - name: Enforce gate
+        if: always()
+        env:
+          SCAN_STATUS: ${{ steps.scan.outputs.status }}
+        run: |
+          case "${SCAN_STATUS:-2}" in
+            0) echo "Secret scan passed." ;;
+            1) echo "::error::Secret scan found blocking findings. See the job summary."; exit 1 ;;
+            *) echo "::error::Secret scan could not run (infrastructure failure). See the job summary."; exit 1 ;;
+          esac
+
+  sast:
+    name: SAST (SonarQube)
+    runs-on: ubuntu-latest
+    # A scheduled run adds nothing for SAST -- it analyses the current tree, not
+    # history -- and would consume free-plan quota for no signal. The secret
+    # sweep is the point of the scheduled run.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # Sonar uses git history to attribute lines and to compute the "new
+          # code" period the Quality Gate is scored against. A shallow clone
+          # silently degrades new-code detection without failing.
+          fetch-depth: 0
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # Absent SONAR_TOKEN must FAIL, never skip. It is absent on fork pull
+      # requests, and a skipped security gate that reports green is worse than
+      # one that is visibly missing (FR-008a).
+      #
+      # pull_request_target is deliberately NOT used to make secrets available
+      # to forks: it runs with full secret access while checking out untrusted
+      # head code.
+      - name: Verify analysis credential
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "${SONAR_TOKEN}" ]; then
+            echo "::error::SONAR_TOKEN is not available, so SAST could not run."
+            echo "::error::This gate fails closed. Fork pull requests cannot run SAST; open the branch in this repository instead."
+            exit 1
+          fi
+
+      - name: Analyse with SonarQube Cloud
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        # -DskipTests is deliberate: the Quality Gate carries no coverage
+        # condition (backend/pom.xml has no JaCoCo plugin), and backend-ci.yml
+        # already runs the tests. Re-running them would duplicate the slowest
+        # part of CI.
+        #
+        # sonar.qualitygate.wait=true is what makes this a gate at all. Without
+        # it the step exits 0 regardless of the Quality Gate result.
+        #
+        # sonar-project.properties is loaded explicitly below and passed as -D
+        # flags. The Maven Sonar plugin does NOT read that file itself -- that
+        # format is a sonar-scanner-CLI convention only, and it being silently
+        # ignored was the root cause of a "must define sonar.organization"
+        # failure here (SCRUM-178, 2026-08-06): every property in that file,
+        # including the analysed-paths list, was invisible to this step.
+        #
+        # sonar.projectBaseDir is required because paths in that file are
+        # written relative to the REPO ROOT (so they can reach web/ and
+        # mobile/, which sit outside the backend/ Maven module), while this
+        # step's working directory is backend/. Without it, every path would
+        # resolve relative to backend/ and silently match nothing outside it
+        # -- a passing gate that quietly analyses less than it claims to.
+        run: |
+          set -euo pipefail
+          props_file="${GITHUB_WORKSPACE}/sonar-project.properties"
+          if [ ! -f "$props_file" ]; then
+            echo "::error::sonar-project.properties not found at repo root"
+            exit 1
+          fi
+
+          absolutize_path_list() {
+            local value="$1"
+            local path
+            local absolute_paths=()
+            IFS=',' read -ra paths <<<"$value"
+            for path in "${paths[@]}"; do
+              absolute_paths+=("${GITHUB_WORKSPACE}/${path}")
+            done
+            local IFS=','
+            printf '%s' "${absolute_paths[*]}"
+          }
+
+          args=()
+          while IFS= read -r line || [ -n "$line" ]; do
+            case "$line" in
+              ''|'#'*) continue ;;
+            esac
+            key="${line%%=*}"
+            value="${line#*=}"
+            [ -n "$key" ] || continue
+            case "$key" in
+              sonar.sources|sonar.tests|sonar.java.binaries)
+                value="$(absolutize_path_list "$value")"
+                ;;
+            esac
+            args+=("-D${key}=${value}")
+          done <"$props_file"
+
+          # Run the Maven wrapper from the repo root and point it at the
+          # backend module. Running mvnw from inside `backend/` caused the
+          # Sonar plugin to resolve relative paths against the module base,
+          # producing duplicated paths like backend/backend/src/main.
+          ./backend/mvnw -B -DskipTests -f backend/pom.xml compile \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
+            "${args[@]}" \
+            -Dsonar.projectBaseDir="${GITHUB_WORKSPACE}" \
+            -Dsonar.qualitygate.wait=true \
+            -Dsonar.qualitygate.timeout=600
+
+  gate-tests:
+    name: Gate Self-Tests
+    runs-on: ubuntu-latest
+    # Runs the gates' own tests in the pipeline, so a change that silently
+    # disables or downgrades a gate fails a test rather than passing unnoticed.
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Install scanners
+        run: .github/scripts/security/install-scanners.sh
+
+      - name: Secret gate self-tests
+        run: .github/scripts/tests/test-secret-scan-gate.sh
+
+      - name: Reporter self-tests
+        run: .github/scripts/tests/test-report-findings.sh
+
+      - name: SAST gate configuration lint
+        run: .github/scripts/tests/test-sast-gate-config.sh
