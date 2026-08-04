@@ -243,16 +243,6 @@ run "public_origin_cleanup" {
   command = apply
 
   assert {
-    condition     = aws_security_group.lb.name == "crewsafe-shared-dev-lb"
-    error_message = "Remediation must adopt the surviving legacy security group under its existing identity."
-  }
-
-  assert {
-    condition     = aws_security_group.lb.vpc_id == "vpc-0test00000000000"
-    error_message = "Remediation must adopt the legacy security group in the existing application VPC."
-  }
-
-  assert {
     condition     = aws_lb.public.internal == false
     error_message = "Cleanup must preserve the active internet-facing public ALB."
   }

@@ -143,9 +143,9 @@ require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
   'the active public load balancer identity' \
   'Cleanup must preserve the verified origin selected by CloudFront.'
 
-require 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
-  'the temporarily managed legacy load-balancer security group' \
-  'The partial final-cleanup apply deleted the ALB but left this group in state; remediation must adopt it without recreating it.'
+forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
+  'the legacy load-balancer security group' \
+  'Final cleanup removes the adopted orphan after the apply role gains the provider read permission required for deletion.'
 
 forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
   'the legacy internal load balancer' \
@@ -250,4 +250,4 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow ec2:DescribeNetworkInterfaces so the provider can delete the orphaned legacy security group"
 
-printf 'ok: %s final-cleanup remediation source guard passed (%d checks)\n' "$component_dir" 31
+printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 31
