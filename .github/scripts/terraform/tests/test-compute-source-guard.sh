@@ -143,9 +143,9 @@ require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
   'the active public load balancer identity' \
   'Cleanup must preserve the verified origin selected by CloudFront.'
 
-forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
-  'the legacy load-balancer security group' \
-  'Final cleanup removes the empty security group after the legacy ALB is unprotected.'
+require 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
+  'the temporarily managed legacy load-balancer security group' \
+  'The partial final-cleanup apply deleted the ALB but left this group in state; remediation must adopt it without recreating it.'
 
 forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
   'the legacy internal load balancer' \
@@ -241,4 +241,13 @@ jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") ==
   "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must remove cloudfront:DeleteVpcOrigin after cleanup"
 
-printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 30
+jq -e '
+  any(.Statement[];
+    .Sid == "ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule"
+    and (.Effect == "Allow")
+    and ((.Action | arrays | index("ec2:DescribeNetworkInterfaces")) != null)
+  )
+' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must allow ec2:DescribeNetworkInterfaces so the provider can delete the orphaned legacy security group"
+
+printf 'ok: %s final-cleanup remediation source guard passed (%d checks)\n' "$component_dir" 31
