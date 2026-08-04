@@ -248,7 +248,7 @@ run "public_origin_cleanup" {
   }
 
   assert {
-    condition     = aws_security_group.lb.vpc_id == "vpc-00000000000000000"
+    condition     = aws_security_group.lb.vpc_id == "vpc-0test00000000000"
     error_message = "Remediation must adopt the legacy security group in the existing application VPC."
   }
 
