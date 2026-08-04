@@ -37,7 +37,7 @@ import {
 import LanguageSheet from "@/components/sheets/LanguageSheet";
 import { languagesArr } from "@/localization/languagesList";
 import { FONT_SCALE_STEPS } from "@/styles/theme";
-import { useReduceMotion } from "@/hooks/useReduceMotion";
+import { useReduceMotion, useReduceMotionPreference } from "@/hooks/useReduceMotion";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -57,7 +57,9 @@ export default function SettingsScreen() {
   const language = useAppSelector((state) => state.preferences.language);
   const fontScale = useAppSelector((state) => state.preferences.fontScale);
   const highContrast = useAppSelector((state) => state.preferences.highContrast);
-  const reduceMotionPreference = useAppSelector((state) => state.preferences.reduceMotion);
+  // Per user, unlike the three above. See `preferencesSlice` for where that line is drawn.
+  const userId = useAppSelector((state) => state.auth.user?.id ?? null);
+  const reduceMotionPreference = useReduceMotionPreference();
 
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
 
@@ -166,8 +168,15 @@ export default function SettingsScreen() {
             label={t("settings.reduceMotion")}
             hint={t("settings.reduceMotionHint")}
             value={reduceMotionEffective}
-            disabled={forcedByDevice}
-            onValueChange={(value) => dispatch(setReduceMotion(value))}
+            // Also disabled with nobody signed in: there would be no account to write the
+            // choice against, and silently discarding a toggle is worse than not offering
+            // it. Unreachable today — Settings only mounts inside a signed-in tab tree —
+            // but it is one navigation change away from being reachable.
+            disabled={forcedByDevice || userId === null}
+            onValueChange={(value) => {
+              if (!userId) return;
+              dispatch(setReduceMotion({ userId, reduceMotion: value }));
+            }}
           />
         </View>
 

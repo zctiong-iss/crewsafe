@@ -124,7 +124,7 @@
     "highContrast": "High contrast",
     "highContrastHint": "Stronger colours and thicker outlines, for reading the screen in direct sunlight.",
     "reduceMotion": "Reduce motion",
-    "reduceMotionHint": "Stops icons animating. Already on if your device has Reduce Motion enabled.",
+    "reduceMotionHint": "On by default. Stops icons animating, except the stop-work warning. Always on if your device has Reduce Motion enabled.",
     "accessibility": "Accessibility",
     "display": "Display",
     "about": "About",

@@ -123,12 +123,21 @@ const LightningBanner: FC<LightningBannerProps> = ({ risk, locale, now }) => {
       <View style={styles.headerRow}>
         {/* The one place in the app where a looping animation is unambiguously earned. An
             expired or clear banner stays still — motion there would keep drawing the eye to
-            something that no longer needs it. */}
+            something that no longer needs it.
+
+            `essential` on the stop-work case only, and for the same reason the pulse exists
+            at all. Since SCRUM-199 the in-app Reduce Motion preference defaults to on, so
+            without this the pulse would be absent for every worker who has never opened
+            Settings — a warning quietly weakened by a default they did not choose. The
+            advisory pulse is not exempt: "be ready to stop" can afford to be still, and an
+            exemption that covers every state is not an exemption. A device-level Reduce
+            Motion still stops both. */}
         <AnimatedIcon
           name={icon}
           size={s(stopWork ? 30 : 24)}
           color={foreground}
           motion={stopWork ? "urgent" : active ? "steady" : "none"}
+          essential={stopWork}
         />
         {/* flex:1 so a long translated title wraps inside the banner instead of pushing
             the icon off its edge — the Hindi stop-work title is nearly twice the English. */}

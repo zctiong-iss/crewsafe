@@ -350,7 +350,35 @@ sun, held by someone who may not read English, possibly in gloves.
   clears WCAG AA against its background.
 - **Reduce motion** honours the OS setting *or* an in-app toggle, and stops screen
   transitions as well as icon animation. WCAG 2.2 SC 2.2.2 requires looping animation to be
-  stoppable.
+  stoppable. **On by default, and scoped per user account** (SCRUM-199/200) — see below.
+
+### Reduce motion: on by default, per user (SCRUM-199 / SCRUM-200)
+
+Three properties, and each one is a separate decision:
+
+1. **On by default.** A worker who has never opened Settings gets motion suppressed. The
+   operating condition argues for it — a pulsing glyph read at arm's length in glare is
+   harder to parse than a still one, and nobody had been asked.
+2. **Per user account, not per device.** `preferences.reduceMotionByUser` is keyed by user
+   id, exactly as `profileSlice` keys avatars. A new worker signing in on a shared site
+   phone gets the default, not the previous worker's answer.
+3. **Persisted both ways.** Turning it *off* is recorded as deliberately as turning it on,
+   so it survives sign-out, backgrounding, and cold start.
+
+**Language, text size and high contrast are deliberately still per-device.** Those answer a
+question about the phone and the light it is being read in — a site handset that needs high
+contrast at noon needs it for whoever is holding it, and making each worker set it again
+every morning is a cost the app already refuses to pay. Reduce motion answers a question
+about the *person*: vestibular sensitivity belongs to a body, not a handset.
+
+**The stop-work pulse is exempt from the in-app toggle** — and only that one. Because the
+default is now *on*, an unexempted stop-work banner would lose its urgent pulse for every
+worker who never opened Settings: a safety cue removed by a default nobody chose. The
+`essential` prop on `AnimatedIcon` carves out exactly that case. A device-level Reduce
+Motion still stops it, because that setting was chosen by someone who has a reason, and no
+in-app judgement about urgency outranks it. The advisory pulse is *not* exempt — "be ready
+to stop" can afford to be still, and an exemption that covers every state is not an
+exemption.
 
 Every error message is a translation key, never a hardcoded string — including the ones
 derived from HTTP status.
@@ -386,6 +414,10 @@ derived from HTTP status.
   app depends on it.
 - **Acknowledgement records accumulate** for the life of the install. Pruning belongs with
   SCRUM-130, which already has to reason about queue lifetime.
+- **Reduce-motion entries accumulate** likewise — one boolean per account that has ever
+  signed in on the device. The same unbounded-growth caveat as the avatar map, and a great
+  deal cheaper than that one. There is no server-side home for it: `MeResponse` has no
+  preferences field, so the setting cannot yet follow a worker to another phone.
 - **`cognito-pkce` on a phone needs a development build.** It is written and inert until
   then; `npm run web:pkce` exercises it today.
 
@@ -626,9 +658,107 @@ label-above-value stack rather than reverting to wrapping.
 
 ---
 
+### Problem 7 — A default of `true` that would have worked only on fresh installs
+
+**Symptom.** Not found on a device — found by reading the warning the codebase had already
+written for it. SCRUM-199 flips `reduceMotion` to default on. `persistConfig.ts` had carried
+this comment since the v1→v2 migration:
+
+> *"Falsy-by-accident works until the first setting whose default is `true`. […] the first
+> preference whose default is `true` would break silently on every upgraded install and work
+> perfectly on every fresh one, which is the worst kind of bug to be handed."*
+
+This ticket **is** that setting.
+
+**Root cause.** redux-persist's default reconciler merges one level deep: each slice is
+*replaced* by what was stored, not merged field by field. Every device that had ever run the
+app had `reduceMotion: false` in AsyncStorage — not because anyone chose it, but because
+that was the old default. On rehydrate the stored value wins, so the new default would never
+reach an existing install. A reviewer testing on a clean emulator would have seen it pass.
+
+**Fix.** Bump `PERSIST_VERSION` and write a migration that applies the new default *after*
+the spread, so the stored value cannot win:
+
+```ts
+preferences: {
+  ...initialPreferencesState,
+  ...(previous.preferences ?? {}),
+  reduceMotion: true,            // after the spread, deliberately
+  reduceMotionChosenExplicitly: false,
+}
+```
+
+The v2 comment is the only reason this was caught before shipping. **A migration note that
+predicts a future bug is worth more than a test that cannot yet be written** — the test for
+this failure needs an upgraded install, which no CI run has.
+
+---
+
+### Problem 8 — "Chose false" and "never asked" were the same stored value
+
+**Symptom.** With the default flipped, a worker who deliberately switched Reduce Motion
+*off* would get it silently switched back on at their next login.
+
+**Root cause.** The state was one boolean. `false` meant both "this user turned it off" and
+"nobody has been asked", and any logic that reapplies a default cannot tell those apart.
+
+**Fix.** Record the choice, not just the value. Initially a `reduceMotionChosenExplicitly`
+flag mirroring the existing `languageChosenExplicitly` pattern; after SCRUM-199 moved to
+per-user scope, the *presence of an entry* in `reduceMotionByUser` carries the same
+information more directly — absent means never asked, present means chosen, either way.
+
+The half that matters is writing an entry on `false` as well as `true`. Recording only the
+`true` case is the easy mistake and it fails in exactly one direction: silently, for the
+users who most wanted the setting off.
+
+---
+
+### Problem 9 — Per-user state that renders before the user exists
+
+**Symptom.** Moving reduce motion to per-user scope introduced a window on every cold start
+where the app renders with no user resolved — and briefly with the wrong motion setting,
+producing a visible flicker as animations start and then stop.
+
+**Root cause.** The two halves rehydrate at different times, on purpose. `preferences` is
+persisted and comes back immediately; `auth.user` is **deliberately not persisted** — it is
+re-fetched from `GET /api/v1/me` on every launch so a revoked role cannot linger. So there
+is a real interval, plus the entire sign-in screen, during which `auth.user` is `null` and
+there is no per-user value to read.
+
+**Fix.** Make the no-user case explicit rather than incidental. `selectReduceMotionFor`
+takes a nullable user id and returns the same default a first-time user gets:
+
+```ts
+export function selectReduceMotionFor(byUser, userId) {
+  if (!userId) return REDUCE_MOTION_DEFAULT;
+  return byUser[userId]?.reduceMotion ?? REDUCE_MOTION_DEFAULT;
+}
+```
+
+Because the fallback equals the default, nothing changes underneath someone as their profile
+lands, and the app never animates at an account it has not yet asked. The alternative —
+remembering the last signed-in user's value to avoid the flicker — would briefly apply the
+previous worker's setting to whoever is holding the phone, which is the exact leak the
+per-user change exists to close.
+
+**Accepted cost:** the v3→v4 migration drops the old device-level value rather than
+attributing it to anyone. Nothing in persisted state can name the person it belonged to,
+precisely because `auth` is not persisted. Guessing would be wrong on a shared phone, so one
+person re-sets one switch once.
+
+---
+
 ### What this says about the checks
 
-Static verification caught none of these. It is good at contracts and shapes and useless at
-ABI compatibility, port ownership, framework freezing behaviour, and text measurement. The
-lesson worth keeping: **get it onto a device before believing it works**, and when something
-native fails, read `adb logcat -b crash -d` rather than reasoning about the JS.
+Static verification caught none of Problems 1–6. It is good at contracts and shapes and
+useless at ABI compatibility, port ownership, framework freezing behaviour, and text
+measurement. The lesson worth keeping: **get it onto a device before believing it works**,
+and when something native fails, read `adb logcat -b crash -d` rather than reasoning about
+the JS.
+
+Problems 7–9 are the mirror image and worth separating. None of them are visible on a
+device — not on a clean emulator, anyway, which is the only kind CI has. They live in
+migration paths and rehydrate ordering, where the failure only appears on an install that
+has *history*. `tsc` was silent on all three. What caught them was a comment someone had
+written about a bug that had not happened yet, and asking of each piece of state: **who does
+this belong to, and what does its absence mean?**

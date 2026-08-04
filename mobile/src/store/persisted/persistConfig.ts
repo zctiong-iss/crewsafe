@@ -18,7 +18,7 @@ import { initialPreferencesState } from "../reducers/preferencesSlice";
  * produce — the hardest kind of bug to reproduce, because it only exists on devices that
  * upgraded rather than installed fresh.
  */
-const PERSIST_VERSION = 2;
+const PERSIST_VERSION = 4;
 
 export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
   storage: typeof AsyncStorage;
@@ -53,6 +53,81 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
       return {
         ...previous,
         preferences: { ...initialPreferencesState, ...(previous.preferences ?? {}) },
+      };
+    },
+
+    /*
+     * v2 → v3 flipped `reduceMotion` to on by default (SCRUM-199), while it was still a
+     * single device-level boolean.
+     *
+     * This is the bug the v2 note predicted, arriving: the default became `true`, and the
+     * spread-defaults-under-stored-values trick that fixes every other field is exactly
+     * wrong for it. A device that ran v2 stored `reduceMotion: false` — not because anyone
+     * chose it, but because that was the default — so letting the stored value win would
+     * have left every upgraded install on the old behaviour while fresh installs got the
+     * new one.
+     *
+     * v4 supersedes this: the field it wrote no longer exists. The migration is kept
+     * because redux-persist runs the chain in order, and a device still on v1 or v2 has to
+     * pass through here to reach v4. It is deliberately written against a local shape
+     * rather than `initialPreferencesState`, so a future change to the current defaults
+     * cannot silently alter what a historical migration does.
+     */
+    3: (state) => {
+      if (!state) return state;
+      const previous = state as typeof state & {
+        preferences?: Record<string, unknown>;
+      };
+      return {
+        ...previous,
+        preferences: {
+          ...(previous.preferences ?? {}),
+          reduceMotion: true,
+          reduceMotionChosenExplicitly: false,
+        },
+      };
+    },
+
+    /*
+     * v3 → v4 moves reduce-motion from one device-level boolean to a per-user map.
+     *
+     * The device-level value is dropped rather than carried over, and there is no way to do
+     * better: it records what *a* phone was set to, and this version needs to know what a
+     * *person* chose. Nothing in persisted state can name that person, because `auth` is
+     * deliberately not persisted — it is re-fetched from `GET /api/v1/me` on every launch so
+     * a revoked role cannot linger. Attributing the old boolean to whoever happens to sign
+     * in next would be a guess, and on a shared site phone it would be the specific wrong
+     * guess this whole change exists to prevent.
+     *
+     * So every account starts as never-asked and gets the default at its next login, which
+     * is exactly the intended behaviour for all of them but one — the person already using
+     * this handset, who may have to set it once more. One switch, once, against a setting
+     * that is otherwise silently inherited by strangers.
+     *
+     * Both dead fields are deleted rather than left in place. redux-persist stores whatever
+     * it is handed, and a stale `reduceMotion` sitting in AsyncStorage is an invitation for
+     * some later reader to find it and believe it.
+     */
+    4: (state) => {
+      if (!state) return state;
+      const previous = state as typeof state & {
+        preferences?: Record<string, unknown>;
+      };
+      const {
+        reduceMotion: _dropped,
+        reduceMotionChosenExplicitly: _alsoDropped,
+        ...carriedOver
+      } = previous.preferences ?? {};
+
+      return {
+        ...previous,
+        preferences: {
+          ...initialPreferencesState,
+          ...carriedOver,
+          // After the spread: a v3 install has no such key, but an interrupted or replayed
+          // migration must not end up merging one in.
+          reduceMotionByUser: {},
+        },
       };
     },
   }),
