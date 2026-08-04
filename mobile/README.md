@@ -825,6 +825,38 @@ speaker Malay would be a guess made on their behalf about a stop-work instructio
 Indonesian falls through to English, and the worker can pick Malay themselves if they prefer
 it. Same reasoning as the existing `zh-Hant` carve-out.
 
+### Server-authored text cannot be translated by this app
+
+Found while reviewing the Inbox in Malay: the action **titles** translated, the instruction
+**bodies** stayed in English.
+
+That is not a missing key. `ActionDispatch.instruction` is free text the server authors — a
+supervisor's own words attached to a dispatched action — and `DispatchCard` renders it
+verbatim. No locale file can reach it, because it is runtime data rather than a key.
+
+```
+Rehat selama 15 minit                              ← actions.REST_15_MIN, translated
+Take a continuous 15-minute rest in the shaded…    ← dispatch.instruction, server text
+```
+
+**What was done here.** The mock dispatch server now resolves its instruction bodies through
+i18n at read time, which is what a localising server would do — the seed holds a key under
+`dev.mockInstruction.*` and `materialise()` renders it per request. A language change shows
+up on the next inbox poll rather than needing a restart.
+
+**What that does not fix.** The real `ActionDispatchController` still returns whatever text
+the supervisor typed. A Malay-speaking worker on the real backend reads the instruction in
+the supervisor's language. The action title carries the safety meaning and *is* translated,
+so this degrades rather than fails — but it needs a backend answer, and the options are the
+usual three: translate at dispatch time, store a structured code plus parameters instead of
+prose, or accept it and make the title authoritative. **Worth its own ticket.**
+
+`ROTATE_TO_LIGHT_DUTY` was also added to `actions.*` in all four locales. It had been left
+out deliberately so the card would demonstrate its `humaniseActionCode` fallback — but a
+real catalogue code rendering in English on a localised screen is too high a price for a
+demonstration. The fallback still guards every code the backend adds ahead of this app's
+translations, which is the case it exists for.
+
 ### Locale parity check
 
 ```bash

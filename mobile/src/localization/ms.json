@@ -308,7 +308,8 @@
     "HYDRATE": "Minum air sekarang",
     "STOP_WORK": "Berhenti kerja",
     "SEEK_SHADE": "Pergi ke tempat teduh",
-    "RESUME_WORK": "Sambung kerja"
+    "RESUME_WORK": "Sambung kerja",
+    "ROTATE_TO_LIGHT_DUTY": "Bertukar ke tugas ringan"
   },
 
   "shift": {
@@ -352,7 +353,12 @@
     "forbiddenHint": "Kes 403 dalam cerita ini tidak dapat dicapai sebaliknya — pemilih hanya menawarkan tapak yang anda miliki. Anda sepatutnya kekal log masuk dan melihat penjelasan.",
     "scenarioClear": "Selamat",
     "scenarioAdvisory": "Amaran",
-    "scenarioStopWork": "Berhenti kerja"
+    "scenarioStopWork": "Berhenti kerja",
+    "mockInstruction": {
+      "REST_15_MIN": "Ambil rehat 15 minit tanpa henti di tempat rehat teduh berhampiran pejabat tapak.",
+      "HYDRATE": "Minum 500ml air sekarang dan isi semula botol anda sebelum kembali ke bahu jalan.",
+      "ROTATE_TO_LIGHT_DUTY": "Bertukar ke stor alat untuk sejam berikutnya. Penyelia anda telah mengatur pengganti."
+    }
   },
 
   "placeholder": {
