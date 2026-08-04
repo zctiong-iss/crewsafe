@@ -10,13 +10,11 @@
 #      group and nothing else. Membership of that group is the ONLY thing granting
 #      database access; a task placed elsewhere fails with a connection timeout
 #      rather than an authorization error, which is far harder to diagnose.
-#   2. "boundary" — reversed 2026-08-04. The load balancer is now public, in the
-#      public subnets, with ingress fenced to CloudFront's managed prefix list
-#      rather than admitted by having no address. The single inbound rule this
-#      component writes into the network component's group must still reference
-#      that group by id — a CIDR-based rule there would still quietly widen the
-#      boundary SCRUM-173 left for this component to close, and that half of the
-#      design did not change.
+#   2. "boundary" — recovery after apply run 30880087606. The existing load
+#      balancer must stay internal and in the private subnets while the surviving
+#      VPC origin references it. Its restored ingress uses the VPC CIDR; the single
+#      inbound rule this component writes into the network component's application
+#      group still references the load-balancer group by id.
 #   3. "credentials" — every credential appears under the container definition's
 #      secrets list and never its environment list, with no version pinned. A
 #      pinned reference turns the managed service's own credential rotation into an
@@ -129,11 +127,11 @@ override_data {
   }
 }
 
-# AWS-published; the assertions check that the prefix list is REFERENCED for
-# ingress, not what its id is.
+# The mock fabricates a random string for cidr_block, which fails provider
+# validation before assertions run. Pin the deployed VPC's representative CIDR.
 override_data {
-  target = data.aws_ec2_managed_prefix_list.cloudfront
-  values = { id = "pl-00a54069" }
+  target = data.aws_vpc.main
+  values = { cidr_block = "10.0.0.0/16" }
 }
 
 # The two managed policies are AWS-published; the mock fabricates their ids, which
@@ -242,32 +240,28 @@ run "placement" {
 run "boundary" {
   command = apply
 
-  # Reversed 2026-08-04. The internal-load-balancer design is documented in the
-  # runbook and in the long comment on aws_security_group.lb, not asserted here —
-  # asserting it would fail against the current, deliberate configuration.
+  # Recovery stage after apply run 30880087606 partially removed the existing
+  # listener and rules before CloudFront released its surviving VPC origin.
   assert {
-    condition     = aws_lb.main.internal == false
-    error_message = "The load balancer is public by design (see main.tf) — ingress is fenced by the CloudFront prefix list rule below, not by having no address."
+    condition     = aws_lb.main.internal == true
+    error_message = "The recovery stage must preserve the existing internal load balancer; replacing it while its VPC origin is attached repeats the failed migration."
   }
 
   assert {
     condition = tolist(aws_lb.main.subnets) == tolist([
-      "subnet-0public0000000a", "subnet-0public0000000b"
+      "subnet-0private000000a", "subnet-0private000000b"
     ])
-    error_message = "The public load balancer belongs in the public subnets."
-  }
-
-  # The prefix list is the whole boundary now that the load balancer has a public
-  # address. A CIDR here — especially 0.0.0.0/0 — would admit the entire internet on
-  # the application's public port.
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.lb_from_cloudfront.prefix_list_id == data.aws_ec2_managed_prefix_list.cloudfront.id
-    error_message = "Ingress to the load balancer must be fenced to CloudFront's managed prefix list."
+    error_message = "The recovery-stage internal load balancer must remain in the private subnets."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.lb_from_cloudfront.cidr_ipv4 == null
-    error_message = "No CIDR may admit traffic to the public load balancer — the prefix list is the only permitted source."
+    condition     = aws_vpc_security_group_ingress_rule.lb_from_vpc_origin.cidr_ipv4 == "10.0.0.0/16"
+    error_message = "The recovery-stage internal load balancer must accept the surviving VPC origin from inside the VPC."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.lb_from_vpc_origin.prefix_list_id == null
+    error_message = "The recovery-stage internal load balancer must not use the public CloudFront prefix-list path."
   }
 
   # The distribution forwards viewer headers verbatim, so the load balancer is the
@@ -303,6 +297,11 @@ run "boundary" {
 
 run "public_edge" {
   command = apply
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).vpc_origin_config).vpc_origin_id == aws_cloudfront_vpc_origin.rebuilt.id
+    error_message = "Recovery must keep CloudFront attached to the one surviving VPC origin; deleting or replacing it in this stage repeats run 30880087606."
+  }
 
   assert {
     condition     = aws_cloudfront_distribution.main.default_cache_behavior[0].viewer_protocol_policy == "redirect-to-https"

@@ -17,21 +17,16 @@
 #      value in a task definition undoes both at once, and it is the likeliest way
 #      this design is quietly broken because writing an environment variable is the
 #      more obvious thing to do.
-#   2. The load balancer's public address must stay fenced to CloudFront. Reversed
-#      2026-08-04 from "must stay internal" — an internal load balancer behind a
-#      CloudFront VPC origin was built, applied twice, and served zero requests for
-#      a full day with no diagnosable fault (see main.tf). The load balancer now
-#      HAS a public address; a 0.0.0.0/0 ingress rule is what would make that
-#      address actually open, so that is what is forbidden now.
+#   2. The recovery-stage load balancer must stay internal. Apply run 30880087606
+#      proved that replacing it while CloudFront still references its surviving
+#      VPC origin creates a destructive dependency race.
 #   3. The application owns its schema transition. Flyway runs in-process before
 #      traffic is accepted, with Hibernate pinned to `validate`. A task-definition
 #      override, a second container, or a command override would re-open what
 #      SCRUM-175's obligations 1 and 2 closed.
-#   4. No shared origin-authentication secret may exist. This project's earlier,
-#      rejected header-based variant of a fenced public load balancer needed one in
-#      state; the prefix-list-only version this component now runs does not, and
-#      forbidding the header outright
-#      stops it returning by accident when someone "hardens" the origin later.
+#   4. No shared origin-authentication secret may exist. The attempted public
+#      variant needed no header, and the recovery VPC-origin path needs none either;
+#      forbidding one stops it returning by accident.
 set -euo pipefail
 source "$(dirname "$0")/helpers/test-helpers.sh"
 
@@ -134,15 +129,16 @@ forbid 'containerPath[^,]*"/tmp"' \
 
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
-# Reversed 2026-08-04. FR-021 used to be discharged by internal = true; it is now
-# discharged by fencing ingress to CloudFront's managed prefix list instead — see
-# the long comment on aws_security_group.lb in main.tf for why an internal load
-# balancer behind a CloudFront VPC origin was abandoned. The load balancer having a
-# public ADDRESS is accepted; what is still forbidden is that address being open to
-# anything OTHER than CloudFront.
+# Recovery stage after apply run 30880087606 partially mutated state. The surviving
+# VPC origin still references the existing internal load balancer, so forcing its
+# replacement would repeat the failed dependency race.
+forbid '^[[:space:]]*internal[[:space:]]*=[[:space:]]*false' \
+  'an internet-facing load balancer during recovery' \
+  'Recovery must preserve the existing internal load balancer until a separately reviewed parallel-origin migration is ready.'
+
 forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
   'a security group rule admitting the whole internet' \
-  'Ingress to the public load balancer must come only from CloudFronts published address range, by prefix_list_id (FR-021). A 0.0.0.0/0 rule would make the prefix-list fence meaningless.'
+  'No recovery-stage resource may admit the whole internet (FR-021).'
 
 # FR-018. A rule that answers on the application path never reaches the
 # application, so every authorization control the application enforces is skipped.
@@ -206,4 +202,4 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow cloudfront:DeleteVpcOrigin"
 
-printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 16
+printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 17
