@@ -34,6 +34,8 @@ import static org.mockito.Mockito.when;
 /**
  * Covers freshness recomputation (stored status is never trusted as-is, except
  * {@code SIMULATED}) and that either half of the snapshot may legitimately be {@code null}.
+ *
+ * @author Jemilin Beulah
  */
 @ExtendWith(MockitoExtension.class)
 class ConditionsSnapshotServiceTest {

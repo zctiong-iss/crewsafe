@@ -16,6 +16,8 @@ import java.util.UUID;
  * Pushes {@link ConditionsSnapshot} events for a site as they change. Same authorization
  * shape as {@link com.crewsafe.site.api.SiteController#getDashboard} — reuses
  * {@code @siteAccess} rather than a new mechanism.
+ *
+ * @author Jemilin Beulah
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/conditions")

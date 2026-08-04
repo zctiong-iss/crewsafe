@@ -28,6 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * same SUPERVISOR/SAFETY_MANAGER/ADMIN role gate as
  * {@link com.crewsafe.site.api.SiteController#getDashboard}, so it must be denied and allowed
  * in exactly the same shapes.
+ *
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class SiteConditionsAuthorizationTest extends AbstractIntegrationTest {

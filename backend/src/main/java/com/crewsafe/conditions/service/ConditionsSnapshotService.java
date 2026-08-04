@@ -21,6 +21,8 @@ import java.util.UUID;
  * Combines the latest weather observation with the active shift for a site into one
  * conditions-screen payload. Plain and synchronous — {@link SiteConditionsStreamService}
  * is what turns repeated calls into a push stream.
+ *
+ * @author Jemilin Beulah
  */
 @Service
 @RequiredArgsConstructor

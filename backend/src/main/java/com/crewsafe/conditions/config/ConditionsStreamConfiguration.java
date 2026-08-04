@@ -8,6 +8,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 /**
  * Shared scheduler for the site conditions SSE stream. A handful of threads, not the
  * single-threaded default, so a burst of open dashboard tabs doesn't queue up behind it.
+ *
+ * @author Jemilin Beulah
  */
 @Configuration
 public class ConditionsStreamConfiguration {

@@ -17,6 +17,8 @@ import java.util.concurrent.ScheduledFuture;
  * Turns repeated {@link ConditionsSnapshotService#getSnapshot} calls into a per-site SSE
  * push stream: one scheduled task per subscriber, cancelled the moment its emitter
  * completes, times out, or errors, so a client that walks away doesn't leave it ticking.
+ *
+ * @author Jemilin Beulah
  */
 @Service
 @RequiredArgsConstructor
