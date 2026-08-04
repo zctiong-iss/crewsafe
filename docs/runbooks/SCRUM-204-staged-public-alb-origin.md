@@ -157,6 +157,13 @@ The cleanup branch was created from applied cutover revision
 `ed098bb1985132e9bab4b38dd0821b94f5519480` after the cutover evidence above passed. Any material
 change to that evidence or active origin blocks cleanup and requires a fresh branch and plan.
 
+The test-only cleanup checkpoint is published on draft PR
+[#76](https://github.com/zctiong-iss/crewsafe/pull/76) at revision `99dbe08`. Terraform Validation
+[run 30890118807, catalog job 91930067020](https://github.com/zctiong-iss/crewsafe/actions/runs/30890118807/job/91930067020)
+failed as expected: the final-topology source guard found the still-declared legacy
+`aws_cloudfront_vpc_origin.rebuilt`. Lockfile and security jobs passed. This is intentional red-test
+evidence only; cleanup implementation must make the same guard and the full required workflow pass.
+
 Reviewed source policies omit `cloudfront:GetVpcOrigin` and `cloudfront:DeleteVpcOrigin`, while the
 already-deployed policies retain them through cleanup refresh/deletion. Immediately after success,
 reconcile and verify the live plan inline policy and apply customer-managed policy from the
