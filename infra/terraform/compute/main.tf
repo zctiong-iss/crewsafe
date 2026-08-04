@@ -82,6 +82,13 @@ data "aws_vpc" "main" {
   id = local.network.vpc_id
 }
 
+# SCRUM-204 preparation: AWS maintains this list as the CloudFront edge fleet
+# changes. The parallel public ALB admits only these origin-facing addresses;
+# manually maintained CIDRs and 0.0.0.0/0 are forbidden by the source guard.
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 data "aws_cloudfront_cache_policy" "caching_disabled" {
   name = "Managed-CachingDisabled"
 }
@@ -191,6 +198,16 @@ resource "aws_security_group" "lb" {
   tags = { Name = "${local.name_prefix}-lb" }
 }
 
+# Distinct from aws_security_group.lb so the recovered and parallel paths can
+# coexist. Its only ingress and egress are declared as separate rules below.
+resource "aws_security_group" "public_lb" {
+  name        = "${local.name_prefix}-public-lb"
+  description = "Parallel public load balancer for SCRUM-204. Ingress is limited to CloudFronts managed origin-facing prefix list."
+  vpc_id      = local.network.vpc_id
+
+  tags = { Name = "${local.name_prefix}-public-lb" }
+}
+
 # --------------------------------------------------------------------------
 # RECOVERY STAGE AFTER THE ONE-STEP PUBLIC-ALB MIGRATION PARTIALLY APPLIED.
 #
@@ -285,6 +302,38 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_lb" {
   ip_protocol                  = "tcp"
 }
 
+# SCRUM-204 preparation boundary. The ALB has a public address, but port 80 is
+# reachable only from AWS's managed CloudFront origin-facing fleet. That list is
+# fleet-wide rather than distribution-specific; the runbook records the trade.
+resource "aws_vpc_security_group_ingress_rule" "public_lb_from_cloudfront" {
+  security_group_id = aws_security_group.public_lb.id
+  description       = "HTTP from CloudFronts managed origin-facing address range only. Fleet-wide; see the SCRUM-204 runbook."
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_lb_to_app" {
+  security_group_id            = aws_security_group.public_lb.id
+  description                  = "To the existing private application runtime on its single container port."
+  referenced_security_group_id = local.network.app_security_group_id
+  from_port                    = local.container_port
+  to_port                      = local.container_port
+  ip_protocol                  = "tcp"
+}
+
+# A second explicit ALB identity may enter the application group during
+# preparation. app_from_lb remains unchanged for the active recovery path.
+resource "aws_vpc_security_group_ingress_rule" "app_from_public_lb" {
+  security_group_id            = local.network.app_security_group_id
+  description                  = "Application port from the SCRUM-204 parallel public load balancer only."
+  referenced_security_group_id = aws_security_group.public_lb.id
+  from_port                    = local.container_port
+  to_port                      = local.container_port
+  ip_protocol                  = "tcp"
+}
+
 # ---------------------------------------------------------------------------
 # Origin
 #
@@ -314,6 +363,25 @@ resource "aws_lb" "main" {
   tags = { Name = "${local.name_prefix}-backend" }
 }
 
+# SCRUM-204 preparation uses a new identity rather than changing aws_lb.main.
+# Changing the existing ALB's `internal` or subnet set would force replacement
+# while its surviving VPC origin is still referenced, repeating run 30880087606.
+# This ALB is intentionally public (AWS-0053), with reachability fenced by the
+# managed-prefix-list rule rather than by 0.0.0.0/0.
+#trivy:ignore:AWS-0053
+resource "aws_lb" "public" {
+  name               = "${local.name_prefix}-public"
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = local.network.public_subnet_ids
+  security_groups    = [aws_security_group.public_lb.id]
+
+  enable_deletion_protection = true
+  drop_invalid_header_fields = true
+
+  tags = { Name = "${local.name_prefix}-public" }
+}
+
 resource "aws_lb_target_group" "backend" {
   name        = "${local.name_prefix}-backend"
   port        = local.container_port
@@ -331,6 +399,29 @@ resource "aws_lb_target_group" "backend" {
   # which is what makes REL-002 work: a database the task cannot reach marks the
   # endpoint down, the target deregisters, and the task is replaced — rather than
   # serving errors as though healthy.
+  health_check {
+    path                = "/actuator/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+  }
+}
+
+# Separate readiness evidence for the parallel path. It probes the same
+# application and registers the same ECS workload; no second runtime is created.
+resource "aws_lb_target_group" "public" {
+  name        = "${local.name_prefix}-public"
+  port        = local.container_port
+  protocol    = "HTTP"
+  vpc_id      = local.network.vpc_id
+  target_type = "ip"
+
+  deregistration_delay = 30
+
   health_check {
     path                = "/actuator/health"
     port                = "traffic-port"
@@ -367,6 +458,21 @@ resource "aws_lb_listener" "backend" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.backend.arn
+  }
+}
+
+# HTTP is the documented temporary origin transport: no trusted certificate can
+# be issued for the AWS-owned ALB hostname. Its security group accepts only the
+# managed CloudFront prefix list, and all requests still reach backend authn/z.
+#trivy:ignore:AWS-0054
+resource "aws_lb_listener" "public" {
+  load_balancer_arn = aws_lb.public.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.public.arn
   }
 }
 
@@ -644,6 +750,14 @@ resource "aws_ecs_service" "backend" {
     container_port   = local.container_port
   }
 
+  # SCRUM-204 preparation dual-registers the existing private workload. The
+  # legacy attachment above remains until the separately reviewed cleanup.
+  load_balancer {
+    target_group_arn = aws_lb_target_group.public.arn
+    container_name   = local.container_name
+    container_port   = local.container_port
+  }
+
   # Must exceed migrations plus application context startup. Flyway runs in-process
   # before the web server accepts connections; if this is too short the platform
   # kills the task mid-migration and retries forever, presenting as a health check
@@ -656,7 +770,7 @@ resource "aws_ecs_service" "backend" {
     rollback = true
   }
 
-  depends_on = [aws_lb_listener.backend]
+  depends_on = [aws_lb_listener.backend, aws_lb_listener.public]
 
   # -------------------------------------------------------------------------
   # THE DECLARED DIVERGENCE (FR-042, Q4).
