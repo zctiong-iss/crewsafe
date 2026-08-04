@@ -6,11 +6,14 @@ import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.repository.AppUserRepository;
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.repository.ApprovalRepository;
 import com.crewsafe.operation.repository.RecommendationRepository;
+import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,11 +43,21 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RecommendationService {
 
+    /**
+     * Placeholder {@code actionCode} for every dispatch created from an AI recommendation
+     * (SCRUM-193). A mitigation does not carry its own action code yet — see SCRUM-243 — so
+     * there is nothing more specific to use; the mitigation's own text goes in {@code
+     * instruction} instead.
+     */
+    private static final String AI_MITIGATION_ACTION_CODE = "AI_RECOMMENDED_ACTION";
+
     private final RecommendationRepository recommendations;
     private final ApprovalRepository approvals;
     private final ShiftRepository shifts;
+    private final ShiftAssignmentRepository shiftAssignments;
     private final AppUserRepository users;
     private final AuditService audit;
+    private final ActionDispatchService actionDispatchService;
     private final ObjectMapper objectMapper;
 
     /** Empty when no shift with this id exists under this site — the caller renders 404. */
@@ -153,8 +166,51 @@ public class RecommendationService {
             afterCommit(() -> audit.record(actorId, eventType, "RECOMMENDATION", recommendationId,
                     "Recommendation " + decision.name().toLowerCase() + " (approval " + savedId + ")"));
 
+            if (decision != Approval.ApprovalDecision.REJECTED) {
+                List<MitigationSuggestion> finalMitigations = decision == Approval.ApprovalDecision.EDITED
+                        ? editedPlan
+                        : parsePlan(recommendation.getDraftPlan());
+                afterCommit(() -> fanOutDispatches(shiftId, saved, finalMitigations, approver));
+            }
+
             return saved;
         });
+    }
+
+    /**
+     * Creates one {@link com.crewsafe.operation.domain.ActionDispatch} per worker currently
+     * assigned to this shift, per mitigation in the plan that was actually approved (SCRUM-193)
+     * — the missing link between a recorded decision and a worker seeing anything in their
+     * pending-dispatch inbox. Before this, {@code POST /api/action-dispatch} had to be called
+     * by hand, once per worker, for every decision.
+     *
+     * <p>Runs after the decision itself has committed (called from {@code afterCommit}, same as
+     * the audit write): a dispatch failing to create for one worker must never undo a
+     * supervisor's already-recorded decision on the recommendation.
+     *
+     * <p>No per-worker targeting exists on a mitigation yet (SCRUM-243, not built) — every
+     * mitigation in the approved plan is dispatched to every worker on the shift, not just the
+     * ones it may actually be relevant to. A shift with no assignments dispatches nothing, and
+     * that is not an error.
+     */
+    private void fanOutDispatches(UUID shiftId, Approval approval, List<MitigationSuggestion> mitigations,
+                                   AppUser actor) {
+        if (mitigations.isEmpty()) {
+            return;
+        }
+
+        CrewSafeUserPrincipal actingPrincipal = new CrewSafeUserPrincipal(actor);
+        List<UUID> workerIds = shiftAssignments.findByShiftId(shiftId).stream()
+                .map(ShiftAssignment::getWorkerId)
+                .distinct()
+                .toList();
+
+        for (UUID workerId : workerIds) {
+            for (MitigationSuggestion mitigation : mitigations) {
+                actionDispatchService.dispatchAction(approval.getId(), workerId, AI_MITIGATION_ACTION_CODE,
+                        mitigation.action(), actingPrincipal);
+            }
+        }
     }
 
     private String serializePlan(List<MitigationSuggestion> plan) {

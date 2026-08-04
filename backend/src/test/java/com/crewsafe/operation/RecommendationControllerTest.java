@@ -8,9 +8,14 @@ import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.domain.SiteMembership;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
+import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Recommendation;
+import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.RecommendationRepository;
+import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
+import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
@@ -27,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -54,12 +60,15 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
     @Autowired private SiteRepository sites;
     @Autowired private SiteMembershipRepository memberships;
     @Autowired private ShiftRepository shifts;
+    @Autowired private ShiftAssignmentRepository shiftAssignments;
     @Autowired private RecommendationRepository recommendations;
+    @Autowired private ActionDispatchRepository actionDispatches;
     @Autowired private AuditEventRepository auditEvents;
 
     private Site siteA;
     private Shift shiftA;
     private AppUser supervisorA;
+    private AppUser workerA;
     private String supervisorAToken;
     private String safetyManagerAToken;
     private String workerAToken;
@@ -85,7 +94,7 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
 
         supervisorA = user(Role.SUPERVISOR, siteA);
         AppUser safetyManagerA = user(Role.SAFETY_MANAGER, siteA);
-        AppUser workerA = user(Role.WORKER, siteA);
+        workerA = user(Role.WORKER, siteA);
         AppUser supervisorB = user(Role.SUPERVISOR, siteB);
 
         supervisorAToken = mintAccessToken(supervisorA.getUsername());
@@ -95,6 +104,11 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
 
         shiftA = shifts.save(new Shift(siteA.getId(), Instant.now().truncatedTo(ChronoUnit.SECONDS),
                 Instant.now().plus(8, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS)));
+    }
+
+    private void assign(Shift shift, AppUser worker) {
+        shiftAssignments.save(new ShiftAssignment(shift.getId(), worker.getId(), "General duties",
+                Intensity.MODERATE, null));
     }
 
     private Recommendation recommendation(Shift shift, String draftPlanJson) {
@@ -325,5 +339,73 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
         postJson(recommendationsUrl(shiftA) + "/" + r.getId() + "/decision", supervisorBToken,
                         decisionBody("APPROVED", null, null))
                 .andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-193: fan-out to worker dispatches ---
+
+    private UUID decideAndExtractApprovalId(Recommendation r, String decision, String reason,
+                                             Object editedPlan) throws Exception {
+        String body = postJson(recommendationsUrl(shiftA) + "/" + r.getId() + "/decision", supervisorAToken,
+                        decisionBody(decision, reason, editedPlan))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("approval").get("id").asText());
+    }
+
+    @Test
+    void approvingDispatchesToEveryWorkerAssignedToTheShift() throws Exception {
+        AppUser secondWorker = user(Role.WORKER, siteA);
+        assign(shiftA, workerA);
+        assign(shiftA, secondWorker);
+        Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        List<ActionDispatch> dispatches = actionDispatches.findByApprovalId(approvalId);
+        assertThat(dispatches).hasSize(2);
+        assertThat(dispatches).allMatch(d -> d.getActionCode().equals("AI_RECOMMENDED_ACTION"));
+        assertThat(dispatches).allMatch(d ->
+                d.getInstruction().equals("Reduce work hours to 20 min active / 10 min rest"));
+        assertThat(dispatches).allMatch(d -> d.getStatus() == ActionDispatch.ActionDispatchStatus.PENDING);
+        assertThat(dispatches).extracting(d -> d.getWorker().getId())
+                .containsExactlyInAnyOrder(workerA.getId(), secondWorker.getId());
+    }
+
+    @Test
+    void rejectingCreatesNoDispatches() throws Exception {
+        assign(shiftA, workerA);
+        Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "REJECTED",
+                "Crew already rotated off heavy tasks this shift", null);
+
+        assertThat(actionDispatches.findByApprovalId(approvalId)).isEmpty();
+    }
+
+    @Test
+    void editingDispatchesTheEditedPlanNotTheOriginalDraft() throws Exception {
+        assign(shiftA, workerA);
+        Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+        var editedPlan = List.of(Map.of(
+                "priority", "MEDIUM",
+                "action", "Reduce work hours to 30 min active / 10 min rest",
+                "rationale", "Crew has partial acclimatisation, full 20/10 split not warranted",
+                "estimatedImpact", "8-10% reduction in heat stress risk"));
+
+        UUID approvalId = decideAndExtractApprovalId(r, "EDITED", null, editedPlan);
+
+        List<ActionDispatch> dispatches = actionDispatches.findByApprovalId(approvalId);
+        assertThat(dispatches).hasSize(1);
+        assertThat(dispatches.get(0).getInstruction()).isEqualTo("Reduce work hours to 30 min active / 10 min rest");
+    }
+
+    @Test
+    void approvingAShiftWithNoAssignedWorkersCreatesNoDispatchesButStillSucceeds() throws Exception {
+        Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        assertThat(actionDispatches.findByApprovalId(approvalId)).isEmpty();
     }
 }
