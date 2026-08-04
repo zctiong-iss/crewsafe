@@ -344,9 +344,10 @@ worker's face above the next worker's name.
 Not decoration — these are the operating conditions: a phone at arm's length in Singapore
 sun, held by someone who may not read English, possibly in gloves.
 
-- **Three languages** (English, 简体中文, हिन्दी), each listed in its own script. The picker
-  is reachable **from the sign-in screen**, not only from Settings — otherwise a shared
-  phone left in a language you cannot read is a trap with no way out.
+- **Four languages** (English, 简体中文, हिन्दी, Bahasa Melayu), each listed in its own script.
+  The picker is reachable **from the sign-in screen**, not only from Settings — otherwise a
+  shared phone left in a language you cannot read is a trap with no way out. Three more are
+  planned; see [SCRUM-205](#scrum-205--localisation) below.
 - **Text size** 0.85–1.5×, applied by `AppText` on top of device scaling. No raw `<Text>`
   exists anywhere in `src/`, so nothing opts out. Capped at 1.5 because fixed-height
   controls clip their own labels past that.
@@ -756,6 +757,128 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-205 — Localisation
+
+Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).
+Target is seven languages; **Malay has landed, three remain.**
+
+| Language | Code | Script | Status |
+|---|---|---|---|
+| English | `en` | Latin | Shipped — source of truth |
+| Simplified Chinese | `zh-Hans` | Han | Shipped |
+| Hindi | `hi` | Devanagari | Shipped |
+| **Malay** | `ms` | **Latin** | **Shipped — machine-drafted, awaiting native review** |
+| Tamil | `ta` | Tamil | Blocked on font work |
+| Bengali | `bn` | Bengali | Blocked on font work |
+| Burmese | `my` | Myanmar | Blocked on font work + Zawgyi decision |
+
+### Why Malay first
+
+It is the only one of the four that is Latin script, so it renders in Gelasio today with no
+font work at all. That makes it the vertical slice: it exercises `languagesArr`, the
+`AppLanguage` type, `resolveDeviceLanguage`, the i18n registration and both pickers — the
+Settings sheet and the sign-in screen — with the font problem held out. Anything that breaks
+in that path breaks for the other three too, and it is far cheaper to diagnose when tofu
+boxes are not also on screen.
+
+### The font blocker, restated
+
+Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek. **It has no glyphs for
+Tamil, Bengali or Myanmar.** Adding those three to `languagesArr` before the font layer
+exists would offer a worker a language that renders as empty boxes — worse than leaving it
+out, because an untranslated screen is at least readable by someone. The follow-up adds
+`@expo-google-fonts/noto-sans-tamil`, `-bengali` and `-myanmar` (all confirmed to exist on
+npm at 0.4.x), per-script family resolution in place of today's four Gelasio constants, and
+script-aware line heights — `lineHeightFor` in `AppText` is tuned for Latin metrics and will
+clip stacked diacritics.
+
+### Translation review status — read before shipping `ms`
+
+`ms.json` is **machine-drafted and has not been reviewed by a native speaker.** The file
+carries this warning in its own `_translationStatus` key, and `i18n.ts` repeats it at the
+registration site.
+
+These keys must be signed off by a native Bahasa Melayu speaker before the language is
+offered in production:
+
+- `lightning.*` — the stop-work and advisory banners
+- `actions.*` — every dispatched instruction
+- `guidance.*` — the heat plan (currently behind `features.heatGuidanceCard`)
+- `wbgt.superseded`, `freshness.staleWarning`, `freshness.delayedWarning`
+
+A mistranslated stop-work instruction is an incident, not a typo.
+
+Two judgement calls in the draft worth a reviewer's attention:
+
+- **`lightning.stopWorkTitle` → "BERHENTI KERJA".** Kept in caps to match the English, which
+  is the loudest string in the app.
+- **`inbox.acknowledgeButton` → "Akui terima"** rather than a bare "Akui". The worker is
+  confirming *receipt* of an instruction, not agreeing with it, and the distinction matters
+  on a screen whose whole purpose is proving the instruction arrived.
+
+### `id` (Indonesian) is deliberately not mapped to `ms`
+
+`resolveDeviceLanguage` does **not** route Indonesian device locales to Malay, despite the
+two being largely mutually intelligible in writing. They diverge in exactly the register
+this app occupies — safety and workplace vocabulary — and silently showing an Indonesian
+speaker Malay would be a guess made on their behalf about a stop-work instruction.
+Indonesian falls through to English, and the worker can pick Malay themselves if they prefer
+it. Same reasoning as the existing `zh-Hant` carve-out.
+
+### Server-authored text cannot be translated by this app
+
+Found while reviewing the Inbox in Malay: the action **titles** translated, the instruction
+**bodies** stayed in English.
+
+That is not a missing key. `ActionDispatch.instruction` is free text the server authors — a
+supervisor's own words attached to a dispatched action — and `DispatchCard` renders it
+verbatim. No locale file can reach it, because it is runtime data rather than a key.
+
+```
+Rehat selama 15 minit                              ← actions.REST_15_MIN, translated
+Take a continuous 15-minute rest in the shaded…    ← dispatch.instruction, server text
+```
+
+**What was done here.** The mock dispatch server now resolves its instruction bodies through
+i18n at read time, which is what a localising server would do — the seed holds a key under
+`dev.mockInstruction.*` and `materialise()` renders it per request. A language change shows
+up on the next inbox poll rather than needing a restart.
+
+**What that does not fix.** The real `ActionDispatchController` still returns whatever text
+the supervisor typed. A Malay-speaking worker on the real backend reads the instruction in
+the supervisor's language. The action title carries the safety meaning and *is* translated,
+so this degrades rather than fails — but it needs a backend answer, and the options are the
+usual three: translate at dispatch time, store a structured code plus parameters instead of
+prose, or accept it and make the title authoritative. **Worth its own ticket.**
+
+`ROTATE_TO_LIGHT_DUTY` was also added to `actions.*` in all four locales. It had been left
+out deliberately so the card would demonstrate its `humaniseActionCode` fallback — but a
+real catalogue code rendering in English on a localised screen is too high a price for a
+demonstration. The fallback still guards every code the backend adds ahead of this app's
+translations, which is the case it exists for.
+
+### Locale parity check
+
+```bash
+npm run check:locales
+```
+
+Fails the build when any locale drifts from `en.json`. Three fault classes, all of them
+otherwise silent:
+
+1. **Missing key** — i18next falls back to English and renders it mid-screen. No error, no
+   warning, no crash. Invisible to `tsc` and to anyone reviewing a diff in a language they
+   do not read.
+2. **Extra key** — a stale key left behind by a removal, which is how a translator's work
+   quietly stops being rendered.
+3. **Placeholder drift** — a dropped `{{time}}` leaves a sentence with a hole in it; a
+   renamed one prints literal braces to the user.
+
+Keys beginning with `_` are metadata and are skipped. The script exits non-zero on failure,
+so it can be wired into CI beside `tsc --noEmit`.
+
+---
+
 ## SCRUM-196 / 197 — My shift screen reorder and strip
 
 Two ordering tickets that arrived alongside a set of content removals. **Everything removed
@@ -919,6 +1042,88 @@ text beside them. There was no clash to fix.
 `title` vs `subtitle` heading, and the `urgent` pulse against Advisory's `steady` and Clear's
 stillness. That redundancy is load-bearing — colour washes out first in glare and fails first
 for red-green colour blindness — and a future consistency pass should not flatten it.
+
+---
+
+### Problem 10 — Button labels silently truncated at a space, on every card but the first
+
+**Symptom.** The Malay inbox rendered the acknowledge button as **"Akui terima"** on the
+first card and **"Akui"** on every card below it. No ellipsis, no error, no warning. It
+survived a full reload, so it was not Fast Refresh leaving stale cells.
+
+**What it was not.** The first instinct — a missing or wrong translation — was wrong, and
+checking cost nothing: `ms.json` contains exactly one `inbox.acknowledgeButton`, its value is
+`"Akui terima"`, and no key anywhere in the file produces a bare `"Akui"`. All three buttons
+were being handed the same string. `AppButton`, `AppText` and `DispatchCard` have no
+`numberOfLines`, `ellipsizeMode` or `adjustsFontSizeToFit` between them, so nothing was
+deliberately truncating either.
+
+**Two wrong diagnoses first**, both plausible, both shipped, neither correct. Recorded because
+the reasoning that produced them is the trap:
+
+1. *"The row is under-measured in a virtualised cell."* Gave the content row `width: "100%"`.
+   No effect.
+2. *"A `Text` that is itself the flex-shrinking node clips instead of wrapping."* Moved the
+   shrink onto a `View` wrapper. No effect.
+
+Both were inferred from the symptom without measuring. The device split — a Fold rendering
+correctly beside an XL that did not, same bundle — was read as evidence *for* a
+geometry-dependent measurement path, when it was really just a clue that something depended
+on available width. **Reasoning about layout produced two confident, wrong answers; the
+first measurement produced the right one in a single step.**
+
+**What measurement showed.** An `onLayout` probe on every node, plus Android's own
+accessibility tree via `uiautomator dump`, on a 1344×2992 @480dpi emulator:
+
+```
+Yoga    "Akui terima"  content=326.0  wrap=97.3  text=97.3  h=24.3   ← identical on all 3
+Android text="Akui terima"  bounds [525,1038][817,1111]              ← 292px = 97.33dp × 3
+        text="Akui terima"  bounds [525,1931][817,2004]              ← renders as "Akui"
+```
+
+The string was never truncated, the node was never wrong, and all three cards measured
+**identically**. Yoga measured one line, 97.33dp wide. Android was handed a text box of
+exactly that width, decided the line needed marginally more, and **broke at the space**. The
+box is one line tall because Yoga measured one line — so the second line was clipped, and
+`textAlign: center` re-centred the survivor. A clipped line disguised as a shorter string.
+
+**The controlled experiment that proved it.** Same glyphs, space removed — `"Akuiterima"` —
+rendered in full on every card. That isolates the line break as the trigger and rules out
+width, font, virtualisation and locale in one step.
+
+**Fix.** `flex: 1` on the label wrapper, so the label's box is derived from the button's
+width instead of from its own measured content. There is then nothing marginal to get wrong.
+Two device-independent pixels of slack were tried first and did *not* help, which is what
+ruled out simple sub-pixel rounding.
+
+Icon buttons keep the old shrink-to-fit sizing (`titleWrap`), because a full-width label
+pushes the icon to the far edge and breaks the centred icon-plus-label pairing. They are not
+exposed to the bug today: every icon button lives on a plain `ScrollView` screen, none inside
+a recycled cell. **If an icon button is ever placed in a virtualised list, give it
+`titleFill` and find another way to keep the icon adjacent.**
+
+**Why English never showed it.** "Acknowledge" is a single word with nowhere to break. The bug
+has been latent since the button was written and needed a two-word label to surface — which
+localisation duly provided. Hindi and Chinese labels are long, but none had yet offered a
+clean break point in the middle.
+
+Verified on-device after the fix: both cards render "Akui terima", and `⚙ Tetapan` keeps its
+icon beside the label.
+
+> **Verify on more than one device.** This was invisible on one emulator and reproducible on
+> another from the same bundle. A single-device pass would have signed it off twice: once
+> because English has no space to break at, and once because the Fold is wide enough not to
+> care.
+
+> **Measure before theorising about layout.** Two fixes were shipped on inference and neither
+> worked. `onLayout` logging and `adb shell uiautomator dump` — which reports the real text
+> and bounds of every node — answered it immediately, and the no-space experiment confirmed
+> it. Both are cheap; neither was tried until the third attempt.
+
+> The general lesson is the one worth keeping: **a label that renders correctly in English is
+> not evidence the layout is correct.** Truncation bugs hide behind single-word labels, and a
+> translation is the first thing that will find them. This is an argument for reviewing
+> screens in the *longest* language, not the default one.
 
 ---
 

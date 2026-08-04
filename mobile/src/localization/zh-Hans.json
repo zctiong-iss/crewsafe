@@ -306,7 +306,8 @@
     "HYDRATE": "立即饮水",
     "STOP_WORK": "停止作业",
     "SEEK_SHADE": "转移至阴凉处",
-    "RESUME_WORK": "恢复作业"
+    "RESUME_WORK": "恢复作业",
+    "ROTATE_TO_LIGHT_DUTY": "轮换至轻度工作"
   },
 
   "shift": {
@@ -350,7 +351,12 @@
     "forbiddenHint": "该场景平时无法触发 — 选择器只会列出您所属的工地。触发后应保持登录状态并显示说明。",
     "scenarioClear": "安全",
     "scenarioAdvisory": "预警",
-    "scenarioStopWork": "停工"
+    "scenarioStopWork": "停工",
+    "mockInstruction": {
+      "REST_15_MIN": "请到工地办公室旁的遮阴休息点连续休息 15 分钟。",
+      "HYDRATE": "立即饮用 500 毫升水，返回作业前请重新装满水瓶。",
+      "ROTATE_TO_LIGHT_DUTY": "接下来一小时改到工具库工作。主管已安排人手接替。"
+    }
   },
 
   "placeholder": {

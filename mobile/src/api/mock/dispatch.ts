@@ -22,6 +22,7 @@
  * mode. See `endpoints/dispatch.ts`.
  */
 import { ApiError } from "../errors";
+import i18n from "@/localization/i18n";
 import type { ActionDispatch } from "@/types/domain";
 import { DEMO_USERS } from "@/auth/demoUsers";
 
@@ -57,17 +58,39 @@ const WORKER_ID = DEMO_USERS[0].id;
 const APPROVAL_ID = "44444444-4444-4444-8444-444444444444";
 
 /**
+ * ── INSTRUCTION TEXT IS RESOLVED AT READ TIME, NOT AT SEED TIME ─────────────────────────
+ * `ActionDispatch.instruction` is free text the *server* authors — a supervisor's own words
+ * attached to a dispatched action. No client-side translation file can reach it, which is
+ * exactly the problem: a worker who set the app to Malay would still read the instruction
+ * in whatever language it was written in.
+ *
+ * This mock stands in for that server, so it does what a localising server would do: it
+ * resolves the instruction into the caller's active language when the request is served.
+ * The seed therefore holds a translation *key*, and `materialise` turns it into text per
+ * read. That also means a language change is reflected on the next poll rather than needing
+ * a restart, because each poll re-materialises.
+ *
+ * A real backend has to solve this properly — see the untranslatable-instruction note in
+ * the README. Nothing here makes that problem go away; it stops the demo from *hiding* it
+ * behind three hardcoded English sentences.
+ */
+interface SeedDispatch extends Omit<ActionDispatch, "instruction"> {
+  /** i18n key under `dev.mockInstruction.*`, resolved per read by `materialise`. */
+  instructionKey: string;
+}
+
+/**
  * Codes drawn from the catalogue named in `V3__domain_schema.sql`: "a growing catalog of
  * dispatchable actions (REST_10_MIN, REST_15_MIN, HYDRATE, STOP_WORK, ...)". Deliberately
  * not an enum server-side, so the client must tolerate an unknown one.
  */
-const SEED: ActionDispatch[] = [
+const SEED: SeedDispatch[] = [
   {
     id: "d1111111-1111-4111-8111-111111111111",
     approvalId: APPROVAL_ID,
     workerId: WORKER_ID,
     actionCode: "REST_15_MIN",
-    instruction: "Take a continuous 15-minute rest in the shaded rest point by the site office.",
+    instructionKey: "dev.mockInstruction.REST_15_MIN",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -78,7 +101,7 @@ const SEED: ActionDispatch[] = [
     approvalId: APPROVAL_ID,
     workerId: WORKER_ID,
     actionCode: "HYDRATE",
-    instruction: "Drink 500ml of water now and refill your bottle before returning to the verge.",
+    instructionKey: "dev.mockInstruction.HYDRATE",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -88,10 +111,16 @@ const SEED: ActionDispatch[] = [
     id: "d3333333-3333-4333-8333-333333333333",
     approvalId: APPROVAL_ID,
     workerId: WORKER_ID,
-    // Not in any translation file, on purpose: the catalogue is open-ended and the card has
-    // to degrade to the raw code rather than rendering an empty row.
+    /*
+     * Translated as of SCRUM-205. It was left out of the catalogue deliberately at first, to
+     * prove the card degrades to `humaniseActionCode` rather than rendering an empty row —
+     * but a real catalogue code showing in English on a localised screen is too high a price
+     * for a demonstration. The fallback still guards every code the backend adds ahead of
+     * this app's translations, which is the case it actually exists for, and
+     * `humaniseActionCode` has its own unit-level coverage.
+     */
     actionCode: "ROTATE_TO_LIGHT_DUTY",
-    instruction: "Swap to the tool store for the next hour. Your supervisor has arranged cover.",
+    instructionKey: "dev.mockInstruction.ROTATE_TO_LIGHT_DUTY",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -99,7 +128,13 @@ const SEED: ActionDispatch[] = [
   },
 ];
 
-const dispatches = new Map<string, ActionDispatch>(SEED.map((d) => [d.id, { ...d }]));
+const dispatches = new Map<string, SeedDispatch>(SEED.map((d) => [d.id, { ...d }]));
+
+/** Seed record → the wire shape, with the instruction resolved into the active language. */
+function materialise(seed: SeedDispatch): ActionDispatch {
+  const { instructionKey, ...rest } = seed;
+  return { ...rest, instruction: i18n.t(instructionKey) };
+}
 
 /**
  * Mirrors `findPendingByWorkerId`, PENDING filter included.
@@ -129,7 +164,7 @@ export function mockPendingDispatches(workerId: string): ActionDispatch[] {
   return [...dispatches.values()]
     .filter((d) => d.workerId === workerId && d.status === "PENDING")
     .sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt))
-    .map((d) => ({ ...d }));
+    .map(materialise);
 }
 
 export function mockAcknowledge(dispatchId: string, idempotencyKey: string): ActionDispatch {
@@ -143,7 +178,7 @@ export function mockAcknowledge(dispatchId: string, idempotencyKey: string): Act
   if (seen) {
     // Replay. Nothing is written; the original result is returned. This is the branch the
     // acceptance criterion exercises.
-    return { ...existing };
+    return materialise(existing);
   }
 
   const acknowledgedAt = new Date().toISOString();
@@ -152,7 +187,7 @@ export function mockAcknowledge(dispatchId: string, idempotencyKey: string): Act
   // Replaced rather than mutated. Even if a reference did escape into frozen state, this
   // writes a new object into the Map instead of assigning through the old one — so the
   // store cannot be poisoned by whatever a caller did with a previous response.
-  const updated: ActionDispatch = {
+  const updated: SeedDispatch = {
     ...existing,
     status: "ACKNOWLEDGED",
     startTime: acknowledgedAt,
@@ -165,7 +200,7 @@ export function mockAcknowledge(dispatchId: string, idempotencyKey: string): Act
     throw new ApiError("network", "Response lost after the server committed", null, null);
   }
 
-  return { ...updated };
+  return materialise(updated);
 }
 
 /** Dev only: put the seed data back so the flow can be run again without a reload. */

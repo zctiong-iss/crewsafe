@@ -58,12 +58,16 @@
   ],
   "scripts": {
     "start": "expo start --port 8082",
+    "//start:clear": "Same as start, with Metro's transform cache cleared. Exists because the bare `npx expo start -c` silently falls back to port 8081 — see the port note above and Problem 1 in the README.",
+    "start:clear": "expo start --clear --port 8082",
     "android": "expo start --android --port 8082",
     "ios": "expo start --ios --port 8082",
     "web": "expo start --web",
     "//web:pkce": "Port 5173 is not cosmetic — it is the callback already registered on the Cognito web client, so AUTH_MODE=cognito-pkce works here with no infrastructure change.",
     "web:pkce": "expo start --web --port 5173",
     "typecheck": "tsc --noEmit",
+    "//check:locales": "Fails when a locale drifts from en.json. A missing key is silent — i18next falls back to English and renders it mid-screen on a safety surface. See scripts/check-locale-parity.mjs.",
+    "check:locales": "node scripts/check-locale-parity.mjs",
     "doctor": "expo-doctor"
   },
   "private": true

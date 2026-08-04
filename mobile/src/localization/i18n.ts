@@ -20,11 +20,21 @@ import { initReactI18next } from "react-i18next";
 import en from "./en.json";
 import zhHans from "./zh-Hans.json";
 import hi from "./hi.json";
+import ms from "./ms.json";
 
+/*
+ * ── TRANSLATION REVIEW STATUS ───────────────────────────────────────────────────────────
+ * `ms` (SCRUM-205) is machine-drafted and has NOT been reviewed by a native speaker. Its
+ * safety strings — `lightning.*`, `actions.*`, `guidance.*`, `wbgt.superseded`,
+ * `freshness.staleWarning` — must be signed off before the language is offered in
+ * production. Each locale file carries the same warning in its `_translationStatus` key,
+ * which is metadata rather than a string the app renders.
+ */
 export const resources = {
   en: { translation: en },
   "zh-Hans": { translation: zhHans },
   hi: { translation: hi },
+  ms: { translation: ms },
 } as const;
 
 void i18n.use(initReactI18next).init({

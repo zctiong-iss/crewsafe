@@ -306,7 +306,8 @@
     "HYDRATE": "Drink water now",
     "STOP_WORK": "Stop work",
     "SEEK_SHADE": "Move into shade",
-    "RESUME_WORK": "Resume work"
+    "RESUME_WORK": "Resume work",
+    "ROTATE_TO_LIGHT_DUTY": "Rotate to light duty"
   },
 
   "shift": {
@@ -350,7 +351,14 @@
     "forbiddenHint": "The story's 403 case is otherwise unreachable — the picker only offers sites you belong to. You should stay signed in and see an explanation.",
     "scenarioClear": "Clear",
     "scenarioAdvisory": "Advisory",
-    "scenarioStopWork": "Stop work"
+    "scenarioStopWork": "Stop work",
+
+    "_mockInstructionNote": "Fixture instruction bodies for the mock dispatch server. Under dev.* because they stand in for supervisor-authored server data that does not exist in mock mode. Underscore-prefixed, so the parity check skips it. See api/mock/dispatch.ts and the untranslatable-instruction note in the README.",
+    "mockInstruction": {
+      "REST_15_MIN": "Take a continuous 15-minute rest in the shaded rest point by the site office.",
+      "HYDRATE": "Drink 500ml of water now and refill your bottle before returning to the verge.",
+      "ROTATE_TO_LIGHT_DUTY": "Swap to the tool store for the next hour. Your supervisor has arranged cover."
+    }
   },
 
   "placeholder": {
