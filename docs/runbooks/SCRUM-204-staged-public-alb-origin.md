@@ -23,7 +23,7 @@ Complete one column per stage with links and non-sensitive outcomes.
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
 | Source commit and approved PR | Pending | Blocked | Blocked |
-| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / passing run pending | Blocked | Blocked |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | Blocked | Blocked |
 | Plan run ID and attempt | Pending | Blocked | Blocked |
 | Account / component / operation / lock match | Pending | Blocked | Blocked |
 | Plan digest and typed confirmation | Pending | Blocked | Blocked |
@@ -57,6 +57,11 @@ Test-first evidence was published in draft PR
 `parallel_public_origin_preparation` failed because the public ALB, its target group/listener,
 managed-prefix-list data source, and security-group rules were undeclared. This is the expected
 failure the preparation implementation must turn green.
+
+Implementation commit `1a1ed34` added the parallel resources without changing the active
+CloudFront origin. Terraform Validation run `30884687670` passed every job; compute job
+`91913410440` passed formatting, validation, mocked-provider tests, the 19-check preparation
+source guard, and infrastructure scanning in 42 seconds. No Terraform command ran locally.
 
 ## 4. Remote plan and apply
 
