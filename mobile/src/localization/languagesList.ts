@@ -11,18 +11,28 @@
  * not a list entry, and it is handled in the action components rather than here.
  *
  * ── SCRUM-205 ───────────────────────────────────────────────────────────────────────────
- * Malay lands first of the four planned additions because it is Latin script and needs no
- * font work, so it exercises this list, `AppLanguage`, `resolveDeviceLanguage`, the i18n
- * registration and both pickers with the font problem held out. Bengali, Burmese and Tamil
- * follow together with the Noto font layer — Gelasio has no glyphs for any of those three,
- * and adding them here before the fonts exist would offer a worker a language that renders
- * as empty boxes. See `docs/plans/SCRUM-205-localisation-plan.md`.
+ * Malay landed first because it is Latin script and needed no font work, so it exercised
+ * this list, `AppLanguage`, `resolveDeviceLanguage`, the i18n registration and both pickers
+ * with the font problem held out. Tamil, Bengali and Burmese follow here, together with the
+ * Noto font layer they depend on — Gelasio has no glyphs for any of the three, so listing
+ * them before the fonts existed would have offered a worker a language that renders as empty
+ * boxes. See `docs/plans/SCRUM-205-localisation-plan.md` and `styles/fonts.ts`.
+ *
+ * Burmese is Unicode only. Myanmar's national migration to Unicode completed in 2019 and
+ * Android 12+ ships Unicode Myanmar fonts, so Zawgyi is treated as legacy and not detected
+ * or transcoded. A worker on a Zawgyi-only device sees garbled Burmese and can switch to
+ * another language from the sign-in picker, which is reachable precisely so that a phone
+ * left in an unreadable language is never a dead end. The decision is recorded in the README
+ * because the failure looks like a bad translation rather than an encoding mismatch.
  */
 export const languagesArr = [
   { code: "en", label: "English" },
   { code: "zh-Hans", label: "简体中文" },
   { code: "hi", label: "हिन्दी" },
   { code: "ms", label: "Bahasa Melayu" },
+  { code: "ta", label: "தமிழ்" },
+  { code: "bn", label: "বাংলা" },
+  { code: "my", label: "မြန်မာ" },
 ] as const;
 
 export type AppLanguage = (typeof languagesArr)[number]["code"];
@@ -57,6 +67,15 @@ export function resolveDeviceLanguage(locales: readonly string[]): AppLanguage {
      * Malay themselves from the picker if they prefer it.
      */
     if (tag.startsWith("ms")) return "ms";
+
+    if (tag.startsWith("ta")) return "ta";
+    if (tag.startsWith("bn")) return "bn";
+    /*
+     * Both tags for Burmese. `my` is the ISO 639-1 code and what Android reports; `mya` and
+     * `bur` are the two 639-2 codes for the same language, and a device that reports either
+     * should not silently fall through to English.
+     */
+    if (tag.startsWith("my") || tag.startsWith("mya") || tag.startsWith("bur")) return "my";
 
     if (tag.startsWith("zh")) {
       if (tag.includes("hant") || tag.includes("tw") || tag.includes("hk") || tag.includes("mo")) {

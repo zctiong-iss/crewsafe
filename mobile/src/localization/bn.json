@@ -1,0 +1,368 @@
+{
+  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.superseded, freshness.staleWarning — MUST be reviewed by a native Bengali speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
+
+  "common": {
+    "appName": "CrewSafe",
+    "cancel": "বাতিল",
+    "confirm": "নিশ্চিত করুন",
+    "save": "সংরক্ষণ",
+    "retry": "আবার চেষ্টা করুন",
+    "close": "বন্ধ করুন",
+    "loading": "লোড হচ্ছে",
+    "back": "ফিরে যান",
+    "none": "কিছু নেই",
+    "optional": "ঐচ্ছিক",
+    "requestReference": "রেফারেন্স: {{requestId}}"
+  },
+
+  "errors": {
+    "unauthenticated": "আপনার সেশন শেষ হয়ে গেছে। চালিয়ে যেতে সাইন ইন করুন।",
+    "not-provisioned": "আপনার সাইন ইন সফল হয়েছে, কিন্তু এই অ্যাকাউন্টটি এখনও CrewSafe-এর জন্য সেট আপ করা হয়নি। আপনার সাইট প্রশাসককে আপনাকে যুক্ত করতে বলুন।",
+    "forbidden": "এতে আপনার প্রবেশাধিকার নেই। থাকা উচিত মনে করলে আপনার সাইট প্রশাসককে জিজ্ঞাসা করুন।",
+    "not-found": "সেই রেকর্ডটি নেই।",
+    "bad-request": "সেই অনুরোধটি বৈধ ছিল না।",
+    "conflict": "অন্য কেউ আগে এটি পরিবর্তন করেছেন। পুনরায় লোড করে আবার চেষ্টা করুন।",
+    "server": "আমাদের দিকে কিছু ভুল হয়েছে। কিছুক্ষণ পরে আবার চেষ্টা করুন।",
+    "network": "CrewSafe-এ পৌঁছানো যাচ্ছে না। আপনার সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।",
+    "configMissing": "অ্যাপটি কনফিগার করা হয়নি। অনুপস্থিত: {{keys}}",
+    "unknown": "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।"
+  },
+
+  "auth": {
+    "signInTitle": "সাইন ইন",
+    "signInSubtitle": "বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা",
+    "usernameLabel": "ব্যবহারকারীর নাম",
+    "usernamePlaceholder": "আপনার ব্যবহারকারীর নাম লিখুন",
+    "passwordLabel": "পাসওয়ার্ড",
+    "passwordPlaceholder": "আপনার পাসওয়ার্ড লিখুন",
+    "signInButton": "সাইন ইন",
+    "signUpButton": "অ্যাকাউন্টের অনুরোধ করুন",
+    "signOutButton": "সাইন আউট",
+    "signingIn": "সাইন ইন করা হচ্ছে",
+    "pkceHint": "আপনাকে আপনার ব্রাউজারে নিরাপদ CrewSafe সাইন-ইন পৃষ্ঠায় নিয়ে যাওয়া হবে।",
+    "modeLabel": "সাইন-ইন মোড (শুধু ডেভেলপমেন্ট)",
+    "modeMock": "ডেমো ব্যবহারকারী",
+    "modeCognitoPassword": "Cognito (পাসওয়ার্ড)",
+    "modeCognitoPkce": "Cognito (হোস্ট করা UI)",
+    "demoUserLabel": "একজন ডেমো ব্যবহারকারী বেছে নিন",
+    "notProvisionedTitle": "অ্যাকাউন্ট সেট আপ করা হয়নি",
+    "sessionExpired": "আপনার সেশন শেষ হয়ে গেছে।",
+    "validation": {
+      "usernameRequired": "আপনার ব্যবহারকারীর নাম লিখুন।",
+      "passwordRequired": "আপনার পাসওয়ার্ড লিখুন।",
+      "passwordTooShort": "আপনার পাসওয়ার্ড কমপক্ষে {{min}} অক্ষরের হতে হবে।"
+    },
+    "cognito": {
+      "invalidCredentials": "সেই ব্যবহারকারীর নাম বা পাসওয়ার্ড সঠিক নয়।",
+      "newPasswordRequired": "এই অ্যাকাউন্টে এখনও অস্থায়ী পাসওয়ার্ড রয়েছে। এখানে সাইন ইন করার আগে AWS Console-এ একটি স্থায়ী পাসওয়ার্ড সেট করুন।",
+      "userDisabled": "এই অ্যাকাউন্টটি নিষ্ক্রিয় করা হয়েছে।",
+      "tooManyAttempts": "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।",
+      "pkceUnavailableInExpoGo": "হোস্ট করা UI সাইন-ইনের জন্য ফোনে একটি development build প্রয়োজন, কারণ Expo Go crewsafe:// লিঙ্ক খুলতে পারে না। এই প্রবাহ পরীক্ষা করতে `npx expo start --web --port 5173` দিয়ে অ্যাপটি চালান, অথবা অন্য মোড ব্যবহার করুন।",
+      "cancelled": "সাইন ইন বাতিল করা হয়েছে।"
+    }
+  },
+
+  "signUp": {
+    "title": "অ্যাকাউন্টের অনুরোধ করুন",
+    "intro": "CrewSafe অ্যাকাউন্ট আপনার সাইট প্রশাসক তৈরি করেন। এটি পূরণ করুন এবং আমরা দেখাব তাঁদের ঠিক কী পাঠাতে হবে।",
+    "fullNameLabel": "পুরো নাম",
+    "fullNamePlaceholder": "সাইটের রেকর্ডে যেমন আছে তেমন আপনার নাম",
+    "usernameLabel": "পছন্দের ব্যবহারকারীর নাম",
+    "usernamePlaceholder": "ছোট হাতের অক্ষর, ফাঁকা জায়গা ছাড়া",
+    "emailLabel": "কর্মক্ষেত্রের ইমেল",
+    "emailPlaceholder": "you@example.com",
+    "siteLabel": "আপনি কোন সাইটে কাজ করেন?",
+    "roleNotice": "এখানে শুধু কর্মীর অ্যাকাউন্টের অনুরোধ করা যায়। সুপারভাইজার, নিরাপত্তা ব্যবস্থাপক এবং প্রশাসকের অ্যাকাউন্ট প্রশাসক তৈরি করেন।",
+    "submitButton": "অনুরোধ প্রস্তুত করুন",
+    "successTitle": "অনুরোধ প্রস্তুত",
+    "successBody": "এই বিবরণ আপনার সাইট প্রশাসককে পাঠান। তাঁরা আপনার অ্যাকাউন্ট তৈরি করবেন এবং আপনি ইমেলে আমন্ত্রণ পাবেন।",
+    "copyButton": "বিবরণ কপি করুন",
+    "copiedButton": "কপি হয়েছে",
+    "editButton": "বিবরণ পরিবর্তন করুন",
+    "backToSignIn": "সাইন ইনে ফিরে যান",
+    "requestHeading": "CrewSafe অ্যাকাউন্টের অনুরোধ",
+    "roleLine": "অনুরোধ করা ভূমিকা: কর্মী",
+    "validation": {
+      "fullNameRequired": "আপনার পুরো নাম লিখুন।",
+      "fullNameTooShort": "কমপক্ষে {{min}} অক্ষর লিখুন।",
+      "fullNameTooLong": "সর্বোচ্চ {{max}} অক্ষর ব্যবহার করুন।",
+      "usernameRequired": "একটি ব্যবহারকারীর নাম বেছে নিন।",
+      "usernameFormat": "শুধু ছোট হাতের অক্ষর ও সংখ্যা ব্যবহার করুন, . _ বা - দিয়ে আলাদা করে।",
+      "usernameTooLong": "সর্বোচ্চ {{max}} অক্ষর ব্যবহার করুন।",
+      "emailRequired": "আপনার কর্মক্ষেত্রের ইমেল লিখুন।",
+      "emailInvalid": "এটি ইমেল ঠিকানার মতো মনে হচ্ছে না।",
+      "emailTooLong": "সর্বোচ্চ {{max}} অক্ষর ব্যবহার করুন।",
+      "singleLineOnly": "লাইন বিরতি এবং বিশেষ ফরম্যাটিং অক্ষর সরিয়ে দিন।",
+      "siteRequired": "আপনার সাইট বেছে নিন।"
+    }
+  },
+
+  "roles": {
+    "WORKER": "কর্মী",
+    "SUPERVISOR": "সাইট সুপারভাইজার",
+    "SAFETY_MANAGER": "নিরাপত্তা ব্যবস্থাপক",
+    "ADMIN": "প্রশাসক"
+  },
+
+  "tabs": {
+    "shift": "আমার শিফট",
+    "inbox": "ইনবক্স",
+    "weather": "আবহাওয়া",
+    "shifts": "শিফট",
+    "profile": "প্রোফাইল",
+    "settings": "সেটিংস"
+  },
+
+  "settings": {
+    "title": "সেটিংস",
+    "language": "ভাষা",
+    "changeLanguage": "ভাষা পরিবর্তন করুন",
+    "textSize": "লেখার আকার",
+    "textSizeSmall": "ছোট",
+    "textSizeDefault": "সাধারণ",
+    "textSizeLarge": "বড়",
+    "textSizeExtraLarge": "অতিরিক্ত বড়",
+    "textSizePreview": "আজ প্রচণ্ড গরম, ঘন ঘন জল পান করুন।",
+    "highContrast": "উচ্চ বৈসাদৃশ্য",
+    "highContrastHint": "সরাসরি রোদে পর্দা পড়ার জন্য গাঢ় রং এবং মোটা রেখা।",
+    "reduceMotion": "নড়াচড়া কমান",
+    "reduceMotionHint": "ডিফল্টভাবে চালু। কাজ বন্ধের সতর্কতা ছাড়া আইকনের অ্যানিমেশন বন্ধ করে। আপনার ডিভাইসে Reduce Motion চালু থাকলে সবসময় চালু থাকবে।",
+    "accessibility": "অভিগম্যতা",
+    "display": "প্রদর্শন",
+    "about": "সম্পর্কে",
+    "aboutVersion": "সংস্করণ {{version}}",
+    "aboutBody": "সিঙ্গাপুরে বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা।"
+  },
+
+  "profile": {
+    "title": "প্রোফাইল",
+    "role": "ভূমিকা",
+    "sites": "সাইট",
+    "username": "ব্যবহারকারীর নাম",
+    "changePhoto": "ছবি পরিবর্তন করুন",
+    "addPhoto": "একটি ছবি যোগ করুন",
+    "photoSheetTitle": "প্রোফাইল ছবি",
+    "takePhoto": "একটি ছবি তুলুন",
+    "chooseFromLibrary": "গ্যালারি থেকে বেছে নিন",
+    "removePhoto": "ছবি সরান",
+    "photoLocalOnly": "আপনার ছবি শুধু এই ফোনেই সংরক্ষিত থাকে। এটি CrewSafe-এ পাঠানো হয় না এবং আপনার সুপারভাইজার এটি দেখতে পাবেন না।",
+    "permissionDeniedTitle": "অনুমতি প্রয়োজন",
+    "cameraDeniedBody": "ছবি তুলতে CrewSafe-এর ক্যামেরা অ্যাক্সেস প্রয়োজন। আপনি ডিভাইস সেটিংসে এটি চালু করতে পারেন।",
+    "libraryDeniedBody": "ছবি বেছে নিতে CrewSafe-এর ফটো অ্যাক্সেস প্রয়োজন। আপনি ডিভাইস সেটিংসে এটি চালু করতে পারেন।",
+    "photoUpdatedToast": "ছবি হালনাগাদ হয়েছে",
+    "photoRemovedToast": "ছবি সরানো হয়েছে"
+  },
+
+  "shifts": {
+    "site": "সাইট",
+    "emptyTitle": "এখনও কোনও শিফট নেই",
+    "emptyBody": "এই সাইটের জন্য আপনি যে শিফট পরিকল্পনা করবেন তা এখানে দেখা যাবে।",
+    "noSitesTitle": "কোনও সাইট বরাদ্দ নেই",
+    "noSitesBody": "আপনাকে এখনও কোনও সাইটে বরাদ্দ করা হয়নি। আপনাকে যুক্ত করতে প্রশাসককে বলুন।",
+    "createButton": "শিফট পরিকল্পনা করুন",
+    "assignmentCount_one": "{{count}} জন কর্মী",
+    "assignmentCount_other": "{{count}} জন কর্মী",
+    "unstaffed": "কোনও কর্মী বরাদ্দ করা হয়নি",
+    "window": "{{start}} থেকে {{end}}",
+    "status": {
+      "PLANNED": "পরিকল্পিত",
+      "ACTIVE": "সক্রিয়",
+      "CLOSED": "বন্ধ"
+    },
+    "detailTitle": "শিফট",
+    "assignments": "কর্মীদল",
+    "worker": "কর্মী",
+    "unknownWorker": "এই সাইটে আর নেই এমন কর্মী",
+    "task": "কাজ",
+    "noTask": "কোনও কাজ নথিভুক্ত নেই",
+    "intensity": "তীব্রতা",
+    "acclimatisation": "অভিযোজনের ৭ দিনের মধ্যে {{day}} নম্বর দিন",
+    "deleteButton": "এই শিফটটি মুছুন",
+    "deleteTitle": "এই শিফটটি মুছবেন?",
+    "deleteBody": "এটি শিফট এবং তাতে বরাদ্দ সবকিছু সরিয়ে দেবে। এটি ফেরানো যাবে না।",
+    "deleteConfirm": "মুছুন",
+    "deleting": "মুছছে",
+    "deletedToast": "শিফট মুছে ফেলা হয়েছে",
+    "deleteFailedTitle": "শিফট মোছা হয়নি",
+
+    "form": {
+      "timesSection": "কখন",
+      "startsAt": "শুরু",
+      "endsAt": "শেষ",
+      "pickDateTime": "একটি তারিখ ও সময় বেছে নিন",
+      "crewSection": "কারা কাজ করছেন",
+      "crewHint": "এই শিফটের জন্য কর্মীদের বেছে নিন। আপনি এখনই শিফট তৈরি করে পরে লোক যোগ করতে পারেন।",
+      "noWorkers": "এই সাইটে এখনও বরাদ্দযোগ্য কোনও কর্মী নেই।",
+      "assignmentsSection": "কাজ ও তীব্রতা",
+      "taskLabel": "কাজ",
+      "taskPlaceholder": "তাঁরা কী করবেন",
+      "taskHint": "ঐচ্ছিক। সর্বোচ্চ {{max}} অক্ষর।",
+      "intensityLabel": "কাজের তীব্রতা",
+      "acclimatisationLabel": "অভিযোজনের দিন",
+      "acclimatisationPlaceholder": "১ থেকে ৭",
+      "acclimatisationHint": "শুধু প্রথম সাত দিনে থাকা, বা এক সপ্তাহের বেশি পরে ফিরে আসা কর্মীর জন্য।",
+      "removeWorker": "শিফট থেকে সরান",
+      "submit": "শিফট তৈরি করুন",
+      "submitting": "তৈরি হচ্ছে",
+      "createdToast": "শিফট তৈরি হয়েছে",
+      "unstaffedNotice": "এই শিফটটি কাউকে বরাদ্দ না করেই তৈরি হবে। পরে কর্মী দিতে পারবেন।"
+    },
+
+    "validation": {
+      "startRequired": "শিফট কখন শুরু হবে তা বেছে নিন।",
+      "endRequired": "শিফট কখন শেষ হবে তা বেছে নিন।",
+      "endNotAfterStart": "শেষের সময় শুরুর সময়ের পরে হতে হবে।",
+      "taskTooLong": "কাজের বিবরণ {{max}} অক্ষরের মধ্যে রাখুন।",
+      "intensityRequired": "একটি কাজের তীব্রতা বেছে নিন।",
+      "acclimatisationRange": "১ থেকে ৭ এর মধ্যে একটি পূর্ণসংখ্যা লিখুন, অথবা ফাঁকা রাখুন।",
+      "checkFields": "উপরের কিছু তথ্যে মনোযোগ প্রয়োজন। লাল দাগ দেওয়া ঘরগুলি দেখাচ্ছে কী ঠিক করতে হবে।"
+    }
+  },
+
+  "weather": {
+    "title": "অবস্থা",
+    "site": "সাইট",
+    "noSitesTitle": "কোনও সাইট বরাদ্দ নেই",
+    "noSitesBody": "আপনাকে এখনও কোনও সাইটে বরাদ্দ করা হয়নি। আপনাকে যুক্ত করতে সাইট প্রশাসককে বলুন।",
+    "feelsLike": "আর্দ্র-বাল্ব গ্লোব তাপমাত্রা",
+    "airTemp": "বাতাসের তাপমাত্রা",
+    "humidity": "আর্দ্রতা",
+    "wind": "বাতাস",
+    "rainfall": "বৃষ্টিপাত",
+    "station": "স্টেশন {{id}}",
+    "observedAt": "{{time}}-এ পর্যবেক্ষণ",
+    "ingestedAt": "{{time}}-এ প্রাপ্ত",
+    "night": "অন্ধকারের পরে",
+    "condition": {
+      "FAIR": "পরিষ্কার",
+      "PARTLY_CLOUDY": "আংশিক মেঘলা",
+      "CLOUDY": "মেঘলা",
+      "WINDY": "ঝোড়ো বাতাস",
+      "RAIN": "বৃষ্টি",
+      "THUNDERY_SHOWERS": "বজ্রসহ বৃষ্টি"
+    }
+  },
+
+  "inbox": {
+    "emptyTitle": "স্বীকার করার কিছু নেই",
+    "emptyBody": "আপনার সুপারভাইজারের অনুমোদিত পদক্ষেপ এখানে দেখা যাবে।",
+    "pending": "আপনার স্বীকৃতির অপেক্ষায়",
+    "acknowledged": "{{time}}-এ স্বীকার করা হয়েছে",
+    "dispatchedAt": "{{time}}-এ পাঠানো হয়েছে",
+    "acknowledgeButton": "স্বীকার করুন",
+    "acknowledging": "পাঠানো হচ্ছে",
+    "retryButton": "আবার চেষ্টা করুন",
+    "failed": "আপনার স্বীকৃতি পাঠানো যায়নি।",
+    "safeToRetry": "আবার চাপা নিরাপদ — এটি দুবার স্বীকার করবে না।",
+    "noInstruction": "আর কোনও বিবরণ দেওয়া হয়নি।"
+  },
+
+  "lightning": {
+    "stopWorkTitle": "কাজ বন্ধ করুন",
+    "stopWorkBody": "এই সাইটের কাছে বজ্রপাত। এখনই যথাযথ আশ্রয়ে যান।",
+    "advisoryTitle": "বজ্রপাতের সতর্কতা",
+    "advisoryBody": "এই সাইটের কাছে বজ্রপাত শনাক্ত হয়েছে। কাজ বন্ধ করতে প্রস্তুত থাকুন।",
+    "clearTitle": "বজ্রপাতের ঝুঁকি নেই",
+    "clearBody": "{{time}}-এ নিরাপদ হিসেবে মূল্যায়ন করা হয়েছে।",
+    "expiredTitle": "বজ্রপাতের সতর্কতার মেয়াদ শেষ",
+    "expiredBody": "সতর্কতা {{time}}-এ শেষ হয়েছে। আপনার সুপারভাইজার নিরাপদ বলে নিশ্চিত করার পরেই কাজ শুরু করুন।",
+    "validUntil": "{{time}} পর্যন্ত বৈধ",
+    "refreshesInMinutes": "{{minutes}} মিনিটে হালনাগাদ হবে",
+    "refreshesInSeconds": "{{seconds}} সেকেন্ডে হালনাগাদ হবে",
+    "overrideNotice": "কাজ বন্ধের নির্দেশ বলবৎ থাকা পর্যন্ত তাপ পরিকল্পনা স্থগিত।"
+  },
+
+  "wbgt": {
+    "title": "তাপের অবস্থা",
+    "reading": "WBGT",
+    "noReading": "কোনও পরিমাপ পাওয়া যায়নি",
+    "superseded": "বজ্রপাতজনিত কাজ বন্ধের নির্দেশ দ্বারা প্রতিস্থাপিত",
+    "band": {
+      "BELOW_31": "৩১°C-এর নিচে",
+      "31_TO_BELOW_32": "৩১ থেকে ৩২°C",
+      "32_TO_BELOW_33": "৩২ থেকে ৩৩°C",
+      "33_AND_ABOVE": "৩৩°C ও তার বেশি"
+    }
+  },
+
+  "guidance": {
+    "title": "আপনাকে যা করতে হবে",
+    "advisoryTitle": "এছাড়াও সুপারিশ করা হচ্ছে",
+    "suspended": "স্থগিত — বজ্রপাতজনিত কাজ বন্ধের নির্দেশ তাপ পরিকল্পনার উপরে প্রাধান্য পায়",
+    "rule": "নিয়ম {{ref}}",
+    "policyVersion": "নীতি {{version}}",
+    "none": "এই মুহূর্তে তাপ সংক্রান্ত কোনও পদক্ষেপ প্রয়োজন নেই।"
+  },
+
+  "actions": {
+    "HYDRATE_REGULARLY": "নিয়মিত জল পান করুন",
+    "HYDRATE_HOURLY": "ঘণ্টায় অন্তত একবার জল পান করুন",
+    "SHADE_RECOVERY": "ছায়ায় বিশ্রামের বিরতি নিন",
+    "RESCHEDULE_HEAVY_WORK": "সম্ভব হলে ভারী কাজের সময় বদলান",
+    "REST_10_MIN_HOURLY": "প্রতি ঘণ্টায় বিরতিহীন ১০ মিনিট বিশ্রাম",
+    "REST_15_MIN_HOURLY": "প্রতি ঘণ্টায় বিরতিহীন ১৫ মিনিট বিশ্রাম",
+    "CLOSE_MONITORING": "তাপজনিত অসুস্থতার জন্য নিজেকে ও আপনার দলকে নিবিড়ভাবে লক্ষ্য রাখুন",
+
+    "REST_10_MIN": "১০ মিনিট বিশ্রাম নিন",
+    "REST_15_MIN": "১৫ মিনিট বিশ্রাম নিন",
+    "HYDRATE": "এখনই জল পান করুন",
+    "STOP_WORK": "কাজ বন্ধ করুন",
+    "SEEK_SHADE": "ছায়ায় যান",
+    "RESUME_WORK": "কাজ আবার শুরু করুন",
+    "ROTATE_TO_LIGHT_DUTY": "হালকা কাজে বদলি হন"
+  },
+
+  "shift": {
+    "title": "আপনার শিফট",
+    "task": "কাজ",
+    "intensity": "কাজের তীব্রতা",
+    "window": "{{start}} থেকে {{end}}",
+    "acclimatisation": "অভিযোজনের ৭ দিনের মধ্যে {{day}} নম্বর দিন",
+    "noTask": "কোনও কাজ নথিভুক্ত নেই",
+    "noShiftTitle": "কোনও শিফট নির্ধারিত নেই",
+    "noShiftBody": "আপনার কোনও চলতি বা আসন্ন শিফট নেই। আপনার সুপারভাইজারের সঙ্গে যোগাযোগ করুন।"
+  },
+
+  "intensity": {
+    "LIGHT": "হালকা",
+    "MODERATE": "মাঝারি",
+    "HEAVY": "ভারী"
+  },
+
+  "freshness": {
+    "LIVE": "সরাসরি",
+    "DELAYED": "বিলম্বিত",
+    "STALE": "পুরোনো",
+    "SIMULATED": "অনুকরণ",
+    "simulatedNotice": "অনুকরণ করা তথ্য। প্রকৃত পরিমাপ নয় — বজ্রপাত বা সাইটের অবস্থার কোনও এন্ডপয়েন্ট এখনও নেই।",
+    "staleWarning": "এই পরিমাপটি নির্ভর করার পক্ষে অনেক পুরোনো। একে চলতি হিসেবে ধরবেন না — আপনার সাইটের নিয়ম মানুন বা সুপারভাইজারের কাছে নিশ্চিত পরিমাপ চান।",
+    "delayedWarning": "এই পরিমাপটি প্রত্যাশার চেয়ে দেরিতে এসেছে। এটি নেওয়ার পর থেকে অবস্থা বদলে থাকতে পারে।"
+  },
+
+  "dev": {
+    "scenarioLabel": "বজ্রপাতের পরিস্থিতি (শুধু ডেভেলপমেন্ট)",
+    "freshnessLabel": "তথ্যের সতেজতা (শুধু ডেভেলপমেন্ট)",
+    "lostResponseLabel": "হারানো উত্তর অনুকরণ করুন (শুধু ডেভেলপমেন্ট)",
+    "lostResponseHint": "সার্ভার স্বীকৃতি নথিভুক্ত করে, তারপর উত্তরটি হারিয়ে যায়। আবার চেষ্টা করলে নিচের সংখ্যাটি ১-এই থাকতে হবে।",
+    "serverAckCount": "এই পদক্ষেপের জন্য সার্ভার-পক্ষের স্বীকৃতি: {{total}}",
+    "resetInbox": "ইনবক্স রিসেট করুন",
+    "weatherLabel": "আবহাওয়ার পরিস্থিতি (শুধু ডেভেলপমেন্ট)",
+    "weatherHint": "অন্তর্নিহিত বৃষ্টি, বাতাস ও আর্দ্রতা নির্ধারণ করে — অবস্থা এখনও সেই সংখ্যাগুলি থেকেই শ্রেণিবদ্ধ হয়, সরাসরি নির্ধারিত হয় না।",
+    "nightLabel": "অন্ধকারের পরে পর্যবেক্ষণ",
+    "forbiddenLabel": "সাইটের মধ্যে ৪০৩ অনুকরণ করুন (শুধু ডেভেলপমেন্ট)",
+    "forbiddenHint": "এই গল্পের ৪০৩ ক্ষেত্রটি অন্যভাবে পৌঁছানো যায় না — নির্বাচক শুধু আপনার সাইটগুলিই দেখায়। আপনার সাইন ইন থাকা উচিত এবং একটি ব্যাখ্যা দেখা উচিত।",
+    "scenarioClear": "পরিষ্কার",
+    "scenarioAdvisory": "সতর্কতা",
+    "scenarioStopWork": "কাজ বন্ধ",
+    "mockInstruction": {
+      "REST_15_MIN": "সাইট অফিসের পাশে ছায়াযুক্ত বিশ্রামস্থলে টানা ১৫ মিনিট বিশ্রাম নিন।",
+      "HYDRATE": "এখনই ৫০০ মিলি জল পান করুন এবং রাস্তার ধারে ফেরার আগে আপনার বোতল ভরে নিন।",
+      "ROTATE_TO_LIGHT_DUTY": "পরের এক ঘণ্টার জন্য টুল স্টোরে চলে যান। আপনার সুপারভাইজার বিকল্প ব্যবস্থা করেছেন।"
+    }
+  },
+
+  "placeholder": {
+    "comingSoon": "শীঘ্রই আসছে",
+    "screenPending": "নির্মাণের ক্রমে এই পর্দাটি পরবর্তী।"
+  }
+}
