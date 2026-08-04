@@ -175,6 +175,9 @@ service-linked-role statements. The plan policy contains no account id.
    `ReadLoadBalancerPlan`, `ReadDistributionPlan`, `ReadNetworkPlan`,
    `ReadApplicationLogGroupPlan`, `ReadCrossOriginParameterPlan` — and **no** mutating action, **no**
    `secretsmanager:GetSecretValue`, and **no** `iam:PassRole`.
+   `ReadNetworkPlan` must include both `ec2:DescribeManagedPrefixLists` and
+   `ec2:GetManagedPrefixListEntries`: the provider first discovers the AWS-managed CloudFront
+   prefix list and then reads its entries while refreshing the data source.
 6. Name the policy `CrewSafeComputeTerraformPlan` and save.
 
 ### 3.2 Update the apply role
@@ -203,8 +206,9 @@ inline policy** here — it will be rejected on the character limit.
    Balancing — the CloudFront VPC origin grant was removed 2026-08-04, see §10), each scoped to its
    exact `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
    warning below.
-8. Confirm it grants **no** `secretsmanager:GetSecretValue`, **no** `logs:GetLogEvents`, and **no**
-   `ecs:ExecuteCommand`.
+8. Confirm its network statement includes `ec2:GetManagedPrefixListEntries`, because apply also
+   refreshes the AWS-managed CloudFront prefix-list data source. Confirm it grants **no**
+   `secretsmanager:GetSecretValue`, **no** `logs:GetLogEvents`, and **no** `ecs:ExecuteCommand`.
 9. Name the policy `CrewSafeComputeTerraformApply` and create it.
 10. Go to **IAM → Roles → `CrewSafeGitHubTerraformApplyRole` → Add permissions → Attach policies**,
     filter by **Customer managed**, select `CrewSafeComputeTerraformApply`, and attach.

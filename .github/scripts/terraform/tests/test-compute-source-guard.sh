@@ -172,4 +172,17 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gat
   'a resource owned by an upstream component' \
   'The network, secrets, and database components own these (FR-053). Changes to them are changes to those components.'
 
-printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 11
+# Terraform reads the entries behind the AWS-managed CloudFront prefix list while
+# refreshing the data source. Both workflows refresh it, so both roles need this
+# read-only verb; DescribeManagedPrefixLists alone is insufficient.
+for policy in plan-role-policy.json apply-role-policy.json; do
+  jq -e '
+    any(.Statement[];
+      .Effect == "Allow" and
+      ((.Action | arrays | index("ec2:GetManagedPrefixListEntries")) != null)
+    )
+  ' "$ROOT/$component_dir/iam/$policy" >/dev/null ||
+    fail "$component_dir/iam/$policy must allow ec2:GetManagedPrefixListEntries"
+done
+
+printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 13
