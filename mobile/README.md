@@ -344,10 +344,10 @@ worker's face above the next worker's name.
 Not decoration — these are the operating conditions: a phone at arm's length in Singapore
 sun, held by someone who may not read English, possibly in gloves.
 
-- **Four languages** (English, 简体中文, हिन्दी, Bahasa Melayu), each listed in its own script.
-  The picker is reachable **from the sign-in screen**, not only from Settings — otherwise a
-  shared phone left in a language you cannot read is a trap with no way out. Three more are
-  planned; see [SCRUM-205](#scrum-205--localisation) below.
+- **Seven languages** (English, 简体中文, हिन्दी, Bahasa Melayu, தமிழ், বাংলা, မြန်မာ), each
+  listed in its own script. The picker is reachable **from the sign-in screen**, not only from
+  Settings — otherwise a shared phone left in a language you cannot read is a trap with no way
+  out. See [SCRUM-205](#scrum-205--localisation) below.
 - **Text size** 0.85–1.5×, applied by `AppText` on top of device scaling. No raw `<Text>`
   exists anywhere in `src/`, so nothing opts out. Capped at 1.5 because fixed-height
   controls clip their own labels past that.
@@ -760,37 +760,67 @@ person re-sets one switch once.
 ## SCRUM-205 — Localisation
 
 Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).
-Target is seven languages; **Malay has landed, three remain.**
+**All seven languages have landed.**
 
-| Language | Code | Script | Status |
-|---|---|---|---|
-| English | `en` | Latin | Shipped — source of truth |
-| Simplified Chinese | `zh-Hans` | Han | Shipped |
-| Hindi | `hi` | Devanagari | Shipped |
-| **Malay** | `ms` | **Latin** | **Shipped — machine-drafted, awaiting native review** |
-| Tamil | `ta` | Tamil | Blocked on font work |
-| Bengali | `bn` | Bengali | Blocked on font work |
-| Burmese | `my` | Myanmar | Blocked on font work + Zawgyi decision |
+| Language | Code | Script | Family | Status |
+|---|---|---|---|---|
+| English | `en` | Latin | Gelasio | Shipped — source of truth |
+| Simplified Chinese | `zh-Hans` | Han | Gelasio + system | Shipped |
+| Hindi | `hi` | Devanagari | Gelasio + system | Shipped — see the Hindi note below |
+| Malay | `ms` | Latin | Gelasio | Shipped — machine-drafted, awaiting native review |
+| **Tamil** | `ta` | Tamil | **Noto Sans Tamil** | Shipped — machine-drafted, awaiting native review |
+| **Bengali** | `bn` | Bengali | **Noto Sans Bengali** | Shipped — machine-drafted, awaiting native review |
+| **Burmese** | `my` | Myanmar | **Noto Sans Myanmar** | Shipped — Unicode only, awaiting native review |
 
-### Why Malay first
+### Why Malay went first
 
-It is the only one of the four that is Latin script, so it renders in Gelasio today with no
-font work at all. That makes it the vertical slice: it exercises `languagesArr`, the
-`AppLanguage` type, `resolveDeviceLanguage`, the i18n registration and both pickers — the
-Settings sheet and the sign-in screen — with the font problem held out. Anything that breaks
-in that path breaks for the other three too, and it is far cheaper to diagnose when tofu
-boxes are not also on screen.
+It was the only one of the four in Latin script, so it rendered in Gelasio with no font work
+at all. That made it the vertical slice: it exercised `languagesArr`, the `AppLanguage` type,
+`resolveDeviceLanguage`, the i18n registration and both pickers — the Settings sheet and the
+sign-in screen — with the font problem held out. It also surfaced a latent `AppButton` layout
+bug (Problem 10) that had nothing to do with localisation and everything to do with being the
+first two-word label in the app.
 
-### The font blocker, restated
+### The font layer
 
-Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek. **It has no glyphs for
-Tamil, Bengali or Myanmar.** Adding those three to `languagesArr` before the font layer
-exists would offer a worker a language that renders as empty boxes — worse than leaving it
-out, because an untranslated screen is at least readable by someone. The follow-up adds
-`@expo-google-fonts/noto-sans-tamil`, `-bengali` and `-myanmar` (all confirmed to exist on
-npm at 0.4.x), per-script family resolution in place of today's four Gelasio constants, and
-script-aware line heights — `lineHeightFor` in `AppText` is tuned for Latin metrics and will
-clip stacked diacritics.
+Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek and has **no glyphs at all**
+for Tamil, Bengali or Myanmar. Rendering them in it produces tofu, or a silent fall back to
+whatever the system has. So each script gets its Noto family:
+
+- `familyFor(language)` resolves the family from the **active language**, not by inspecting
+  each string. Every string is in one language at a time, so per-string script detection
+  would cost work on every text node to answer a question the language already answers.
+- The Noto families include basic Latin, so `32.4 °C WBGT` on a Tamil screen draws from one
+  face instead of falling back per glyph.
+- `lineHeightBoostFor(language)` widens the line box for the three new scripts. Bengali hangs
+  a matra across the top of a word and all three carry vowel signs below the baseline; the
+  1.35 ratio tuned for Gelasio clips them, and it clips *subtly* — a diacritic loses its top
+  and the word is still nearly right, which is how a wrong word reaches a worker.
+- All four weights (400/500/600/700) were **checked to exist** in all four families rather
+  than assumed. Noto subsets do not uniformly ship every weight.
+- Every family loads at startup in `App.tsx`. The same reasoning that bundles translations
+  applies to the faces that draw them: a worker who loses signal mid-shift must not lose
+  their language, and a font fetched on language-switch would fail on exactly the site phone
+  this app is built for.
+
+**Hindi is deliberately still on the system fallback.** It is Devanagari, which Gelasio also
+lacks, but it shipped long before this change and has been rendering through the OS all
+along. Moving it to a Noto family is a visual change to an already-shipped language and
+deserves its own ticket with its own before-and-after — not a silent ride-along in this one.
+
+### Burmese is Unicode only
+
+Recorded here because the plan required the decision be made explicitly and because the
+failure mode looks like a bad translation rather than an encoding mismatch.
+
+`my.json` is Myanmar **Unicode** (U+1000–U+109F), not Zawgyi. Myanmar's national migration to
+Unicode completed in 2019 and Android 12+ ships Unicode Myanmar fonts, so Zawgyi is treated as
+legacy: not detected, not transcoded. A worker on a Zawgyi-only device sees garbled Burmese
+and can switch language from the sign-in picker, which is reachable precisely so that a phone
+left in an unreadable language is never a dead end.
+
+**Do not "fix" garbled Burmese by transcoding the file to Zawgyi.** The file carries the same
+warning in its `_encoding` key.
 
 ### Translation review status — read before shipping `ms`
 
@@ -798,8 +828,10 @@ clip stacked diacritics.
 carries this warning in its own `_translationStatus` key, and `i18n.ts` repeats it at the
 registration site.
 
-These keys must be signed off by a native Bahasa Melayu speaker before the language is
-offered in production:
+The same is true of `ta.json`, `bn.json` and `my.json`.
+
+These keys must be signed off by a native speaker of each language before it is offered in
+production:
 
 - `lightning.*` — the stop-work and advisory banners
 - `actions.*` — every dispatched instruction
@@ -857,13 +889,35 @@ real catalogue code rendering in English on a localised screen is too high a pri
 demonstration. The fallback still guards every code the backend adds ahead of this app's
 translations, which is the case it exists for.
 
+### Verified on device, and what that turned up
+
+All three new languages were driven on a 1344×2992 @480dpi emulator: language picker, My
+shift, Inbox, Settings, and a force-stop-and-relaunch to confirm the choice persists.
+
+- **All three scripts render.** No tofu, no system fallback. Burmese even picks up Burmese
+  numerals in the shift window (`၁၉:၃၉ မှ ၂:၃၉`), because `Intl` formats against the active
+  locale.
+- **The Inbox is fully translated**, instruction bodies included — those come from
+  `dev.mockInstruction.*` via the mock dispatch server, which resolves them through i18n at
+  read time. Server-authored instruction text on the *real* backend is still untranslatable;
+  see the note above.
+- **Tab labels had to be shortened for Tamil and Burmese.** `என் பணிமுறை` and
+  `ကျွန်ုပ်၏ အလှည့်` both truncated to `…` in the tab bar. No font or layout change fixes
+  this — a tab bar has a hard width budget, and the honest fix is a shorter label. Tamil
+  `tabs.shift`/`tabs.inbox` and Burmese `tabs.shift`/`tabs.profile` are therefore *not*
+  literal translations of the English; they are tab-sized. This is the text-expansion risk
+  the plan predicted, landing exactly where it said it would.
+
+Still unverified: **iOS**, and the largest text setting in the new scripts. Both are where
+the extra line-height matters most.
+
 ### Locale parity check
 
 ```bash
 npm run check:locales
 ```
 
-Fails the build when any locale drifts from `en.json`. Three fault classes, all of them
+Fails the build when any locale drifts from `en.json`. Four fault classes, all of them
 otherwise silent:
 
 1. **Missing key** — i18next falls back to English and renders it mid-screen. No error, no
@@ -873,6 +927,17 @@ otherwise silent:
    quietly stops being rendered.
 3. **Placeholder drift** — a dropped `{{time}}` leaves a sentence with a hole in it; a
    renamed one prints literal braces to the user.
+4. **Wrong script** — a string written in a script that belongs to a different locale.
+   Added because it actually happened while drafting the three new files: one value in
+   `ta.json` was Bengali. Valid JSON, right key, right placeholders, and unreadable to the
+   person it was written for. A reviewer catches that only if they read both scripts.
+
+The script check ignores Latin, which legitimately appears in every file — "CrewSafe",
+"WBGT", "°C", the email placeholder. It also excludes U+0964/U+0965, the danda and double
+danda: Unicode files them under Devanagari but they are shared Indic punctuation, and
+treating them as Devanagari flagged every correctly written Bengali sentence. That was four
+false positives before a single true one, and **a check that cries wolf on correct input is
+worse than no check, because the next person turns it off.**
 
 Keys beginning with `_` are metadata and are skipped. The script exits non-zero on failure,
 so it can be wired into CI beside `tsc --noEmit`.

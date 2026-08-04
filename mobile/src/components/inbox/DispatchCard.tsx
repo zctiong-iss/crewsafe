@@ -51,9 +51,12 @@ const DispatchCard: FC<DispatchCardProps> = ({
   // Both scale with the device and with the user's text setting, so the icon stays on the
   // title's first line on a 320dp phone at 0.85x and a tablet at 1.5x alike.
   const iconSize = s(22);
+  // `locale` is passed so the offset tracks the script's line box as well as the device and
+  // text scale. Tamil, Bengali and Myanmar sit in a taller line than Latin, and an offset
+  // computed without them is right in English and visibly out in three other languages.
   const iconTopOffset = Math.max(
     0,
-    (lineHeightFor("subtitle", theme.fontScale) - iconSize) / 2,
+    (lineHeightFor("subtitle", theme.fontScale, locale) - iconSize) / 2,
   );
 
   return (
