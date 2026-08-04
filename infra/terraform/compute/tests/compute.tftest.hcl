@@ -302,10 +302,11 @@ run "boundary" {
   }
 }
 
-# SCRUM-204 US1 — the public path must coexist with the recovery topology. These
-# assertions are deliberately added before the resources so Terraform Validation
-# demonstrates the test-first failure on the draft preparation PR.
-run "parallel_public_origin_preparation" {
+# SCRUM-204 US2 — CloudFront must select the verified public path while the full
+# recovery topology remains available. These assertions are changed before the
+# origin configuration so Terraform Validation demonstrates the cutover's
+# test-first failure on the draft PR.
+run "public_origin_cutover" {
   command = apply
 
   assert {
@@ -376,8 +377,18 @@ run "parallel_public_origin_preparation" {
   }
 
   assert {
-    condition     = one(one(aws_cloudfront_distribution.main.origin).vpc_origin_config).vpc_origin_id == aws_cloudfront_vpc_origin.rebuilt.id
-    error_message = "Preparation must leave CloudFront on the surviving VPC origin; cutover is a later reviewed revision."
+    condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
+    error_message = "Cutover must point the existing backend origin at the verified public ALB."
+  }
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).custom_origin_config).origin_protocol_policy == "http-only"
+    error_message = "CloudFront must reach the temporary public origin over the reviewed HTTP-only transport."
+  }
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).custom_origin_config).http_port == 80
+    error_message = "The custom origin must use only the prefix-list-fenced public listener on port 80."
   }
 }
 
@@ -385,8 +396,8 @@ run "public_edge" {
   command = apply
 
   assert {
-    condition     = one(one(aws_cloudfront_distribution.main.origin).vpc_origin_config).vpc_origin_id == aws_cloudfront_vpc_origin.rebuilt.id
-    error_message = "Recovery must keep CloudFront attached to the one surviving VPC origin; deleting or replacing it in this stage repeats run 30880087606."
+    condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
+    error_message = "The stable distribution must select the verified public ALB after cutover."
   }
 
   assert {

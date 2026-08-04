@@ -22,13 +22,13 @@ Complete one column per stage with links and non-sensitive outcomes.
 
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
-| Source commit and approved PR | Pending | Blocked | Blocked |
+| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | Cutover branch created from applied preparation revision | Blocked |
 | Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | Blocked | Blocked |
-| Plan run ID and attempt | Pending | Blocked | Blocked |
-| Account / component / operation / lock match | Pending | Blocked | Blocked |
-| Plan digest and typed confirmation | Pending | Blocked | Blocked |
-| Apply run and single-use marker | Pending | Blocked | Blocked |
-| Target and distribution status | Pending | Blocked | Blocked |
+| Plan run ID and attempt | `30885366655`, attempt 1 | Blocked | Blocked |
+| Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked | Blocked |
+| Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked | Blocked |
+| Apply run and single-use marker | [Run 30885467533, job 91915592556](https://github.com/zctiong-iss/crewsafe/actions/runs/30885467533/job/91915592556); final marker step passed | Blocked | Blocked |
+| Target and distribution status | Apply: 7 added, 1 changed, 0 destroyed. Public target group `crewsafe-shared-dev-public`: 1 healthy, 0 unhealthy; CloudFront intentionally retained the VPC origin | Blocked | Blocked |
 | Smoke, latency, propagation, authn/authz | N/A | Blocked | Blocked |
 | Rollback status / convergence plan | Active legacy path | Blocked | Blocked |
 
@@ -91,6 +91,15 @@ add the distinct public ALB path and second ECS target registration only.
 After apply, both target groups must be registered, the public target healthy, ingress exactly
 TCP/80 from `com.amazonaws.global.cloudfront.origin-facing`, egress TCP/8080 to the application
 SG, and CloudFront still on the VPC origin. Any failure blocks cutover.
+
+Preparation gate accepted on 2026-08-04. Apply run `30885467533` used the reviewed plan from run
+`30885366655` against source `737fd928f560cceca57ed2c497b59708bbb2b90d` and completed with
+7 additions, 1 in-place ECS service change, and no destruction. The operator inspected target group
+`crewsafe-shared-dev-public` in `ap-southeast-1`: one IP target on port 8080 was `Healthy`, with zero
+unhealthy, initial, draining, or unused targets. The reviewed Terraform validation binds ALB ingress
+to `com.amazonaws.global.cloudfront.origin-facing` on TCP/80, forbids CIDR ingress, and restricts
+the ALB-to-application hop to the application security group on TCP/8080. The cutover branch
+`feat/scrum-204-staged-public-alb-origin-cutover` was created from that applied `main` revision.
 
 ## 6. Cutover and rollback
 
