@@ -95,6 +95,16 @@ trap "rm -rf '$work'" EXIT INT TERM
 raw="$work/gitleaks-report.json"
 [[ -n "$out" ]] || out="$work/normalized-findings.json"
 
+# --out must be a path this script can WRITE and then READ BACK, because the
+# finding count is read from it after writing. A pipe or character device
+# (e.g. --out /dev/stdout) would deadlock: reading the write end of a pipe
+# blocks forever. Reject those up front and fail closed rather than hang --
+# a hung gate is worse than a failing one, because it burns the whole job
+# timeout before anyone learns anything.
+if [[ -e "$out" && ! -f "$out" ]]; then
+  die "--out must be a regular file, not a pipe or device: $out"
+fi
+
 config_args=()
 repo_config="$(git rev-parse --show-toplevel)/.gitleaks.toml"
 [[ -f "$repo_config" ]] && config_args+=(--config "$repo_config")

@@ -60,6 +60,28 @@ make_tmpdir() {
 #
 # The generated value authenticates against nothing and never leaves the
 # throwaway repository it is written into.
+# random_chars <count> <character class>
+#
+# Reads a BOUNDED slice of /dev/urandom, filters it, then truncates with
+# parameter expansion. The obvious form -- `tr -dc CLASS </dev/urandom | head -c N`
+# -- leaves tr reading an infinite stream after head exits, so tr takes SIGPIPE
+# and prints "tr: write error: Broken pipe" to stderr on every call. That noise
+# appeared in the Gate Self-Tests job output (SCRUM-178, 2026-08-06) and, under
+# `set -o pipefail`, is a failure waiting to be depended on.
+#
+# 1024 bytes yields ~240 characters for a 62-of-256 class, comfortably more than
+# any caller needs; the length check below makes a short draw loud rather than
+# silently producing a too-short credential that the scanner would not match.
+random_chars() {
+  local count="$1" class="$2" raw
+  raw="$(head -c 1024 /dev/urandom | LC_ALL=C tr -dc "$class")"
+  if [[ ${#raw} -lt $count ]]; then
+    printf 'harness: random_chars drew %d chars, needed %d\n' "${#raw}" "$count" >&2
+    return 1
+  fi
+  printf '%s' "${raw:0:count}"
+}
+
 synthetic_aws_key() {
   # A Stripe TEST-MODE key shape: sk_test_ followed by 32 alphanumerics. Matches
   # the gitleaks `stripe-access-token` rule.
@@ -77,20 +99,20 @@ synthetic_aws_key() {
   # `sk_test_` is Stripe's test-mode prefix: such keys are non-production by
   # construction, and this one is random, never transmitted, and lives only
   # inside a throwaway repository for the duration of one test.
-  printf 'sk_test_%s' "$(LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 32)"
+  printf 'sk_test_%s' "$(random_chars 32 'a-zA-Z0-9')"
 }
 
 # A PEM private-key block. Also deterministic (12 of 12 against gitleaks 8.30.1),
 # kept as a second credential shape so a test can assert on more than one rule.
 synthetic_private_key() {
   printf -- '-----BEGIN RSA PRIVATE KEY-----\n%s\n-----END RSA PRIVATE KEY-----' \
-    "$(LC_ALL=C tr -dc 'A-Za-z0-9+/' </dev/urandom | head -c 64)"
+    "$(random_chars 64 'A-Za-z0-9+/')"
 }
 
 # A generic high-entropy secret-shaped value, regenerated per call so no two
 # test runs write the same string.
 synthetic_generic_secret() {
-  printf 'sk_test_%s' "$(LC_ALL=C tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 32)"
+  printf 'sk_test_%s' "$(random_chars 32 'a-zA-Z0-9')"
 }
 
 # --- throwaway git repositories ---------------------------------------------

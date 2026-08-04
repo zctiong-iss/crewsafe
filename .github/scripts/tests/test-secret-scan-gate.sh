@@ -96,7 +96,22 @@ if [[ "$GITLEAKS_PRESENT" == 1 ]]; then
   assert_not_contains "$out_dirty" "$key" \
     "credential value never appears in output"
 
-  findings_dirty="$(cd "$repo_dirty" && "$SCAN" --mode full --out /dev/stdout 2>/dev/null | tail -c 4000 || true)"
+  # Write the normalized findings to a REAL file, never to /dev/stdout. The
+  # scan script reads its own --out back to count findings, and reading the
+  # write end of a pipe blocks forever -- passing /dev/stdout here deadlocked
+  # the Gate Self-Tests job until the runner killed it (SCRUM-178, 2026-08-06).
+  findings_file="$(make_tmpdir)/findings.json"
+  in_dir "$repo_dirty" "$SCAN" --mode full --out "$findings_file" >/dev/null 2>&1 || true
+  findings_dirty="$(cat "$findings_file" 2>/dev/null || true)"
+
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if [[ -s "$findings_file" ]]; then
+    _pass "normalized findings file is written and non-empty"
+  else
+    _fail "normalized findings file is written and non-empty" \
+      "nothing at $findings_file -- the redaction assertion below would pass vacuously"
+  fi
+
   assert_not_contains "$findings_dirty" "$key" \
     "credential value never appears in the normalized findings file"
 
