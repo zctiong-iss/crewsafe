@@ -496,26 +496,29 @@ Everything lands in `/crewsafe/shared-dev/backend`. There is no other diagnosis 
 
 ---
 
-## 10. Known interim posture — FR-032 is discharged by a follow-up, not here
+## 10. Scanner exemptions and the `cluster_arn` output
 
-SCRUM-174 deferred pinning the execution and task roles to a specific cluster until a cluster
-existed. It now exists — but the pinning **cannot be applied from this component**: a role's
-`assume_role_policy` is an attribute of a resource `secrets-shared-dev` owns, not a separately
-attachable one. (SCRUM-175 could add a pinned credential grant from outside only because
-`aws_iam_role_policy` *is* separate.)
+### FR-032's cluster pinning was not built, because it is not possible
 
-Resolution, decided at the plan review: this component publishes **`cluster_arn`** as an output, and
-**[SCRUM-191](https://u-team-h6ii4x03.atlassian.net/browse/SCRUM-191)** applies the condition to
-`secrets-shared-dev` referencing it. Raised 2026-08-02, blocked by SCRUM-176, related to SCRUM-174.
+This section previously warned that the execution and task roles were assumable account-wide
+pending SCRUM-191, and that `cluster_arn` was published so SCRUM-191 could pin them to this
+cluster. **SCRUM-191 established that AWS does not support pinning an ECS trust policy to a
+cluster**, quoting the
+[ECS task IAM role documentation](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html):
 
-> **Until SCRUM-191 lands**: the two roles are assumable by the ECS tasks service principal
-> **account-wide**, not only by tasks in this cluster. The exposure is bounded today — the account
-> holds exactly one cluster and Terraform is CI-only — and it grows the moment a second cluster
-> exists.
+> Using the `aws:SourceArn` condition key to specify a specific cluster is not currently supported,
+> you should use the wildcard to specify all clusters.
 
-Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
+SCRUM-191 instead applied the documented account-and-region conditions to both roles, closing a
+cross-account confused deputy. The same-account cross-cluster exposure is **still open and
+accepted** — see section 12 of the
+[SCRUM-174 runbook](./SCRUM-174-secrets-and-iam.md) for what that means and what it obliges you to
+do if you create a second cluster.
 
-When SCRUM-191 lands, delete this section.
+**The `cluster_arn` output therefore has no consumer.** It is retained, and its description in
+`infra/terraform/compute/outputs.tf` says so. Nothing depends on it; removing it would be a change
+to this component's published contract and is a decision for whoever owns this component, not an
+obvious cleanup.
 
 ### The synthetic-user mappings parameter, and why this component creates it
 
