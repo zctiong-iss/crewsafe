@@ -102,7 +102,7 @@ forbid ':(AWSCURRENT|AWSPENDING|AWSPREVIOUS)|:[0-9a-fA-F-]{36}:"|::[0-9a-fA-F-]{
 # FR-022a. The header-based variant of a fenced public load balancer needed a
 # shared secret in state, which SCRUM-174 and SCRUM-175 forbid categorically. This
 # component fences with CloudFront's managed prefix list alone (see
-# aws_security_group.lb in main.tf) and was never entitled to grow a header back in
+# aws_security_group.public_lb in main.tf) and was never entitled to grow a header back in
 # as a "belt and suspenders" addition.
 forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header' \
   'an origin-authentication header' \
@@ -143,17 +143,13 @@ require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
   'the active public load balancer identity' \
   'Cleanup must preserve the verified origin selected by CloudFront.'
 
-require 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
-  'the temporarily managed legacy load-balancer security group' \
-  'The failed cleanup left this group attached to the surviving deletion-protected ALB; remediation must adopt it without recreating it.'
+forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
+  'the legacy load-balancer security group' \
+  'Final cleanup removes the empty security group after the legacy ALB is unprotected.'
 
-require 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
-  'the temporarily managed legacy load balancer' \
-  'Remediation must adopt the surviving ALB so a reviewed apply can disable deletion protection before final cleanup.'
-
-require 'enable_deletion_protection[[:space:]]*=[[:space:]]*false' \
-  'disabled deletion protection on the surviving legacy ALB' \
-  'The remediation revision must change only this protection flag; final cleanup happens in a later reviewed revision.'
+forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
+  'the legacy internal load balancer' \
+  'Final cleanup removes the unprotected legacy ALB; only the verified public origin may remain.'
 
 require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' \
   'the AWS-managed CloudFront origin-facing prefix list' \
@@ -181,7 +177,7 @@ forbid 'resource[[:space:]]+"aws_lb_listener"[[:space:]]+"backend"' \
 
 forbid 'resource[[:space:]]+"aws_vpc_security_group_(ingress|egress)_rule"[[:space:]]+"(lb_from_vpc_origin|lb_to_app|app_from_lb)"' \
   'legacy load-balancer connectivity rules' \
-  'Remediation adopts only the surviving ALB and its attached empty security group; no legacy traffic path may return.'
+  'Final cleanup permits no legacy traffic path to return.'
 
 load_balancer_blocks="$(grep -Ec '^[[:space:]]*load_balancer[[:space:]]*\{' < <(scan))"
 [[ "$load_balancer_blocks" -eq 1 ]] ||
@@ -245,4 +241,4 @@ jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") ==
   "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must remove cloudfront:DeleteVpcOrigin after cleanup"
 
-printf 'ok: %s cleanup-remediation source guard passed (%d checks)\n' "$component_dir" 31
+printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 30
