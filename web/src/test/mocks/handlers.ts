@@ -1,10 +1,4 @@
-/**
- * @author Tang Chee Seng (with assistance from Claude)
- *
- *
- * Written against docs/api/shift.yaml.
- * 
- */
+/** @author Tang Chee Seng (with assistance from Claude) */
 
 import { http, HttpResponse } from "msw";
 
@@ -33,7 +27,6 @@ export const handlers = [
             }
         );
     
-
     if (new Date(body.endsAt) <= new Date(body.startsAt)){
     return HttpResponse.json(errorBody(
         "Bad Request",
@@ -50,11 +43,21 @@ export const handlers = [
             status: "PLANNED", ...body }, { status: 201 });
     }),
 
-  // The picker's source (W-20, shipped in PR #49).
+  // The picker's source.
   http.get(`${BASE}/api/v1/sites/:siteId/workers`, () =>
     HttpResponse.json([
       { id: "00000000-0000-4000-8000-000000000001", displayName: "Worker One" },
       { id: "00000000-0000-4000-8000-000000000002", displayName: "Worker Two" },
     ]),
   ),
+
+  http.get(`${BASE}/api/v1/me`, () =>
+  HttpResponse.json({
+    id: "u-1",
+    username: "supervisor",
+    displayName: "Supervisor",
+    role: "SUPERVISOR",
+    siteIds: ["site-1"],
+  }),
+),
 ];

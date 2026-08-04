@@ -9,6 +9,7 @@ import { SignInScreen } from "@/auth/SignInScreen";
 import { useAuth } from "@/auth/useAuth";
 import { PlaceholderPage } from "@/features/placeholder/PlaceholderPage";
 import { NAVIGATION } from "./navigation";
+import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 
 /**
  * Routes are chosen by auth state, not guarded per-route.
@@ -99,6 +100,8 @@ export function App() {
           {NAVIGATION.filter((item) => item.to !== "/").map((item) => (
             <Route key={item.to} path={item.to} element={<PlaceholderPage title={item.label} />} />
           ))}
+
+          <Route path="/shifts/new" element={<CreateShiftPage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

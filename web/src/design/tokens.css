@@ -69,7 +69,9 @@
   /* IBM Plex was drawn for technical interfaces and has true tabular figures, which is
      what a console full of readings and timestamps actually needs. Mono is reserved for
      machine-readable identifiers so a code never reads as prose. */
-  --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* EDIT - 4 Aug (Chee Seng): Lexend was chosen instead due to its readability. */
+  /* --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif; */
+  --font-ui: "Lexend", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-code: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
   --text-xs: 0.6875rem; /* 11px — eyebrow labels, table headers */
