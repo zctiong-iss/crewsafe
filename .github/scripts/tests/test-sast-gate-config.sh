@@ -101,6 +101,12 @@ check "sast job loads sonar-project.properties" \
 check "sast job sets sonar.projectBaseDir" \
   "$([[ "$sast" == *"sonar.projectBaseDir"* ]] && echo true || echo false)"
 
+check "sast job absolutizes every Sonar path-list entry" \
+  "$([[ "$sast" == *"absolutize_path_list"* ]] && \
+     [[ "$sast" == *'sonar.sources|sonar.tests|sonar.java.binaries'* ]] && \
+     [[ "$sast" == *'"${GITHUB_WORKSPACE}/${path}"'* ]] && \
+     echo true || echo false)"
+
 # Every value in sonar-project.properties MUST be a single line: the workflow's
 # loader does not understand Java-properties backslash continuation, and a
 # continued line would be split into a malformed key and a value-only
