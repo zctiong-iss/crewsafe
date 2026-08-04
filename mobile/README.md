@@ -1058,48 +1058,67 @@ were being handed the same string. `AppButton`, `AppText` and `DispatchCard` hav
 `numberOfLines`, `ellipsizeMode` or `adjustsFontSizeToFit` between them, so nothing was
 deliberately truncating either.
 
-**Root cause.** Layout, not content. `AppButton`'s content row was `flexShrink: 1` with no
-definite width, and the `Text` inside it was *also* `flexShrink: 1`. The row therefore sized
-to its own content, which made the width available to the label depend on **when the row was
-measured** — and inside a virtualised `FlatList` that is not stable. The first cell lays out
-against the real width; later cells are measured during virtualisation against a narrower
-estimate, and a shrinkable `Text` resolves that by **clipping at a word boundary rather than
-wrapping**.
+**Two wrong diagnoses first**, both plausible, both shipped, neither correct. Recorded because
+the reasoning that produced them is the trap:
 
-**Why English never showed it.** "Acknowledge" is a single word with nowhere to break. The
-bug has been latent since the button was written and needed a two-word label to surface —
-which localisation duly provided. Every other locale had been lucky: Hindi and Chinese labels
-are long, but the button had not yet met one that *could* break cleanly in the middle.
+1. *"The row is under-measured in a virtualised cell."* Gave the content row `width: "100%"`.
+   No effect.
+2. *"A `Text` that is itself the flex-shrinking node clips instead of wrapping."* Moved the
+   shrink onto a `View` wrapper. No effect.
 
-**Fix, in two parts.** The first attempt gave the row a definite width — `width: "100%"` in
-place of `flexShrink: 1` — so the available width became the button's content box, known
-before the label is measured and identical in every cell. **That was not sufficient on its
-own:** the bug persisted on a Pixel 10 Pro XL while a Pixel 10 Pro Fold rendered correctly
-from the same bundle, which is the signature of a measurement path that varies with screen
-geometry rather than one that had been made deterministic.
+Both were inferred from the symptom without measuring. The device split — a Fold rendering
+correctly beside an XL that did not, same bundle — was read as evidence *for* a
+geometry-dependent measurement path, when it was really just a clue that something depended
+on available width. **Reasoning about layout produced two confident, wrong answers; the
+first measurement produced the right one in a single step.**
 
-The second part removes the actual defect. The shrinking node is now a `View` wrapper, and
-the `Text` has **no flex properties at all**:
+**What measurement showed.** An `onLayout` probe on every node, plus Android's own
+accessibility tree via `uiautomator dump`, on a 1344×2992 @480dpi emulator:
 
-```jsx
-<View style={styles.titleWrap}>   {/* flexShrink: 1 — Views shrink correctly */}
-  <AppText …>{title}</AppText>    {/* no flex props — inherits a settled width, wraps */}
-</View>
+```
+Yoga    "Akui terima"  content=326.0  wrap=97.3  text=97.3  h=24.3   ← identical on all 3
+Android text="Akui terima"  bounds [525,1038][817,1111]              ← 292px = 97.33dp × 3
+        text="Akui terima"  bounds [525,1931][817,2004]              ← renders as "Akui"
 ```
 
-A `Text` that is itself the shrinking node does not wrap under pressure on Android — it
-clips, at a word boundary, silently. A `View` shrinks correctly, and a `Text` with no flex
-properties of its own wraps inside whatever width its parent settled on. `minHeight` rather
-than `height` on the button lets it grow to fit a wrapped label.
+The string was never truncated, the node was never wrong, and all three cards measured
+**identically**. Yoga measured one line, 97.33dp wide. Android was handed a text box of
+exactly that width, decided the line needed marginally more, and **broke at the space**. The
+box is one line tall because Yoga measured one line — so the second line was clipped, and
+`textAlign: center` re-centred the survivor. A clipped line disguised as a shorter string.
 
-This touches all 25 `AppButton` call sites, so it is worth an eye on the long ones — "Request
-an account" in Hindi (`खाते का अनुरोध करें`) is the widest label in the app and the best
-stress test.
+**The controlled experiment that proved it.** Same glyphs, space removed — `"Akuiterima"` —
+rendered in full on every card. That isolates the line break as the trigger and rules out
+width, font, virtualisation and locale in one step.
 
-> **Verify on more than one device.** This bug was invisible on one emulator and reproducible
-> on another with the same code. A single-device pass would have signed it off twice: once
+**Fix.** `flex: 1` on the label wrapper, so the label's box is derived from the button's
+width instead of from its own measured content. There is then nothing marginal to get wrong.
+Two device-independent pixels of slack were tried first and did *not* help, which is what
+ruled out simple sub-pixel rounding.
+
+Icon buttons keep the old shrink-to-fit sizing (`titleWrap`), because a full-width label
+pushes the icon to the far edge and breaks the centred icon-plus-label pairing. They are not
+exposed to the bug today: every icon button lives on a plain `ScrollView` screen, none inside
+a recycled cell. **If an icon button is ever placed in a virtualised list, give it
+`titleFill` and find another way to keep the icon adjacent.**
+
+**Why English never showed it.** "Acknowledge" is a single word with nowhere to break. The bug
+has been latent since the button was written and needed a two-word label to surface — which
+localisation duly provided. Hindi and Chinese labels are long, but none had yet offered a
+clean break point in the middle.
+
+Verified on-device after the fix: both cards render "Akui terima", and `⚙ Tetapan` keeps its
+icon beside the label.
+
+> **Verify on more than one device.** This was invisible on one emulator and reproducible on
+> another from the same bundle. A single-device pass would have signed it off twice: once
 > because English has no space to break at, and once because the Fold is wide enough not to
 > care.
+
+> **Measure before theorising about layout.** Two fixes were shipped on inference and neither
+> worked. `onLayout` logging and `adb shell uiautomator dump` — which reports the real text
+> and bounds of every node — answered it immediately, and the no-space experiment confirmed
+> it. Both are cheap; neither was tried until the third attempt.
 
 > The general lesson is the one worth keeping: **a label that renders correctly in English is
 > not evidence the layout is correct.** Truncation bugs hide behind single-word labels, and a
