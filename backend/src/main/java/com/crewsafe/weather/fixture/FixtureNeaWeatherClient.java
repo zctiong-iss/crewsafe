@@ -6,6 +6,7 @@ import com.crewsafe.weather.nea.NeaStation;
 import com.crewsafe.weather.nea.NeaStationReading;
 import com.crewsafe.weather.nea.NeaWeatherClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -33,6 +34,7 @@ import java.util.Map;
  */
 @Component
 @ConditionalOnProperty(prefix = "app.weather.data", name = "mode", havingValue = "fixture")
+@Slf4j
 public class FixtureNeaWeatherClient implements NeaWeatherClient {
 
     private final List<Map<NeaMetric, NeaObservation>> frames;
@@ -73,7 +75,14 @@ public class FixtureNeaWeatherClient implements NeaWeatherClient {
                                                              Resource resource) {
         try (InputStream input = resource.getInputStream()) {
             FixtureDocument document = objectMapper.readValue(input, FixtureDocument.class);
-            return validateAndMap(document);
+            List<Map<NeaMetric, NeaObservation>> loadedFrames = validateAndMap(document);
+
+            // capturedAt and description describe the replay scenario itself. Individual
+            // frame timestamps remain the observation times stored by weather ingestion.
+            log.info("Loaded weather fixture '{}' captured at {} with {} frames from {}",
+                    document.description(), document.capturedAt(), loadedFrames.size(),
+                    resource.getDescription());
+            return loadedFrames;
         } catch (IOException exception) {
             throw new IllegalStateException("Weather fixture could not be loaded", exception);
         }
@@ -81,8 +90,9 @@ public class FixtureNeaWeatherClient implements NeaWeatherClient {
 
     private List<Map<NeaMetric, NeaObservation>> validateAndMap(FixtureDocument document) {
         if (document == null || document.capturedAt() == null
+                || !StringUtils.hasText(document.description())
                 || document.frames() == null || document.frames().isEmpty()) {
-            throw invalid("fixture requires capturedAt and at least one frame");
+            throw invalid("fixture requires capturedAt, description, and at least one frame");
         }
 
         Map<String, NeaStation> stations = mapStations(document.stations());
