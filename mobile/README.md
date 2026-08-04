@@ -344,9 +344,10 @@ worker's face above the next worker's name.
 Not decoration — these are the operating conditions: a phone at arm's length in Singapore
 sun, held by someone who may not read English, possibly in gloves.
 
-- **Three languages** (English, 简体中文, हिन्दी), each listed in its own script. The picker
-  is reachable **from the sign-in screen**, not only from Settings — otherwise a shared
-  phone left in a language you cannot read is a trap with no way out.
+- **Four languages** (English, 简体中文, हिन्दी, Bahasa Melayu), each listed in its own script.
+  The picker is reachable **from the sign-in screen**, not only from Settings — otherwise a
+  shared phone left in a language you cannot read is a trap with no way out. Three more are
+  planned; see [SCRUM-205](#scrum-205--localisation) below.
 - **Text size** 0.85–1.5×, applied by `AppText` on top of device scaling. No raw `<Text>`
   exists anywhere in `src/`, so nothing opts out. Capped at 1.5 because fixed-height
   controls clip their own labels past that.
@@ -753,6 +754,96 @@ per-user change exists to close.
 attributing it to anyone. Nothing in persisted state can name the person it belonged to,
 precisely because `auth` is not persisted. Guessing would be wrong on a shared phone, so one
 person re-sets one switch once.
+
+---
+
+## SCRUM-205 — Localisation
+
+Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).
+Target is seven languages; **Malay has landed, three remain.**
+
+| Language | Code | Script | Status |
+|---|---|---|---|
+| English | `en` | Latin | Shipped — source of truth |
+| Simplified Chinese | `zh-Hans` | Han | Shipped |
+| Hindi | `hi` | Devanagari | Shipped |
+| **Malay** | `ms` | **Latin** | **Shipped — machine-drafted, awaiting native review** |
+| Tamil | `ta` | Tamil | Blocked on font work |
+| Bengali | `bn` | Bengali | Blocked on font work |
+| Burmese | `my` | Myanmar | Blocked on font work + Zawgyi decision |
+
+### Why Malay first
+
+It is the only one of the four that is Latin script, so it renders in Gelasio today with no
+font work at all. That makes it the vertical slice: it exercises `languagesArr`, the
+`AppLanguage` type, `resolveDeviceLanguage`, the i18n registration and both pickers — the
+Settings sheet and the sign-in screen — with the font problem held out. Anything that breaks
+in that path breaks for the other three too, and it is far cheaper to diagnose when tofu
+boxes are not also on screen.
+
+### The font blocker, restated
+
+Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek. **It has no glyphs for
+Tamil, Bengali or Myanmar.** Adding those three to `languagesArr` before the font layer
+exists would offer a worker a language that renders as empty boxes — worse than leaving it
+out, because an untranslated screen is at least readable by someone. The follow-up adds
+`@expo-google-fonts/noto-sans-tamil`, `-bengali` and `-myanmar` (all confirmed to exist on
+npm at 0.4.x), per-script family resolution in place of today's four Gelasio constants, and
+script-aware line heights — `lineHeightFor` in `AppText` is tuned for Latin metrics and will
+clip stacked diacritics.
+
+### Translation review status — read before shipping `ms`
+
+`ms.json` is **machine-drafted and has not been reviewed by a native speaker.** The file
+carries this warning in its own `_translationStatus` key, and `i18n.ts` repeats it at the
+registration site.
+
+These keys must be signed off by a native Bahasa Melayu speaker before the language is
+offered in production:
+
+- `lightning.*` — the stop-work and advisory banners
+- `actions.*` — every dispatched instruction
+- `guidance.*` — the heat plan (currently behind `features.heatGuidanceCard`)
+- `wbgt.superseded`, `freshness.staleWarning`, `freshness.delayedWarning`
+
+A mistranslated stop-work instruction is an incident, not a typo.
+
+Two judgement calls in the draft worth a reviewer's attention:
+
+- **`lightning.stopWorkTitle` → "BERHENTI KERJA".** Kept in caps to match the English, which
+  is the loudest string in the app.
+- **`inbox.acknowledgeButton` → "Akui terima"** rather than a bare "Akui". The worker is
+  confirming *receipt* of an instruction, not agreeing with it, and the distinction matters
+  on a screen whose whole purpose is proving the instruction arrived.
+
+### `id` (Indonesian) is deliberately not mapped to `ms`
+
+`resolveDeviceLanguage` does **not** route Indonesian device locales to Malay, despite the
+two being largely mutually intelligible in writing. They diverge in exactly the register
+this app occupies — safety and workplace vocabulary — and silently showing an Indonesian
+speaker Malay would be a guess made on their behalf about a stop-work instruction.
+Indonesian falls through to English, and the worker can pick Malay themselves if they prefer
+it. Same reasoning as the existing `zh-Hant` carve-out.
+
+### Locale parity check
+
+```bash
+npm run check:locales
+```
+
+Fails the build when any locale drifts from `en.json`. Three fault classes, all of them
+otherwise silent:
+
+1. **Missing key** — i18next falls back to English and renders it mid-screen. No error, no
+   warning, no crash. Invisible to `tsc` and to anyone reviewing a diff in a language they
+   do not read.
+2. **Extra key** — a stale key left behind by a removal, which is how a translator's work
+   quietly stops being rendered.
+3. **Placeholder drift** — a dropped `{{time}}` leaves a sentence with a hole in it; a
+   renamed one prints literal braces to the user.
+
+Keys beginning with `_` are metadata and are skipped. The script exits non-zero on failure,
+so it can be wired into CI beside `tsc --noEmit`.
 
 ---
 

@@ -1,0 +1,362 @@
+{
+  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.superseded, freshness.staleWarning — MUST be reviewed by a native Bahasa Melayu speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
+
+  "common": {
+    "appName": "CrewSafe",
+    "cancel": "Batal",
+    "confirm": "Sahkan",
+    "save": "Simpan",
+    "retry": "Cuba lagi",
+    "close": "Tutup",
+    "loading": "Memuatkan",
+    "back": "Kembali",
+    "none": "Tiada",
+    "optional": "Pilihan",
+    "requestReference": "Rujukan: {{requestId}}"
+  },
+
+  "errors": {
+    "unauthenticated": "Sesi anda telah tamat. Log masuk untuk meneruskan.",
+    "not-provisioned": "Log masuk anda berjaya, tetapi akaun ini belum disediakan untuk CrewSafe. Minta pentadbir tapak anda menambah anda.",
+    "forbidden": "Anda tiada akses kepada ini. Jika anda rasa sepatutnya ada, tanya pentadbir tapak anda.",
+    "not-found": "Rekod itu tidak wujud.",
+    "bad-request": "Permintaan itu tidak sah.",
+    "conflict": "Orang lain telah mengubahnya dahulu. Muat semula dan cuba lagi.",
+    "server": "Ada masalah di pihak kami. Cuba lagi sebentar.",
+    "network": "Tidak dapat menghubungi CrewSafe. Semak sambungan anda dan cuba lagi.",
+    "configMissing": "Aplikasi belum dikonfigurasikan. Tiada: {{keys}}",
+    "unknown": "Ada masalah berlaku. Cuba lagi."
+  },
+
+  "auth": {
+    "signInTitle": "Log masuk",
+    "signInSubtitle": "Keselamatan tekanan haba untuk kru luar",
+    "usernameLabel": "Nama pengguna",
+    "usernamePlaceholder": "Masukkan nama pengguna anda",
+    "passwordLabel": "Kata laluan",
+    "passwordPlaceholder": "Masukkan kata laluan anda",
+    "signInButton": "Log masuk",
+    "signUpButton": "Mohon akaun",
+    "signOutButton": "Log keluar",
+    "signingIn": "Sedang log masuk",
+    "pkceHint": "Anda akan dibawa ke halaman log masuk CrewSafe yang selamat dalam pelayar anda.",
+    "modeLabel": "Mod log masuk (pembangunan sahaja)",
+    "modeMock": "Pengguna demo",
+    "modeCognitoPassword": "Cognito (kata laluan)",
+    "modeCognitoPkce": "Cognito (UI dihoskan)",
+    "demoUserLabel": "Pilih pengguna demo",
+    "notProvisionedTitle": "Akaun belum disediakan",
+    "sessionExpired": "Sesi anda telah tamat.",
+    "validation": {
+      "usernameRequired": "Masukkan nama pengguna anda.",
+      "passwordRequired": "Masukkan kata laluan anda.",
+      "passwordTooShort": "Kata laluan anda sekurang-kurangnya {{min}} aksara."
+    },
+    "cognito": {
+      "invalidCredentials": "Nama pengguna atau kata laluan itu tidak betul.",
+      "newPasswordRequired": "Akaun ini masih menggunakan kata laluan sementara. Tetapkan kata laluan kekal dalam AWS Console sebelum log masuk di sini.",
+      "userDisabled": "Akaun ini telah dilumpuhkan.",
+      "tooManyAttempts": "Terlalu banyak percubaan. Tunggu sebentar dan cuba lagi.",
+      "pkceUnavailableInExpoGo": "Log masuk UI dihoskan memerlukan binaan pembangunan pada telefon, kerana Expo Go tidak dapat membuka pautan crewsafe://. Jalankan aplikasi dengan `npx expo start --web --port 5173` untuk menguji aliran ini, atau gunakan mod lain.",
+      "cancelled": "Log masuk telah dibatalkan."
+    }
+  },
+
+  "signUp": {
+    "title": "Mohon akaun",
+    "intro": "Akaun CrewSafe dibuka oleh pentadbir tapak anda. Isikan ini dan kami akan tunjukkan dengan tepat apa yang perlu dihantar kepada mereka.",
+    "fullNameLabel": "Nama penuh",
+    "fullNamePlaceholder": "Nama anda seperti dalam rekod tapak",
+    "usernameLabel": "Nama pengguna pilihan",
+    "usernamePlaceholder": "huruf kecil, tanpa ruang",
+    "emailLabel": "E-mel kerja",
+    "emailPlaceholder": "anda@contoh.com",
+    "siteLabel": "Di tapak mana anda bekerja?",
+    "roleNotice": "Hanya akaun Pekerja boleh dimohon di sini. Akaun Penyelia, Pengurus Keselamatan dan Pentadbir dibuka oleh pentadbir.",
+    "submitButton": "Sediakan permohonan",
+    "successTitle": "Permohonan sedia",
+    "successBody": "Hantar butiran ini kepada pentadbir tapak anda. Mereka akan membuka akaun anda dan anda akan menerima jemputan melalui e-mel.",
+    "copyButton": "Salin butiran",
+    "copiedButton": "Disalin",
+    "editButton": "Ubah butiran",
+    "backToSignIn": "Kembali ke log masuk",
+    "requestHeading": "Permohonan akaun CrewSafe",
+    "roleLine": "Peranan dimohon: Pekerja",
+    "validation": {
+      "fullNameRequired": "Masukkan nama penuh anda.",
+      "fullNameTooShort": "Masukkan sekurang-kurangnya {{min}} aksara.",
+      "fullNameTooLong": "Gunakan tidak lebih daripada {{max}} aksara.",
+      "usernameRequired": "Pilih satu nama pengguna.",
+      "usernameFormat": "Gunakan huruf kecil dan nombor sahaja, dipisahkan dengan . _ atau -",
+      "usernameTooLong": "Gunakan tidak lebih daripada {{max}} aksara.",
+      "emailRequired": "Masukkan e-mel kerja anda.",
+      "emailInvalid": "Itu tidak kelihatan seperti alamat e-mel.",
+      "emailTooLong": "Gunakan tidak lebih daripada {{max}} aksara.",
+      "singleLineOnly": "Buang pemisah baris dan aksara format khas.",
+      "siteRequired": "Pilih tapak anda."
+    }
+  },
+
+  "roles": {
+    "WORKER": "Pekerja",
+    "SUPERVISOR": "Penyelia Tapak",
+    "SAFETY_MANAGER": "Pengurus Keselamatan",
+    "ADMIN": "Pentadbir"
+  },
+
+  "tabs": {
+    "shift": "Syif saya",
+    "inbox": "Peti masuk",
+    "weather": "Cuaca",
+    "shifts": "Syif",
+    "profile": "Profil",
+    "settings": "Tetapan"
+  },
+
+  "settings": {
+    "title": "Tetapan",
+    "language": "Bahasa",
+    "changeLanguage": "Tukar bahasa",
+    "textSize": "Saiz teks",
+    "textSizeSmall": "Kecil",
+    "textSizeDefault": "Lalai",
+    "textSizeLarge": "Besar",
+    "textSizeExtraLarge": "Sangat besar",
+    "textSizePreview": "Cuaca panas hari ini, minum air dengan kerap.",
+    "highContrast": "Kontras tinggi",
+    "highContrastHint": "Warna lebih kuat dan garis lebih tebal, untuk membaca skrin di bawah cahaya matahari terus.",
+    "reduceMotion": "Kurangkan gerakan",
+    "reduceMotionHint": "Dihidupkan secara lalai. Menghentikan animasi ikon, kecuali amaran berhenti kerja. Sentiasa hidup jika peranti anda mengaktifkan Kurangkan Gerakan.",
+    "accessibility": "Kebolehcapaian",
+    "display": "Paparan",
+    "about": "Perihal",
+    "aboutVersion": "Versi {{version}}",
+    "aboutBody": "Keselamatan tekanan haba untuk kru luar di Singapura."
+  },
+
+  "profile": {
+    "title": "Profil",
+    "role": "Peranan",
+    "sites": "Tapak",
+    "username": "Nama pengguna",
+    "changePhoto": "Tukar gambar",
+    "addPhoto": "Tambah gambar",
+    "photoSheetTitle": "Gambar profil",
+    "takePhoto": "Ambil gambar",
+    "chooseFromLibrary": "Pilih daripada galeri",
+    "removePhoto": "Buang gambar",
+    "photoLocalOnly": "Gambar anda disimpan dalam telefon ini sahaja. Ia tidak dihantar ke CrewSafe dan penyelia anda tidak akan melihatnya.",
+    "permissionDeniedTitle": "Kebenaran diperlukan",
+    "cameraDeniedBody": "CrewSafe memerlukan akses kamera untuk mengambil gambar. Anda boleh menghidupkannya dalam tetapan peranti anda.",
+    "libraryDeniedBody": "CrewSafe memerlukan akses gambar untuk memilih satu gambar. Anda boleh menghidupkannya dalam tetapan peranti anda.",
+    "photoUpdatedToast": "Gambar dikemas kini",
+    "photoRemovedToast": "Gambar dibuang"
+  },
+
+  "shifts": {
+    "site": "Tapak",
+    "emptyTitle": "Tiada syif lagi",
+    "emptyBody": "Syif yang anda rancang untuk tapak ini akan muncul di sini.",
+    "noSitesTitle": "Tiada tapak diberikan",
+    "noSitesBody": "Anda belum ditugaskan ke mana-mana tapak. Minta pentadbir anda menambah anda.",
+    "createButton": "Rancang syif",
+    "assignmentCount_one": "{{count}} pekerja",
+    "assignmentCount_other": "{{count}} pekerja",
+    "unstaffed": "Tiada pekerja ditugaskan",
+    "window": "{{start}} hingga {{end}}",
+    "status": {
+      "PLANNED": "Dirancang",
+      "ACTIVE": "Aktif",
+      "CLOSED": "Ditutup"
+    },
+    "detailTitle": "Syif",
+    "assignments": "Kru",
+    "worker": "Pekerja",
+    "unknownWorker": "Pekerja tiada lagi di tapak ini",
+    "task": "Tugas",
+    "noTask": "Tiada tugas direkodkan",
+    "intensity": "Keamatan",
+    "acclimatisation": "Hari penyesuaian {{day}} daripada 7",
+    "deleteButton": "Padam syif ini",
+    "deleteTitle": "Padam syif ini?",
+    "deleteBody": "Ini membuang syif dan segala yang ditugaskan padanya. Ia tidak boleh dibatalkan.",
+    "deleteConfirm": "Padam",
+    "deleting": "Memadam",
+    "deletedToast": "Syif dipadam",
+    "deleteFailedTitle": "Syif tidak dipadam",
+
+    "form": {
+      "timesSection": "Bila",
+      "startsAt": "Bermula",
+      "endsAt": "Tamat",
+      "pickDateTime": "Pilih tarikh dan masa",
+      "crewSection": "Siapa yang bekerja",
+      "crewHint": "Pilih pekerja untuk syif ini. Anda juga boleh membuat syif sekarang dan menambah orang kemudian.",
+      "noWorkers": "Tapak ini belum mempunyai pekerja yang boleh ditugaskan.",
+      "assignmentsSection": "Tugas dan keamatan",
+      "taskLabel": "Tugas",
+      "taskPlaceholder": "Apa yang mereka akan lakukan",
+      "taskHint": "Pilihan. Sehingga {{max}} aksara.",
+      "intensityLabel": "Keamatan kerja",
+      "acclimatisationLabel": "Hari penyesuaian",
+      "acclimatisationPlaceholder": "1 hingga 7",
+      "acclimatisationHint": "Hanya untuk pekerja dalam tujuh hari pertama, atau yang kembali selepas lebih seminggu.",
+      "removeWorker": "Buang daripada syif",
+      "submit": "Buat syif",
+      "submitting": "Sedang membuat",
+      "createdToast": "Syif dibuat",
+      "unstaffedNotice": "Syif ini akan dibuat tanpa sesiapa ditugaskan. Anda boleh menugaskan pekerja kemudian."
+    },
+
+    "validation": {
+      "startRequired": "Pilih bila syif bermula.",
+      "endRequired": "Pilih bila syif tamat.",
+      "endNotAfterStart": "Masa tamat mesti selepas masa mula.",
+      "taskTooLong": "Pastikan tugas kurang daripada {{max}} aksara.",
+      "intensityRequired": "Pilih satu keamatan kerja.",
+      "acclimatisationRange": "Masukkan nombor bulat dari 1 hingga 7, atau biarkan kosong.",
+      "checkFields": "Beberapa butiran di atas perlu diperhatikan. Medan bergaris merah menunjukkan apa yang perlu dibetulkan."
+    }
+  },
+
+  "weather": {
+    "title": "Keadaan",
+    "site": "Tapak",
+    "noSitesTitle": "Tiada tapak diberikan",
+    "noSitesBody": "Anda belum ditugaskan ke mana-mana tapak. Minta pentadbir tapak anda menambah anda.",
+    "feelsLike": "Suhu glob bebuli basah",
+    "airTemp": "Suhu udara",
+    "humidity": "Kelembapan",
+    "wind": "Angin",
+    "rainfall": "Hujan",
+    "station": "Stesen {{id}}",
+    "observedAt": "Dicerap {{time}}",
+    "ingestedAt": "Diterima {{time}}",
+    "night": "Selepas gelap",
+    "condition": {
+      "FAIR": "Cerah",
+      "PARTLY_CLOUDY": "Berawan sebahagian",
+      "CLOUDY": "Berawan",
+      "WINDY": "Berangin",
+      "RAIN": "Hujan",
+      "THUNDERY_SHOWERS": "Hujan berguruh"
+    }
+  },
+
+  "inbox": {
+    "emptyTitle": "Tiada apa untuk diakui",
+    "emptyBody": "Tindakan yang diluluskan oleh penyelia anda akan muncul di sini.",
+    "pending": "Menunggu pengakuan anda",
+    "acknowledged": "Diakui pada {{time}}",
+    "dispatchedAt": "Dihantar {{time}}",
+    "acknowledgeButton": "Akui terima",
+    "acknowledging": "Menghantar",
+    "retryButton": "Cuba lagi",
+    "failed": "Pengakuan anda tidak dapat dihantar.",
+    "safeToRetry": "Selamat untuk tekan sekali lagi — ia tidak akan mengakui dua kali.",
+    "noInstruction": "Tiada butiran lanjut diberikan."
+  },
+
+  "lightning": {
+    "stopWorkTitle": "BERHENTI KERJA",
+    "stopWorkBody": "Kilat berhampiran tapak ini. Cari perlindungan yang sesuai dengan segera.",
+    "advisoryTitle": "Amaran kilat",
+    "advisoryBody": "Kilat dikesan berhampiran tapak ini. Bersedia untuk berhenti kerja.",
+    "clearTitle": "Tiada risiko kilat",
+    "clearBody": "Dinilai selamat pada {{time}}.",
+    "expiredTitle": "Amaran kilat telah tamat",
+    "expiredBody": "Amaran tamat pada {{time}}. Sambung kerja hanya apabila penyelia anda mengesahkan keadaan selamat.",
+    "validUntil": "Sah sehingga {{time}}",
+    "refreshesInMinutes": "Dikemas kini dalam {{minutes}} min",
+    "refreshesInSeconds": "Dikemas kini dalam {{seconds}} s",
+    "overrideNotice": "Pelan haba digantung selagi arahan berhenti kerja berkuat kuasa."
+  },
+
+  "wbgt": {
+    "title": "Keadaan haba",
+    "reading": "WBGT",
+    "noReading": "Tiada bacaan tersedia",
+    "superseded": "Digantikan oleh arahan berhenti kerja kilat",
+    "band": {
+      "BELOW_31": "Bawah 31°C",
+      "31_TO_BELOW_32": "31 hingga 32°C",
+      "32_TO_BELOW_33": "32 hingga 33°C",
+      "33_AND_ABOVE": "33°C dan ke atas"
+    }
+  },
+
+  "guidance": {
+    "title": "Apa yang anda mesti buat",
+    "advisoryTitle": "Turut disyorkan",
+    "suspended": "Digantung — arahan berhenti kerja kilat mengatasi pelan haba",
+    "rule": "Peraturan {{ref}}",
+    "policyVersion": "Polisi {{version}}",
+    "none": "Tiada tindakan haba diperlukan sekarang."
+  },
+
+  "actions": {
+    "HYDRATE_REGULARLY": "Minum air dengan kerap",
+    "HYDRATE_HOURLY": "Minum air sekurang-kurangnya sekali sejam",
+    "SHADE_RECOVERY": "Ambil rehat pemulihan di tempat teduh",
+    "RESCHEDULE_HEAVY_WORK": "Jadualkan semula kerja berat jika boleh",
+    "REST_10_MIN_HOURLY": "Rehat 10 minit tanpa henti, setiap jam",
+    "REST_15_MIN_HOURLY": "Rehat 15 minit tanpa henti, setiap jam",
+    "CLOSE_MONITORING": "Perhatikan diri anda dan kru anda dengan teliti untuk tanda penyakit haba",
+
+    "REST_10_MIN": "Rehat selama 10 minit",
+    "REST_15_MIN": "Rehat selama 15 minit",
+    "HYDRATE": "Minum air sekarang",
+    "STOP_WORK": "Berhenti kerja",
+    "SEEK_SHADE": "Pergi ke tempat teduh",
+    "RESUME_WORK": "Sambung kerja"
+  },
+
+  "shift": {
+    "title": "Syif anda",
+    "task": "Tugas",
+    "intensity": "Keamatan kerja",
+    "window": "{{start}} hingga {{end}}",
+    "acclimatisation": "Hari penyesuaian {{day}} daripada 7",
+    "noTask": "Tiada tugas direkodkan",
+    "noShiftTitle": "Tiada syif dijadualkan",
+    "noShiftBody": "Anda tiada syif semasa atau akan datang. Semak dengan penyelia anda."
+  },
+
+  "intensity": {
+    "LIGHT": "Ringan",
+    "MODERATE": "Sederhana",
+    "HEAVY": "Berat"
+  },
+
+  "freshness": {
+    "LIVE": "Langsung",
+    "DELAYED": "Lewat",
+    "STALE": "Lapuk",
+    "SIMULATED": "Simulasi",
+    "simulatedNotice": "Data simulasi. Bukan bacaan sebenar — belum ada titik akhir kilat atau keadaan tapak.",
+    "staleWarning": "Bacaan ini terlalu lama untuk dipercayai. Jangan anggap ia semasa — ikut prosedur tapak anda atau minta penyelia anda memberikan bacaan yang disahkan.",
+    "delayedWarning": "Bacaan ini tiba lebih lewat daripada dijangka. Keadaan mungkin telah berubah sejak ia diambil."
+  },
+
+  "dev": {
+    "scenarioLabel": "Senario kilat (pembangunan sahaja)",
+    "freshnessLabel": "Kesegaran data (pembangunan sahaja)",
+    "lostResponseLabel": "Simulasi respons hilang (pembangunan sahaja)",
+    "lostResponseHint": "Pelayan merekod pengakuan, kemudian jawapannya digugurkan. Cuba lagi dan kiraan di bawah mesti kekal pada 1.",
+    "serverAckCount": "Pengakuan di pihak pelayan untuk tindakan ini: {{total}}",
+    "resetInbox": "Set semula peti masuk",
+    "weatherLabel": "Senario cuaca (pembangunan sahaja)",
+    "weatherHint": "Menetapkan hujan, angin dan kelembapan yang mendasarinya — keadaan masih dikelaskan daripada nombor tersebut, bukan ditetapkan terus.",
+    "nightLabel": "Dicerap selepas gelap",
+    "forbiddenLabel": "Simulasi 403 merentas tapak (pembangunan sahaja)",
+    "forbiddenHint": "Kes 403 dalam cerita ini tidak dapat dicapai sebaliknya — pemilih hanya menawarkan tapak yang anda miliki. Anda sepatutnya kekal log masuk dan melihat penjelasan.",
+    "scenarioClear": "Selamat",
+    "scenarioAdvisory": "Amaran",
+    "scenarioStopWork": "Berhenti kerja"
+  },
+
+  "placeholder": {
+    "comingSoon": "Akan datang",
+    "screenPending": "Skrin ini seterusnya dalam susunan pembinaan."
+  }
+}

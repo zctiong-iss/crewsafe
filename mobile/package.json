@@ -64,6 +64,8 @@
     "//web:pkce": "Port 5173 is not cosmetic — it is the callback already registered on the Cognito web client, so AUTH_MODE=cognito-pkce works here with no infrastructure change.",
     "web:pkce": "expo start --web --port 5173",
     "typecheck": "tsc --noEmit",
+    "//check:locales": "Fails when a locale drifts from en.json. A missing key is silent — i18next falls back to English and renders it mid-screen on a safety surface. See scripts/check-locale-parity.mjs.",
+    "check:locales": "node scripts/check-locale-parity.mjs",
     "doctor": "expo-doctor"
   },
   "private": true
