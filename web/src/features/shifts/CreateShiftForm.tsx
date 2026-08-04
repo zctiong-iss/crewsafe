@@ -13,6 +13,8 @@ import {
   type ShiftCreateRequest,
 } from "@/api/shifts";
 import { validateShift, type FieldErrors } from "./validateShift";
+import { WorkIntensitySegmented } from "./WorkIntensitySegmented";
+import "./CreateShiftForm.css";
 
 interface AssignmentRow {
   workerId: string;
@@ -119,55 +121,59 @@ export function CreateShiftForm({ siteId }: { siteId: string }) {
   return (
     <AppShell title="Create shift">
       <form className="shift-form" onSubmit={handleSubmit}>
-        <label htmlFor="startsAt">Starts at</label>
-        <input id="startsAt" type="datetime-local" required value={startsAt}
-          onChange={(e) => setStartsAt(e.target.value)} />
+        <section className="shift-form__section">
+        <h2 className="shift-form__section-title">When</h2>
+          <label htmlFor="startsAt">Starts at</label>
+          <input id="startsAt" type="datetime-local" required value={startsAt}
+            onChange={(e) => setStartsAt(e.target.value)} />
 
-        <label htmlFor="endsAt">Ends at</label>
-        <input id="endsAt" type="datetime-local" required value={endsAt}
-          onChange={(e) => setEndsAt(e.target.value)} />
-        {errors.endsAt && <p className="shift-form__error" role="alert">{errors.endsAt}</p>}
+          <label htmlFor="endsAt">Ends at</label>
+          <input id="endsAt" type="datetime-local" required value={endsAt}
+            onChange={(e) => setEndsAt(e.target.value)} />
+          {errors.endsAt && <p className="shift-form__error" role="alert">{errors.endsAt}</p>}
+        </section>
 
-        {rows.map((row, i) => (
-          <fieldset key={i} className="shift-form__row">
-            <legend>Worker {i + 1}</legend>
+        <section className="shift-form__section">
+        <h2 className="shift-form__section-title">Crew</h2>
+          {rows.map((row, i) => (
+            <fieldset key={i} className="shift-form__row card">
+              <legend>Worker {i + 1}</legend>
 
-            <label htmlFor={`worker-${i}`}>Worker</label>
-            <select id={`worker-${i}`} required value={row.workerId}
-              onChange={(e) => updateRow(i, { workerId: e.target.value })}>
-              <option value="">Select a worker</option>
-              {workersLoad.workers.map((w) => (
-                <option key={w.id} value={w.id}>{w.displayName}</option>
-              ))}
-            </select>
+              <label htmlFor={`worker-${i}`}>Worker</label>
+              <select id={`worker-${i}`} required value={row.workerId}
+                onChange={(e) => updateRow(i, { workerId: e.target.value })}>
+                <option value="">Select a worker</option>
+                {workersLoad.workers.map((w) => (
+                  <option key={w.id} value={w.id}>{w.displayName}</option>
+                ))}
+              </select>
 
-            <label htmlFor={`intensity-${i}`}>Intensity</label>
-            <select id={`intensity-${i}`} required value={row.intensity}
-              onChange={(e) => updateRow(i, { intensity: e.target.value as Intensity | "" })}>
-              <option value="">Select intensity</option>
-              <option value="LIGHT">Light</option>
-              <option value="MODERATE">Moderate</option>
-              <option value="HEAVY">Heavy</option>
-            </select>
+              <WorkIntensitySegmented
+                name={`intensity-${i}`}
+                value={row.intensity}
+                onChange={(next) => updateRow(i, { intensity: next })}
+              />
 
-            <label htmlFor={`task-${i}`}>Task (optional)</label>
-            <input id={`task-${i}`} type="text" maxLength={120} value={row.taskName}
-              onChange={(e) => updateRow(i, { taskName: e.target.value })} />
+              <label htmlFor={`task-${i}`}>Task (optional)</label>
+              <input id={`task-${i}`} type="text" maxLength={120} value={row.taskName}
+                onChange={(e) => updateRow(i, { taskName: e.target.value })} />
 
-            <label htmlFor={`accl-${i}`}>Acclimatisation day (optional)</label>
-            <input id={`accl-${i}`} type="number" min={1} max={7} value={row.acclimatisationDay}
-              onChange={(e) => updateRow(i, { acclimatisationDay: e.target.value })} />
-            {errors[`assignments.${i}.acclimatisationDay`] && (
-              <p className="shift-form__error" role="alert">
-                {errors[`assignments.${i}.acclimatisationDay`]}
-              </p>
-            )}
+              <label htmlFor={`accl-${i}`}>Acclimatisation day (optional)</label>
+              <input id={`accl-${i}`} type="number" min={1} max={7} value={row.acclimatisationDay}
+                onChange={(e) => updateRow(i, { acclimatisationDay: e.target.value })} />
+              {errors[`assignments.${i}.acclimatisationDay`] && (
+                <p className="shift-form__error" role="alert">
+                  {errors[`assignments.${i}.acclimatisationDay`]}
+                </p>
+              )}
 
-            <button type="button" onClick={() => removeRow(i)}>Remove worker</button>
-          </fieldset>
-        ))}
+              <button type="button" onClick={() => removeRow(i)}>Remove worker</button>
+            </fieldset>
+          ))}
 
-        <button type="button" onClick={addRow}>Add worker</button>
+          <button type="button" onClick={addRow}>Add worker</button>
+        </section>
+
 
         {rows.length === 0 && (
           <p className="shift-form__note">

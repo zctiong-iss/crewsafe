@@ -31,7 +31,7 @@ async function addOneAssignment(user: ReturnType<typeof userEvent.setup>) {
   setDateTime("Ends at", "2026-08-10T16:00");
   await user.click(screen.getByRole("button", { name: "Add worker" }));
   await user.selectOptions(screen.getByLabelText("Worker"), WORKER_ONE);
-  await user.selectOptions(screen.getByLabelText("Intensity"), "MODERATE");
+  await user.click(screen.getByRole("radio", { name: "Moderate" }));
 }
 
 // A POST spy that records calls — lets AC-2 / AC-3 assert "no request was sent".

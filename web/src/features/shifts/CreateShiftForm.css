@@ -1,0 +1,90 @@
+/** @author Tang Chee Seng (with assistance from Claude) */
+
+/* Create-shift form layout. Structure/logic live in CreateShiftForm.tsx. */
+.shift-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 640px;
+}
+
+.shift-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.shift-form__section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  margin: 0 0 var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.shift-form label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+.shift-form input,
+.shift-form select {
+  font: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.shift-form input:focus-visible,
+.shift-form select:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 1px;
+}
+
+/* Each worker row carries the .card utility (global.css) — add only layout + padding here. */
+.shift-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.shift-form__row legend {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  padding: 0 var(--space-2);
+}
+
+.shift-form__error {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+.shift-form__note {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.shift-form button {
+  align-self: flex-start;
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.shift-form button[type="submit"] {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
+}
+.shift-form button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
