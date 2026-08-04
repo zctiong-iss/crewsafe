@@ -23,7 +23,7 @@ Complete one column per stage with links and non-sensitive outcomes.
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
 | Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | Cutover branch created from applied preparation revision | Blocked |
-| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / passing run pending | Blocked |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / [passing run 30887107913, compute job 91920846373](https://github.com/zctiong-iss/crewsafe/actions/runs/30887107913/job/91920846373) | Blocked |
 | Plan run ID and attempt | `30885366655`, attempt 1 | Blocked | Blocked |
 | Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked | Blocked |
 | Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked | Blocked |
@@ -120,6 +120,12 @@ The implementation changes only the existing distribution's `backend` origin dom
 `custom_origin_config` on port 80. The surviving `aws_cloudfront_vpc_origin.rebuilt`, internal ALB,
 legacy listener/target group, public path, both ECS registrations, cache/origin-request policies,
 viewer certificate, allowed methods, and `staging_base_url` output remain unchanged for rollback.
+
+Implementation commit `d3f3a7b` turned the expected-red checkpoint green. Terraform Validation
+run `30887107913` passed formatting, validation, mocked-provider tests, the 23-check cutover source
+guard, component/workflow guards, lockfile checks, Gitleaks, and infrastructure scanning. The
+`compute-shared-dev` job was `91920846373`; every job in the workflow passed. No Terraform command
+ran locally.
 
 Wait for CloudFront `Deployed`, then run two passes at least five minutes apart:
 
