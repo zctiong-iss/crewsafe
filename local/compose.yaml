@@ -59,6 +59,13 @@ services:
       APP_COGNITO_JWK_SET_URI: ${APP_COGNITO_JWK_SET_URI:?APP_COGNITO_JWK_SET_URI is required}
       APP_COGNITO_CLIENT_IDS: ${APP_COGNITO_CLIENT_IDS:?APP_COGNITO_CLIENT_IDS is required}
       APP_COGNITO_DEMO_USERS_JSON: ${APP_COGNITO_DEMO_USERS_JSON:?APP_COGNITO_DEMO_USERS_JSON is required}
+      # Weather collection is intentionally opt-in. Forwarding these switches lets a
+      # developer choose live collection or deterministic fixture replay without editing
+      # application.yml or the Compose file.
+      WEATHER_DATA_MODE: ${WEATHER_DATA_MODE:-live}
+      WEATHER_INGESTION_ENABLED: ${WEATHER_INGESTION_ENABLED:-false}
+      WEATHER_FIXTURE_LOOP: ${WEATHER_FIXTURE_LOOP:-false}
+      NEA_API_KEY: ${NEA_API_KEY:-}
     volumes:
       - ../:/workspace
       - crewsafe-m2-cache:/root/.m2

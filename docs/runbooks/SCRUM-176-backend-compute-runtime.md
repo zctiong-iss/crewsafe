@@ -30,7 +30,7 @@ client ──443/TLS──> CloudFront distribution
                     RDS PostgreSQL (SCRUM-175)
 ```
 
-Fourteen resources. Everything the application needs is resolved **by reference** at task start
+Fifteen resources. Everything the application needs is resolved **by reference** at task start
 using the two roles `secrets-shared-dev` published — nothing is baked into the image, and no
 credential is in Terraform source, state, a plan artifact, or a log.
 
@@ -114,9 +114,10 @@ mechanism differs.
 > first it adds `CrewSafeEcrTerraformPlan`/`Apply` to the same two roles.
 
 **Replace `<ACCOUNT_ID>` in the apply policy with the target account's twelve-digit id before
-attaching. It appears eight times**, across `ManageApplicationLogGroup` (twice),
-`ManageCrossOriginParameter`, `PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the
-three service-linked-role statements. The plan policy contains no account id.
+attaching. It appears nine times**, across `ManageApplicationLogGroup` (twice),
+`ManageTheTwoParametersThisComponentCreates` (twice — one per parameter),
+`PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the three service-linked-role
+statements. The plan policy contains no account id.
 
 > **Inline policy budget — this component is the one that broke it.** A role's inline policies share
 > a **10,240 non-whitespace character** limit, counted across *all* of them. Attaching this
@@ -176,8 +177,10 @@ inline policy** here — it will be rejected on the character limit.
    log-group ARN forms, not `*`.
 5. Confirm `ListLogGroupsApply` holds **exactly one action**, `logs:DescribeLogGroups`, on `*`.
    **Do not "tighten" this to an ARN** — see the first warning below.
-6. Confirm `ManageCrossOriginParameter` is scoped to the single parameter ARN, not the prefix and
-   not `*`. This component creates exactly one configuration entry.
+6. Confirm `ManageTheTwoParametersThisComponentCreates` names **both** exact parameter ARNs —
+   `cors/allowed-origins` and `cognito/demo-users-json` — and neither the prefix nor `*`. It was a
+   single ARN until 2026-08-03; the second entry supplies the synthetic-user mappings the staging
+   profile requires (see §10).
 7. Confirm all **three** service-linked-role statements are present, each scoped to its exact
    `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
    warning below.
@@ -393,8 +396,8 @@ each of these by reading the plan output:
 | 8 | Image reference is `<repo>:<40-hex>`, not `latest` | |
 | 9 | Exactly **one** new ingress rule targets the application security group | |
 | 10 | Security group descriptions contain **no apostrophe** | EC2 rejects it at create time, not at plan — **this is what broke SCRUM-173's first apply** |
-| 11 | Distribution minimum protocol is `TLSv1.2_2021`, cache policy is `CachingDisabled` | Without the explicit minimum the default certificate implies TLS 1.0 |
-| 12 | Resource count is at or under 22 | |
+| 11 | Distribution minimum protocol is `TLSv1` — **yes, TLSv1** — and cache policy is `CachingDisabled` | Corrected 2026-08-04. The API ignores this field with the default certificate and pins it to `TLSv1`; the old check demanded `TLSv1.2_2021`, which was unsatisfiable and produced a diff that never converged. See §10 |
+| 12 | Resource count is at or under 23 | Was 22 before the synthetic-user mappings parameter was added |
 
 ---
 
@@ -432,7 +435,15 @@ aws logs tail /crewsafe/shared-dev/backend --since 15m \
 Take the elapsed time from the first Flyway line to `Started CrewSafeApplication`, add the JVM cold
 start, set the variable's default to roughly twice the total, and record the measurement here.
 
-> **Measured cold start:** *to be filled in on the first apply*
+> **Measured cold start: 62.4 seconds.** First successful start, 2026-08-03 —
+> `Started CrewSafeApplication in 62.411 seconds (process running for 66.496)`. Flyway validated five
+> migrations against schema v5 in under a second, so the time is JVM start plus Spring context
+> initialisation, not migrations.
+>
+> **The 180-second default needs no change.** It is roughly 3x the measured start, which is the
+> margin this setting wants — a cold image pull, slower task placement, or one added migration all
+> fit inside it. Re-measure if the application gains eager initialisation or the image grows
+> substantially.
 
 ---
 
@@ -485,26 +496,143 @@ Everything lands in `/crewsafe/shared-dev/backend`. There is no other diagnosis 
 
 ---
 
-## 10. Known interim posture — FR-032 is discharged by a follow-up, not here
+## 10. Scanner exemptions and the `cluster_arn` output
 
-SCRUM-174 deferred pinning the execution and task roles to a specific cluster until a cluster
-existed. It now exists — but the pinning **cannot be applied from this component**: a role's
-`assume_role_policy` is an attribute of a resource `secrets-shared-dev` owns, not a separately
-attachable one. (SCRUM-175 could add a pinned credential grant from outside only because
-`aws_iam_role_policy` *is* separate.)
+### FR-032's cluster pinning was not built, because it is not possible
 
-Resolution, decided at the plan review: this component publishes **`cluster_arn`** as an output, and
-**[SCRUM-191](https://u-team-h6ii4x03.atlassian.net/browse/SCRUM-191)** applies the condition to
-`secrets-shared-dev` referencing it. Raised 2026-08-02, blocked by SCRUM-176, related to SCRUM-174.
+This section previously warned that the execution and task roles were assumable account-wide
+pending SCRUM-191, and that `cluster_arn` was published so SCRUM-191 could pin them to this
+cluster. **SCRUM-191 established that AWS does not support pinning an ECS trust policy to a
+cluster**, quoting the
+[ECS task IAM role documentation](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html):
 
-> **Until SCRUM-191 lands**: the two roles are assumable by the ECS tasks service principal
-> **account-wide**, not only by tasks in this cluster. The exposure is bounded today — the account
-> holds exactly one cluster and Terraform is CI-only — and it grows the moment a second cluster
-> exists.
+> Using the `aws:SourceArn` condition key to specify a specific cluster is not currently supported,
+> you should use the wildcard to specify all clusters.
 
-Do not delete the `cluster_arn` output because it looks unused. Its only consumer is SCRUM-191.
+SCRUM-191 instead applied the documented account-and-region conditions to both roles, closing a
+cross-account confused deputy. The same-account cross-cluster exposure is **still open and
+accepted** — see section 12 of the
+[SCRUM-174 runbook](./SCRUM-174-secrets-and-iam.md) for what that means and what it obliges you to
+do if you create a second cluster.
 
-When SCRUM-191 lands, delete this section.
+**The `cluster_arn` output therefore has no consumer.** It is retained, and its description in
+`infra/terraform/compute/outputs.tf` says so. Nothing depends on it; removing it would be a change
+to this component's published contract and is a decision for whoever owns this component, not an
+obvious cleanup.
+
+### The VPC origin was rebuilt, and how a 504 with nothing misconfigured was diagnosed
+
+The first apply to create the whole component left a VPC origin that reported **Deployed** and
+routed **nothing**. Every request to the public URL returned `504 Gateway Timeout` after almost
+exactly 30 seconds, while the load balancer's `RequestCount` sat at `0.0` for a full day.
+
+**The 30 seconds was the first real clue.** The distribution's origin carried
+`ConnectionAttempts: 3` and `ConnectionTimeout: 10` — 3 × 10 = 30s, matching the measured 30.079s.
+That is a *connection* failure, three times over. Not a slow application, not a 5xx relayed from the
+load balancer.
+
+**`RequestCount: 0` was the second.** Health checks are deliberately excluded from that metric, so a
+healthy target and a zero request count are consistent — and together they prove the load balancer
+is working internally while nothing external reaches it. Do not let a healthy target persuade you
+the origin is fine; it says nothing about ingress.
+
+Everything configurable was then verified correct, and none of it was the cause:
+
+| Checked | Result |
+| --- | --- |
+| Listener | `:80` HTTP, `forward`, correct target group |
+| Target | healthy |
+| Load balancer security group | ingress `tcp 80` from the VPC CIDR — covers both CloudFront interfaces |
+| CloudFront's own security group | all egress |
+| Network ACLs | none; the VPC uses the default allow-all |
+| VPC origin | `Deployed`, correct load balancer ARN, `HTTPPort 80`, `http-only` |
+| Distribution origin | correct load balancer DNS name, correct VPC origin id |
+| **VPC Reachability Analyzer**, CloudFront interface → load balancer interface, tcp/80 | **`reachable: true`** |
+
+That last line is what turned elimination into proof, and it is the check worth reaching for early
+next time. It analyses the configured path and, when a path fails, names the blocking component. It
+costs about $0.10 and creates two throwaway objects outside Terraform — delete them with
+`aws ec2 delete-network-insights-path`, which removes its analyses too.
+
+> **When every layer is correct and nothing arrives, suspect the association, not the settings.** The
+> VPC origin was created in the wake of an apply that died *inside* `CreateVpcOrigin` — see round 2 in
+> §3.3. A half-formed association presents exactly this way, and no amount of reading configuration
+> will show it.
+
+**Renaming was tried first and does not work.** Plan run
+[30874184699](https://github.com/zctiong-iss/crewsafe/actions/runs/30874184699) reported *will be
+updated in-place*, `0 to add, 2 to change, 0 to destroy` — `name` is not a force-new attribute, so a
+rename relabels the same broken origin. `-replace` is unreachable because the shared workflows accept
+no per-dispatch arguments.
+
+**The rebuild is therefore two resources across two applies:**
+
+| Apply | Change | Expected plan |
+| --- | --- | --- |
+| 1 | Add `aws_cloudfront_vpc_origin.rebuilt`, repoint the distribution at it | `1 to add, 1 to change, 0 to destroy` |
+| 2 | Delete the superseded `aws_cloudfront_vpc_origin.backend` block | `0 to add, 0 to change, 1 to destroy` |
+
+Doing it in one step is what fails: CloudFront refuses to delete a VPC origin a distribution still
+references, so a combined plan strands the distribution that holds the stable public URL. Verify the
+public URL answers after apply 1, before running apply 2.
+
+> **Read that plan before applying it.** It must say the VPC origin **must be replaced**. If it says
+> *will be updated in-place*, the name is not a force-new attribute, the change rebuilds nothing, and
+> the right move is a second resource repointed in one apply and the first removed in another. Do
+> **not** apply a destroy-first replacement: CloudFront will not delete a VPC origin a distribution
+> still references, so it fails partway and strands the distribution that holds the stable URL.
+
+### The synthetic-user mappings parameter, and why this component creates it
+
+`/crewsafe/shared-dev/cognito/demo-users-json`, seeded with `[]`.
+
+The first task to start cleanly got all the way to `Started CrewSafeApplication in 62.411 seconds`
+and then died:
+
+```text
+IllegalArgumentException: Mapping JSON is malformed.
+Caused by: IllegalArgumentException: argument "content" is null
+```
+
+`DemoDataSeeder` is `@Profile({"local","staging"})` and this deployment runs the **staging** profile,
+so it executes. It reads `app.cognito.demo-users-json`, which carries **no** `@NotBlank` on
+`CognitoProperties` — reading as optional — but a null value throws rather than seeding nothing.
+
+Three things about this are worth knowing before touching it:
+
+**Only one of the four `APP_COGNITO_*` values was missing, not all four.** `ISSUER_URI`,
+`JWK_SET_URI` and `CLIENT_IDS` were already wired as parameter references from the start, sourced
+from what `secrets-shared-dev` publishes out of the cognito component's state. They resolved
+correctly, which is why their `@NotBlank` constraints never fired. The failure was confined to the
+one property with no constraint.
+
+**The failure lands 60 seconds in, after the port is bound.** Flyway had already validated, Tomcat
+had already started, and the log reads like an application defect rather than absent configuration.
+Anything that reaches `Started` and then throws is worth checking against the parameter list first.
+
+**This component creates the parameter rather than referencing one the secrets component owns.** That
+is the FR-033 rule applied deliberately: a `secrets` reference to a parameter that does not exist
+fails the *container start* outright — the same reason `NEA_API_KEY` is still absent from the task
+definition. Wiring a reference to a not-yet-created parameter would have replaced a 60-second failure
+with a task that never starts at all. Creating it here makes the parameter and its consumer arrive in
+the same apply, with no window between them. It sits under the prefix `secrets-shared-dev` publishes,
+so the execution role's **prefix-scoped** read grant covers it with no change to that component.
+
+> **Terraform seeds the value once and then stops tracking it** — `ignore_changes = [value]`. The real
+> mappings belong to whoever administers the synthetic users; without this, an apply would silently
+> revert staging's seeded users to `[]`, a data change presenting as an empty diff.
+
+`[]` means "no users to reconcile" and is the tested no-op — `DemoDataSeederMappingTest` asserts it
+parses to empty. This component cannot know the real mappings: they derive from the shared Cognito
+configuration, which reaches Terraform through no channel, since the plan and apply workflows pass
+four `TF_VAR_*` values and none carries it.
+
+> **A backend fix is still worth making, and it is not in this component.** `demoUsersJson` has no
+> constraint, which reads as optional, yet a null throws. Any environment that forgets the property
+> loses a minute of startup to an error that names Jackson rather than the missing configuration.
+> Treating null or blank as "nothing to seed" would make the contract match the annotation. Raise it
+> against whoever owns `DemoDataSeeder` — the parameter above is the deployment-side fix, not a
+> reason to leave the landmine.
 
 ### The container root filesystem is writable, and on Fargate that is forced
 
@@ -542,6 +670,44 @@ running as root against a read-only mount it can still subvert through the writa
 
 If the hardening has to come back, it needs the EBS volume or the init container, each with its own
 decision and its own Jira issue. It is not a tidy-up.
+
+### This edge accepts TLS 1.0, and no automated check will tell you
+
+`minimum_protocol_version = "TLSv1"`. That is not a choice — it is what the provider-issued
+certificate forces — and the component previously claimed otherwise.
+
+The original code set `"TLSv1.2_2021"` with a comment saying the value *"MUST be set explicitly"* or
+the distribution would accept TLS 1.0. **Setting it does nothing.** With
+`cloudfront_default_certificate = true`, the CloudFront API ignores the field and pins the security
+policy to `TLSv1`. The field is only honoured when a **custom** certificate is used. Confirmed by
+plan run [30874184699](https://github.com/zctiong-iss/crewsafe/actions/runs/30874184699), which
+showed `minimum_protocol_version = "TLSv1" -> "TLSv1.2_2021"` on a distribution that had already been
+applied repeatedly.
+
+Three consequences, and the third is the one that matters most:
+
+1. **A diff that never converged.** Every plan for this component carried a phantom change to the
+   distribution. That is precisely the noise that makes a mandatory twelve-item plan review stop
+   being read carefully, on the component where plan review is the main safety gate.
+2. **A test that asserted an aspiration.** The `public_edge` run block required `"TLSv1.2_2021"` and
+   passed — against the *configuration*, while the *deployed* distribution accepted TLS 1.0. It now
+   asserts `"TLSv1"`: a weaker guarantee, stated honestly, rather than a stronger one that was never
+   true.
+3. **No scanner catches it.** Trivy reports nothing about TLS at any severity — `CRITICAL`, `HIGH`,
+   `MEDIUM`, or `LOW` — with `TLSv1` declared. Verify for yourself:
+   `trivy config --severity CRITICAL,HIGH,MEDIUM,LOW infra/terraform/compute`. The only findings are
+   `AWS-0010` (no distribution logging, MEDIUM), `AWS-0017` and `AWS-0034` (both LOW). So this posture
+   is invisible to every automated gate in the pipeline and survives only as long as this section
+   does.
+
+> **Raising the floor is its own issue, not a one-line change.** It needs a domain the project
+> controls, an ACM certificate **in us-east-1** (CloudFront accepts certificates from no other
+> region), DNS records, and `cloudfront_default_certificate = false`. It is a direct consequence of
+> choosing the provider-issued `*.cloudfront.net` hostname during clarification, and that consequence
+> was not traced at the time.
+
+The two assertions in `public_edge` — the `TLSv1` floor and `cloudfront_default_certificate == true` —
+are deliberately adjacent. They are one decision, and they change together or not at all.
 
 ### Two accepted Trivy exemptions
 

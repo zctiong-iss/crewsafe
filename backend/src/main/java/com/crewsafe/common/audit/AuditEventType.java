@@ -48,6 +48,15 @@ public final class AuditEventType {
     /** A worker was taken off a shift (SCRUM-159/160-fix). */
     public static final String SHIFT_ASSIGNMENT_REMOVED = "SHIFT_ASSIGNMENT_REMOVED";
 
+    /** A supervisor sent an approved safety action to a worker (SCRUM-185). */
+    public static final String ACTION_DISPATCHED = "ACTION_DISPATCHED";
+
+    /** A worker acknowledged a dispatched safety action (SCRUM-185). */
+    public static final String ACTION_ACKNOWLEDGED = "ACTION_ACKNOWLEDGED";
+
+    /** A worker completed a dispatched safety action (SCRUM-185). */
+    public static final String ACTION_COMPLETED = "ACTION_COMPLETED";
+
     private AuditEventType() {
     }
 }

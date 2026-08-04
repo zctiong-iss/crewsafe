@@ -21,13 +21,14 @@
  * because a worker learns to read the tempo before they read the words. `pop` deliberately
  * does not loop — a completed thing has no reason to keep asking for attention.
  *
- * All of it stops when `useReduceMotion` is true.
+ * All of it stops when `useReduceMotion` is true — except where `essential` says otherwise.
+ * See that prop.
  */
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Platform } from "react-native";
 import type { FC } from "react";
 import { Ionicons } from "@expo/vector-icons";
-import { useReduceMotion } from "@/hooks/useReduceMotion";
+import { useReduceMotion, useSystemReduceMotion } from "@/hooks/useReduceMotion";
 
 export type IconMotion =
   /** Fast, insistent scale pulse. Stop-work and failures. */
@@ -56,6 +57,21 @@ interface AnimatedIconProps {
   color: string;
   motion?: IconMotion;
   style?: object;
+  /**
+   * Marks this motion as carrying safety meaning rather than polish, exempting it from the
+   * *in-app* Reduce Motion preference only. The OS setting still stops it.
+   *
+   * Needed because SCRUM-199 makes that preference default to on: without an exemption the
+   * stop-work banner would lose its pulse for every worker who has never opened Settings,
+   * which is a safety cue removed by a default nobody chose. The device setting is a
+   * different thing entirely — it was chosen, by someone who has a reason — and stays
+   * absolute.
+   *
+   * Deliberately rare. Reach for it only where the motion is the warning, not decoration
+   * on one; an `essential` flag on a third icon is a sign the exemption has become a
+   * loophole.
+   */
+  essential?: boolean;
 }
 
 /*
@@ -64,8 +80,22 @@ interface AnimatedIconProps {
  */
 const NATIVE_DRIVER = Platform.OS !== "web";
 
-const AnimatedIcon: FC<AnimatedIconProps> = ({ name, size, color, motion = "none", style }) => {
-  const reduceMotion = useReduceMotion();
+const AnimatedIcon: FC<AnimatedIconProps> = ({
+  name,
+  size,
+  color,
+  motion = "none",
+  style,
+  essential = false,
+}) => {
+  /*
+   * Both are called unconditionally — hooks cannot be branched on a prop — and the cheaper
+   * one is discarded. `useReduceMotion` composes `useSystemReduceMotion`, so this is one
+   * extra store read, not a second accessibility subscription.
+   */
+  const combined = useReduceMotion();
+  const systemOnly = useSystemReduceMotion();
+  const reduceMotion = essential ? systemOnly : combined;
 
   // Separate values so motions never fight over one channel. `spin` is 0..1 and is
   // interpolated to degrees — Animated cannot tween a string.

@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Proves the audit trail remains append-only outside normal application code paths. */
@@ -78,5 +79,24 @@ class AuditEventAppendOnlyTest extends AbstractIntegrationTest {
         assertThat(Arrays.stream(AuditEventRepository.class.getMethods())
                 .map(Method::getName))
                 .noneMatch(name -> name.startsWith("delete"));
+    }
+
+    @Test
+    void createsAUsefulCorrelationIdOutsideAnHttpRequest() {
+        String suffix = UUID.randomUUID().toString();
+        AppUser actor = users.save(new AppUser(
+                "background-audit-" + suffix, suffix, "Background Audit User", Role.ADMIN));
+        String eventType = "BACKGROUND_AUDIT_TEST";
+
+        MDC.remove("requestId");
+        audit.record(actor.getId(), eventType, "USER", actor.getId(), "background event");
+
+        AuditEvent stored = events.findByEventTypeOrderByOccurredAtDesc(eventType).stream()
+                .filter(event -> event.getActorId().equals(actor.getId()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThatCode(() -> UUID.fromString(stored.getCorrelationId()))
+                .doesNotThrowAnyException();
     }
 }

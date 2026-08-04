@@ -283,6 +283,103 @@ themselves in a pending-deletion state — recoverable, but only within the 7-da
 - **One statement uses `Resource: "*"`**: `ecr:GetAuthorizationToken`, which the ECR API accepts
   no resource scope for. AWS's own `AmazonECSTaskExecutionRolePolicy` is written the same way.
   It is held to one action in one statement, and a test asserts all three of those facts.
-- **The role trust policies carry no `aws:SourceArn` condition.** Pinning the trust to a specific
-  ECS cluster is the right hardening, but that cluster does not exist yet. The compute component
-  should add it.
+- **The role trust policies carry `aws:SourceArn` and `aws:SourceAccount` conditions** (SCRUM-191).
+  See section 12 for what they close, what they do not, and why they are not cluster-scoped.
+
+## 12. Trust policy source conditions (SCRUM-191)
+
+Both `crewsafe-shared-dev-task-execution` and `crewsafe-shared-dev-task` carry this condition on
+their trust policy:
+
+```json
+"Condition": {
+  "ArnLike":      { "aws:SourceArn": "arn:aws:ecs:ap-southeast-1:<account>:*" },
+  "StringEquals": { "aws:SourceAccount": "<account>" }
+}
+```
+
+### What was originally planned, and why it was not built
+
+SCRUM-174 deferred this hardening with a comment saying a "production-grade hardening would add an
+`aws:SourceArn` condition pinning this to a specific ECS cluster", once a cluster existed.
+SCRUM-176 then built the cluster and published `cluster_arn` specifically so the follow-up could
+reference it, and its plan review approved that design.
+
+**The pin is not possible.** AWS documents it in one sentence, quoted verbatim from the
+[ECS task IAM role documentation](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html):
+
+> Using the `aws:SourceArn` condition key to specify a specific cluster is not currently supported,
+> you should use the wildcard to specify all clusters.
+
+So the trailing `:*` is the documented form, not a placeholder. A value naming a cluster would not
+fail at apply — IAM accepts any syntactically valid trust policy — it would simply never match,
+denying every assumption and stopping tasks from starting. `compute-shared-dev`'s `cluster_arn`
+output consequently has no consumer; it is retained, and its description says so.
+
+### What this closes, and what it does not
+
+| Threat | Status |
+| --- | --- |
+| Another AWS account's ECS service principal is induced to assume these roles | **Closed.** Both keys are populated only when a service acts on behalf of a resource owner, which is the confused-deputy shape |
+| A task in a **second cluster in this account** assumes these roles | **Open, and accepted.** No trust policy can prevent it |
+| What the roles may read once assumed | Unchanged — this added a condition, not a grant |
+
+**If you create a second ECS cluster in this account, give its tasks their own identities.** These
+roles are not cluster-scoped and cannot be. Reusing them grants that cluster read access to the
+database master credential and the weather API key. That obligation is the only real mitigation for
+the open row above, and nothing in the code can enforce it.
+
+The exposure is bounded today: the account holds one cluster, and Terraform is CI-only so a second
+cannot be stood up from a workstation.
+
+### Why the strict operators
+
+`ArnLikeIfExists` and `StringEqualsIfExists` would evaluate true when the key is absent, removing
+any risk of denying a legitimate assumption. They are **forbidden** here, and a test asserts their
+absence. The reason is verifiability: with them, a healthy task proves nothing about whether the
+condition is enforced, and a control that cannot be distinguished from its own absence is close to
+no control.
+
+### The apply is not staged, and cannot be
+
+The obvious safer sequence — apply the task role's condition, verify, then the execution role's —
+is not expressible here. Both `terraform-plan.yml` and `terraform-apply.yml` are gated to the `main`
+ref, neither accepts a free-form variable at dispatch, and the apply replays one saved plan for the
+whole component root. Staging would require either a workflow change or a second pull request merged
+after the first is applied. **Do not propose it again as an improvement without first changing the
+workflows.**
+
+The risk it would have managed is that AWS documents these conditions only for the *task* role; the
+execution role's documented trust policy carries none, and whether ECS populates the keys when it
+assumes the execution role is not documented either way. A condition on an absent key fails closed.
+
+### Applying the conditions
+
+1. **Author and review the revert commit first.** Restoring the pre-change trust policies must be a
+   merge and a dispatch, not an authoring exercise under pressure. Its timing is the whole of its
+   value. Make it revertible per role so a failure attributable to one does not cost the other.
+2. Record the *before* state: the service's healthy task count, and both role ARNs.
+3. Dispatch **Terraform State Plan** for `secrets-shared-dev`. It must show
+   `0 to add, 2 to change, 0 to destroy` and only the two `assume_role_policy` attributes.
+   **Abort on any `must be replaced` or `will be destroyed` line** — the roles are in use and this
+   component is `allow_destroy: false`.
+4. Dispatch **Terraform State Apply**.
+5. Verify. See below — this is the step that actually matters.
+
+### Verifying, and diagnosing a failure
+
+**An apply that succeeded proves almost nothing.** IAM accepts any syntactically valid trust policy,
+and a task already running keeps the session it was vended. Both cheap signals are false negatives
+for the failure that matters.
+
+Force a new deployment and confirm the **new** task pulls its image, writes to its log stream,
+resolves both credentials, and reaches healthy. That is the only path that exercises the execution
+role at assumption time. Also confirm both role ARNs are unchanged — an in-place update preserves
+them, a replacement does not, and a changed ARN leaves every consumer's `executionRoleArn` stale.
+
+**Add this to the list of causes for a task that will not start:** the role was assumed from outside
+the pinned account or region, so `sts:AssumeRole` was denied. The symptom is a task that never
+reaches healthy with an authorization error in the log group — which reads like a missing grant
+rather than a trust-policy problem, and that is what makes it worth naming here. Recovery is to
+merge the pre-written revert and dispatch plan then apply. **Do not debug in place**; the revert
+restores a known-good posture in one cycle and diagnosis can follow.

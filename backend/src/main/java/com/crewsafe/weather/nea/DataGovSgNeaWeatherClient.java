@@ -27,6 +27,8 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
  * <p>WBGT is served by the unified {@code /weather?api=wbgt} endpoint and has a different
  * JSON shape from the other station APIs. Both shapes are normalised into
  * {@link NeaObservation} here so no upstream DTO leaks into the rest of CrewSafe.
+ * The complete endpoint inventory and local run instructions live in
+ * {@code docs/runbooks/SCRUM-111-weather-ingestion.md}.
  *
  * @author Bryan Phang
  */
@@ -36,7 +38,11 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
 @RequiredArgsConstructor
 public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
 
-    private static final Map<NeaMetric, String> WEATHER_PATHS = Map.of(
+    private static final String WBGT_ENDPOINT_PATH = "/weather";
+    private static final String DATASET_QUERY_PARAMETER = "api";
+    private static final String WBGT_DATASET_NAME = "wbgt";
+
+    private static final Map<NeaMetric, String> STANDARD_WEATHER_ENDPOINT_PATHS = Map.of(
             NeaMetric.AIR_TEMPERATURE, "/air-temperature",
             NeaMetric.RELATIVE_HUMIDITY, "/relative-humidity",
             NeaMetric.WIND_SPEED, "/wind-speed",
@@ -54,16 +60,18 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
             return fetchWbgt();
         }
 
-        String path = WEATHER_PATHS.get(metric);
-        if (path == null) {
+        String endpointPath = STANDARD_WEATHER_ENDPOINT_PATHS.get(metric);
+        if (endpointPath == null) {
             throw new IllegalArgumentException("Unsupported NEA metric: " + metric);
         }
-        return fetchStandardWeather(metric, path);
+        return fetchStandardWeather(metric, endpointPath);
     }
 
     private NeaObservation fetchWbgt() {
         WbgtResponse response = execute("WBGT", () -> neaRestClient.get()
-                .uri(uriBuilder -> uriBuilder.path("/weather").queryParam("api", "wbgt").build())
+                .uri(uriBuilder -> uriBuilder.path(WBGT_ENDPOINT_PATH)
+                        .queryParam(DATASET_QUERY_PARAMETER, WBGT_DATASET_NAME)
+                        .build())
                 .retrieve()
                 .body(WbgtResponse.class));
         validateEnvelope("WBGT", response == null ? null : response.code(),
@@ -102,9 +110,9 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
         return new NeaStationReading(station, reading.wbgt(), reading.heatStress());
     }
 
-    private NeaObservation fetchStandardWeather(NeaMetric metric, String path) {
+    private NeaObservation fetchStandardWeather(NeaMetric metric, String endpointPath) {
         StandardResponse response = execute(metric.name(), () -> neaRestClient.get()
-                .uri(path)
+                .uri(endpointPath)
                 .retrieve()
                 .body(StandardResponse.class));
         validateEnvelope(metric.name(), response == null ? null : response.code(),

@@ -26,7 +26,7 @@ output "cluster_name" {
 }
 
 output "cluster_arn" {
-  description = "ARN of the cluster. NOT UNUSED - deleting it removes the only path to closing a known security gap. FR-032 requires the execution and task roles to be pinned to this cluster, discharging a deferral the secrets component recorded when no cluster existed. That pinning cannot happen here: a role's assume_role_policy is an attribute of a resource secrets-shared-dev owns, not a separately attachable one. This output exists so the follow-up against SCRUM-174 can reference the exact ARN rather than re-deriving it - the same role task_execution_role_name plays in that component's own contract."
+  description = "ARN of the cluster. CURRENTLY UNCONSUMED, and retained deliberately. It was published for FR-032, which required the execution and task roles to be pinned to this cluster. SCRUM-191 established that AWS does not support pinning an ECS trust policy to a cluster - 'Using the aws:SourceArn condition key to specify a specific cluster is not currently supported, you should use the wildcard to specify all clusters' - so it applied account-and-region source conditions instead and never read this value. Removing this output is a change to a published contract, not an obvious cleanup; see section 10 of this component's runbook and section 12 of the SCRUM-174 runbook before deciding."
   value       = aws_ecs_cluster.main.arn
 }
 

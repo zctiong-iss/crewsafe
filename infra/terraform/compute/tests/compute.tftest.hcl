@@ -290,9 +290,25 @@ run "public_edge" {
     error_message = "Plaintext must redirect, never be served (FR-025, SC-002)."
   }
 
+  # This assertion used to require "TLSv1.2_2021" and it was testing an aspiration, not a
+  # fact. The CloudFront API ignores minimum_protocol_version when
+  # cloudfront_default_certificate is set and pins the policy to TLSv1 — so the assertion
+  # passed against the CONFIG while the DEPLOYED distribution accepted TLS 1.0, and
+  # produced a diff that could never converge (plan run 30874184699).
+  #
+  # It now asserts the value AWS will actually honour. That is a weaker guarantee, stated
+  # honestly, rather than a stronger one that was never true.
   assert {
-    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].minimum_protocol_version == "TLSv1.2_2021"
-    error_message = "TLS 1.2 minimum must be set EXPLICITLY — the default certificate otherwise implies TLS 1.0 and SC-003 fails (FR-026)."
+    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].minimum_protocol_version == "TLSv1"
+    error_message = "With the default certificate, TLSv1 is the only value CloudFront honours. Anything else is a phantom diff that never converges. Raising the floor needs a custom certificate on a controlled domain, which is its own issue."
+  }
+
+  # The distribution must serve on the provider-issued name, which is the whole reason the
+  # TLS floor above cannot be raised. Asserted so the coupling between the two is visible:
+  # if this ever becomes false, the assertion above should be revisited.
+  assert {
+    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].cloudfront_default_certificate == true
+    error_message = "The distribution uses the provider-issued certificate. Switching to a custom one is what unlocks a TLS 1.2 floor — change both assertions together."
   }
 
   # An API's responses are per-caller. With caching enabled, one user's
@@ -541,6 +557,39 @@ run "cross_origin_entry" {
   assert {
     condition     = !can(regex("\\*", aws_ssm_parameter.cors_allowed_origins.value))
     error_message = "The origin list must be explicit, never a wildcard (FR-039, SC-019)."
+  }
+
+  # The synthetic-user mappings. This entry exists because the application requires the
+  # property to be PRESENT: DemoDataSeeder runs under the staging profile and throws on a
+  # null value rather than seeding nothing, 60 seconds into startup and after the port is
+  # bound. It is created here rather than referenced from the secrets component because a
+  # `secrets` reference to a parameter that does not exist fails the container start
+  # outright — the same rule that keeps NEA_API_KEY absent (FR-033).
+  assert {
+    condition     = aws_ssm_parameter.demo_users_json.name == "/crewsafe/shared-dev/cognito/demo-users-json"
+    error_message = "The mappings entry must sit under the prefix the secrets component publishes, so the execution role's prefix-scoped read grant covers it without a change to that component."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.demo_users_json.type == "String"
+    error_message = "The mappings are fictional identities, not a credential — usernames, subject identifiers, roles and site codes."
+  }
+
+  assert {
+    condition     = can(jsondecode(aws_ssm_parameter.demo_users_json.value))
+    error_message = "The value must parse as JSON. A malformed value fails the task at startup, not at plan time, so plan-time validation is the only place it can be caught cheaply."
+  }
+
+  # The reference must be to the resource, not a reconstructed string. A string would
+  # plan clean while leaving Terraform free to create the task definition BEFORE the
+  # parameter, and a task definition pointing at a parameter that does not yet exist
+  # fails the container start.
+  assert {
+    condition = length([
+      for s in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].secrets : s
+      if s.name == "APP_COGNITO_DEMO_USERS_JSON" && endswith(s.valueFrom, aws_ssm_parameter.demo_users_json.name)
+    ]) == 1
+    error_message = "The task definition must inject APP_COGNITO_DEMO_USERS_JSON from the parameter this component creates. Without it the application starts, binds the port, and then dies in DemoDataSeeder."
   }
 }
 
