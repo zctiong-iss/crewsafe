@@ -346,6 +346,16 @@ run "parallel_public_origin_preparation" {
   }
 
   assert {
+    condition     = aws_vpc_security_group_ingress_rule.app_from_public_lb.security_group_id == "sg-0app00000000000000" && aws_vpc_security_group_ingress_rule.app_from_public_lb.referenced_security_group_id == aws_security_group.public_lb.id
+    error_message = "Application ingress must name the parallel ALB security group, never an address range."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.app_from_public_lb.cidr_ipv4 == null && aws_vpc_security_group_ingress_rule.app_from_public_lb.from_port == 8080 && aws_vpc_security_group_ingress_rule.app_from_public_lb.to_port == 8080
+    error_message = "The parallel ALB may enter the application group by security-group reference on port 8080 only."
+  }
+
+  assert {
     condition     = aws_lb_listener.public.default_action[0].type == "forward" && aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
     error_message = "The public listener must forward to its distinct target group and never answer on the application's behalf."
   }

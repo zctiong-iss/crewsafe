@@ -23,7 +23,7 @@ Complete one column per stage with links and non-sensitive outcomes.
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
 | Source commit and approved PR | Pending | Blocked | Blocked |
-| Expected failing / passing validation runs | Pending | Blocked | Blocked |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / passing run pending | Blocked | Blocked |
 | Plan run ID and attempt | Pending | Blocked | Blocked |
 | Account / component / operation / lock match | Pending | Blocked | Blocked |
 | Plan digest and typed confirmation | Pending | Blocked | Blocked |
@@ -50,6 +50,13 @@ The following pure shell checks ran from repository root before preparation test
 All passed. The compute guard reported 17 checks; the CI guard included Cognito deployment and
 backend-mode checks. Requirements were 16/16 complete. The branch was
 `feat/scrum-204-staged-public-alb-origin` at `22614e9a2da4f6455fc469db2238b468e39fce12`.
+
+Test-first evidence was published in draft PR
+[#71](https://github.com/zctiong-iss/crewsafe/pull/71). After the formatting-only correction in
+`b803287`, run `30883961904` reached `terraform test`: seven existing runs passed and
+`parallel_public_origin_preparation` failed because the public ALB, its target group/listener,
+managed-prefix-list data source, and security-group rules were undeclared. This is the expected
+failure the preparation implementation must turn green.
 
 ## 4. Remote plan and apply
 
