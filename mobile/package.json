@@ -58,6 +58,8 @@
   ],
   "scripts": {
     "start": "expo start --port 8082",
+    "//start:clear": "Same as start, with Metro's transform cache cleared. Exists because the bare `npx expo start -c` silently falls back to port 8081 — see the port note above and Problem 1 in the README.",
+    "start:clear": "expo start --clear --port 8082",
     "android": "expo start --android --port 8082",
     "ios": "expo start --ios --port 8082",
     "web": "expo start --web",
