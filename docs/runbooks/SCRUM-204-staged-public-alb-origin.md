@@ -23,7 +23,7 @@ Complete one column per stage with links and non-sensitive outcomes.
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
 | Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | Cutover branch created from applied preparation revision | Blocked |
-| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | Blocked | Blocked |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / passing run pending | Blocked |
 | Plan run ID and attempt | `30885366655`, attempt 1 | Blocked | Blocked |
 | Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked | Blocked |
 | Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked | Blocked |
@@ -107,6 +107,19 @@ Use a fresh `feat/scrum-204-staged-public-alb-origin-cutover` branch from applie
 Cutover may change the existing `backend` origin to the public ALB's HTTP-only custom origin. It
 must not replace the distribution/output, delete legacy resources, remove either target
 registration, widen ingress, or introduce an origin secret.
+
+Test-first commit `5f5213b` was published in draft PR
+[#73](https://github.com/zctiong-iss/crewsafe/pull/73). Terraform Validation run `30886599486`
+passed configuration validation and seven existing compute runs, then the
+`public_origin_cutover` run failed because `custom_origin_config` was null. This is the expected
+failure that the cutover implementation must turn green; all other completed component, catalog,
+lockfile, and security jobs passed.
+
+The implementation changes only the existing distribution's `backend` origin domain to
+`aws_lb.public.dns_name` and replaces its selected `vpc_origin_config` block with an HTTP-only
+`custom_origin_config` on port 80. The surviving `aws_cloudfront_vpc_origin.rebuilt`, internal ALB,
+legacy listener/target group, public path, both ECS registrations, cache/origin-request policies,
+viewer certificate, allowed methods, and `staging_base_url` output remain unchanged for rollback.
 
 Wait for CloudFront `Deployed`, then run two passes at least five minutes apart:
 
