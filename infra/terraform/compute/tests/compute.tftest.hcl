@@ -244,74 +244,15 @@ run "placement" {
   }
 }
 
-run "boundary" {
-  command = apply
-
-  # Recovery stage after apply run 30880087606 partially removed the existing
-  # listener and rules before CloudFront released its surviving VPC origin.
-  assert {
-    condition     = aws_lb.main.internal == true
-    error_message = "The recovery stage must preserve the existing internal load balancer; replacing it while its VPC origin is attached repeats the failed migration."
-  }
-
-  assert {
-    condition = tolist(aws_lb.main.subnets) == tolist([
-      "subnet-0private000000a", "subnet-0private000000b"
-    ])
-    error_message = "The recovery-stage internal load balancer must remain in the private subnets."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.lb_from_vpc_origin.cidr_ipv4 == "10.0.0.0/16"
-    error_message = "The recovery-stage internal load balancer must accept the surviving VPC origin from inside the VPC."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.lb_from_vpc_origin.prefix_list_id == null
-    error_message = "The recovery-stage internal load balancer must not use the public CloudFront prefix-list path."
-  }
-
-  # The distribution forwards viewer headers verbatim, so the load balancer is the
-  # last hop that can reject a malformed one before the application sees it.
-  assert {
-    condition     = aws_lb.main.drop_invalid_header_fields == true
-    error_message = "Non-conforming header fields must be dropped at the load balancer, not passed through to the task."
-  }
-
-  # The one rule this component writes into an upstream resource. SCRUM-173 left
-  # the application security group with no inbound rule and said so in the
-  # resource's own description: load balancer ingress belongs here.
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.security_group_id == "sg-0app00000000000000"
-    error_message = "The single inbound rule must target the network component's application security group (FR-019)."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.referenced_security_group_id == aws_security_group.lb.id
-    error_message = "Inbound must be admitted by security group reference, never a CIDR — a CIDR rule connects and quietly widens the boundary (FR-019, SC-007)."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.cidr_ipv4 == null
-    error_message = "No CIDR may admit the application port (SC-007)."
-  }
-
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.from_port == 8080 && aws_vpc_security_group_ingress_rule.app_from_lb.to_port == 8080
-    error_message = "Only the application port may be admitted (FR-019)."
-  }
-}
-
-# SCRUM-204 US2 — CloudFront must select the verified public path while the full
-# recovery topology remains available. These assertions are changed before the
-# origin configuration so Terraform Validation demonstrates the cutover's
-# test-first failure on the draft PR.
-run "public_origin_cutover" {
+# SCRUM-204 US3 — the verified public path becomes the only runtime attachment.
+# Legacy-resource absence is categorical and therefore covered by the source
+# guard; these provider-backed assertions prove the surviving topology.
+run "public_origin_cleanup" {
   command = apply
 
   assert {
     condition     = aws_lb.public.internal == false
-    error_message = "The parallel origin needs a distinct internet-facing ALB; aws_lb.main remains internal and is not converted in place."
+    error_message = "Cleanup must preserve the active internet-facing public ALB."
   }
 
   assert {
@@ -369,16 +310,13 @@ run "public_origin_cutover" {
   assert {
     condition = toset([
       for attachment in aws_ecs_service.backend.load_balancer : attachment.target_group_arn
-      ]) == toset([
-      aws_lb_target_group.backend.arn,
-      aws_lb_target_group.public.arn,
-    ])
-    error_message = "Preparation must register the existing ECS workload with both legacy and public target groups."
+    ]) == toset([aws_lb_target_group.public.arn])
+    error_message = "Cleanup must leave exactly the active public target-group attachment."
   }
 
   assert {
     condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
-    error_message = "Cutover must point the existing backend origin at the verified public ALB."
+    error_message = "Cleanup must preserve the existing backend origin on the verified public ALB."
   }
 
   assert {
@@ -577,24 +515,24 @@ run "container_hardening" {
 }
 
 # ---------------------------------------------------------------------------
-# US3 — health drives traffic
+# Health drives traffic
 # ---------------------------------------------------------------------------
 
 run "health_drives_traffic" {
   command = apply
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].path == "/actuator/health"
+    condition     = aws_lb_target_group.public.health_check[0].path == "/actuator/health"
     error_message = "The probe must ask the application, not the root path or a synthetic port check (FR-026, SC-016)."
   }
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].matcher == "200"
+    condition     = aws_lb_target_group.public.health_check[0].matcher == "200"
     error_message = "Actuator returns 503 when down; only 200 may count as healthy (SC-016)."
   }
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].port == "traffic-port"
+    condition     = aws_lb_target_group.public.health_check[0].port == "traffic-port"
     error_message = "The probe must reach the container's own port (SC-016)."
   }
 
@@ -613,12 +551,12 @@ run "health_drives_traffic" {
   # A rule that answers on the application path never reaches the application, so
   # every authorization control the application enforces is skipped.
   assert {
-    condition     = aws_lb_listener.backend.default_action[0].type == "forward"
+    condition     = aws_lb_listener.public.default_action[0].type == "forward"
     error_message = "The listener must forward. A fixed-response or redirect action is a path to the endpoint that bypasses the application (FR-018, SC-004)."
   }
 
   assert {
-    condition     = length(aws_lb_listener.backend.default_action) == 1
+    condition     = length(aws_lb_listener.public.default_action) == 1
     error_message = "Exactly one default action (FR-018)."
   }
 }

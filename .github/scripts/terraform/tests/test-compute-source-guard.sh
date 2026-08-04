@@ -139,27 +139,13 @@ forbid 'containerPath[^,]*"/tmp"' \
 
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
-# SCRUM-204 preparation requires distinct load balancers. The existing `main`
-# resource stays internal while a separately identified public ALB is introduced;
-# the Terraform assertions bind each `internal` value to the correct resource.
-require 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
-  'the recovered internal load balancer identity' \
-  'Preparation must preserve the load balancer referenced by the surviving VPC origin.'
-
 require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
-  'a distinct parallel public load balancer identity' \
-  'Preparation adds a parallel origin; converting aws_lb.main in place repeats the failed replacement race.'
+  'the active public load balancer identity' \
+  'Cleanup must preserve the verified origin selected by CloudFront.'
 
 require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' \
   'the AWS-managed CloudFront origin-facing prefix list' \
   'The parallel origin must fail closed to CloudFronts published origin-facing addresses.'
-
-# SCRUM-204 cutover changes only which origin the distribution selects. The
-# legacy identities and both service registrations remain available until the
-# separately reviewed cleanup revision.
-require 'resource[[:space:]]+"aws_cloudfront_vpc_origin"[[:space:]]+"rebuilt"' \
-  'the retained CloudFront VPC origin' \
-  'Cutover must preserve the reviewed rollback path.'
 
 require 'custom_origin_config[[:space:]]*\{' \
   'the public ALB custom-origin configuration' \
@@ -169,9 +155,29 @@ require 'domain_name[[:space:]]*=[[:space:]]*aws_lb\.public\.dns_name' \
   'the public ALB as the existing distribution origin' \
   'The stable backend origin must point to the public ALB without replacing the distribution.'
 
+forbid 'resource[[:space:]]+"aws_cloudfront_vpc_origin"' \
+  'a legacy CloudFront VPC origin' \
+  'Cleanup is allowed only after CloudFront has deployed and passed evidence on the public custom origin.'
+
+forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
+  'the legacy internal load balancer' \
+  'The verified public ALB is the only final origin.'
+
+forbid 'resource[[:space:]]+"aws_lb_target_group"[[:space:]]+"backend"' \
+  'the legacy target group' \
+  'The ECS service must retain only its active public target-group attachment.'
+
+forbid 'resource[[:space:]]+"aws_lb_listener"[[:space:]]+"backend"' \
+  'the legacy listener' \
+  'Cleanup removes the unreferenced internal path.'
+
+forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"|resource[[:space:]]+"aws_vpc_security_group_(ingress|egress)_rule"[[:space:]]+"(lb_from_vpc_origin|lb_to_app|app_from_lb)"' \
+  'legacy load-balancer security resources' \
+  'Only the prefix-list-fenced public-origin boundary remains after cleanup.'
+
 load_balancer_blocks="$(grep -Ec '^[[:space:]]*load_balancer[[:space:]]*\{' < <(scan))"
-[[ "$load_balancer_blocks" -eq 2 ]] ||
-  fail "$component_dir must retain exactly two ECS load_balancer attachments during cutover (found $load_balancer_blocks)"
+[[ "$load_balancer_blocks" -eq 1 ]] ||
+  fail "$component_dir must retain exactly one ECS load_balancer attachment after cleanup (found $load_balancer_blocks)"
 
 forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
   'a security group rule admitting the whole internet' \
@@ -218,25 +224,17 @@ for policy in plan-role-policy.json apply-role-policy.json; do
     fail "$component_dir/iam/$policy must allow ec2:GetManagedPrefixListEntries"
 done
 
-# The public-ALB migration removes two CloudFront VPC origins that still exist in
-# state. Plan and apply must refresh them before apply can delete them; the plan
-# role remains read-only, while only the apply role receives the delete verb.
+# Reviewed source reaches final least privilege. The already-deployed policies
+# retain these verbs through the cleanup refresh/deletion and are reconciled from
+# these narrower files immediately after the VPC origin is gone.
 for policy in plan-role-policy.json apply-role-policy.json; do
-  jq -e '
-    any(.Statement[];
-      .Effect == "Allow" and
-      ((.Action | arrays | index("cloudfront:GetVpcOrigin")) != null)
-    )
-  ' "$ROOT/$component_dir/iam/$policy" >/dev/null ||
-    fail "$component_dir/iam/$policy must allow cloudfront:GetVpcOrigin"
+  jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:GetVpcOrigin") == null' \
+    "$ROOT/$component_dir/iam/$policy" >/dev/null ||
+    fail "$component_dir/iam/$policy must remove cloudfront:GetVpcOrigin after cleanup"
 done
 
-jq -e '
-  any(.Statement[];
-    .Effect == "Allow" and
-    ((.Action | arrays | index("cloudfront:DeleteVpcOrigin")) != null)
-  )
-' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
-  fail "$component_dir/iam/apply-role-policy.json must allow cloudfront:DeleteVpcOrigin"
+jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") == null' \
+  "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must remove cloudfront:DeleteVpcOrigin after cleanup"
 
-printf 'ok: %s cutover source guard passed (%d checks)\n' "$component_dir" 23
+printf 'ok: %s cleanup source guard passed (%d checks)\n' "$component_dir" 28

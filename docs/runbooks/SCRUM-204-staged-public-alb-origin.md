@@ -22,15 +22,15 @@ Complete one column per stage with links and non-sensitive outcomes.
 
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
-| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | Cutover branch created from applied preparation revision | Blocked |
+| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | `ed098bb1985132e9bab4b38dd0821b94f5519480`, PR [#73](https://github.com/zctiong-iss/crewsafe/pull/73) | Cleanup branch created from applied cutover revision |
 | Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / [passing run 30887107913, compute job 91920846373](https://github.com/zctiong-iss/crewsafe/actions/runs/30887107913/job/91920846373) | Blocked |
-| Plan run ID and attempt | `30885366655`, attempt 1 | Blocked | Blocked |
-| Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked | Blocked |
-| Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked | Blocked |
-| Apply run and single-use marker | [Run 30885467533, job 91915592556](https://github.com/zctiong-iss/crewsafe/actions/runs/30885467533/job/91915592556); final marker step passed | Blocked | Blocked |
-| Target and distribution status | Apply: 7 added, 1 changed, 0 destroyed. Public target group `crewsafe-shared-dev-public`: 1 healthy, 0 unhealthy; CloudFront intentionally retained the VPC origin | Blocked | Blocked |
-| Smoke, latency, propagation, authn/authz | N/A | Blocked | Blocked |
-| Rollback status / convergence plan | Active legacy path | Blocked | Blocked |
+| Plan run ID and attempt | `30885366655`, attempt 1 | `30887456082`, attempt 1 | Blocked |
+| Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked |
+| Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked |
+| Apply run and single-use marker | [Run 30885467533, job 91915592556](https://github.com/zctiong-iss/crewsafe/actions/runs/30885467533/job/91915592556); final marker step passed | [Run 30887529413, job 91921935284](https://github.com/zctiong-iss/crewsafe/actions/runs/30887529413/job/91921935284); final marker step passed | Blocked |
+| Target and distribution status | Apply: 7 added, 1 changed, 0 destroyed. Public target group `crewsafe-shared-dev-public`: 1 healthy, 0 unhealthy; CloudFront intentionally retained the VPC origin | Apply: 0 added, 1 changed, 0 destroyed. Existing distribution reached terminal deployment on the public ALB origin | Blocked |
+| Smoke, latency, propagation, authn/authz | N/A | Two health passes returned 200/UP more than five minutes apart; 20 health p95 0.043 s; authenticated protected request 200; unauthenticated equivalent 401; synthetic create 201 in 0.462 s, immediate read visibility, 20 protected-read p95 0.103 s, 20 state-changing p95 0.115 s, cleanup delete 204 | Blocked |
+| Rollback status / convergence plan | Active legacy path | Cutover accepted; legacy path retained until reviewed cleanup | Blocked |
 
 Evidence includes exact HTTP statuses, timestamps, target/distribution status, and latency samples
 without sensitive headers. It must connect each result to the exact revision and deployment
@@ -137,11 +137,25 @@ Wait for CloudFront `Deployed`, then run two passes at least five minutes apart:
 Use approved synthetic fixtures and never expose a bearer token. Any failure blocks cleanup and
 requires a fresh reviewed rollback revision/plan restoring the retained VPC origin.
 
+Cutover gate accepted on 2026-08-04. Apply run `30887529413` applied reviewed plan
+`30887456082` from `main` source `ed098bb1985132e9bab4b38dd0821b94f5519480`: only the existing
+distribution changed, with no additions or destruction. Two health passes more than five minutes
+apart returned HTTP 200 and `UP`; 20 health samples had p95 0.043 seconds. The mapped synthetic
+supervisor received HTTP 200 from a protected read while the unauthenticated equivalent received
+HTTP 401. A reversible synthetic shift exercise returned create 201 in 0.462 seconds, was visible
+immediately, produced 20/20 protected reads at p95 0.103 seconds and 20/20 updates at p95 0.115
+seconds, and ended with delete 204. No token, credential, domain record, or synthetic object
+identifier is retained as evidence.
+
 ## 7. Cleanup
 
 Use a fresh `feat/scrum-204-staged-public-alb-origin-cleanup` branch only after accepted cutover
 evidence. Cleanup may delete only the unreferenced VPC origin/internal ALB path and legacy ECS
 attachment; it must preserve the public path, distribution, runtime, network, database, and secrets.
+
+The cleanup branch was created from applied cutover revision
+`ed098bb1985132e9bab4b38dd0821b94f5519480` after the cutover evidence above passed. Any material
+change to that evidence or active origin blocks cleanup and requires a fresh branch and plan.
 
 Reviewed source policies omit `cloudfront:GetVpcOrigin` and `cloudfront:DeleteVpcOrigin`, while the
 already-deployed policies retain them through cleanup refresh/deletion. Immediately after success,
