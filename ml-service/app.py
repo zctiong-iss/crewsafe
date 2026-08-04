@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import time
 
 from bedrock_client import BedrockClient, BedrockAccessError, BedrockModelAccessError
-from models import MitigationRequest, MitigationBatch
+from models import MitigationRequest, MitigationBatch, ForecastRequest, ForecastPrediction
+from forecast_service import ForecastService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -129,6 +130,56 @@ async def suggest_mitigations(request: MitigationRequest):
         raise HTTPException(status_code=502, detail=f"Invalid response from Bedrock: {str(e)}")
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/forecast", response_model=ForecastPrediction)
+async def forecast(request: ForecastRequest):
+    """
+    Generate a versioned baseline forecast for WBGT, temperature, or humidity.
+
+    This endpoint serves the persistence baseline (naive: next value equals current)
+    that SCRUM-114's trained model must beat. Every prediction is versioned for
+    traceability (US-06 requirement).
+
+    Request contract:
+    - metric: wbgt, temperature, or humidity
+    - horizon_minutes: 30 or 60 minutes
+    - current_value: current observed value
+
+    Response contract:
+    - predicted_value: forecast at horizon
+    - model_version: traced version (currently baseline-1.0.0)
+    - confidence_interval: 95% bounds for uncertainty
+    - timestamp: prediction creation time (ISO 8601)
+
+    Acceptance: Backend consumes end-to-end; replacing with trained model
+    requires no consumer change.
+    """
+    start_time = time.time()
+
+    try:
+        # Invoke persistence baseline forecast (synchronous, <5ms)
+        prediction = ForecastService.forecast(
+            metric=request.metric,
+            current_value=request.current_value,
+            horizon_minutes=request.horizon_minutes,
+        )
+
+        latency_ms = (time.time() - start_time) * 1000
+        logger.info(
+            f"Forecast: {request.metric}={prediction.predicted_value:.1f} "
+            f"(horizon={request.horizon_minutes}min, latency={latency_ms:.1f}ms, "
+            f"version={prediction.model_version})"
+        )
+
+        return prediction
+
+    except ValueError as e:
+        logger.error(f"Forecast validation failed: {e}")
+        raise HTTPException(status_code=422, detail=f"Invalid request: {str(e)}")
+    except Exception as e:
+        logger.exception(f"Forecast error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
