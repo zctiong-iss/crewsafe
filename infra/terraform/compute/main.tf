@@ -334,9 +334,34 @@ resource "aws_lb_listener" "backend" {
 # Public edge
 # ---------------------------------------------------------------------------
 
+# The name is "-vpc-origin" rather than "-backend", and the difference is doing work.
+#
+# The first VPC origin was created in the wake of the apply that died INSIDE
+# CreateVpcOrigin (run 30796767337, wrong service-linked-role principal). It reported
+# Deployed and routed nothing: the distribution returned 504 on every request while the
+# load balancer's RequestCount stayed at 0 for a whole day. Every configurable element
+# was verified correct — listener :80 forwarding to a target group with a healthy
+# target, security group admitting tcp/80 from the VPC CIDR, no network ACLs, the
+# distribution naming the right load balancer DNS and the right VPC origin id, the
+# origin itself carrying the right load balancer ARN and http-only on 80. VPC
+# Reachability Analyzer then confirmed the path from a CloudFront interface to a load
+# balancer interface was reachable. Nothing was misconfigured and nothing arrived, which
+# leaves the association itself.
+#
+# Renaming forces a replacement, which is the only way to rebuild that association from
+# Terraform: the plan and apply workflows accept no per-dispatch arguments, so -replace
+# is unreachable. create_before_destroy is REQUIRED, not tidiness — CloudFront refuses to
+# delete a VPC origin a distribution still references, so a destroy-first replacement
+# fails partway and strands the distribution, which is the only thing holding the stable
+# public URL. The new name must differ from the old for the same reason: both exist at
+# once during the replacement.
+#
+# Read the plan before applying. It MUST say this resource "must be replaced". If it says
+# "will be updated in-place", the name is not a force-new attribute and this change
+# rebuilds nothing — stop and use a second resource instead.
 resource "aws_cloudfront_vpc_origin" "backend" {
   vpc_origin_endpoint_config {
-    name                   = "${local.name_prefix}-backend"
+    name                   = "${local.name_prefix}-vpc-origin"
     arn                    = aws_lb.main.arn
     http_port              = 80
     https_port             = 443
@@ -346,6 +371,10 @@ resource "aws_cloudfront_vpc_origin" "backend" {
       quantity = 1
       items    = ["TLSv1.2"]
     }
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

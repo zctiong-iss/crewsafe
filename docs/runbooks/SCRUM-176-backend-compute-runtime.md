@@ -520,6 +520,55 @@ do if you create a second cluster.
 to this component's published contract and is a decision for whoever owns this component, not an
 obvious cleanup.
 
+### The VPC origin was rebuilt, and how a 504 with nothing misconfigured was diagnosed
+
+The first apply to create the whole component left a VPC origin that reported **Deployed** and
+routed **nothing**. Every request to the public URL returned `504 Gateway Timeout` after almost
+exactly 30 seconds, while the load balancer's `RequestCount` sat at `0.0` for a full day.
+
+**The 30 seconds was the first real clue.** The distribution's origin carried
+`ConnectionAttempts: 3` and `ConnectionTimeout: 10` — 3 × 10 = 30s, matching the measured 30.079s.
+That is a *connection* failure, three times over. Not a slow application, not a 5xx relayed from the
+load balancer.
+
+**`RequestCount: 0` was the second.** Health checks are deliberately excluded from that metric, so a
+healthy target and a zero request count are consistent — and together they prove the load balancer
+is working internally while nothing external reaches it. Do not let a healthy target persuade you
+the origin is fine; it says nothing about ingress.
+
+Everything configurable was then verified correct, and none of it was the cause:
+
+| Checked | Result |
+| --- | --- |
+| Listener | `:80` HTTP, `forward`, correct target group |
+| Target | healthy |
+| Load balancer security group | ingress `tcp 80` from the VPC CIDR — covers both CloudFront interfaces |
+| CloudFront's own security group | all egress |
+| Network ACLs | none; the VPC uses the default allow-all |
+| VPC origin | `Deployed`, correct load balancer ARN, `HTTPPort 80`, `http-only` |
+| Distribution origin | correct load balancer DNS name, correct VPC origin id |
+| **VPC Reachability Analyzer**, CloudFront interface → load balancer interface, tcp/80 | **`reachable: true`** |
+
+That last line is what turned elimination into proof, and it is the check worth reaching for early
+next time. It analyses the configured path and, when a path fails, names the blocking component. It
+costs about $0.10 and creates two throwaway objects outside Terraform — delete them with
+`aws ec2 delete-network-insights-path`, which removes its analyses too.
+
+> **When every layer is correct and nothing arrives, suspect the association, not the settings.** The
+> VPC origin was created in the wake of an apply that died *inside* `CreateVpcOrigin` — see round 2 in
+> §3.3. A half-formed association presents exactly this way, and no amount of reading configuration
+> will show it.
+
+**The fix was to force a replacement by renaming the origin**, with `create_before_destroy` — see the
+comment on `aws_cloudfront_vpc_origin.backend` for why both halves are load-bearing. `-replace` is
+unreachable because the shared workflows accept no per-dispatch arguments.
+
+> **Read that plan before applying it.** It must say the VPC origin **must be replaced**. If it says
+> *will be updated in-place*, the name is not a force-new attribute, the change rebuilds nothing, and
+> the right move is a second resource repointed in one apply and the first removed in another. Do
+> **not** apply a destroy-first replacement: CloudFront will not delete a VPC origin a distribution
+> still references, so it fails partway and strands the distribution that holds the stable URL.
+
 ### The synthetic-user mappings parameter, and why this component creates it
 
 `/crewsafe/shared-dev/cognito/demo-users-json`, seeded with `[]`.
