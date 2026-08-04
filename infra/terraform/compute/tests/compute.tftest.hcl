@@ -402,22 +402,36 @@ run "credentials_by_reference" {
 run "container_hardening" {
   command = apply
 
-  # All three together, because the failure mode is having two of them.
   assert {
     condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].user == "1000"
     error_message = "The container must run as a non-root user (FR-014, SC-015)."
   }
 
+  # These two assert an ABSENCE, and the absence is the fix rather than an omission.
+  #
+  # On Fargate a non-root container cannot have both a read-only root filesystem and
+  # writable scratch: tmpfs is unsupported, and a bind mount is created root-owned at
+  # 0755 so uid 1000 cannot write to it (aws/containers-roadmap#938, still open). The
+  # earlier version of this component asserted BOTH and the first task died with
+  # `AccessDeniedException: /tmp/tomcat.8080.<n>` before serving anything.
+  #
+  # The pair below is what keeps a well-meaning "restore the hardening" edit from
+  # reintroducing that outage: adding either one back fails here.
   assert {
-    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].readonlyRootFilesystem == true
-    error_message = "The container must run with a read-only root filesystem (FR-013, SC-015)."
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].readonlyRootFilesystem == false
+    error_message = "readonlyRootFilesystem must stay false while the container runs as non-root on Fargate — see the note in main.tf. Restoring it needs a managed EBS volume or a root init container, which is its own decision."
   }
 
   assert {
     condition = length([
-      for mount in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].mountPoints : mount if mount.containerPath == "/tmp"
-    ]) == 1
-    error_message = "A read-only root filesystem WITHOUT writable scratch at /tmp fails startup before the first log line — the JVM writes hsperfdata and Tomcat allocates a temp directory there (FR-013, SC-015)."
+      for mount in try(jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].mountPoints, []) : mount if mount.containerPath == "/tmp"
+    ]) == 0
+    error_message = "No bind mount may be placed at /tmp. Fargate creates it root-owned at 0755, which SHADOWS the image's writable /tmp and stops the JVM and Tomcat from allocating scratch — the exact startup failure this looks like it prevents."
+  }
+
+  assert {
+    condition     = length(aws_ecs_task_definition.backend.volume) == 0
+    error_message = "No volume should be declared. The only one this component ever needed was the /tmp scratch mount that Fargate cannot make writable for a non-root user."
   }
 
   assert {
@@ -527,6 +541,39 @@ run "cross_origin_entry" {
   assert {
     condition     = !can(regex("\\*", aws_ssm_parameter.cors_allowed_origins.value))
     error_message = "The origin list must be explicit, never a wildcard (FR-039, SC-019)."
+  }
+
+  # The synthetic-user mappings. This entry exists because the application requires the
+  # property to be PRESENT: DemoDataSeeder runs under the staging profile and throws on a
+  # null value rather than seeding nothing, 60 seconds into startup and after the port is
+  # bound. It is created here rather than referenced from the secrets component because a
+  # `secrets` reference to a parameter that does not exist fails the container start
+  # outright — the same rule that keeps NEA_API_KEY absent (FR-033).
+  assert {
+    condition     = aws_ssm_parameter.demo_users_json.name == "/crewsafe/shared-dev/cognito/demo-users-json"
+    error_message = "The mappings entry must sit under the prefix the secrets component publishes, so the execution role's prefix-scoped read grant covers it without a change to that component."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.demo_users_json.type == "String"
+    error_message = "The mappings are fictional identities, not a credential — usernames, subject identifiers, roles and site codes."
+  }
+
+  assert {
+    condition     = can(jsondecode(aws_ssm_parameter.demo_users_json.value))
+    error_message = "The value must parse as JSON. A malformed value fails the task at startup, not at plan time, so plan-time validation is the only place it can be caught cheaply."
+  }
+
+  # The reference must be to the resource, not a reconstructed string. A string would
+  # plan clean while leaving Terraform free to create the task definition BEFORE the
+  # parameter, and a task definition pointing at a parameter that does not yet exist
+  # fails the container start.
+  assert {
+    condition = length([
+      for s in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].secrets : s
+      if s.name == "APP_COGNITO_DEMO_USERS_JSON" && endswith(s.valueFrom, aws_ssm_parameter.demo_users_json.name)
+    ]) == 1
+    error_message = "The task definition must inject APP_COGNITO_DEMO_USERS_JSON from the parameter this component creates. Without it the application starts, binds the port, and then dies in DemoDataSeeder."
   }
 }
 

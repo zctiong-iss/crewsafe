@@ -10,7 +10,11 @@ jq -e '
 [[ -x "$resolver" ]]
 grep -Eq 'CREWSAFE_SHARED_COGNITO_JSON' "$ROOT/run.sh"
 grep -Eq 'gh variable get' "$ROOT/run.sh"
-if grep -En 'eval|terraform|aws configure' "$ROOT/run.sh"; then
+# Comments stripped before scanning — a comment NAMING one of these is not a use of it.
+# See the longer note in test-runtime-guards.sh, which strips for the same reason.
+if sed -E 's/(^|[[:space:]])#.*$//' "$ROOT/run.sh" | grep -n '' \
+  | grep -E 'eval|terraform|aws configure'; then
+  echo "run.sh uses eval, invokes Terraform, or configures AWS (AGENTS.md §3)." >&2
   exit 1
 fi
 

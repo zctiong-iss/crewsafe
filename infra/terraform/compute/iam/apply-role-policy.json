@@ -87,6 +87,9 @@
         "ec2:CreateTags",
         "ec2:DeleteSecurityGroup",
         "ec2:DeleteTags",
+        "ec2:DescribeAccountAttributes",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInternetGateways",
         "ec2:DescribeSecurityGroupRules",
         "ec2:DescribeSecurityGroups",
         "ec2:DescribeSubnets",
@@ -123,7 +126,7 @@
       "Resource": "*"
     },
     {
-      "Sid": "ManageCrossOriginParameter",
+      "Sid": "ManageTheTwoParametersThisComponentCreates",
       "Effect": "Allow",
       "Action": [
         "ssm:AddTagsToResource",
@@ -135,7 +138,10 @@
         "ssm:PutParameter",
         "ssm:RemoveTagsFromResource"
       ],
-      "Resource": "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cors/allowed-origins"
+      "Resource": [
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cors/allowed-origins",
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cognito/demo-users-json"
+      ]
     },
     {
       "Sid": "PassOnlyTheTwoRolesTheSecretsComponentPublished",
@@ -185,10 +191,10 @@
       "Action": [
         "iam:CreateServiceLinkedRole"
       ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/cloudfront.amazonaws.com/AWSServiceRoleForCloudFrontVPCOrigin",
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/vpcorigin.cloudfront.amazonaws.com/AWSServiceRoleForCloudFrontVPCOrigin",
       "Condition": {
         "StringLike": {
-          "iam:AWSServiceName": "cloudfront.amazonaws.com"
+          "iam:AWSServiceName": "vpcorigin.cloudfront.amazonaws.com"
         }
       }
     }

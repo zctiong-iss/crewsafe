@@ -203,16 +203,18 @@ Test-first ordering; `/speckit-tasks` expands this into numbered tasks.
 
 Ordering is forced by SCRUM-177; only the apply waits.
 
-0. Attach `CrewSafeComputeTerraformPlan` and `CrewSafeComputeTerraformApply` to the two shared CI
-   roles, substituting `<ACCOUNT_ID>` eight times in the apply document (runbook §3).
-1. #40 merges → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_*` repository variables.
-2. #41 merges → first image published to `crewsafe/backend`.
-3. Set `var.initial_image_tag`'s default to that image's commit SHA; rebase this branch onto `main`,
-   resolving `components.json` and the catalogue test.
+0. Attach `CrewSafeComputeTerraformPlan` (inline) and `CrewSafeComputeTerraformApply`
+   (**customer-managed** — the apply document exhausted the role's 10,240-char inline budget),
+   substituting `<ACCOUNT_ID>` eight times in the apply document (runbook §3).
+1. ✅ #40 merges → apply `ecr-shared-dev` → set the `CREWSAFE_ECR_*` repository variables.
+2. ✅ #41 merges → first image published to `crewsafe/backend`.
+3. ✅ Set `var.initial_image_tag`'s default to that image's commit SHA —
+   `af7727812ee82bb74afc172fa6e5d4b865752152`. The rebase this step also called for is moot: both
+   catalogues landed on `main` together, so there was no conflict to resolve.
 4. Dispatch **Terraform State Plan** for `compute-shared-dev`.
 5. **Mandatory plan-review checks** — the local quickstart §3, twelve items. A clean plan does not prove
    every server-side constraint; items 10 (no apostrophe in a security group description) and 6
-   (read-only root *and* the tmpfs mount) are the two that have a track record of failing after a
+   (writable root, no volume, no `/tmp` mount — **inverted 2026-08-03**, see the runbook §10) are the two that have a track record of failing after a
    clean plan.
 6. Dispatch **Terraform State Apply** with the reviewed `plan_run_id` and the typed confirmation.
 7. Post-apply verification — the local quickstart §4, SC-001 to SC-010.

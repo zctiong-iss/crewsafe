@@ -1,0 +1,367 @@
+{
+  "common": {
+    "appName": "CrewSafe",
+    "cancel": "取消",
+    "confirm": "确认",
+    "save": "保存",
+    "retry": "重试",
+    "close": "关闭",
+    "loading": "加载中",
+    "back": "返回",
+    "none": "无",
+    "optional": "选填",
+    "requestReference": "参考编号：{{requestId}}"
+  },
+
+  "errors": {
+    "unauthenticated": "您的登录已过期，请重新登录。",
+    "not-provisioned": "登录成功，但此账号尚未在 CrewSafe 中开通。请联系工地管理员为您添加。",
+    "forbidden": "您没有访问权限。如果认为这是错误，请联系工地管理员。",
+    "not-found": "找不到该记录。",
+    "bad-request": "请求无效。",
+    "conflict": "他人已先行修改。请刷新后重试。",
+    "server": "服务器出现问题，请稍后重试。",
+    "network": "无法连接 CrewSafe。请检查网络后重试。",
+    "configMissing": "应用尚未配置完成。缺少：{{keys}}",
+    "unknown": "出现问题，请重试。"
+  },
+
+  "auth": {
+    "signInTitle": "登录",
+    "signInSubtitle": "户外作业人员热应激防护",
+    "usernameLabel": "用户名",
+    "usernamePlaceholder": "请输入用户名",
+    "passwordLabel": "密码",
+    "passwordPlaceholder": "请输入密码",
+    "signInButton": "登录",
+    "signUpButton": "申请账号",
+    "signOutButton": "退出登录",
+    "signingIn": "正在登录",
+    "pkceHint": "系统将在浏览器中打开 CrewSafe 安全登录页面。",
+    "modeLabel": "登录方式（仅开发环境）",
+    "modeMock": "演示用户",
+    "modeCognitoPassword": "Cognito（密码）",
+    "modeCognitoPkce": "Cognito（托管界面）",
+    "demoUserLabel": "选择演示用户",
+    "notProvisionedTitle": "账号尚未开通",
+    "sessionExpired": "您的登录已过期。",
+    "validation": {
+      "usernameRequired": "请输入用户名。",
+      "passwordRequired": "请输入密码。",
+      "passwordTooShort": "密码至少需要 {{min}} 个字符。"
+    },
+    "cognito": {
+      "invalidCredentials": "用户名或密码不正确。",
+      "newPasswordRequired": "此账号仍在使用临时密码。请先在 AWS 控制台设置正式密码，再于此处登录。",
+      "userDisabled": "此账号已被停用。",
+      "tooManyAttempts": "尝试次数过多，请稍后重试。",
+      "pkceUnavailableInExpoGo": "在手机上使用托管界面登录需要开发版构建，因为 Expo Go 无法打开 crewsafe:// 链接。请改用 `npx expo start --web --port 5173` 测试此流程，或选择其他登录方式。",
+      "cancelled": "登录已取消。"
+    }
+  },
+
+  "signUp": {
+    "title": "申请账号",
+    "intro": "CrewSafe 账号由工地管理员创建。填写以下信息后，我们会告诉您需要发送哪些内容给管理员。",
+    "fullNameLabel": "姓名",
+    "fullNamePlaceholder": "与工地记录一致的姓名",
+    "usernameLabel": "希望使用的用户名",
+    "usernamePlaceholder": "小写字母，不含空格",
+    "emailLabel": "工作邮箱",
+    "emailPlaceholder": "you@example.com",
+    "siteLabel": "您在哪个工地作业？",
+    "roleNotice": "此处仅可申请「作业人员」账号。主管、安全经理和管理员账号须由管理员创建。",
+    "submitButton": "生成申请",
+    "successTitle": "申请已生成",
+    "successBody": "请将以下信息发送给工地管理员。管理员创建账号后，您将收到邮件邀请。",
+    "copyButton": "复制信息",
+    "copiedButton": "已复制",
+    "editButton": "修改信息",
+    "backToSignIn": "返回登录",
+    "requestHeading": "CrewSafe 账号申请",
+    "roleLine": "申请角色：作业人员",
+    "validation": {
+      "fullNameRequired": "请输入姓名。",
+      "fullNameTooShort": "请至少输入 {{min}} 个字符。",
+      "fullNameTooLong": "最多 {{max}} 个字符。",
+      "usernameRequired": "请设置用户名。",
+      "usernameFormat": "仅可使用小写字母和数字，并以 . _ 或 - 分隔。",
+      "usernameTooLong": "最多 {{max}} 个字符。",
+      "emailRequired": "请输入工作邮箱。",
+      "emailInvalid": "邮箱地址格式不正确。",
+      "emailTooLong": "最多 {{max}} 个字符。",
+      "singleLineOnly": "请删除换行符和特殊格式字符。",
+      "siteRequired": "请选择工地。"
+    }
+  },
+
+  "roles": {
+    "WORKER": "作业人员",
+    "SUPERVISOR": "工地主管",
+    "SAFETY_MANAGER": "安全经理",
+    "ADMIN": "管理员"
+  },
+
+  "tabs": {
+    "shift": "我的班次",
+    "inbox": "收件箱",
+    "weather": "天气",
+    "shifts": "班次",
+    "profile": "我的",
+    "settings": "设置"
+  },
+
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "changeLanguage": "更改语言",
+    "textSize": "字体大小",
+    "textSizeSmall": "小",
+    "textSizeDefault": "标准",
+    "textSizeLarge": "大",
+    "textSizeExtraLarge": "特大",
+    "textSizePreview": "天气炎热，请及时补充水分并在阴凉处休息。",
+    "highContrast": "高对比度",
+    "highContrastHint": "加深颜色、加粗边框，便于在阳光直射下阅读。",
+    "reduceMotion": "减少动效",
+    "reduceMotionHint": "停止图标动画。若设备已开启「减少动态效果」，此项将自动生效。",
+    "accessibility": "无障碍",
+    "display": "显示",
+    "about": "关于",
+    "aboutVersion": "版本 {{version}}",
+    "aboutBody": "为新加坡户外作业人员提供热应激防护。"
+  },
+
+  "profile": {
+    "title": "我的",
+    "role": "角色",
+    "sites": "工地",
+    "username": "用户名",
+    "changePhoto": "更换照片",
+    "addPhoto": "添加照片",
+    "photoSheetTitle": "头像照片",
+    "takePhoto": "拍照",
+    "chooseFromLibrary": "从相册选择",
+    "removePhoto": "移除照片",
+    "photoLocalOnly": "照片仅保存在本机，不会上传至 CrewSafe，您的主管也无法看到。",
+    "permissionDeniedTitle": "需要权限",
+    "cameraDeniedBody": "拍照需要相机权限。您可以在设备设置中开启。",
+    "libraryDeniedBody": "选择照片需要相册权限。您可以在设备设置中开启。",
+    "photoUpdatedToast": "照片已更新",
+    "photoRemovedToast": "照片已移除"
+  },
+
+  "shifts": {
+    "site": "工地",
+    "emptyTitle": "暂无班次",
+    "emptyBody": "您为该工地安排的班次将显示在此处。",
+    "noSitesTitle": "尚未分配工地",
+    "noSitesBody": "您还没有被分配到任何工地。请联系管理员为您添加。",
+    "createButton": "安排班次",
+    "assignmentCount_one": "{{count}} 名作业人员",
+    "assignmentCount_other": "{{count}} 名作业人员",
+    "unstaffed": "尚未安排人员",
+    "window": "{{start}} 至 {{end}}",
+    "status": {
+      "PLANNED": "已计划",
+      "ACTIVE": "进行中",
+      "CLOSED": "已结束"
+    },
+    "detailTitle": "班次",
+    "assignments": "作业班组",
+    "worker": "作业人员",
+    "unknownWorker": "该人员已不在此工地",
+    "task": "任务",
+    "noTask": "未记录任务",
+    "intensity": "强度",
+    "acclimatisation": "适应期第 {{day}} 天（共 7 天）",
+    "deleteButton": "删除此班次",
+    "deleteTitle": "确认删除此班次？",
+    "deleteBody": "此操作将删除该班次及其全部人员安排，且无法撤销。",
+    "deleteConfirm": "删除",
+    "deleting": "正在删除",
+    "deletedToast": "班次已删除",
+    "deleteFailedTitle": "班次未删除",
+
+    "form": {
+      "timesSection": "时间",
+      "startsAt": "开始",
+      "endsAt": "结束",
+      "pickDateTime": "选择日期和时间",
+      "crewSection": "参与人员",
+      "crewHint": "选择本班次的作业人员。也可先创建班次，稍后再安排人员。",
+      "noWorkers": "该工地暂无可安排的作业人员。",
+      "assignmentsSection": "任务与强度",
+      "taskLabel": "任务",
+      "taskPlaceholder": "具体作业内容",
+      "taskHint": "选填，最多 {{max}} 个字符。",
+      "intensityLabel": "作业强度",
+      "acclimatisationLabel": "适应期天数",
+      "acclimatisationPlaceholder": "1 至 7",
+      "acclimatisationHint": "仅适用于入职前七天，或离岗超过一周后返岗的人员。",
+      "removeWorker": "从班次中移除",
+      "submit": "创建班次",
+      "submitting": "正在创建",
+      "createdToast": "班次已创建",
+      "unstaffedNotice": "该班次创建时不含任何人员，您可稍后再安排。"
+    },
+
+    "validation": {
+      "startRequired": "请选择班次开始时间。",
+      "endRequired": "请选择班次结束时间。",
+      "endNotAfterStart": "结束时间必须晚于开始时间。",
+      "taskTooLong": "任务描述请勿超过 {{max}} 个字符。",
+      "intensityRequired": "请选择作业强度。",
+      "acclimatisationRange": "请输入 1 至 7 之间的整数，或留空。",
+      "checkFields": "上方仍有内容需要修改，红色边框的输入框即为待修正项。"
+    }
+  },
+
+  "weather": {
+    "title": "环境状况",
+    "site": "工地",
+    "noSitesTitle": "尚未分配工地",
+    "noSitesBody": "您还没有被分配到任何工地。请联系工地管理员为您添加。",
+    "feelsLike": "湿球黑球温度",
+    "airTemp": "气温",
+    "humidity": "湿度",
+    "wind": "风速",
+    "rainfall": "降雨量",
+    "station": "监测站 {{id}}",
+    "observedAt": "观测时间 {{time}}",
+    "ingestedAt": "接收时间 {{time}}",
+    "night": "夜间",
+    "condition": {
+      "FAIR": "晴好",
+      "PARTLY_CLOUDY": "局部多云",
+      "CLOUDY": "多云",
+      "WINDY": "有风",
+      "RAIN": "有雨",
+      "THUNDERY_SHOWERS": "雷阵雨"
+    }
+  },
+
+  "inbox": {
+    "emptyTitle": "暂无待确认事项",
+    "emptyBody": "主管下达的已批准指令将显示在此处。",
+    "pending": "等待您确认",
+    "acknowledged": "已于 {{time}} 确认",
+    "dispatchedAt": "{{time}} 下发",
+    "acknowledgeButton": "确认收到",
+    "acknowledging": "正在发送",
+    "retryButton": "重试",
+    "failed": "确认信息发送失败。",
+    "safeToRetry": "可以放心再次点击，不会重复确认。",
+    "noInstruction": "未提供更多说明。"
+  },
+
+  "lightning": {
+    "stopWorkTitle": "立即停工",
+    "stopWorkBody": "工地附近有雷电。请立即前往安全的避雷场所。",
+    "advisoryTitle": "雷电预警",
+    "advisoryBody": "工地附近监测到雷电。请做好随时停工的准备。",
+    "clearTitle": "无雷电风险",
+    "clearBody": "{{time}} 评估为安全。",
+    "expiredTitle": "雷电警报已过期",
+    "expiredBody": "警报已于 {{time}} 失效。请在主管确认解除警报后再复工。",
+    "nearestStrike": "最近落雷距离 {{km}} 公里",
+    "observedAt": "观测时间 {{time}}",
+    "validUntil": "有效至 {{time}}",
+    "expiresInMinutes": "{{minutes}} 分钟后失效",
+    "expiresInSeconds": "{{seconds}} 秒后失效",
+    "overrideNotice": "停工期间，防暑方案暂停执行。"
+  },
+
+  "wbgt": {
+    "title": "热风险状况",
+    "reading": "WBGT",
+    "noReading": "暂无读数",
+    "superseded": "已被雷电停工指令取代",
+    "forecast": "未来一小时：{{band}}",
+    "observedAt": "观测时间 {{time}}",
+    "temperature": "气温",
+    "humidity": "湿度",
+    "wind": "风速",
+    "band": {
+      "BELOW_31": "低于 31°C",
+      "31_TO_BELOW_32": "31 至 32°C",
+      "32_TO_BELOW_33": "32 至 33°C",
+      "33_AND_ABOVE": "33°C 及以上"
+    }
+  },
+
+  "guidance": {
+    "title": "必须执行的措施",
+    "advisoryTitle": "建议执行",
+    "suspended": "已暂停 — 雷电停工优先于防暑方案",
+    "rule": "规则 {{ref}}",
+    "policyVersion": "政策版本 {{version}}",
+    "none": "目前无需采取防暑措施。"
+  },
+
+  "actions": {
+    "HYDRATE_REGULARLY": "定时补充水分",
+    "HYDRATE_HOURLY": "每小时至少饮水一次",
+    "SHADE_RECOVERY": "在阴凉处休息恢复",
+    "RESCHEDULE_HEAVY_WORK": "如条件允许，请改期进行重体力作业",
+    "REST_10_MIN_HOURLY": "每小时连续休息 10 分钟",
+    "REST_15_MIN_HOURLY": "每小时连续休息 15 分钟",
+    "CLOSE_MONITORING": "密切留意自己和同伴是否出现中暑症状",
+
+    "REST_10_MIN": "休息 10 分钟",
+    "REST_15_MIN": "休息 15 分钟",
+    "HYDRATE": "立即饮水",
+    "STOP_WORK": "停止作业",
+    "SEEK_SHADE": "转移至阴凉处",
+    "RESUME_WORK": "恢复作业"
+  },
+
+  "shift": {
+    "title": "您的班次",
+    "task": "作业任务",
+    "intensity": "作业强度",
+    "window": "{{start}} 至 {{end}}",
+    "acclimatisation": "适应期第 {{day}} 天（共 7 天）",
+    "noTask": "未记录任务",
+    "noShiftTitle": "暂无排班",
+    "noShiftBody": "您目前没有进行中或即将开始的班次。请与主管确认。"
+  },
+
+  "intensity": {
+    "LIGHT": "轻度",
+    "MODERATE": "中度",
+    "HEAVY": "重度"
+  },
+
+  "freshness": {
+    "LIVE": "实时",
+    "DELAYED": "延迟",
+    "STALE": "过期",
+    "SIMULATED": "模拟",
+    "simulatedNotice": "模拟数据，非真实读数 — 雷电与气象接口尚未开发。",
+    "staleWarning": "该读数过旧，不可作为依据。请勿视为当前状况，应按工地规程处理或向主管索取确认读数。",
+    "delayedWarning": "该读数到达时间晚于预期，实际状况可能已发生变化。"
+  },
+
+  "dev": {
+    "scenarioLabel": "雷电场景（仅开发环境）",
+    "freshnessLabel": "数据时效（仅开发环境）",
+    "lostResponseLabel": "模拟响应丢失（仅开发环境）",
+    "lostResponseHint": "服务器已记录确认，但响应被丢弃。重试后，下方计数必须保持为 1。",
+    "serverAckCount": "服务器端已记录的确认次数：{{total}}",
+    "resetInbox": "重置收件箱",
+    "weatherLabel": "天气场景（仅开发环境）",
+    "weatherHint": "设置底层的降雨、风速与湿度数值 — 天气状况仍由这些数值推导得出，而非直接指定。",
+    "nightLabel": "夜间观测",
+    "forbiddenLabel": "模拟跨工地 403（仅开发环境）",
+    "forbiddenHint": "该场景平时无法触发 — 选择器只会列出您所属的工地。触发后应保持登录状态并显示说明。",
+    "scenarioClear": "安全",
+    "scenarioAdvisory": "预警",
+    "scenarioStopWork": "停工"
+  },
+
+  "placeholder": {
+    "comingSoon": "即将推出",
+    "screenPending": "此页面正在开发中。"
+  }
+}

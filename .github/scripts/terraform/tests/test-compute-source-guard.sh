@@ -106,6 +106,15 @@ forbid '"(command|Command|entryPoint|EntryPoint)"[[:space:]]*[:=]' \
   'a container command or entrypoint override' \
   'The image starts the application. An override is how a migration gets run separately from the process that serves traffic (FR-037).'
 
+# A bind mount at /tmp reads as hardening and is the opposite. Fargate creates one
+# root-owned at 0755, which SHADOWS the image's writable /tmp, so the non-root
+# process cannot allocate the scratch the JVM and Tomcat both need. This component
+# shipped with that mount and the first task died on it before serving a request.
+# Absence cannot be seen in a diff, so it is asserted here.
+forbid 'containerPath[^,]*"/tmp"' \
+  'a bind mount at /tmp' \
+  'Fargate creates bind mounts root-owned at 0755, so uid 1000 cannot write to one (aws/containers-roadmap#938). Mounting /tmp causes the AccessDeniedException it appears to prevent. Restoring a read-only root filesystem needs a managed EBS volume or a root init container - not this mount.'
+
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
 # FR-021. The single most consequential argument in this component. An internet

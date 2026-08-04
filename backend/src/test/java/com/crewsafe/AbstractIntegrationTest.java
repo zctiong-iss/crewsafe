@@ -80,8 +80,13 @@ public abstract class AbstractIntegrationTest {
         // Pinned by digest for the same reason Postgres is pinned to a version: this
         // container is the whole authentication test surface, and an upstream push to
         // :latest must not be able to change token shape or break CI silently.
+        //
+        // Pinned to the multi-arch manifest list digest, not a single platform's manifest
+        // digest - CI runners are amd64 while local development here is arm64, and a
+        // single-platform digest only resolves on the architecture it was captured from
+        // (pulling it elsewhere fails outright with "exec format error").
         COGNITO_LOCAL = new GenericContainer<>("jagregory/cognito-local@sha256:"
-                + "3bd1cc79aee4444cded432680995ab1a26c6811e0af2bf61773478d9613e0141")
+                + "a5ad30d01da5016a38535a717f6e1642d1b37f886a7b17e90b67f6e5ad134831")
                 .withExposedPorts(9229)
                 .withCopyToContainer(MountableFile.forClasspathResource("cognito-local-config.json"),
                         "/app/.cognito/config.json")

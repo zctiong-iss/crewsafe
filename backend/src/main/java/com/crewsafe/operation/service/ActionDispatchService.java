@@ -1,6 +1,7 @@
 package com.crewsafe.operation.service;
 
 import com.crewsafe.common.audit.AuditService;
+import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
@@ -29,6 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class ActionDispatchService {
+
+    private static final String AUDIT_TARGET_TYPE = "ACTION_DISPATCH";
 
     private final ActionDispatchRepository actionDispatchRepository;
     private final ApprovalRepository approvalRepository;
@@ -59,7 +62,8 @@ public class ActionDispatchService {
                 .build();
 
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), "ACTION_DISPATCHED", "action_dispatch", saved.getId(),
+        auditService.record(principal.getId(), AuditEventType.ACTION_DISPATCHED,
+                AUDIT_TARGET_TYPE, saved.getId(),
                 "Action dispatched: " + actionCode + " to worker: " + workerId);
         log.info("Action dispatched: {} to worker: {}", actionCode, workerId);
 
@@ -85,8 +89,8 @@ public class ActionDispatchService {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
         dispatch.setStartTime(Instant.now());
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), "ACTION_ACKNOWLEDGED", "action_dispatch", saved.getId(),
-                "Action acknowledged: " + dispatchId);
+        auditService.record(principal.getId(), AuditEventType.ACTION_ACKNOWLEDGED,
+                AUDIT_TARGET_TYPE, saved.getId(), "Action acknowledged: " + dispatchId);
         log.info("Action dispatch acknowledged: {}", dispatchId);
 
         return saved;
@@ -111,8 +115,8 @@ public class ActionDispatchService {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
         dispatch.setEndTime(Instant.now());
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), "ACTION_COMPLETED", "action_dispatch", saved.getId(),
-                "Action completed: " + dispatchId);
+        auditService.record(principal.getId(), AuditEventType.ACTION_COMPLETED,
+                AUDIT_TARGET_TYPE, saved.getId(), "Action completed: " + dispatchId);
         log.info("Action dispatch completed: {}", dispatchId);
 
         return saved;
