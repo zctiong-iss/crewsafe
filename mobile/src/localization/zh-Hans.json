@@ -124,7 +124,7 @@
     "highContrast": "高对比度",
     "highContrastHint": "加深颜色、加粗边框，便于在阳光直射下阅读。",
     "reduceMotion": "减少动效",
-    "reduceMotionHint": "停止图标动画。若设备已开启「减少动态效果」，此项将自动生效。",
+    "reduceMotionHint": "默认开启。停止图标动画，但停工警告除外。若设备已开启「减少动态效果」，此项将始终生效。",
     "accessibility": "无障碍",
     "display": "显示",
     "about": "关于",
