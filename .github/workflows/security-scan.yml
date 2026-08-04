@@ -134,7 +134,6 @@ jobs:
           fi
 
       - name: Analyse with SonarQube Cloud
-        working-directory: backend
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         # -DskipTests is deliberate: the Quality Gate carries no coverage
@@ -177,7 +176,11 @@ jobs:
             args+=("-D${key}=${value}")
           done <"$props_file"
 
-          ./mvnw -B -DskipTests compile \
+          # Run the Maven wrapper from the repo root and point it at the
+          # backend module. Running mvnw from inside `backend/` caused the
+          # Sonar plugin to resolve relative paths against the module base,
+          # producing duplicated paths like backend/backend/src/main.
+          ./backend/mvnw -B -DskipTests -f backend/pom.xml compile \
             org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
             "${args[@]}" \
             -Dsonar.projectBaseDir="${GITHUB_WORKSPACE}" \

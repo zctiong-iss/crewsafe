@@ -155,6 +155,24 @@ write_summary() {
       printf '\n'
     fi
   } >>"$summary_out"
+
+  # Also emit a concise, sanitized plaintext summary to stdout so callers
+  # that capture stdout (for example the gate self-tests) see the same
+  # high-level information even when $GITHUB_STEP_SUMMARY points at a
+  # runner-managed file. Sanitize to avoid introducing workflow commands.
+  local short_scope
+  short_scope="$(sanitize "$scope")"
+  case "$status" in
+    0)
+      printf 'The gate ran and found %s blocking finding(s) in scope: %s\n' "$blocking" "$short_scope"
+      ;;
+    1)
+      printf 'The gate ran and found %s blocking finding(s) in scope: %s\n' "$blocking" "$short_scope"
+      ;;
+    *)
+      printf 'The gate failed to run (infrastructure failure) for scope: %s\n' "$short_scope"
+      ;;
+  esac
 }
 
 if [[ ! -f "$in_file" ]]; then
