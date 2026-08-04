@@ -212,3 +212,10 @@ and its still-attached empty security group, changing `enable_deletion_protectio
 replacement, public-path change, listener/target-group/rule restoration, or ECS attachment change.
 After it applies, a second fresh final-cleanup revision removes the two temporary declarations and
 uses another reviewed plan to delete only the unprotected ALB and its security group.
+
+The remediation test-only checkpoint is revision `96e2f18` on draft PR
+[#77](https://github.com/zctiong-iss/crewsafe/pull/77). Terraform Validation
+[run 30893043642, catalog job 91939441332](https://github.com/zctiong-iss/crewsafe/actions/runs/30893043642/job/91939441332)
+failed as expected because the temporary legacy ALB security-group declaration is absent. Lockfile
+and security jobs passed; the Terraform matrix was skipped after this deliberate source-guard
+failure. Implementation must make this guard and the full required workflow pass.
