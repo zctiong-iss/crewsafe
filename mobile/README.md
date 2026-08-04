@@ -183,7 +183,7 @@ state that dies with the screen — never Redux, never persisted, never logged.
 |---|---|---|
 | Sign in | — | Three auth modes, dev-only selector |
 | Request an account | — | **Placeholder by necessity** — see gaps below |
-| My shift | **SCRUM-172** | Mocked |
+| My shift | **SCRUM-172**, **196/197** | Mocked |
 | Inbox | **SCRUM-186** | **Real** `ActionDispatchController` |
 | Weather | — | Mocked conditions, **real** `GET /sites` |
 | Shifts / detail | **SCRUM-161** | **Real** `ShiftController` |
@@ -199,10 +199,14 @@ the most.
 ### Acceptance criteria, and how to see them
 
 **SCRUM-172 — "the warning clears on expiry."** My shift → the stop-work banner counts down
-per second and flips to a muted expired state at the boundary. The heat plan's *Suspended*
-notice disappears at the same instant. The mocked window is 90 seconds rather than §7.1's
-~30 minutes, because nobody watches a screen for half an hour to confirm a banner clears —
-that duration is the only value shortened.
+per second and flips to a muted expired state at the boundary. The mocked window is 90
+seconds rather than §7.1's ~30 minutes, because nobody watches a screen for half an hour to
+confirm a banner clears — that duration is the only value shortened.
+
+> The heat plan's *Suspended* notice used to disappear at the same instant. That card is now
+> hidden — see [SCRUM-196/197](#scrum-196--197--my-shift-screen-reorder-and-strip) — and
+> `WbgtCard`'s own *Superseded by the lightning stop-work* label is what carries the
+> override while it is off.
 
 The expired state deliberately **does not say "safe to resume"**. What lapses at
 `validUntil` is the server's assessment, not the hazard; §7.1 holds a stop-work until a
@@ -409,6 +413,10 @@ derived from HTTP status.
 - **Still unverified by eye:** Gelasio at the largest text setting, whether the stop-work
   banner reads in direct sun, and whether the animation rates feel right rather than merely
   work.
+- **The heat plan card is switched off** (`features.heatGuidanceCard`, SCRUM-196/197). While
+  it is, the app shows no mandatory heat actions, no rule references and no policy version —
+  FR-15 and FR-16 have no other surface. One boolean restores it; the full reversal spec is
+  in [SCRUM-196/197](#scrum-196--197--my-shift-screen-reorder-and-strip).
 - **Offline queueing is out of scope** (SCRUM-130). The idempotency key is the groundwork.
 - **Reactotron is not wired.** It needs host configuration to reach a phone; nothing in the
   app depends on it.
@@ -745,6 +753,172 @@ per-user change exists to close.
 attributing it to anyone. Nothing in persisted state can name the person it belonged to,
 precisely because `auth` is not persisted. Guessing would be wrong on a shared phone, so one
 person re-sets one switch once.
+
+---
+
+## SCRUM-196 / 197 — My shift screen reorder and strip
+
+Two ordering tickets that arrived alongside a set of content removals. **Everything removed
+here is recorded verbatim below so it can be put back by reference** — ask for "the
+SCRUM-196/197 reversal list in the mobile README" and this section is the spec.
+
+Nothing was deleted from the API, the domain types, or the mock server. Every removal is a
+*display* change: `LightningRisk` still carries `nearestStrikeKm` and `observedAt`,
+`SiteConditions` still carries every metric, and the policy engine still returns its full
+evaluation. The data is on the wire; it is just no longer painted.
+
+### Ordering (SCRUM-196, SCRUM-197)
+
+`MyShiftScreen` render order:
+
+| Before | After |
+|---|---|
+| 1. Lightning banner | 1. Lightning banner |
+| 2. Freshness notice | 2. **Task view** (`ShiftCard`) |
+| 3. Heat conditions (`WbgtCard`) | 3. *Heat plan (`HeatGuidance`) — now hidden* |
+| 4. Heat plan (`HeatGuidance`) | 4. Freshness notice |
+| 5. Task view (`ShiftCard`) | 5. **Heat conditions** (`WbgtCard`) |
+
+The freshness notice moved **with** the reading rather than staying put. It exists to tell a
+worker whether to trust that number, so separating the two would strand a warning above a
+card it no longer refers to.
+
+FR-12a is still satisfied. It constrains the lightning warning to sit *above* the WBGT
+reading — moving the reading further down only reinforces that.
+
+### Text removed from the lightning banner
+
+| State | Removed / changed | Exact former text (en) | i18n key |
+|---|---|---|---|
+| Stop work, Advisory | **Removed** | `Nearest strike {{km}} km away` | `lightning.nearestStrike` |
+| All live states | **Removed** | `Observed {{time}}` | `lightning.observedAt` |
+| All live states | **Reworded** | `Expires in {{minutes}} min` → `Refreshes in {{minutes}} min` | `lightning.expiresInMinutes` → `lightning.refreshesInMinutes` |
+| All live states | **Reworded** | `Expires in {{seconds}} s` → `Refreshes in {{seconds}} s` | `lightning.expiresInSeconds` → `lightning.refreshesInSeconds` |
+
+`lightning.nearestStrike` and `lightning.observedAt` were **deleted from all three locale
+files** (`en`, `hi`, `zh-Hans`). To restore, re-add:
+
+```jsonc
+// en.json, inside "lightning"
+"nearestStrike": "Nearest strike {{km}} km away",
+"observedAt": "Observed {{time}}",
+// hi.json
+"nearestStrike": "निकटतम बिजली {{km}} किमी दूर",
+"observedAt": "{{time}} पर दर्ज",
+// zh-Hans.json
+"nearestStrike": "最近落雷距离 {{km}} 公里",
+"observedAt": "观测时间 {{time}}",
+```
+
+**Why "Refreshes" and not "Expires".** The clock is unchanged; only the promise it makes is.
+"Expires" invited reading the *hazard* as ending at zero, when what lapses is the server's
+assessment — and the screen immediately polls for a new one. "Refreshes" describes what the
+worker actually observes. Only a supervisor lifts a stop-work.
+
+**Kept:** the Clear state's body line `Assessed clear at {{time}}.` (`lightning.clearBody`)
+and the expired body `The warning lapsed at {{time}}. Resume work only when your supervisor
+confirms the all-clear.` (`lightning.expiredBody`). Only the *meta row* was stripped.
+
+### Text removed from the heat conditions card
+
+`WbgtCard` was reduced to title, freshness badge, superseded label, and the WBGT reading.
+
+| Removed | Exact former text (en) | i18n key | Status |
+|---|---|---|---|
+| Band | `32 to 33°C` etc. | `wbgt.band.*` | **Key kept** — still used by the Weather tab |
+| Forecast | `Next hour: {{band}}` | `wbgt.forecast` | **Key deleted** |
+| Air temp | `Air temp` + value | `wbgt.temperature` | **Key deleted** |
+| Humidity | `Humidity` + value | `wbgt.humidity` | **Key deleted** |
+| Wind | `Wind` + value | `wbgt.wind` | **Key deleted** |
+| Observation time | `Observed {{time}}` | `wbgt.observedAt` | **Key deleted** |
+
+To restore, re-add to the `"wbgt"` block:
+
+```jsonc
+// en.json
+"forecast": "Next hour: {{band}}",  "observedAt": "Observed {{time}}",
+"temperature": "Air temp",  "humidity": "Humidity",  "wind": "Wind",
+// hi.json
+"forecast": "अगले घंटे: {{band}}",  "observedAt": "{{time}} पर दर्ज",
+"temperature": "तापमान",  "humidity": "नमी",  "wind": "हवा",
+// zh-Hans.json
+"forecast": "未来一小时：{{band}}",  "observedAt": "观测时间 {{time}}",
+"temperature": "气温",  "humidity": "湿度",  "wind": "风速",
+```
+
+`WbgtCard` also **lost two props**, `policy` and `locale`, which became unused once the band,
+forecast and timestamp went. Restoring any of those rows means restoring the props and
+passing `policy={policy} locale={i18n.language}` from `MyShiftScreen`.
+
+**On "the temperature should follow NEA data":** it already does, and no code change was
+needed. The card renders `conditions.wbgt` straight from the API response. In mock mode that
+is a fixture (32.4, badged *Simulated*); once `GET /api/v1/sites/{siteId}/conditions` exists
+it becomes the real ingested observation with no edit to this file. **That endpoint still
+does not exist** — see [Backend gaps](#backend-gaps).
+
+### The "What you must do" card — hidden, not deleted
+
+Controlled by `features.heatGuidanceCard` in `src/constants/features.ts`. **Set it to `true`
+to restore. Nothing else needs to change.**
+
+`HeatGuidance.tsx` is untouched and still compiles — it is rendered behind the flag rather
+than commented out, precisely so it stays typechecked. Commented-out JSX is invisible to
+`tsc` and rots the moment a prop or translation key moves underneath it; the rot is then
+discovered by whoever uncomments it, which is the worst possible moment.
+
+**What is not visible while the flag is off:**
+
+| Lost | Requirement |
+|---|---|
+| Mandatory heat actions — `Drink water at least once an hour`, `Rest 10 minutes without a break, every hour` | FR-15 |
+| Section headings `What you must do` / `Also recommended` | — |
+| Rule references — `Rule HS-31-HYDRATE`, `Rule HS-32-HEAVY`, `Rule HS-BASE-SHADE` | **FR-16** |
+| Policy version — `Policy MOM-WBGT-2026.1-MOCK` | **FR-16** |
+| Worded stop-work override — `Suspended — lightning stop-work overrides the heat plan` | FR-12a |
+
+No translation keys were deleted for this — the whole `"guidance"` and `"actions"` blocks
+are intact in all three locales, because the component still references them.
+
+> **This is the removal with the most weight behind it.** `HeatGuidance` was the app's only
+> surface for the deterministic policy engine's output. The dispatch Inbox is *not* a
+> substitute: it shows actions a **supervisor** approved and sent, not what the policy
+> requires on its own. While the flag is off, a worker on a HEAVY task at 32.4°C WBGT is not
+> told in-app that an hourly ten-minute rest is mandatory, and no rule reference or policy
+> version is shown anywhere — which is what FR-16 asks for.
+>
+> The FR-12a override survives, in words, via `WbgtCard`'s *Superseded by the lightning
+> stop-work* label. That label is now load-bearing and should not be removed while this flag
+> is off.
+
+### Lightning banner: all live states now filled
+
+Clear and Advisory became filled blocks with white text, matching Stop work. Expired keeps
+its outline — it is explicitly *not* an all-clear, and giving a lapsed assessment the same
+weight as a live one is the one misreading that matters.
+
+This required a new palette entry. White text on the existing advisory amber **failed WCAG
+AA**:
+
+| State | Fill | White text | AA (4.5:1) |
+|---|---|---|---|
+| Stop work | `#C71A34` | 5.79:1 | pass |
+| Advisory — **old** | `#B26A00` | **4.24:1** | **fail** |
+| Advisory — **new** `warningFill` | `#9A5B00` | 5.43:1 | pass |
+| Clear | `#1B5E20` | 7.87:1 | pass |
+
+`warningFill` is a *fill* colour only. `warning` is unchanged and still correct for warning
+text and borders on a light surface. Two names because they solve opposite problems: one
+must be legible **on** white, the other **under** it. High contrast reuses its existing
+`#7A4600` (7.77:1), which already passed.
+
+**No new icon was imported, deliberately.** Both icons draw in `foreground`, which turns
+white the instant the banner is filled, so they inherit exactly the same contrast as the
+text beside them. There was no clash to fix.
+
+**What now distinguishes Stop work**, since fill no longer does: a 30px icon vs 24px, a
+`title` vs `subtitle` heading, and the `urgent` pulse against Advisory's `steady` and Clear's
+stillness. That redundancy is load-bearing — colour washes out first in glare and fails first
+for red-green colour blindness — and a future consistency pass should not flatten it.
 
 ---
 

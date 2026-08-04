@@ -264,11 +264,9 @@
     "clearBody": "Assessed clear at {{time}}.",
     "expiredTitle": "Lightning warning expired",
     "expiredBody": "The warning lapsed at {{time}}. Resume work only when your supervisor confirms the all-clear.",
-    "nearestStrike": "Nearest strike {{km}} km away",
-    "observedAt": "Observed {{time}}",
     "validUntil": "Valid until {{time}}",
-    "expiresInMinutes": "Expires in {{minutes}} min",
-    "expiresInSeconds": "Expires in {{seconds}} s",
+    "refreshesInMinutes": "Refreshes in {{minutes}} min",
+    "refreshesInSeconds": "Refreshes in {{seconds}} s",
     "overrideNotice": "Heat plan suspended while stop-work is in effect."
   },
 
@@ -277,11 +275,6 @@
     "reading": "WBGT",
     "noReading": "No reading available",
     "superseded": "Superseded by the lightning stop-work",
-    "forecast": "Next hour: {{band}}",
-    "observedAt": "Observed {{time}}",
-    "temperature": "Air temp",
-    "humidity": "Humidity",
-    "wind": "Wind",
     "band": {
       "BELOW_31": "Below 31°C",
       "31_TO_BELOW_32": "31 to 32°C",
