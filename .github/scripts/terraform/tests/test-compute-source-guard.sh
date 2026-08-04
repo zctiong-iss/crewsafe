@@ -143,6 +143,18 @@ require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
   'the active public load balancer identity' \
   'Cleanup must preserve the verified origin selected by CloudFront.'
 
+require 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
+  'the temporarily managed legacy load-balancer security group' \
+  'The failed cleanup left this group attached to the surviving deletion-protected ALB; remediation must adopt it without recreating it.'
+
+require 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
+  'the temporarily managed legacy load balancer' \
+  'Remediation must adopt the surviving ALB so a reviewed apply can disable deletion protection before final cleanup.'
+
+require 'enable_deletion_protection[[:space:]]*=[[:space:]]*false' \
+  'disabled deletion protection on the surviving legacy ALB' \
+  'The remediation revision must change only this protection flag; final cleanup happens in a later reviewed revision.'
+
 require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' \
   'the AWS-managed CloudFront origin-facing prefix list' \
   'The parallel origin must fail closed to CloudFronts published origin-facing addresses.'
@@ -159,10 +171,6 @@ forbid 'resource[[:space:]]+"aws_cloudfront_vpc_origin"' \
   'a legacy CloudFront VPC origin' \
   'Cleanup is allowed only after CloudFront has deployed and passed evidence on the public custom origin.'
 
-forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
-  'the legacy internal load balancer' \
-  'The verified public ALB is the only final origin.'
-
 forbid 'resource[[:space:]]+"aws_lb_target_group"[[:space:]]+"backend"' \
   'the legacy target group' \
   'The ECS service must retain only its active public target-group attachment.'
@@ -171,9 +179,9 @@ forbid 'resource[[:space:]]+"aws_lb_listener"[[:space:]]+"backend"' \
   'the legacy listener' \
   'Cleanup removes the unreferenced internal path.'
 
-forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"|resource[[:space:]]+"aws_vpc_security_group_(ingress|egress)_rule"[[:space:]]+"(lb_from_vpc_origin|lb_to_app|app_from_lb)"' \
-  'legacy load-balancer security resources' \
-  'Only the prefix-list-fenced public-origin boundary remains after cleanup.'
+forbid 'resource[[:space:]]+"aws_vpc_security_group_(ingress|egress)_rule"[[:space:]]+"(lb_from_vpc_origin|lb_to_app|app_from_lb)"' \
+  'legacy load-balancer connectivity rules' \
+  'Remediation adopts only the surviving ALB and its attached empty security group; no legacy traffic path may return.'
 
 load_balancer_blocks="$(grep -Ec '^[[:space:]]*load_balancer[[:space:]]*\{' < <(scan))"
 [[ "$load_balancer_blocks" -eq 1 ]] ||
@@ -237,4 +245,4 @@ jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") ==
   "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must remove cloudfront:DeleteVpcOrigin after cleanup"
 
-printf 'ok: %s cleanup source guard passed (%d checks)\n' "$component_dir" 28
+printf 'ok: %s cleanup-remediation source guard passed (%d checks)\n' "$component_dir" 31

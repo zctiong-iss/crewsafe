@@ -197,3 +197,18 @@ No changes. Your infrastructure matches the configuration.
 Investigate any non-empty convergence plan; do not apply it automatically. Final review requires
 linked evidence for all stages, least-privilege live policies, no local Terraform, no sensitive
 data exposure, canonical textual statuses, and no unreviewed high-severity finding.
+
+### Cleanup remediation after apply run 30891380424
+
+Apply [run 30891380424, job 91933982695](https://github.com/zctiong-iss/crewsafe/actions/runs/30891380424/job/91933982695)
+partially applied reviewed plan `30891291364` from source
+`ff1582a6936da7b8e52b1a38d0b54c4826d17f0e`. It deleted the legacy VPC origin, listener, target
+group, and three connectivity rules, then failed deleting `aws_lb.main` because deletion protection
+was enabled. The plan is stale after those state changes and must never be retried.
+
+Remediation uses a fresh reviewed revision and plan to re-declare only the surviving internal ALB
+and its still-attached empty security group, changing `enable_deletion_protection` from `true` to
+`false`. The remediation plan must contain exactly that one in-place ALB change: no add, destroy,
+replacement, public-path change, listener/target-group/rule restoration, or ECS attachment change.
+After it applies, a second fresh final-cleanup revision removes the two temporary declarations and
+uses another reviewed plan to delete only the unprotected ALB and its security group.

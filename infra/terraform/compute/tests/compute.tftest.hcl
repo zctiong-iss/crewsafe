@@ -243,6 +243,23 @@ run "public_origin_cleanup" {
   command = apply
 
   assert {
+    condition     = aws_lb.main.internal == true
+    error_message = "Remediation must adopt the surviving legacy ALB without changing its internal topology."
+  }
+
+  assert {
+    condition     = aws_lb.main.enable_deletion_protection == false
+    error_message = "Remediation must disable deletion protection before the legacy ALB can be removed in a later reviewed revision."
+  }
+
+  assert {
+    condition = tolist(aws_lb.main.subnets) == tolist([
+      "subnet-0private000000a", "subnet-0private000000b"
+    ])
+    error_message = "Remediation must adopt the legacy ALB in its existing private subnets."
+  }
+
+  assert {
     condition     = aws_lb.public.internal == false
     error_message = "Cleanup must preserve the active internet-facing public ALB."
   }
