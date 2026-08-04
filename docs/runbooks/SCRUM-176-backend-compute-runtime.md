@@ -13,15 +13,16 @@ the deployed backend reachable.
 ## 1. What this component is
 
 ECS Fargate running the `com.crewsafe` Spring Boot backend in the private subnets
-`network-shared-dev` published, behind an **internal** load balancer that only a CloudFront VPC
-origin can reach. The public entry point is the distribution's provider-issued
-`*.cloudfront.net` name with a publicly trusted certificate.
+`network-shared-dev` published, behind a **public** load balancer in the public subnets whose
+ingress is fenced to CloudFront's managed address range. The public entry point is the
+distribution's provider-issued `*.cloudfront.net` name with a publicly trusted certificate.
 
 ```text
 client ──443/TLS──> CloudFront distribution
-                         │  VPC origin, AWS private path
+                         │  80/HTTP, public internet, fenced to CloudFront's
+                         │  managed prefix list at the load balancer's security group
                          ▼
-                    INTERNAL load balancer (private subnets, no public address)
+                    PUBLIC load balancer (public subnets, fenced ingress)
                          │  8080, by security group reference
                          ▼
                     Fargate task (private subnets, no public IP)
@@ -30,7 +31,21 @@ client ──443/TLS──> CloudFront distribution
                     RDS PostgreSQL (SCRUM-175)
 ```
 
-Fifteen resources. Everything the application needs is resolved **by reference** at task start
+**This inverts what this runbook said before 2026-08-04.** The component shipped and was first
+applied with an **internal** load balancer reachable only through a CloudFront VPC origin. That
+design was built, applied twice, and abandoned after the origin reported healthy while serving zero
+requests for a full day with no diagnosable fault — full account in §10. The public load balancer
+fenced by CloudFront's prefix list is the alternative the original specification considered and
+rejected for needing a shared secret in state; that objection applied to a header-based variant this
+design does not use.
+
+**What this concedes, stated plainly:** the CloudFront-to-origin hop now crosses the public internet
+in plaintext, and the prefix list admits any CloudFront distribution in any AWS account, not only
+this one — see §10 for why, and for the controls this environment relies on instead (a Cognito token
+on every route, server-side authorization). Acquiring a domain name removes both the VPC-origin
+apparatus's need to exist in the first place AND this concession, in one change — also in §10.
+
+Fourteen resources. Everything the application needs is resolved **by reference** at task start
 using the two roles `secrets-shared-dev` published — nothing is baked into the image, and no
 credential is in Terraform source, state, a plan artifact, or a log.
 
@@ -114,10 +129,11 @@ mechanism differs.
 > first it adds `CrewSafeEcrTerraformPlan`/`Apply` to the same two roles.
 
 **Replace `<ACCOUNT_ID>` in the apply policy with the target account's twelve-digit id before
-attaching. It appears nine times**, across `ManageApplicationLogGroup` (twice),
+attaching. It appears eight times** (down from nine before 2026-08-04's switch to a public load
+balancer — see §10), across `ManageApplicationLogGroup` (twice),
 `ManageTheTwoParametersThisComponentCreates` (twice — one per parameter),
-`PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the three service-linked-role
-statements. The plan policy contains no account id.
+`PassOnlyTheTwoRolesTheSecretsComponentPublished` (twice), and the **two** remaining
+service-linked-role statements. The plan policy contains no account id.
 
 > **Inline policy budget — this component is the one that broke it.** A role's inline policies share
 > a **10,240 non-whitespace character** limit, counted across *all* of them. Attaching this
@@ -168,7 +184,9 @@ inline policy** here — it will be rejected on the character limit.
 
 1. Open **IAM → Policies → Create policy**, then the **JSON** editor.
 2. Paste the complete reviewed document from `infra/terraform/compute/iam/apply-role-policy.json`,
-   with `<ACCOUNT_ID>` already substituted.
+   with `<ACCOUNT_ID>` already substituted. **It appears eight times** as of 2026-08-04 — one fewer
+   than earlier revisions, because switching to a public load balancer removed the CloudFront VPC
+   origin service-linked-role grant (see §10).
 3. Confirm `PassOnlyTheTwoRolesTheSecretsComponentPublished` names the **two exact role ARNs** the
    secrets component published — not a wildcard — **and carries the `iam:PassedToService` condition
    naming `ecs-tasks.amazonaws.com`**. Without the condition, the apply role can hand those roles to
@@ -181,8 +199,9 @@ inline policy** here — it will be rejected on the character limit.
    `cors/allowed-origins` and `cognito/demo-users-json` — and neither the prefix nor `*`. It was a
    single ARN until 2026-08-03; the second entry supplies the synthetic-user mappings the staging
    profile requires (see §10).
-7. Confirm all **three** service-linked-role statements are present, each scoped to its exact
-   `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
+7. Confirm the **two** remaining service-linked-role statements are present (ECS, Elastic Load
+   Balancing — the CloudFront VPC origin grant was removed 2026-08-04, see §10), each scoped to its
+   exact `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
    warning below.
 8. Confirm it grants **no** `secretsmanager:GetSecretValue`, **no** `logs:GetLogEvents`, and **no**
    `ecs:ExecuteCommand`.
@@ -204,14 +223,19 @@ inline policy** here — it will be rejected on the character limit.
 > is a coin flip that costs a failed apply to resolve. Both forms address the same single log group,
 > so listing both is precise rather than permissive.
 
-> **Three new AWS services in one component, and each may need its service-linked role created on
+> **Two new AWS services in one component, and each may need its service-linked role created on
 > the first apply.** SCRUM-175's runbook records the pattern: *"a hand-written least-privilege policy
 > for a service the project has not used before will be wrong… budget two or three [failed applies]
-> for any new AWS service."* ECS, Elastic Load Balancing, and CloudFront are all new here, so all
-> three grants are included pre-emptively rather than discovered one failed apply at a time. Each is
-> pinned to one exact role ARN with an `iam:AWSServiceName` condition, so the grant cannot create any
-> other service-linked role. If a role already exists in the account the grant is simply unused — it
-> is not a permission to delete or modify an existing one.
+> for any new AWS service."* ECS and Elastic Load Balancing are both new here, so both grants are
+> included pre-emptively rather than discovered one failed apply at a time. Each is pinned to one
+> exact role ARN with an `iam:AWSServiceName` condition, so the grant cannot create any other
+> service-linked role. If a role already exists in the account the grant is simply unused — it is not
+> a permission to delete or modify an existing one.
+>
+> A third such grant, for CloudFront's VPC-origin service-linked role, existed until 2026-08-04 and
+> was removed along with the VPC origin itself — a standard CloudFront distribution in front of a
+> public load balancer needs no service-linked role at all. See §10 for why the VPC origin was
+> abandoned.
 
 > **Neither policy grants `secretsmanager:GetSecretValue`, and neither ever should.** The CI roles
 > build the task definition that *references* the credentials; the **task execution role** resolves
@@ -386,7 +410,8 @@ each of these by reading the plan output:
 
 | # | Check | Why it is not caught earlier |
 | --- | --- | --- |
-| 1 | `aws_lb.main` shows `internal = true`, subnets are the **private** ids | The single most consequential argument here |
+| 1 | `aws_lb.main` shows `internal = false`, subnets are the **public** ids — **inverted 2026-08-04**, see §10 | The single most consequential argument here |
+| 1a | The load balancer's security group admits ingress **only** by `prefix_list_id` referencing `com.amazonaws.global.cloudfront.origin-facing` — **no** `cidr_ipv4`, and certainly no `0.0.0.0/0` | This is now the entire boundary the origin depends on; the source guard forbids `0.0.0.0/0` but a plan is the only place to see the prefix list actually resolved |
 | 2 | Service `assign_public_ip = false`, `security_groups` has **exactly one** entry | Membership of that group is the only thing granting database access |
 | 3 | Task definition `environment` has **no** credential and **no** Flyway/DDL variable | |
 | 4 | Every `valueFrom` ends with the ARN, a JSON key, and **two colons** | A pinned version turns credential rotation into an outage |
@@ -397,7 +422,7 @@ each of these by reading the plan output:
 | 9 | Exactly **one** new ingress rule targets the application security group | |
 | 10 | Security group descriptions contain **no apostrophe** | EC2 rejects it at create time, not at plan — **this is what broke SCRUM-173's first apply** |
 | 11 | Distribution minimum protocol is `TLSv1` — **yes, TLSv1** — and cache policy is `CachingDisabled` | Corrected 2026-08-04. The API ignores this field with the default certificate and pins it to `TLSv1`; the old check demanded `TLSv1.2_2021`, which was unsatisfiable and produced a diff that never converged. See §10 |
-| 12 | Resource count is at or under 23 | Was 22 before the synthetic-user mappings parameter was added |
+| 12 | Resource count is 14 on a fresh apply | Two lower since 2026-08-04 — both `aws_cloudfront_vpc_origin` resources were removed with the switch to a public load balancer (§10). No `for_each` or `count` is used anywhere in this component, so this is an exact count of the `resource` blocks in `main.tf`, not an estimate |
 
 ---
 
@@ -520,7 +545,20 @@ do if you create a second cluster.
 to this component's published contract and is a decision for whoever owns this component, not an
 obvious cleanup.
 
-### The VPC origin was rebuilt, and how a 504 with nothing misconfigured was diagnosed
+### SUPERSEDED 2026-08-04 — the VPC origin was abandoned, not fixed
+
+**This component no longer has an `aws_cloudfront_vpc_origin` resource at all.** The load balancer is
+public, fenced by CloudFront's managed prefix list — see §1 and the long comment on
+`aws_security_group.lb` in `main.tf`. This subsection is kept in full because the diagnostic path is
+the reason for that decision and because the next person to consider a VPC origin for anything should
+read it first.
+
+**The short version:** the VPC-origin design was built and applied twice. Both origins reported
+`Deployed`. Neither ever routed a single request. The second rebuild's own network interfaces turned
+out to be the *original* pair, never re-attached — evidence that the fault was not something a third
+rebuild would have fixed. The fault was never found; it was designed around instead.
+
+#### Round 1 — the first VPC origin, reachable by every check except the one that mattered
 
 The first apply to create the whole component left a VPC origin that reported **Deployed** and
 routed **nothing**. Every request to the public URL returned `504 Gateway Timeout` after almost
@@ -565,22 +603,42 @@ updated in-place*, `0 to add, 2 to change, 0 to destroy` — `name` is not a for
 rename relabels the same broken origin. `-replace` is unreachable because the shared workflows accept
 no per-dispatch arguments.
 
-**The rebuild is therefore two resources across two applies:**
+The working rebuild shape was two resources across two applies — add a new `aws_cloudfront_vpc_origin`
+under a different name, repoint the distribution at it in one apply; delete the superseded block in a
+second, once the new one is confirmed serving. CloudFront refuses to delete a VPC origin a
+distribution still references, so a combined step strands the distribution holding the stable URL —
+that constraint is why it has to be two applies, not one.
 
-| Apply | Change | Expected plan |
-| --- | --- | --- |
-| 1 | Add `aws_cloudfront_vpc_origin.rebuilt`, repoint the distribution at it | `1 to add, 1 to change, 0 to destroy` |
-| 2 | Delete the superseded `aws_cloudfront_vpc_origin.backend` block | `0 to add, 0 to change, 1 to destroy` |
+#### Round 2 — a fresh origin, the same two network interfaces, still nothing
 
-Doing it in one step is what fails: CloudFront refuses to delete a VPC origin a distribution still
-references, so a combined plan strands the distribution that holds the stable public URL. Verify the
-public URL answers after apply 1, before running apply 2.
+Apply 1 of the rebuild ran clean: `Apply complete! Resources: 1 added, 1 changed, 0 destroyed`, a new
+VPC origin id, the distribution repointed. **The public URL still returned 504, identically**, 30.29s
+this time.
 
-> **Read that plan before applying it.** It must say the VPC origin **must be replaced**. If it says
-> *will be updated in-place*, the name is not a force-new attribute, the change rebuilds nothing, and
-> the right move is a second resource repointed in one apply and the first removed in another. Do
-> **not** apply a destroy-first replacement: CloudFront will not delete a VPC origin a distribution
-> still references, so it fails partway and strands the distribution that holds the stable URL.
+Every check that had passed for round 1 passed again for round 2 — new origin `Deployed`, correct
+load balancer ARN, `http-only` on 80, distribution pointing at the new origin id. One more check was
+run this time that had not been run before:
+
+```text
+aws ec2 describe-network-interfaces --filters Name=description,Values='*loudFront*' \
+  --query 'NetworkInterfaces[].{id:NetworkInterfaceId,ip:PrivateIpAddress,created:Attachment.AttachTime}'
+```
+
+**The two CloudFront network interfaces were the exact same two from round 1, and neither had an
+`AttachTime`.** A brand-new VPC origin id had been created, and CloudFront had not provisioned new
+network interfaces for it — it reused two interfaces already sitting unattached in the account. An
+unattached network interface routes nothing no matter how correct the security group admitting it is,
+which is consistent with every other observation: `RequestCount: 0`, Reachability Analyzer reporting
+the *path* as open while nothing used it, and a `Deployed` status that describes CloudFront's own
+bookkeeping rather than a working data path.
+
+This is why a third rebuild was not attempted. The problem was not the specific origin object; it was
+something upstream of it — plausibly traceable to the very first `CreateVpcOrigin` call, which had
+already failed once mid-request on the wrong service-linked-role principal (round 2 of §3.3) before
+succeeding on a retry. Whatever state that left in the account, rebuilding the origin object again
+was not going to reach it. **No support case was opened; the design was abandoned instead**, in favor
+of the public-load-balancer-plus-prefix-list alternative this component now runs. See §1 for what that
+costs and why it was judged worth it.
 
 ### The synthetic-user mappings parameter, and why this component creates it
 
@@ -709,24 +767,25 @@ Three consequences, and the third is the one that matters most:
 The two assertions in `public_edge` — the `TLSv1` floor and `cloudfront_default_certificate == true` —
 are deliberately adjacent. They are one decision, and they change together or not at all.
 
-### Two accepted Trivy exemptions
+### Three accepted Trivy exemptions
 
-The `security` job scans `infra/terraform` at HIGH,CRITICAL and fails the build. Two findings on
+The `security` job scans `infra/terraform` at HIGH,CRITICAL and fails the build. Three findings on
 this component are suppressed inline with `#trivy:ignore:` and the reasoning beside them in
 `infra/terraform/compute/main.tf` — the same convention `network` and `bootstrap/state` already use.
-Neither is a scanner false positive; both are decisions.
+None is a scanner false positive; all three are decisions.
 
 | Finding | Where | Why it is accepted |
 | --- | --- | --- |
-| `AWS-0054` — listener does not use HTTPS | `aws_lb_listener.backend` | The rule reads `protocol` without reading `internal`. What it asks for is unobtainable: no publicly trusted certificate can be issued for the `*.elb.amazonaws.com` name this listener answers on. That constraint is the reason the load balancer is internal and the reason the edge is a CloudFront VPC origin. **If the load balancer ever becomes public this exemption is wrong** — the source guard forbids `internal = false` to keep the two from drifting apart. |
+| `AWS-0053` — load balancer exposed publicly | `aws_lb.main` | Added 2026-08-04, when the load balancer became public — see §1 and §10. This check exists to catch *accidental* exposure; this exposure is required by the design and immediately fenced by `aws_vpc_security_group_ingress_rule.lb_from_cloudfront` to CloudFront's managed address range. The source guard forbids a `0.0.0.0/0` ingress rule to keep that fence from being quietly removed. |
+| `AWS-0054` — listener does not use HTTPS | `aws_lb_listener.backend` | The rule reads `protocol`. What it asks for is unobtainable: no publicly trusted certificate can be issued for the `*.elb.amazonaws.com` name this listener answers on, and CloudFront's own connection to this origin does not verify TLS either way (`origin_protocol_policy` is `http-only`, forced by the same constraint). This exemption's reasoning changed on 2026-08-04 along with the load balancer becoming public — it no longer rests on the load balancer being unreachable from the internet, because it is not; it rests on there being no certificate to serve regardless. |
 | `AWS-0011` — distribution has no WAF | `aws_cloudfront_distribution.main` | Production edge control, per-account monthly cost, rule set needs tuning against real traffic. This is a single-task dev environment whose only client is the team; an untuned managed rule group buys a green scan and false blocks. Revisit when a production environment is specified. |
 
-The third finding the scan first raised, `AWS-0052` (invalid header fields), was **fixed rather than
+The fourth finding the scan first raised, `AWS-0052` (invalid header fields), was **fixed rather than
 suppressed** — `drop_invalid_header_fields = true`, asserted in the `boundary` run block. The
 distribution forwards viewer headers verbatim under `Managed-AllViewerExceptHostHeader`, so this is
 the last hop that can reject a malformed one before the task sees it.
 
-Adding a resource that trips a new HIGH or CRITICAL means either fixing it or adding a third row
+Adding a resource that trips a new HIGH or CRITICAL means either fixing it or adding a fourth row
 here with the same standard of reasoning. `trivy config --severity CRITICAL,HIGH --exit-code 1
 infra/terraform/` reproduces the CI job locally and needs no AWS credentials.
 

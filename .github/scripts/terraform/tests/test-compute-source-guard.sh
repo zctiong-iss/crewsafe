@@ -17,15 +17,20 @@
 #      value in a task definition undoes both at once, and it is the likeliest way
 #      this design is quietly broken because writing an environment variable is the
 #      more obvious thing to do.
-#   2. The load balancer must stay internal. An `internal = false` here would give
-#      the origin a public address and make the distribution bypassable — the whole
-#      reason a VPC origin was chosen over a prefix-list variant.
+#   2. The load balancer's public address must stay fenced to CloudFront. Reversed
+#      2026-08-04 from "must stay internal" — an internal load balancer behind a
+#      CloudFront VPC origin was built, applied twice, and served zero requests for
+#      a full day with no diagnosable fault (see main.tf). The load balancer now
+#      HAS a public address; a 0.0.0.0/0 ingress rule is what would make that
+#      address actually open, so that is what is forbidden now.
 #   3. The application owns its schema transition. Flyway runs in-process before
 #      traffic is accepted, with Hibernate pinned to `validate`. A task-definition
 #      override, a second container, or a command override would re-open what
 #      SCRUM-175's obligations 1 and 2 closed.
-#   4. No shared origin-authentication secret may exist. The rejected
-#      prefix-list-plus-header design needed one in state; forbidding it outright
+#   4. No shared origin-authentication secret may exist. This project's earlier,
+#      rejected header-based variant of a fenced public load balancer needed one in
+#      state; the prefix-list-only version this component now runs does not, and
+#      forbidding the header outright
 #      stops it returning by accident when someone "hardens" the origin later.
 set -euo pipefail
 source "$(dirname "$0")/helpers/test-helpers.sh"
@@ -44,9 +49,19 @@ scan() {
 
 forbid() {
   local pattern="$1" label="$2" reason="$3"
-  if scan | grep -Eq -- "$pattern"; then
+  # Process substitution, NOT `scan | grep -Eq`. With `set -o pipefail`, grep -q's
+  # early exit on the FIRST match can SIGPIPE sed before it finishes writing the
+  # rest of scan()'s output; pipefail then reports the pipeline's exit status as
+  # sed's SIGPIPE death (141) rather than grep's successful match (0), and this
+  # `if` silently takes the wrong branch — the guard reports a clean pass while the
+  # forbidden pattern is sitting in the file. Confirmed reproducible against
+  # `internal = false` while writing SCRUM-176's public-load-balancer change: the
+  # match is real, `grep -n` finds it, but `if scan | grep -Eq ...` took the pass
+  # branch anyway. `< <(scan)` reads from a substituted process whose exit status
+  # is not part of this command's pipeline, so pipefail cannot poison it.
+  if grep -Eq -- "$pattern" < <(scan); then
     printf 'FAIL: %s declares %s.\n  %s\n' "$component_dir" "$label" "$reason" >&2
-    scan | grep -En -- "$pattern" | head -5 >&2
+    grep -En -- "$pattern" < <(scan) | head -5 >&2
     grep -En -- "$pattern" "${tf_files[@]}" | head -5 >&2
     exit 1
   fi
@@ -79,12 +94,14 @@ forbid ':(AWSCURRENT|AWSPENDING|AWSPREVIOUS)|:[0-9a-fA-F-]{36}:"|::[0-9a-fA-F-]{
   'a version-pinned secret reference' \
   'A pinned reference breaks when the managed service rotates the credential (FR-028). Leave the version id and stage empty.'
 
-# FR-022a. The rejected origin-protection design fenced a public load balancer with
-# a shared header. It required a secret in state, which SCRUM-174 and SCRUM-175
-# forbid. The VPC origin makes the control structural instead.
+# FR-022a. The header-based variant of a fenced public load balancer needed a
+# shared secret in state, which SCRUM-174 and SCRUM-175 forbid categorically. This
+# component fences with CloudFront's managed prefix list alone (see
+# aws_security_group.lb in main.tf) and was never entitled to grow a header back in
+# as a "belt and suspenders" addition.
 forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header' \
   'an origin-authentication header' \
-  'The rejected prefix-list-plus-header design needed a secret in state (FR-022a). The VPC origin replaces it; the origin has no public address to fence.'
+  "A shared origin-authentication secret would need to live in Terraform state (FR-022a, forbidden categorically). The prefix list is the origin's only fence and needs no secret."
 
 # --- Constructs that would move the schema boundary ----------------------------
 
@@ -117,12 +134,15 @@ forbid 'containerPath[^,]*"/tmp"' \
 
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
-# FR-021. The single most consequential argument in this component. An internet
-# facing load balancer would give the origin a public address, and every other
-# control here assumes it has none.
-forbid '^[[:space:]]*internal[[:space:]]*=[[:space:]]*false' \
-  'an internet-facing load balancer' \
-  'The origin must have no public address (FR-021). That is what makes the distribution unbypassable by construction rather than by a rule someone can widen.'
+# Reversed 2026-08-04. FR-021 used to be discharged by internal = true; it is now
+# discharged by fencing ingress to CloudFront's managed prefix list instead — see
+# the long comment on aws_security_group.lb in main.tf for why an internal load
+# balancer behind a CloudFront VPC origin was abandoned. The load balancer having a
+# public ADDRESS is accepted; what is still forbidden is that address being open to
+# anything OTHER than CloudFront.
+forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
+  'a security group rule admitting the whole internet' \
+  'Ingress to the public load balancer must come only from CloudFronts published address range, by prefix_list_id (FR-021). A 0.0.0.0/0 rule would make the prefix-list fence meaningless.'
 
 # FR-018. A rule that answers on the application path never reaches the
 # application, so every authorization control the application enforces is skipped.
