@@ -219,3 +219,11 @@ The remediation test-only checkpoint is revision `96e2f18` on draft PR
 failed as expected because the temporary legacy ALB security-group declaration is absent. Lockfile
 and security jobs passed; the Terraform matrix was skipped after this deliberate source-guard
 failure. Implementation must make this guard and the full required workflow pass.
+
+Implementation revision `c6e6749` restores only the surviving legacy ALB and its attached empty
+security group, with the ALB's prior identity/topology unchanged and deletion protection set to
+`false`. Terraform Validation
+[run 30893442008, compute job 91940919377](https://github.com/zctiong-iss/crewsafe/actions/runs/30893442008/job/91940919377)
+passed formatting, initialization without the remote backend, validation, mocked Terraform tests,
+the 31-check remediation source guard, lockfile/component/workflow guards, Gitleaks, and
+infrastructure scanning. Every workflow job passed; no Terraform command ran locally.
