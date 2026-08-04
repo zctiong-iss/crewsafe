@@ -58,10 +58,12 @@
       "Action": [
         "cloudfront:CreateDistribution",
         "cloudfront:DeleteDistribution",
+        "cloudfront:DeleteVpcOrigin",
         "cloudfront:GetCachePolicy",
         "cloudfront:GetDistribution",
         "cloudfront:GetDistributionConfig",
         "cloudfront:GetOriginRequestPolicy",
+        "cloudfront:GetVpcOrigin",
         "cloudfront:ListCachePolicies",
         "cloudfront:ListDistributions",
         "cloudfront:ListOriginRequestPolicies",
