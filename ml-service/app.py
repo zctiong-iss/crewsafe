@@ -86,7 +86,15 @@ async def verify_bedrock_access():
         }, 503
 
 
-@app.post("/bedrock/suggest", response_model=MitigationBatch)
+@app.post(
+    "/bedrock/suggest",
+    response_model=MitigationBatch,
+    responses={
+        200: {"description": "Mitigation suggestions"},
+        502: {"description": "Invalid response from Bedrock"},
+        503: {"description": "Bedrock service unavailable"},
+    },
+)
 async def suggest_mitigations(request: MitigationRequest):
     """
     Generate mitigation suggestions via Bedrock with structured output.
@@ -127,13 +135,21 @@ async def suggest_mitigations(request: MitigationRequest):
         )
     except ValueError as e:
         logger.error(f"Response validation failed: {e}")
-        raise HTTPException(status_code=502, detail=f"Invalid response from Bedrock: {str(e)}")
+        raise HTTPException(status_code=502, detail="Invalid response from Bedrock")
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@app.post("/forecast", response_model=ForecastPrediction)
+@app.post(
+    "/forecast",
+    response_model=ForecastPrediction,
+    responses={
+        200: {"description": "Versioned forecast prediction"},
+        422: {"description": "Invalid forecast request parameters"},
+        500: {"description": "Internal server error"},
+    },
+)
 async def forecast(request: ForecastRequest):
     """
     Generate a versioned baseline forecast for WBGT, temperature, or humidity.
@@ -175,11 +191,11 @@ async def forecast(request: ForecastRequest):
 
         return prediction
 
-    except ValueError as e:
-        logger.error(f"Forecast validation failed: {e}")
-        raise HTTPException(status_code=422, detail=f"Invalid request: {str(e)}")
-    except Exception as e:
-        logger.exception(f"Forecast error: {e}")
+    except ValueError:
+        logger.exception("Forecast validation failed")
+        raise HTTPException(status_code=422, detail="Invalid forecast request parameters")
+    except Exception:
+        logger.exception("Forecast error occurred")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
