@@ -14,9 +14,10 @@ data "aws_caller_identity" "current" {}
 # at init rather than silently producing wrong values. The plan role already holds
 # s3:GetObject on crewsafe/*, so a fourth state read needs no IAM change.
 #
-# public_subnet_ids IS read (reversed 2026-08-04 — see the note on aws_lb.main).
-# The load balancer was internal from FR-021 through the first apply; it is public
-# now, fenced by CloudFront's managed prefix list instead of by having no address.
+# The recovery stage intentionally reads only the private subnet ids. Apply run
+# 30880087606 proved the old and new origins cannot be migrated in one graph: it
+# removed the listener and rules, then CloudFront rejected deletion of the VPC
+# origin it still referenced. The public path must be introduced separately.
 # ---------------------------------------------------------------------------
 
 data "terraform_remote_state" "network" {
@@ -74,12 +75,11 @@ data "terraform_remote_state" "ecr" {
 # host-based routing and the origin's health semantics behave unpredictably.
 # ---------------------------------------------------------------------------
 
-# AWS-published, and refreshed by AWS as CloudFront's edge fleet changes — the
-# reason to reference it instead of hand-maintaining a CIDR list. Restricts the load
-# balancer's ingress to CloudFront's own origin-facing addresses (see
-# aws_vpc_security_group_ingress_rule.lb_from_cloudfront below).
-data "aws_ec2_managed_prefix_list" "cloudfront" {
-  name = "com.amazonaws.global.cloudfront.origin-facing"
+# The surviving VPC origin reaches the internal load balancer from interfaces
+# inside this VPC. The network component deliberately does not publish the CIDR,
+# so this component reads it without taking ownership of the VPC.
+data "aws_vpc" "main" {
+  id = local.network.vpc_id
 }
 
 data "aws_cloudfront_cache_policy" "caching_disabled" {
@@ -185,15 +185,20 @@ resource "aws_cloudwatch_log_group" "backend" {
 # That is what broke SCRUM-173's first apply, 16 resources in.
 resource "aws_security_group" "lb" {
   name        = "${local.name_prefix}-lb"
-  description = "Public load balancer fronting the backend. Ingress fenced to CloudFronts own address range; forwards to the application runtime and nothing else."
+  description = "Internal load balancer fronting the backend. Reached only through the CloudFront VPC origin; forwards to the application runtime and nothing else."
   vpc_id      = local.network.vpc_id
 
   tags = { Name = "${local.name_prefix}-lb" }
 }
 
 # --------------------------------------------------------------------------
-# WHY A PUBLIC LOAD BALANCER, WHEN FR-021 AND THE ORIGINAL PLAN REVIEW SAID IT MUST
-# STAY INTERNAL — reversed 2026-08-04, and this is a design decision, not a bug fix.
+# RECOVERY STAGE AFTER THE ONE-STEP PUBLIC-ALB MIGRATION PARTIALLY APPLIED.
+#
+# The discussion below records why the public design was attempted. It is not the
+# active topology in this recovery commit. Apply run 30880087606 destroyed the old
+# listener and rules, deleted one unused VPC origin, and then failed because the
+# distribution still used the other origin. This stage preserves that surviving
+# origin and its internal load balancer while restoring the deleted connectivity.
 #
 # The internal-load-balancer-plus-VPC-origin design was built and applied twice
 # (run 30875158574 rebuilt the origin under a new id). Both origins reported
@@ -212,14 +217,14 @@ resource "aws_security_group" "lb" {
 # through CloudFront's private path instead. That constraint is real. What was
 # avoidable was solving it with a mechanism that then could not be debugged.
 #
-# This is the accepted trade specification called "the rejected alternative":
+# The attempted trade was the specification's "rejected alternative":
 # a public load balancer fenced by CloudFront's managed prefix list. It was
 # rejected initially because the header-based variant of it needs a shared secret
 # in Terraform state, which SCRUM-174 and SCRUM-175 forbid categorically. THE
-# PREFIX LIST ALONE NEEDS NO SECRET — that half of the rejected design is what
-# this component now uses, without the header.
+# PREFIX LIST ALONE NEEDS NO SECRET. A later migration may use that design, but it
+# must introduce a parallel origin before removing this recovery topology.
 #
-# WHAT THIS CONCEDES: the CloudFront-to-origin hop now crosses the public internet
+# WHAT THE DEFERRED PUBLIC DESIGN CONCEDES: the CloudFront-to-origin hop crosses the public internet
 # in plaintext (origin_protocol_policy below is still http-only — no certificate
 # exists for the load balancer's name to make it anything else). Restricting
 # ingress to CloudFront's published address range is a defense against
@@ -234,7 +239,7 @@ resource "aws_security_group" "lb" {
 # the application without going through this distribution still cannot act
 # without a valid token.
 #
-# Revisit this the moment the project acquires a domain name: a public load
+# Revisit the deferred design the moment the project acquires a domain name: a public load
 # balancer with its OWN ACM certificate removes the need for CloudFront entirely,
 # closes the plaintext hop, and removes the fleet-wide reachability concession in
 # one change. That is a smaller architecture than what is here, not a bigger one —
@@ -242,10 +247,10 @@ resource "aws_security_group" "lb" {
 # start.
 # --------------------------------------------------------------------------
 
-resource "aws_vpc_security_group_ingress_rule" "lb_from_cloudfront" {
+resource "aws_vpc_security_group_ingress_rule" "lb_from_vpc_origin" {
   security_group_id = aws_security_group.lb.id
-  description       = "HTTP from CloudFronts published origin-facing address range. Fleet-wide, not scoped to this distribution - see the note on this security group."
-  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
+  description       = "HTTP from the surviving CloudFront VPC origin, whose network interfaces are inside this VPC."
+  cidr_ipv4         = data.aws_vpc.main.cidr_block
   from_port         = 80
   to_port           = 80
   ip_protocol       = "tcp"
@@ -283,27 +288,18 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_lb" {
 # ---------------------------------------------------------------------------
 # Origin
 #
-# internal = false, and see the note on aws_security_group.lb above for the full
-# reasoning and what it concedes. The short version: an internal load balancer
-# behind a CloudFront VPC origin was built and applied twice, reported healthy
-# throughout, and served zero requests for a full day with no diagnosable fault.
-# This is the fenced-public-load-balancer alternative the original specification
-# considered and rejected for needing a secret in state — that objection applied
-# to a header-based variant this design does not use.
+# Recovery stage: preserve the existing internal load balancer. Changing
+# `internal` or its subnets forces replacement, which cannot happen while the
+# surviving VPC origin remains associated with the distribution.
 # ---------------------------------------------------------------------------
 
-# AWS-0053 (load balancer exposed publicly) is accepted, deliberately. That check
-# exists to catch ACCIDENTAL exposure of something meant to stay internal — this is
-# the opposite: exposure the design requires, fenced immediately below by
-# aws_vpc_security_group_ingress_rule.lb_from_cloudfront to CloudFront's published
-# address range and nothing else. See the source guard's forbid on a 0.0.0.0/0
-# ingress rule for the check that would actually catch this fence being removed.
-#trivy:ignore:AWS-0053
+# The public-load-balancer AWS-0053 exception is deliberately absent in recovery:
+# this resource must remain internal and the source guard rejects `internal = false`.
 resource "aws_lb" "main" {
   name               = "${local.name_prefix}-backend"
-  internal           = false
+  internal           = true
   load_balancer_type = "application"
-  subnets            = local.network.public_subnet_ids
+  subnets            = local.network.private_subnet_ids
   security_groups    = [aws_security_group.lb.id]
 
   enable_deletion_protection = true
@@ -351,10 +347,8 @@ resource "aws_lb_target_group" "backend" {
 # a path to the endpoint that answers without reaching the application, skipping
 # every authorization control the application enforces (FR-018).
 #
-# Plaintext on 80, and THIS IS NOW A PUBLIC PLAINTEXT LISTENER — the load balancer
-# has a public address, fenced only by the security group above. That is the
-# concession the note on aws_security_group.lb spells out in full; this is not an
-# oversight and not the same exemption that used to sit here.
+# Plaintext on 80 remains inside the VPC in this recovery stage. TLS terminates at
+# CloudFront and the internal load balancer has no public address.
 #
 # AWS-0054 fires on protocol = "HTTP". The finding is accepted, not worked around:
 # no publicly trusted certificate can be issued for the *.elb.amazonaws.com name
@@ -362,9 +356,8 @@ resource "aws_lb_target_group" "backend" {
 # private-CA certificate that CloudFront's origin connection would then have to be
 # told to trust — more moving parts protecting a hop CloudFront does not verify
 # either way (origin_protocol_policy is http-only below, by the same constraint).
-# The real mitigation is upstream of this listener: ingress is restricted to
-# CloudFront's address range, and every route requires a Cognito-issued token
-# regardless of transport.
+# The distribution redirects viewers to TLS, and every application route still
+# requires a Cognito-issued token regardless of transport.
 #trivy:ignore:AWS-0054
 resource "aws_lb_listener" "backend" {
   load_balancer_arn = aws_lb.main.arn
@@ -381,13 +374,26 @@ resource "aws_lb_listener" "backend" {
 # Public edge
 # ---------------------------------------------------------------------------
 
-# No aws_cloudfront_vpc_origin resource exists in this component anymore. Two were
-# built and applied (run 30875158574 rebuilt the second under a fresh id after the
-# first failed identically); both reported Deployed and routed nothing, for reasons
-# that were never found despite every configurable element checking out and AWS's
-# own Reachability Analyzer confirming the network path was open. See the long note
-# on aws_security_group.lb for the full account and the trade this switch to a
-# custom_origin_config accepts.
+# Apply attempt 30880087606 deleted the unused original VPC origin but could not
+# delete this one because the distribution still references it. Keeping exactly
+# this surviving resource in configuration prevents Terraform from racing its
+# deletion against the distribution update again. A later migration must first
+# establish and verify a parallel public origin, then remove this block in a
+# separate reviewed apply.
+resource "aws_cloudfront_vpc_origin" "rebuilt" {
+  vpc_origin_endpoint_config {
+    name                   = "${local.name_prefix}-vpc-origin"
+    arn                    = aws_lb.main.arn
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      quantity = 1
+      items    = ["TLSv1.2"]
+    }
+  }
+}
 #
 # AWS-0011 (no web ACL) is accepted for shared-dev. A WAF is a production edge
 # control with a per-account monthly cost and a rule set that has to be tuned against
@@ -401,23 +407,15 @@ resource "aws_lb_listener" "backend" {
 #trivy:ignore:AWS-0011
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
-  comment         = "crewsafe shared-dev backend API. Origin is a public load balancer fenced to CloudFronts address range (SCRUM-176)."
+  comment         = "crewsafe shared-dev backend API. Origin is an internal load balancer with no public address (SCRUM-176)."
   is_ipv6_enabled = true
 
   origin {
     origin_id   = "backend"
     domain_name = aws_lb.main.dns_name
 
-    # No certificate exists for the load balancer's *.elb.amazonaws.com name, so
-    # CloudFront cannot verify this hop by TLS either way — http-only reflects that
-    # constraint rather than choosing plaintext where TLS was available. The three
-    # https_port/origin_ssl_protocols arguments below are validated by the provider
-    # even though origin_protocol_policy makes them unreachable in practice.
-    custom_origin_config {
-      http_port              = 80
-      https_port             = 443
-      origin_protocol_policy = "http-only"
-      origin_ssl_protocols   = ["TLSv1.2"]
+    vpc_origin_config {
+      vpc_origin_id = aws_cloudfront_vpc_origin.rebuilt.id
     }
   }
 
