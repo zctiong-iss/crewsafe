@@ -1,0 +1,333 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Action dispatch and acknowledgement
+  version: "1.0"
+  description: >
+    Contract for SCRUM-184: the dispatch payload a worker receives for an approved
+    action, the acknowledgement request (including the idempotency key), and the retry
+    contract for a repeated acknowledgement. Written after the fact — `ActionDispatchController`
+    (SCRUM-185) and the mobile inbox (SCRUM-186) were both already built and shipped
+    without this spec existing; this documents their actual behaviour rather than a
+    fresh design, and calls out the two places where that behaviour is not what a
+    from-scratch contract would specify.
+
+    Unlike the rest of this API, these paths are NOT under /api/v1 — they are mounted
+    at /api/action-dispatch. Left as-is: changing it now is a backend/mobile coordination
+    concern, not something this contract ticket should force.
+
+    Targeting: a dispatch is created against one worker at a time (workerId on the
+    request), from one approval. There is no fan-out endpoint — dispatching the same
+    action to five affected workers is five calls, one per worker, each producing its
+    own ActionDispatch row. Only that worker (or ADMIN, for the pending-list) can read
+    or acknowledge their own dispatches.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/action-dispatch:
+    post:
+      operationId: dispatchAction
+      summary: Dispatch an approved action to one worker
+      description: >
+        approvalId must reference an Approval whose decision is APPROVED — dispatching
+        from a REJECTED or EDITED-but-undecided approval is rejected. SUPERVISOR only;
+        there is no site-scoping check here today (unlike every /api/v1/sites/... write),
+        since the approval itself is the authorization boundary.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DispatchActionRequest"
+      responses:
+        "201":
+          description: The created dispatch, status PENDING.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDispatch"
+        "400":
+          description: approvalId, workerId or actionCode missing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not a SUPERVISOR.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/action-dispatch/{dispatchId}:
+    parameters:
+      - $ref: "#/components/parameters/DispatchId"
+    get:
+      operationId: getDispatch
+      summary: Read one dispatch
+      description: >
+        Open to SUPERVISOR, SAFETY_MANAGER and WORKER — a WORKER caller is not
+        currently checked against dispatch.workerId here (unlike acknowledge/complete/
+        pending, which all enforce it). Noted as a gap in the implementation plan for
+        this ticket rather than fixed here, since this is a contract-only ticket.
+      responses:
+        "200":
+          description: The dispatch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDispatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/action-dispatch/{dispatchId}/acknowledge:
+    parameters:
+      - $ref: "#/components/parameters/DispatchId"
+    post:
+      operationId: acknowledgeDispatch
+      summary: Worker acknowledges a dispatched action
+      description: >
+        ── THE IDEMPOTENCY CONTRACT ──────────────────────────────────────────────
+        Idempotency-Key is REQUIRED on every attempt, including the first. A replayed
+        request (same dispatchId, any Idempotency-Key) returns 200 with the dispatch's
+        current state and creates no second acknowledgement — enforced today by a
+        status check (`if already ACKNOWLEDGED, return as-is`) before any write happens,
+        not by looking up the key itself. The header is still required from the client:
+        state-based idempotency only works while the client is asking about a dispatch
+        row that still exists in the state it remembers, and an offline queue that
+        replays a write long after the fact — possibly across a reinstall — needs a key
+        that was generated and persisted at the moment of the original tap. The server
+        does not read the header's value yet; it is reserved for that case rather than
+        retrofitted onto queued items that never had one.
+
+        A client on timeout should retry with the SAME dispatchId and the SAME
+        Idempotency-Key. The response is 200 with the original result, never a 409 or a
+        second record — this holds today via the status check above.
+
+        WORKER only, and only the assigned worker: a caller acknowledging a dispatch
+        that is not theirs gets 403, not 404 (404 would let a worker enumerate valid
+        dispatch ids that are not theirs).
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Generated and persisted by the client at the moment of the tap, before the request is sent.
+      responses:
+        "200":
+          description: The dispatch, status ACKNOWLEDGED (or already was — a replay returns the same state).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDispatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not WORKER, or is a WORKER but not the one this dispatch was sent to.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/action-dispatch/{dispatchId}/complete:
+    parameters:
+      - $ref: "#/components/parameters/DispatchId"
+    post:
+      operationId: completeDispatch
+      summary: Worker marks a dispatched action as completed
+      description: >
+        Same ownership and idempotency shape as acknowledge, minus the header: repeat
+        calls after COMPLETED return the existing state via the same status-check
+        pattern, and Idempotency-Key is not required here (SCRUM-184's idempotency
+        scope is the acknowledgement step specifically, not every dispatch transition).
+      responses:
+        "200":
+          description: The dispatch, status COMPLETED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDispatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not WORKER, or is a WORKER but not the one this dispatch was sent to.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/action-dispatch/approval/{approvalId}:
+    parameters:
+      - name: approvalId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getDispatchesForApproval
+      summary: List every dispatch that came from one approval
+      description: The supervisor/safety-manager view — every worker an approved action was actually sent to.
+      responses:
+        "200":
+          description: Dispatches for this approval, in no guaranteed order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActionDispatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not SUPERVISOR or SAFETY_MANAGER.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/action-dispatch/worker/{workerId}/pending:
+    parameters:
+      - name: workerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getPendingDispatchesForWorker
+      summary: The worker's inbox — dispatches not yet acknowledged
+      description: >
+        PENDING rows only. An acknowledged dispatch vanishes from this list entirely —
+        it is not "the current state of everything sent to me", it is specifically the
+        unacknowledged queue. A caller may only request their own workerId (ADMIN
+        exempted, matching the pattern elsewhere in this API).
+      responses:
+        "200":
+          description: This worker's pending dispatches.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActionDispatch"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is WORKER but requested a workerId that is not their own.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    DispatchId:
+      name: dispatchId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller's role is not permitted on this endpoint.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    ActionDispatchStatus:
+      type: string
+      enum: [PENDING, ACKNOWLEDGED, COMPLETED]
+      description: Server-controlled. Every dispatch is created PENDING.
+
+    ActionDispatch:
+      type: object
+      required: [id, approvalId, workerId, actionCode, status, dispatchedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        approvalId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        actionCode:
+          type: string
+          description: >
+            Open catalogue, not an enum — REST_10_MIN, REST_15_MIN, HYDRATE, STOP_WORK,
+            and others added over time (V3__domain_schema.sql). Clients must tolerate
+            and gracefully render an unrecognised code rather than treating it as an error.
+        instruction:
+          type: string
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the worker acknowledges.
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the worker completes.
+        status:
+          $ref: "#/components/schemas/ActionDispatchStatus"
+        dispatchedAt:
+          type: string
+          format: date-time
+
+    DispatchActionRequest:
+      type: object
+      required: [approvalId, workerId, actionCode]
+      properties:
+        approvalId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        actionCode:
+          type: string
+        instruction:
+          type: string
