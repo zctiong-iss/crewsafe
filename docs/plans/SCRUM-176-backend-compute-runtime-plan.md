@@ -11,6 +11,15 @@ that produced this plan are not committed; the durable decisions are here and in
 
 ## Summary
 
+> **SUPERSEDED 2026-08-04.** The internal-load-balancer-plus-CloudFront-VPC-origin architecture
+> described below was built and applied twice; both applies produced a distribution that reported
+> healthy and served zero requests, for reasons that were never diagnosable from Terraform or from
+> AWS's own network tooling. It was abandoned in favor of a public load balancer fenced by
+> CloudFront's managed prefix list — the alternative this plan's Constitution Check considered and
+> rejected below. This section is kept in full as the record of that original decision and its
+> reasoning; the current architecture, the full diagnostic account, and what the change concedes are
+> in the [runbook](../runbooks/SCRUM-176-backend-compute-runtime.md) §1 and §10.
+
 Run the existing `com.crewsafe` Spring Boot backend on ECS Fargate in the private subnets
 `network-shared-dev` published, attached to the application security group that component created,
 with every credential and every configuration value resolved **by reference** at task start using
