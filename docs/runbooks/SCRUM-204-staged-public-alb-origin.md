@@ -22,13 +22,13 @@ Complete one column per stage with links and non-sensitive outcomes.
 
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
-| Source commit and approved PR | Pending | Blocked | Blocked |
-| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | Blocked | Blocked |
-| Plan run ID and attempt | Pending | Blocked | Blocked |
-| Account / component / operation / lock match | Pending | Blocked | Blocked |
-| Plan digest and typed confirmation | Pending | Blocked | Blocked |
-| Apply run and single-use marker | Pending | Blocked | Blocked |
-| Target and distribution status | Pending | Blocked | Blocked |
+| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | Cutover branch created from applied preparation revision | Blocked |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / [passing run 30887107913, compute job 91920846373](https://github.com/zctiong-iss/crewsafe/actions/runs/30887107913/job/91920846373) | Blocked |
+| Plan run ID and attempt | `30885366655`, attempt 1 | Blocked | Blocked |
+| Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked | Blocked |
+| Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked | Blocked |
+| Apply run and single-use marker | [Run 30885467533, job 91915592556](https://github.com/zctiong-iss/crewsafe/actions/runs/30885467533/job/91915592556); final marker step passed | Blocked | Blocked |
+| Target and distribution status | Apply: 7 added, 1 changed, 0 destroyed. Public target group `crewsafe-shared-dev-public`: 1 healthy, 0 unhealthy; CloudFront intentionally retained the VPC origin | Blocked | Blocked |
 | Smoke, latency, propagation, authn/authz | N/A | Blocked | Blocked |
 | Rollback status / convergence plan | Active legacy path | Blocked | Blocked |
 
@@ -92,12 +92,40 @@ After apply, both target groups must be registered, the public target healthy, i
 TCP/80 from `com.amazonaws.global.cloudfront.origin-facing`, egress TCP/8080 to the application
 SG, and CloudFront still on the VPC origin. Any failure blocks cutover.
 
+Preparation gate accepted on 2026-08-04. Apply run `30885467533` used the reviewed plan from run
+`30885366655` against source `737fd928f560cceca57ed2c497b59708bbb2b90d` and completed with
+7 additions, 1 in-place ECS service change, and no destruction. The operator inspected target group
+`crewsafe-shared-dev-public` in `ap-southeast-1`: one IP target on port 8080 was `Healthy`, with zero
+unhealthy, initial, draining, or unused targets. The reviewed Terraform validation binds ALB ingress
+to `com.amazonaws.global.cloudfront.origin-facing` on TCP/80, forbids CIDR ingress, and restricts
+the ALB-to-application hop to the application security group on TCP/8080. The cutover branch
+`feat/scrum-204-staged-public-alb-origin-cutover` was created from that applied `main` revision.
+
 ## 6. Cutover and rollback
 
 Use a fresh `feat/scrum-204-staged-public-alb-origin-cutover` branch from applied preparation.
 Cutover may change the existing `backend` origin to the public ALB's HTTP-only custom origin. It
 must not replace the distribution/output, delete legacy resources, remove either target
 registration, widen ingress, or introduce an origin secret.
+
+Test-first commit `5f5213b` was published in draft PR
+[#73](https://github.com/zctiong-iss/crewsafe/pull/73). Terraform Validation run `30886599486`
+passed configuration validation and seven existing compute runs, then the
+`public_origin_cutover` run failed because `custom_origin_config` was null. This is the expected
+failure that the cutover implementation must turn green; all other completed component, catalog,
+lockfile, and security jobs passed.
+
+The implementation changes only the existing distribution's `backend` origin domain to
+`aws_lb.public.dns_name` and replaces its selected `vpc_origin_config` block with an HTTP-only
+`custom_origin_config` on port 80. The surviving `aws_cloudfront_vpc_origin.rebuilt`, internal ALB,
+legacy listener/target group, public path, both ECS registrations, cache/origin-request policies,
+viewer certificate, allowed methods, and `staging_base_url` output remain unchanged for rollback.
+
+Implementation commit `d3f3a7b` turned the expected-red checkpoint green. Terraform Validation
+run `30887107913` passed formatting, validation, mocked-provider tests, the 23-check cutover source
+guard, component/workflow guards, lockfile checks, Gitleaks, and infrastructure scanning. The
+`compute-shared-dev` job was `91920846373`; every job in the workflow passed. No Terraform command
+ran locally.
 
 Wait for CloudFront `Deployed`, then run two passes at least five minutes apart:
 

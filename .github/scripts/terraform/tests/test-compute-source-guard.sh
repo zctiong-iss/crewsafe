@@ -154,6 +154,25 @@ require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' 
   'the AWS-managed CloudFront origin-facing prefix list' \
   'The parallel origin must fail closed to CloudFronts published origin-facing addresses.'
 
+# SCRUM-204 cutover changes only which origin the distribution selects. The
+# legacy identities and both service registrations remain available until the
+# separately reviewed cleanup revision.
+require 'resource[[:space:]]+"aws_cloudfront_vpc_origin"[[:space:]]+"rebuilt"' \
+  'the retained CloudFront VPC origin' \
+  'Cutover must preserve the reviewed rollback path.'
+
+require 'custom_origin_config[[:space:]]*\{' \
+  'the public ALB custom-origin configuration' \
+  'Cutover must select the verified public ALB rather than the failing VPC-origin route.'
+
+require 'domain_name[[:space:]]*=[[:space:]]*aws_lb\.public\.dns_name' \
+  'the public ALB as the existing distribution origin' \
+  'The stable backend origin must point to the public ALB without replacing the distribution.'
+
+load_balancer_blocks="$(grep -Ec '^[[:space:]]*load_balancer[[:space:]]*\{' < <(scan))"
+[[ "$load_balancer_blocks" -eq 2 ]] ||
+  fail "$component_dir must retain exactly two ECS load_balancer attachments during cutover (found $load_balancer_blocks)"
+
 forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
   'a security group rule admitting the whole internet' \
   'No recovery-stage resource may admit the whole internet (FR-021).'
@@ -220,4 +239,4 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow cloudfront:DeleteVpcOrigin"
 
-printf 'ok: %s preparation source guard passed (%d checks)\n' "$component_dir" 19
+printf 'ok: %s cutover source guard passed (%d checks)\n' "$component_dir" 23

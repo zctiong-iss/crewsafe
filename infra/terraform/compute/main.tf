@@ -335,11 +335,12 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_public_lb" {
 }
 
 # ---------------------------------------------------------------------------
-# Origin
+# Origins
 #
-# Recovery stage: preserve the existing internal load balancer. Changing
-# `internal` or its subnets forces replacement, which cannot happen while the
-# surviving VPC origin remains associated with the distribution.
+# SCRUM-204 cutover selects the separately verified public ALB for CloudFront's
+# existing backend origin. The recovered internal ALB and surviving VPC-origin
+# identity remain managed until the separately reviewed cleanup revision, so a
+# failed cutover can be rolled back without reconstructing either resource.
 # ---------------------------------------------------------------------------
 
 # The public-load-balancer AWS-0053 exception is deliberately absent in recovery:
@@ -513,15 +514,22 @@ resource "aws_cloudfront_vpc_origin" "rebuilt" {
 #trivy:ignore:AWS-0011
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
-  comment         = "crewsafe shared-dev backend API. Origin is an internal load balancer with no public address (SCRUM-176)."
+  comment         = "crewsafe shared-dev backend API. CloudFront reaches the prefix-list-fenced public ALB (SCRUM-204 cutover)."
   is_ipv6_enabled = true
 
   origin {
     origin_id   = "backend"
-    domain_name = aws_lb.main.dns_name
+    domain_name = aws_lb.public.dns_name
 
-    vpc_origin_config {
-      vpc_origin_id = aws_cloudfront_vpc_origin.rebuilt.id
+    # No trusted certificate can be issued for the AWS-owned ALB hostname. This
+    # temporary shared-development hop therefore uses HTTP, with network access
+    # limited to AWS's managed CloudFront origin-facing prefix list on port 80.
+    # Viewer TLS and backend Cognito authorization remain unchanged.
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
 
