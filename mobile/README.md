@@ -1045,6 +1045,48 @@ for red-green colour blindness — and a future consistency pass should not flat
 
 ---
 
+### Problem 10 — Button labels silently truncated at a space, on every card but the first
+
+**Symptom.** The Malay inbox rendered the acknowledge button as **"Akui terima"** on the
+first card and **"Akui"** on every card below it. No ellipsis, no error, no warning. It
+survived a full reload, so it was not Fast Refresh leaving stale cells.
+
+**What it was not.** The first instinct — a missing or wrong translation — was wrong, and
+checking cost nothing: `ms.json` contains exactly one `inbox.acknowledgeButton`, its value is
+`"Akui terima"`, and no key anywhere in the file produces a bare `"Akui"`. All three buttons
+were being handed the same string. `AppButton`, `AppText` and `DispatchCard` have no
+`numberOfLines`, `ellipsizeMode` or `adjustsFontSizeToFit` between them, so nothing was
+deliberately truncating either.
+
+**Root cause.** Layout, not content. `AppButton`'s content row was `flexShrink: 1` with no
+definite width, and the `Text` inside it was *also* `flexShrink: 1`. The row therefore sized
+to its own content, which made the width available to the label depend on **when the row was
+measured** — and inside a virtualised `FlatList` that is not stable. The first cell lays out
+against the real width; later cells are measured during virtualisation against a narrower
+estimate, and a shrinkable `Text` resolves that by **clipping at a word boundary rather than
+wrapping**.
+
+**Why English never showed it.** "Acknowledge" is a single word with nowhere to break. The
+bug has been latent since the button was written and needed a two-word label to surface —
+which localisation duly provided. Every other locale had been lucky: Hindi and Chinese labels
+are long, but the button had not yet met one that *could* break cleanly in the middle.
+
+**Fix.** Give the row a definite width — `width: "100%"` in place of `flexShrink: 1` — so the
+available width is the button's content box, known before the label is measured and identical
+in every cell. The label wraps instead of clipping, and `minHeight` (rather than `height`)
+lets the button grow to fit. The title keeps `flexShrink: 1`, which now governs *wrapping*
+inside a known width rather than deciding whether the text survives at all.
+
+This touches all 25 `AppButton` call sites, so it is worth an eye on the long ones — "Request
+an account" in Hindi is the widest label in the app.
+
+> The general lesson is the one worth keeping: **a label that renders correctly in English is
+> not evidence the layout is correct.** Truncation bugs hide behind single-word labels, and a
+> translation is the first thing that will find them. This is an argument for reviewing
+> screens in the *longest* language, not the default one.
+
+---
+
 ### What this says about the checks
 
 Static verification caught none of Problems 1–6. It is good at contracts and shapes and

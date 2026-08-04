@@ -122,16 +122,36 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    // Without this the row keeps its intrinsic width and the label runs past the button's
-    // rounded edge. Hindi and Simplified Chinese labels are materially longer than the
-    // English ones they were laid out against — "खाते का अनुरोध करें" for "Request an
-    // account" — so this is load-bearing, not defensive.
-    flexShrink: 1,
+    /*
+     * A definite width, not `flexShrink: 1`.
+     *
+     * The row previously sized to its own content and shrank. That kept long labels inside
+     * the button — the original problem, and Hindi and Simplified Chinese really are much
+     * longer than the English they were laid out against ("खाते का अनुरोध करें" for "Request
+     * an account") — but it made the width available to the label depend on when the row
+     * happened to be measured.
+     *
+     * Inside a virtualised FlatList that is not stable. The first cell lays out with the
+     * real width; later cells are measured during virtualisation against a narrower
+     * estimate, and a `Text` that is itself shrinkable resolves that by *clipping at a word
+     * boundary* rather than wrapping. The Malay inbox showed it plainly: "Akui terima" on
+     * the first card, "Akui" on every card below it, with no ellipsis to hint that anything
+     * had been cut.
+     *
+     * English never triggered it. "Acknowledge" is one word with nowhere to break, so the
+     * bug needed a two-word label to become visible — it has been latent since the button
+     * was written.
+     *
+     * `width: "100%"` makes the available width the button's content box, which is known
+     * before the label is measured and identical in every cell. The label wraps instead of
+     * clipping, and `minHeight` (rather than `height`) lets the button grow to fit it.
+     */
+    width: "100%",
   },
   title: {
     textAlign: "center",
-    // Lets the text wrap inside the button instead of overflowing it. The button uses
-    // minHeight rather than height precisely so a wrapped label can grow the button.
+    // Still shrinkable, but now within a definite width — so this governs wrapping rather
+    // than deciding whether the text survives at all.
     flexShrink: 1,
   },
   icon: {
