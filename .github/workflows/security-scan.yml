@@ -166,6 +166,7 @@ jobs:
           fi
 
           args=()
+          sonar_sources=""
           while IFS= read -r line || [ -n "$line" ]; do
             case "$line" in
               ''|'#'*) continue ;;
@@ -173,8 +174,19 @@ jobs:
             key="${line%%=*}"
             value="${line#*=}"
             [ -n "$key" ] || continue
-            args+=("-D${key}=${value}")
+            if [ "${key}" = "sonar.sources" ]; then
+              sonar_sources="$value"
+            else
+              args+=("-D${key}=${value}")
+            fi
           done <"$props_file"
+
+          # Make sonar.sources absolute (repo-root) so the Maven Sonar plugin
+          # cannot accidentally resolve it relative to the module base and
+          # produce duplicated paths like backend/backend/src/main.
+          if [ -n "${sonar_sources}" ]; then
+            args+=("-Dsonar.sources=${GITHUB_WORKSPACE}/${sonar_sources}")
+          fi
 
           # Run the Maven wrapper from the repo root and point it at the
           # backend module. Running mvnw from inside `backend/` caused the
