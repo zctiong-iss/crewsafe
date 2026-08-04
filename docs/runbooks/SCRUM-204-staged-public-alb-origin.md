@@ -255,3 +255,17 @@ the live `CrewSafeComputeTerraformApply` customer-managed policy from
 remediation plan should then be no-change for the adopted security group. A subsequent fresh
 final-cleanup revision removes the temporary declaration and uses a new reviewed plan to delete only
 that group. Confirm the public health endpoint remains HTTP 200 after each apply.
+
+The remediation plan applied in
+[run 30895356128, job 91946851517](https://github.com/zctiong-iss/crewsafe/actions/runs/30895356128/job/91946851517)
+from merged source `26fb591a222a9c3446d8aeb1b9605c49e343a8e8` completed with
+`0 added, 0 changed, 0 destroyed`. This proves the temporary declaration adopted the surviving
+security group without drift after the live apply-role policy was updated. The public health path
+remained available.
+
+The final revision removes only the temporary `aws_security_group.lb` declaration and restores the
+categorical source guard that forbids the legacy group. Its fresh reviewed plan must show exactly
+one destroy for `aws_security_group.lb`, with no additions, changes, replacements, or public-path
+effects. Apply only that exact plan once, then verify `/actuator/health` returns HTTP 200 and run a
+fresh convergence plan expecting no changes. `ec2:DescribeNetworkInterfaces` remains a required
+provider read permission for the apply role's authorized security-group deletion capability.
