@@ -396,7 +396,7 @@ each of these by reading the plan output:
 | 8 | Image reference is `<repo>:<40-hex>`, not `latest` | |
 | 9 | Exactly **one** new ingress rule targets the application security group | |
 | 10 | Security group descriptions contain **no apostrophe** | EC2 rejects it at create time, not at plan — **this is what broke SCRUM-173's first apply** |
-| 11 | Distribution minimum protocol is `TLSv1.2_2021`, cache policy is `CachingDisabled` | Without the explicit minimum the default certificate implies TLS 1.0 |
+| 11 | Distribution minimum protocol is `TLSv1` — **yes, TLSv1** — and cache policy is `CachingDisabled` | Corrected 2026-08-04. The API ignores this field with the default certificate and pins it to `TLSv1`; the old check demanded `TLSv1.2_2021`, which was unsatisfiable and produced a diff that never converged. See §10 |
 | 12 | Resource count is at or under 23 | Was 22 before the synthetic-user mappings parameter was added |
 
 ---
@@ -559,9 +559,22 @@ costs about $0.10 and creates two throwaway objects outside Terraform — delete
 > §3.3. A half-formed association presents exactly this way, and no amount of reading configuration
 > will show it.
 
-**The fix was to force a replacement by renaming the origin**, with `create_before_destroy` — see the
-comment on `aws_cloudfront_vpc_origin.backend` for why both halves are load-bearing. `-replace` is
-unreachable because the shared workflows accept no per-dispatch arguments.
+**Renaming was tried first and does not work.** Plan run
+[30874184699](https://github.com/zctiong-iss/crewsafe/actions/runs/30874184699) reported *will be
+updated in-place*, `0 to add, 2 to change, 0 to destroy` — `name` is not a force-new attribute, so a
+rename relabels the same broken origin. `-replace` is unreachable because the shared workflows accept
+no per-dispatch arguments.
+
+**The rebuild is therefore two resources across two applies:**
+
+| Apply | Change | Expected plan |
+| --- | --- | --- |
+| 1 | Add `aws_cloudfront_vpc_origin.rebuilt`, repoint the distribution at it | `1 to add, 1 to change, 0 to destroy` |
+| 2 | Delete the superseded `aws_cloudfront_vpc_origin.backend` block | `0 to add, 0 to change, 1 to destroy` |
+
+Doing it in one step is what fails: CloudFront refuses to delete a VPC origin a distribution still
+references, so a combined plan strands the distribution that holds the stable public URL. Verify the
+public URL answers after apply 1, before running apply 2.
 
 > **Read that plan before applying it.** It must say the VPC origin **must be replaced**. If it says
 > *will be updated in-place*, the name is not a force-new attribute, the change rebuilds nothing, and
@@ -657,6 +670,44 @@ running as root against a read-only mount it can still subvert through the writa
 
 If the hardening has to come back, it needs the EBS volume or the init container, each with its own
 decision and its own Jira issue. It is not a tidy-up.
+
+### This edge accepts TLS 1.0, and no automated check will tell you
+
+`minimum_protocol_version = "TLSv1"`. That is not a choice — it is what the provider-issued
+certificate forces — and the component previously claimed otherwise.
+
+The original code set `"TLSv1.2_2021"` with a comment saying the value *"MUST be set explicitly"* or
+the distribution would accept TLS 1.0. **Setting it does nothing.** With
+`cloudfront_default_certificate = true`, the CloudFront API ignores the field and pins the security
+policy to `TLSv1`. The field is only honoured when a **custom** certificate is used. Confirmed by
+plan run [30874184699](https://github.com/zctiong-iss/crewsafe/actions/runs/30874184699), which
+showed `minimum_protocol_version = "TLSv1" -> "TLSv1.2_2021"` on a distribution that had already been
+applied repeatedly.
+
+Three consequences, and the third is the one that matters most:
+
+1. **A diff that never converged.** Every plan for this component carried a phantom change to the
+   distribution. That is precisely the noise that makes a mandatory twelve-item plan review stop
+   being read carefully, on the component where plan review is the main safety gate.
+2. **A test that asserted an aspiration.** The `public_edge` run block required `"TLSv1.2_2021"` and
+   passed — against the *configuration*, while the *deployed* distribution accepted TLS 1.0. It now
+   asserts `"TLSv1"`: a weaker guarantee, stated honestly, rather than a stronger one that was never
+   true.
+3. **No scanner catches it.** Trivy reports nothing about TLS at any severity — `CRITICAL`, `HIGH`,
+   `MEDIUM`, or `LOW` — with `TLSv1` declared. Verify for yourself:
+   `trivy config --severity CRITICAL,HIGH,MEDIUM,LOW infra/terraform/compute`. The only findings are
+   `AWS-0010` (no distribution logging, MEDIUM), `AWS-0017` and `AWS-0034` (both LOW). So this posture
+   is invisible to every automated gate in the pipeline and survives only as long as this section
+   does.
+
+> **Raising the floor is its own issue, not a one-line change.** It needs a domain the project
+> controls, an ACM certificate **in us-east-1** (CloudFront accepts certificates from no other
+> region), DNS records, and `cloudfront_default_certificate = false`. It is a direct consequence of
+> choosing the provider-issued `*.cloudfront.net` hostname during clarification, and that consequence
+> was not traced at the time.
+
+The two assertions in `public_edge` — the `TLSv1` floor and `cloudfront_default_certificate == true` —
+are deliberately adjacent. They are one decision, and they change together or not at all.
 
 ### Two accepted Trivy exemptions
 
