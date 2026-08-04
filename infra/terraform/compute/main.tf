@@ -356,10 +356,22 @@ resource "aws_lb_listener" "backend" {
 # public URL. The new name must differ from the old for the same reason: both exist at
 # once during the replacement.
 #
-# Read the plan before applying. It MUST say this resource "must be replaced". If it says
-# "will be updated in-place", the name is not a force-new attribute and this change
-# rebuilds nothing — stop and use a second resource instead.
-resource "aws_cloudfront_vpc_origin" "backend" {
+# Renaming was tried first and does NOT work: plan run 30874184699 reported
+# "will be updated in-place", 0 to add / 2 to change / 0 to destroy. `name` is not a
+# force-new attribute, so a rename relabels the same broken origin and rebuilds nothing.
+#
+# So the rebuild is two resources across two applies, which is also the only shape that
+# cannot strand the distribution:
+#
+#   Apply 1 (this commit): create `rebuilt` and repoint the distribution at it. The old
+#                          origin stays in place, referenced by nothing.
+#   Apply 2 (next commit): delete the `backend` block below. Unreferenced by then, so
+#                          CloudFront will let it go.
+#
+# Doing it in one step is what fails — CloudFront refuses to delete a VPC origin a
+# distribution still references, and the distribution is the only thing holding the stable
+# public URL.
+resource "aws_cloudfront_vpc_origin" "rebuilt" {
   vpc_origin_endpoint_config {
     name                   = "${local.name_prefix}-vpc-origin"
     arn                    = aws_lb.main.arn
@@ -372,9 +384,28 @@ resource "aws_cloudfront_vpc_origin" "backend" {
       items    = ["TLSv1.2"]
     }
   }
+}
 
-  lifecycle {
-    create_before_destroy = true
+# SUPERSEDED — delete this block in the follow-up apply once `rebuilt` is serving.
+#
+# Kept for exactly one apply so the distribution can be repointed before this is removed.
+# Its name is left at the original value deliberately: changing it would add a pointless
+# in-place update to a resource that is about to be destroyed.
+#
+# If you are reading this and the distribution already references `rebuilt`, this block's
+# only remaining job is to be deleted.
+resource "aws_cloudfront_vpc_origin" "backend" {
+  vpc_origin_endpoint_config {
+    name                   = "${local.name_prefix}-backend"
+    arn                    = aws_lb.main.arn
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "http-only"
+
+    origin_ssl_protocols {
+      quantity = 1
+      items    = ["TLSv1.2"]
+    }
   }
 }
 
@@ -397,7 +428,7 @@ resource "aws_cloudfront_distribution" "main" {
     domain_name = aws_lb.main.dns_name
 
     vpc_origin_config {
-      vpc_origin_id = aws_cloudfront_vpc_origin.backend.id
+      vpc_origin_id = aws_cloudfront_vpc_origin.rebuilt.id
     }
   }
 
@@ -420,12 +451,29 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # The default provider certificate, on a provider-issued *.cloudfront.net name.
-  # minimum_protocol_version MUST be set explicitly: with the default certificate
-  # and no override the distribution accepts TLS 1.0, and SC-003 fails outright.
+  # TLSv1 is NOT a choice. It is what the default certificate forces, and the comment
+  # that used to sit here was wrong.
+  #
+  # It claimed minimum_protocol_version "MUST be set explicitly" or the distribution
+  # accepts TLS 1.0. Setting it changes nothing: with cloudfront_default_certificate the
+  # CloudFront API IGNORES this field and pins the security policy to TLSv1. The previous
+  # value of "TLSv1.2_2021" therefore produced a diff that could never converge —
+  # plan run 30874184699 showed `minimum_protocol_version = "TLSv1" -> "TLSv1.2_2021"`
+  # against a distribution that has been applied repeatedly. Every future plan for this
+  # component would carry that same phantom change, which is exactly the noise that makes
+  # a mandatory plan review stop being read.
+  #
+  # Declaring the real value kills the phantom diff and makes the posture legible instead
+  # of aspirational: THIS EDGE ACCEPTS TLS 1.0.
+  #
+  # Raising the floor requires a custom certificate on a domain the project controls,
+  # because the field is only honoured when cloudfront_default_certificate is false. That
+  # is a consequence of choosing the provider-issued *.cloudfront.net hostname, and it was
+  # not traced at the time. It needs its own issue — a custom domain, an ACM certificate in
+  # us-east-1, and DNS — not a one-line change here.
   viewer_certificate {
     cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
+    minimum_protocol_version       = "TLSv1"
   }
 }
 

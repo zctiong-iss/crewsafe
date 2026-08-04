@@ -290,9 +290,25 @@ run "public_edge" {
     error_message = "Plaintext must redirect, never be served (FR-025, SC-002)."
   }
 
+  # This assertion used to require "TLSv1.2_2021" and it was testing an aspiration, not a
+  # fact. The CloudFront API ignores minimum_protocol_version when
+  # cloudfront_default_certificate is set and pins the policy to TLSv1 — so the assertion
+  # passed against the CONFIG while the DEPLOYED distribution accepted TLS 1.0, and
+  # produced a diff that could never converge (plan run 30874184699).
+  #
+  # It now asserts the value AWS will actually honour. That is a weaker guarantee, stated
+  # honestly, rather than a stronger one that was never true.
   assert {
-    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].minimum_protocol_version == "TLSv1.2_2021"
-    error_message = "TLS 1.2 minimum must be set EXPLICITLY — the default certificate otherwise implies TLS 1.0 and SC-003 fails (FR-026)."
+    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].minimum_protocol_version == "TLSv1"
+    error_message = "With the default certificate, TLSv1 is the only value CloudFront honours. Anything else is a phantom diff that never converges. Raising the floor needs a custom certificate on a controlled domain, which is its own issue."
+  }
+
+  # The distribution must serve on the provider-issued name, which is the whole reason the
+  # TLS floor above cannot be raised. Asserted so the coupling between the two is visible:
+  # if this ever becomes false, the assertion above should be revisited.
+  assert {
+    condition     = aws_cloudfront_distribution.main.viewer_certificate[0].cloudfront_default_certificate == true
+    error_message = "The distribution uses the provider-issued certificate. Switching to a custom one is what unlocks a TLS 1.2 floor — change both assertions together."
   }
 
   # An API's responses are per-caller. With caching enabled, one user's
