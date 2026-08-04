@@ -178,6 +178,9 @@ service-linked-role statements. The plan policy contains no account id.
    `ReadNetworkPlan` must include both `ec2:DescribeManagedPrefixLists` and
    `ec2:GetManagedPrefixListEntries`: the provider first discovers the AWS-managed CloudFront
    prefix list and then reads its entries while refreshing the data source.
+   `ReadDistributionPlan` must also include `cloudfront:GetVpcOrigin` until the public-load-balancer
+   migration has removed both legacy VPC origins from state; Terraform refreshes resources before
+   it can plan their destruction.
 6. Name the policy `CrewSafeComputeTerraformPlan` and save.
 
 ### 3.2 Update the apply role
@@ -207,8 +210,11 @@ inline policy** here — it will be rejected on the character limit.
    exact `aws-service-role/…` ARN **and carrying its `iam:AWSServiceName` condition** — see the second
    warning below.
 8. Confirm its network statement includes `ec2:GetManagedPrefixListEntries`, because apply also
-   refreshes the AWS-managed CloudFront prefix-list data source. Confirm it grants **no**
-   `secretsmanager:GetSecretValue`, **no** `logs:GetLogEvents`, and **no** `ecs:ExecuteCommand`.
+   refreshes the AWS-managed CloudFront prefix-list data source. During the public-load-balancer
+   migration, `ManageDistribution` must include `cloudfront:GetVpcOrigin` and
+   `cloudfront:DeleteVpcOrigin`: the former refreshes the two legacy origins still in state and the
+   latter removes them. Confirm it grants **no** `secretsmanager:GetSecretValue`, **no**
+   `logs:GetLogEvents`, and **no** `ecs:ExecuteCommand`.
 9. Name the policy `CrewSafeComputeTerraformApply` and create it.
 10. Go to **IAM → Roles → `CrewSafeGitHubTerraformApplyRole` → Add permissions → Attach policies**,
     filter by **Customer managed**, select `CrewSafeComputeTerraformApply`, and attach.

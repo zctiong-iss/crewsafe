@@ -185,4 +185,25 @@ for policy in plan-role-policy.json apply-role-policy.json; do
     fail "$component_dir/iam/$policy must allow ec2:GetManagedPrefixListEntries"
 done
 
-printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 13
+# The public-ALB migration removes two CloudFront VPC origins that still exist in
+# state. Plan and apply must refresh them before apply can delete them; the plan
+# role remains read-only, while only the apply role receives the delete verb.
+for policy in plan-role-policy.json apply-role-policy.json; do
+  jq -e '
+    any(.Statement[];
+      .Effect == "Allow" and
+      ((.Action | arrays | index("cloudfront:GetVpcOrigin")) != null)
+    )
+  ' "$ROOT/$component_dir/iam/$policy" >/dev/null ||
+    fail "$component_dir/iam/$policy must allow cloudfront:GetVpcOrigin"
+done
+
+jq -e '
+  any(.Statement[];
+    .Effect == "Allow" and
+    ((.Action | arrays | index("cloudfront:DeleteVpcOrigin")) != null)
+  )
+' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must allow cloudfront:DeleteVpcOrigin"
+
+printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 16
