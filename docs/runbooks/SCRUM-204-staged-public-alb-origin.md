@@ -22,8 +22,8 @@ Complete one column per stage with links and non-sensitive outcomes.
 
 | Field | Preparation | Cutover | Cleanup |
 | --- | --- | --- | --- |
-| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | `ed098bb1985132e9bab4b38dd0821b94f5519480`, PR [#73](https://github.com/zctiong-iss/crewsafe/pull/73) | Cleanup branch created from applied cutover revision |
-| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / [passing run 30887107913, compute job 91920846373](https://github.com/zctiong-iss/crewsafe/actions/runs/30887107913/job/91920846373) | Blocked |
+| Source commit and approved PR | `737fd928f560cceca57ed2c497b59708bbb2b90d`, PR [#71](https://github.com/zctiong-iss/crewsafe/pull/71) | `ed098bb1985132e9bab4b38dd0821b94f5519480`, PR [#73](https://github.com/zctiong-iss/crewsafe/pull/73) | Implementation `f8aea42`, draft PR [#76](https://github.com/zctiong-iss/crewsafe/pull/76); merged source pending review |
+| Expected failing / passing validation runs | [Expected red run 30883961904, compute job 91911195962](https://github.com/zctiong-iss/crewsafe/actions/runs/30883961904/job/91911195962) / [passing run 30884687670, compute job 91913410440](https://github.com/zctiong-iss/crewsafe/actions/runs/30884687670/job/91913410440) | [Expected red run 30886599486, compute job 91919329837](https://github.com/zctiong-iss/crewsafe/actions/runs/30886599486/job/91919329837) / [passing run 30887107913, compute job 91920846373](https://github.com/zctiong-iss/crewsafe/actions/runs/30887107913/job/91920846373) | [Expected red run 30890118807, catalog job 91930067020](https://github.com/zctiong-iss/crewsafe/actions/runs/30890118807/job/91930067020) / [passing run 30890752295, compute job 91932270308](https://github.com/zctiong-iss/crewsafe/actions/runs/30890752295/job/91932270308) |
 | Plan run ID and attempt | `30885366655`, attempt 1 | `30887456082`, attempt 1 | Blocked |
 | Account / component / operation / lock match | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | `dev` / `compute-shared-dev` / `apply`; exact-plan validation passed | Blocked |
 | Plan digest and typed confirmation | Plan metadata validated; `APPLY dev compute-shared-dev` | Plan metadata validated; `APPLY dev compute-shared-dev` | Blocked |
@@ -181,6 +181,12 @@ The final topology is CloudFront's existing `backend` custom origin over HTTP/80
 `aws_lb.public`, fenced by `com.amazonaws.global.cloudfront.origin-facing`; the public listener
 forwards to `aws_lb_target_group.public`, and the private ECS service has exactly that one target
 group attachment. Backend Cognito authentication and site/object authorization remain unchanged.
+
+Implementation revision `f8aea42` turned the expected-red checkpoint green. Terraform Validation
+[run 30890752295, compute job 91932270308](https://github.com/zctiong-iss/crewsafe/actions/runs/30890752295/job/91932270308)
+passed formatting, initialization without the remote backend, validation, mocked Terraform tests,
+the 28-check cleanup source guard, component/workflow guards, lockfile checks, Gitleaks, and
+infrastructure scanning. Every workflow job passed, and no Terraform command ran locally.
 
 Repeat every cutover check, then dispatch a fresh plan. The required result is:
 
