@@ -62,6 +62,16 @@ forbid() {
   fi
 }
 
+# Positive companion to forbid(). Stage migrations need to prove that old and new
+# identities coexist; categorical absence checks alone cannot see a missing path.
+require() {
+  local pattern="$1" label="$2" reason="$3"
+  if ! grep -Eq -- "$pattern" < <(scan); then
+    printf 'FAIL: %s is missing %s.\n  %s\n' "$component_dir" "$label" "$reason" >&2
+    exit 1
+  fi
+}
+
 # --- Constructs that would place a credential in state or a task definition ----
 
 # FR-027. Anchored to a line-leading assignment so it catches a real argument
@@ -129,12 +139,20 @@ forbid 'containerPath[^,]*"/tmp"' \
 
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
-# Recovery stage after apply run 30880087606 partially mutated state. The surviving
-# VPC origin still references the existing internal load balancer, so forcing its
-# replacement would repeat the failed dependency race.
-forbid '^[[:space:]]*internal[[:space:]]*=[[:space:]]*false' \
-  'an internet-facing load balancer during recovery' \
-  'Recovery must preserve the existing internal load balancer until a separately reviewed parallel-origin migration is ready.'
+# SCRUM-204 preparation requires distinct load balancers. The existing `main`
+# resource stays internal while a separately identified public ALB is introduced;
+# the Terraform assertions bind each `internal` value to the correct resource.
+require 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
+  'the recovered internal load balancer identity' \
+  'Preparation must preserve the load balancer referenced by the surviving VPC origin.'
+
+require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
+  'a distinct parallel public load balancer identity' \
+  'Preparation adds a parallel origin; converting aws_lb.main in place repeats the failed replacement race.'
+
+require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' \
+  'the AWS-managed CloudFront origin-facing prefix list' \
+  'The parallel origin must fail closed to CloudFronts published origin-facing addresses.'
 
 forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
   'a security group rule admitting the whole internet' \
@@ -202,4 +220,4 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow cloudfront:DeleteVpcOrigin"
 
-printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 17
+printf 'ok: %s preparation source guard passed (%d checks)\n' "$component_dir" 19

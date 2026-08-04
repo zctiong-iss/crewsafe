@@ -1,5 +1,12 @@
 # Runbook — `compute-shared-dev` (SCRUM-176)
 
+> **SCRUM-204 migration notice (2026-08-04):** The recovered internal ALB and surviving VPC
+> origin documented here remain active during preparation, but public-origin conversion
+> instructions are superseded by
+> [`SCRUM-204-staged-public-alb-origin.md`](SCRUM-204-staged-public-alb-origin.md). Use separate
+> preparation, cutover, and cleanup revisions; do not reconstruct the failed one-step migration
+> from this runbook's incident history.
+
 Backend compute runtime and staging DNS. The seventh Terraform component, and the one that makes
 the deployed backend reachable.
 

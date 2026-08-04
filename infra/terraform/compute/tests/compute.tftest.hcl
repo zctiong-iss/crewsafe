@@ -134,6 +134,13 @@ override_data {
   values = { cidr_block = "10.0.0.0/16" }
 }
 
+# AWS-published. Preparation assertions prove this managed identifier is the
+# public ALB's only ingress source rather than a caller-supplied CIDR.
+override_data {
+  target = data.aws_ec2_managed_prefix_list.cloudfront
+  values = { id = "pl-00a54069" }
+}
+
 # The two managed policies are AWS-published; the mock fabricates their ids, which
 # is fine — the assertions check that the managed policies are REFERENCED, not what
 # their ids are.
@@ -292,6 +299,75 @@ run "boundary" {
   assert {
     condition     = aws_vpc_security_group_ingress_rule.app_from_lb.from_port == 8080 && aws_vpc_security_group_ingress_rule.app_from_lb.to_port == 8080
     error_message = "Only the application port may be admitted (FR-019)."
+  }
+}
+
+# SCRUM-204 US1 — the public path must coexist with the recovery topology. These
+# assertions are deliberately added before the resources so Terraform Validation
+# demonstrates the test-first failure on the draft preparation PR.
+run "parallel_public_origin_preparation" {
+  command = apply
+
+  assert {
+    condition     = aws_lb.public.internal == false
+    error_message = "The parallel origin needs a distinct internet-facing ALB; aws_lb.main remains internal and is not converted in place."
+  }
+
+  assert {
+    condition = tolist(aws_lb.public.subnets) == tolist([
+      "subnet-0public0000000a", "subnet-0public0000000b"
+    ])
+    error_message = "The parallel public ALB must use exactly the network component's public subnets."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.prefix_list_id == data.aws_ec2_managed_prefix_list.cloudfront.id
+    error_message = "Public-origin ingress must reference AWS's managed CloudFront origin-facing prefix list."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.cidr_ipv4 == null
+    error_message = "No CIDR may admit traffic to the public ALB; the managed prefix list is its only source."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.from_port == 80 && aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.to_port == 80
+    error_message = "CloudFront may reach only the public ALB's HTTP listener port."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.referenced_security_group_id == "sg-0app00000000000000"
+    error_message = "The public ALB may send traffic only to the existing application security group."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.from_port == 8080 && aws_vpc_security_group_egress_rule.public_lb_to_app.to_port == 8080
+    error_message = "The public ALB may send traffic only to the application port."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.default_action[0].type == "forward" && aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
+    error_message = "The public listener must forward to its distinct target group and never answer on the application's behalf."
+  }
+
+  assert {
+    condition     = aws_lb_target_group.public.health_check[0].path == "/actuator/health" && aws_lb_target_group.public.health_check[0].matcher == "200"
+    error_message = "The parallel target group must expose the existing application health signal before cutover."
+  }
+
+  assert {
+    condition = toset([
+      for attachment in aws_ecs_service.backend.load_balancer : attachment.target_group_arn
+    ]) == toset([
+      aws_lb_target_group.backend.arn,
+      aws_lb_target_group.public.arn,
+    ])
+    error_message = "Preparation must register the existing ECS workload with both legacy and public target groups."
+  }
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).vpc_origin_config).vpc_origin_id == aws_cloudfront_vpc_origin.rebuilt.id
+    error_message = "Preparation must leave CloudFront on the surviving VPC origin; cutover is a later reviewed revision."
   }
 }
 
