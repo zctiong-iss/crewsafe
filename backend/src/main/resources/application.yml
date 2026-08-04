@@ -61,6 +61,13 @@ app:
       delayed-after: ${WEATHER_DELAYED_AFTER:20m}
       stale-after: ${WEATHER_STALE_AFTER:45m}
 
+  conditions:
+    stream:
+      # How often a subscribed dashboard tab receives a fresh conditions/shift snapshot.
+      push-interval: ${CONDITIONS_STREAM_PUSH_INTERVAL:15s}
+      # How long an idle SSE connection is held open before the client must reconnect.
+      emitter-timeout: ${CONDITIONS_STREAM_EMITTER_TIMEOUT:5m}
+
   # app.cognito.* is deliberately absent from this file. Every value is required (see the
   # @NotBlank/@NotEmpty constraints on CognitoProperties), so leaving them undefined here
   # means a deployment that forgets one fails at startup with a validation error naming the
