@@ -43,8 +43,28 @@ function flatten(value, prefix = "") {
   });
 }
 
+/**
+ * Byte-order comparison rather than `localeCompare`, and rather than a bare `sort()`.
+ *
+ * A bare `sort()` coerces to string and orders by UTF-16 code unit, which happens to be
+ * right here but says so nowhere. `localeCompare` would be worse: it orders by the *running
+ * machine's* locale, so a CI runner and a developer laptop could disagree about whether two
+ * placeholder sets match. This check compares sorted lists for equality, so the only
+ * property that matters is that the order is identical everywhere it runs.
+ */
+function byCodePoint(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 function placeholders(text) {
-  return [...text.matchAll(/{{\s*([\w.-]+)\s*}}/g)].map((match) => match[1]).sort();
+  return [...text.matchAll(/{{\s*([\w.-]+)\s*}}/g)].map((match) => match[1]).sort(byCodePoint);
+}
+
+/** `["time", "count"]` → `{{time}}, {{count}}`, or "none" for an empty list. */
+function formatPlaceholders(names) {
+  if (names.length === 0) return "none";
+  return names.map((name) => `{{${name}}}`).join(", ");
 }
 
 function load(code) {
@@ -55,7 +75,7 @@ const locales = readdirSync(LOCALE_DIR)
   .filter((name) => name.endsWith(".json"))
   .map((name) => name.replace(/\.json$/, ""))
   .filter((code) => code !== SOURCE)
-  .sort();
+  .sort(byCodePoint);
 
 const source = new Map(flatten(load(SOURCE)));
 let failed = false;
@@ -83,8 +103,13 @@ for (const code of locales) {
     failed = true;
     for (const key of missing) console.log(`        missing: ${key}`);
     for (const key of extra) console.log(`        not in ${SOURCE}: ${key}`);
-    for (const m of placeholderMismatches) {
-      console.log(`        placeholders differ: ${m.key} — expected {{${m.want.join("}}, {{")}}}, got ${m.got.length ? `{{${m.got.join("}}, {{")}}}` : "none"}`);
+    for (const mismatch of placeholderMismatches) {
+      // Both sides formatted up front: a template literal nested inside another is hard to
+      // read and easy to get wrong, and this one already had a brace-counting problem
+      // waiting in it.
+      const want = formatPlaceholders(mismatch.want);
+      const got = formatPlaceholders(mismatch.got);
+      console.log(`        placeholders differ: ${mismatch.key} — expected ${want}, got ${got}`);
     }
   }
 }
