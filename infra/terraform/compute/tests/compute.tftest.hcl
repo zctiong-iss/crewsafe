@@ -358,7 +358,7 @@ run "parallel_public_origin_preparation" {
   assert {
     condition = toset([
       for attachment in aws_ecs_service.backend.load_balancer : attachment.target_group_arn
-    ]) == toset([
+      ]) == toset([
       aws_lb_target_group.backend.arn,
       aws_lb_target_group.public.arn,
     ])
