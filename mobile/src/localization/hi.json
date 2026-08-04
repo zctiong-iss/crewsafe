@@ -264,11 +264,9 @@
     "clearBody": "{{time}} पर सुरक्षित आँका गया।",
     "expiredTitle": "बिजली की चेतावनी समाप्त",
     "expiredBody": "चेतावनी {{time}} पर समाप्त हो गई। काम तभी शुरू करें जब आपका सुपरवाइज़र पुष्टि करे।",
-    "nearestStrike": "निकटतम बिजली {{km}} किमी दूर",
-    "observedAt": "{{time}} पर दर्ज",
     "validUntil": "{{time}} तक मान्य",
-    "expiresInMinutes": "{{minutes}} मिनट में समाप्त",
-    "expiresInSeconds": "{{seconds}} सेकंड में समाप्त",
+    "refreshesInMinutes": "{{minutes}} मिनट में ताज़ा होगा",
+    "refreshesInSeconds": "{{seconds}} सेकंड में ताज़ा होगा",
     "overrideNotice": "काम रुका रहने तक गर्मी सम्बन्धी योजना स्थगित है।"
   },
 
@@ -277,11 +275,6 @@
     "reading": "WBGT",
     "noReading": "कोई रीडिंग उपलब्ध नहीं",
     "superseded": "बिजली के कारण काम रोकने का आदेश लागू — यह रीडिंग अब मान्य नहीं",
-    "forecast": "अगले घंटे: {{band}}",
-    "observedAt": "{{time}} पर दर्ज",
-    "temperature": "तापमान",
-    "humidity": "नमी",
-    "wind": "हवा",
     "band": {
       "BELOW_31": "31°C से कम",
       "31_TO_BELOW_32": "31 से 32°C",

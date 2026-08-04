@@ -1,10 +1,28 @@
 /**
- * The WBGT reading and its band.
+ * The WBGT reading, and nothing else.
  *
  * Always rendered *below* the lightning banner — FR-12a is explicit that the lightning
  * warning sits above the WBGT reading, and §7.1 evaluates lightning before any WBGT rule.
  * The ordering is enforced by the screen, not by this component; this one only refuses to
  * invent a reading it does not have.
+ *
+ * ── WHY THIS CARD IS NOW ONE NUMBER ─────────────────────────────────────────────────────
+ * It previously carried the band ("32 to 33°C"), the next-hour forecast, air temperature,
+ * humidity, wind and the observation time. All of it was true and none of it was actionable
+ * on a phone held at arm's length in sun: the worker's decision is driven by the actions in
+ * the heat plan, not by reading a band boundary off a card. Stripped to the reading at the
+ * product owner's request.
+ *
+ * What was removed is not lost — `SiteConditions` still carries every field, and the
+ * Weather tab renders the full picture for anyone who wants it. This is a display decision,
+ * not a data one.
+ *
+ * ── THE READING IS THE SERVER'S, ALWAYS ─────────────────────────────────────────────────
+ * `conditions.wbgt` is whatever the API returned. In mock mode that is a fixture; once
+ * `GET /api/v1/sites/{siteId}/conditions` exists it is the NEA-ingested observation with no
+ * change to this file. Nothing here derives, rounds toward, or falls back to a number of
+ * its own — §12.2 is explicit that no client may compute or override a WBGT band, and a
+ * "sensible default" here would be exactly that with a friendlier name.
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";
@@ -15,26 +33,17 @@ import AppText from "../texts/AppText";
 import FreshnessBadge from "./FreshnessBadge";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
-import { formatTime } from "@/helpers/dateTime";
-import type { PolicyEvaluation, SiteConditions } from "@/types/domain";
+import type { SiteConditions } from "@/types/domain";
 
 interface WbgtCardProps {
   conditions: SiteConditions;
-  policy: PolicyEvaluation | null;
-  locale: string;
   /** Dims the card while a stop-work is in force, so the heat plan reads as superseded. */
   superseded?: boolean;
 }
 
-const WbgtCard: FC<WbgtCardProps> = ({ conditions, policy, locale, superseded = false }) => {
+const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-
-  const secondary = [
-    { label: t("wbgt.temperature"), value: conditions.temperature, unit: "°C" },
-    { label: t("wbgt.humidity"), value: conditions.humidity, unit: "%" },
-    { label: t("wbgt.wind"), value: conditions.windSpeed, unit: " km/h" },
-  ];
 
   return (
     <View
@@ -65,8 +74,14 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, policy, locale, superseded = 
         <FreshnessBadge status={conditions.qualityStatus} />
       </View>
 
-      {/* Stated, not implied. A dimmed card reads as "loading" as easily as "superseded",
-          and in high contrast there is no dim at all. */}
+      {/*
+        Stated, not implied. A dimmed card reads as "loading" as easily as "superseded", and
+        in high contrast there is no dim at all.
+
+        This label matters more than it did: with the heat plan card switched off (see
+        `features.heatGuidanceCard`) it is now the *only* place the app says in words that a
+        lightning stop-work overrides the heat guidance, which FR-12a requires.
+      */}
       {superseded ? (
         <AppText variant="label" tone="danger" style={styles.superseded}>
           {t("wbgt.superseded")}
@@ -74,49 +89,19 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, policy, locale, superseded = 
       ) : null}
 
       {conditions.wbgt === null ? (
+        // Says so rather than showing a dash. A missing reading and a reading of zero must
+        // never look alike on a heat-safety screen.
         <AppText variant="body" tone="secondary" style={styles.reading}>
           {t("wbgt.noReading")}
         </AppText>
       ) : (
-        <>
-          <View style={styles.readingRow}>
-            <AppText variant="display">{conditions.wbgt.toFixed(1)}</AppText>
-            <AppText variant="subtitle" tone="secondary" style={styles.unit}>
-              °C {t("wbgt.reading")}
-            </AppText>
-          </View>
-
-          {policy ? (
-            <>
-              <AppText variant="body" style={styles.band}>
-                {t(`wbgt.band.${policy.currentBand}`)}
-              </AppText>
-              {policy.forecastBand ? (
-                <AppText variant="caption" tone="secondary">
-                  {t("wbgt.forecast", { band: t(`wbgt.band.${policy.forecastBand}`) })}
-                </AppText>
-              ) : null}
-            </>
-          ) : null}
-        </>
+        <View style={styles.readingRow}>
+          <AppText variant="display">{conditions.wbgt.toFixed(1)}</AppText>
+          <AppText variant="subtitle" tone="secondary" style={styles.unit}>
+            °C {t("wbgt.reading")}
+          </AppText>
+        </View>
       )}
-
-      <View style={styles.secondaryRow}>
-        {secondary.map((item) =>
-          item.value === null ? null : (
-            <View key={item.label} style={styles.secondaryItem}>
-              <AppText variant="caption" tone="secondary">
-                {item.label}
-              </AppText>
-              <AppText variant="label">{`${item.value}${item.unit}`}</AppText>
-            </View>
-          ),
-        )}
-      </View>
-
-      <AppText variant="caption" tone="secondary" style={styles.observed}>
-        {t("wbgt.observedAt", { time: formatTime(conditions.observedAt, locale) })}
-      </AppText>
     </View>
   );
 };
@@ -151,20 +136,5 @@ const styles = StyleSheet.create({
   },
   reading: {
     marginTop: vs(8),
-  },
-  band: {
-    marginTop: vs(2),
-  },
-  secondaryRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: vs(12),
-  },
-  secondaryItem: {
-    marginEnd: s(20),
-    marginTop: vs(4),
-  },
-  observed: {
-    marginTop: vs(10),
   },
 });

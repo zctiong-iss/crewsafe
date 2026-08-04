@@ -264,11 +264,9 @@
     "clearBody": "{{time}} 评估为安全。",
     "expiredTitle": "雷电警报已过期",
     "expiredBody": "警报已于 {{time}} 失效。请在主管确认解除警报后再复工。",
-    "nearestStrike": "最近落雷距离 {{km}} 公里",
-    "observedAt": "观测时间 {{time}}",
     "validUntil": "有效至 {{time}}",
-    "expiresInMinutes": "{{minutes}} 分钟后失效",
-    "expiresInSeconds": "{{seconds}} 秒后失效",
+    "refreshesInMinutes": "{{minutes}} 分钟后刷新",
+    "refreshesInSeconds": "{{seconds}} 秒后刷新",
     "overrideNotice": "停工期间，防暑方案暂停执行。"
   },
 
@@ -277,11 +275,6 @@
     "reading": "WBGT",
     "noReading": "暂无读数",
     "superseded": "已被雷电停工指令取代",
-    "forecast": "未来一小时：{{band}}",
-    "observedAt": "观测时间 {{time}}",
-    "temperature": "气温",
-    "humidity": "湿度",
-    "wind": "风速",
     "band": {
       "BELOW_31": "低于 31°C",
       "31_TO_BELOW_32": "31 至 32°C",
