@@ -182,6 +182,17 @@ resource "aws_cloudwatch_log_group" "backend" {
 # AWS restricts security group descriptions to a-zA-Z0-9 and . _-:/()#,@[]+=&;{}!$*
 # An apostrophe is not in that set and fails at CreateSecurityGroup, not at plan.
 # That is what broke SCRUM-173's first apply, 16 resources in.
+# SCRUM-204 remediation temporarily adopts the empty security group still attached
+# to the surviving legacy ALB. Its original identity and attributes must remain
+# exact so the remediation plan neither creates nor replaces it.
+resource "aws_security_group" "lb" {
+  name        = "${local.name_prefix}-lb"
+  description = "Internal load balancer fronting the backend. Reached only through the CloudFront VPC origin; forwards to the application runtime and nothing else."
+  vpc_id      = local.network.vpc_id
+
+  tags = { Name = "${local.name_prefix}-lb" }
+}
+
 resource "aws_security_group" "public_lb" {
   name        = "${local.name_prefix}-public-lb"
   description = "Parallel public load balancer for SCRUM-204. Ingress is limited to CloudFronts managed origin-facing prefix list."
@@ -235,6 +246,24 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_public_lb" {
 # origin. The legacy internal path was retained through cutover validation and is
 # removed by the separately reviewed cleanup revision.
 # ---------------------------------------------------------------------------
+
+# Apply run 30891380424 removed the legacy traffic path but could not delete this
+# ALB while deletion protection remained enabled. This temporary declaration
+# adopts the surviving resource with its exact prior topology and changes only the
+# protection flag. A separately reviewed final-cleanup revision removes it and its
+# empty security group after this in-place change is applied.
+resource "aws_lb" "main" {
+  name               = "${local.name_prefix}-backend"
+  internal           = true
+  load_balancer_type = "application"
+  subnets            = local.network.private_subnet_ids
+  security_groups    = [aws_security_group.lb.id]
+
+  enable_deletion_protection = false
+  drop_invalid_header_fields = true
+
+  tags = { Name = "${local.name_prefix}-backend" }
+}
 
 # This ALB is intentionally public (AWS-0053), with reachability fenced by the
 # managed-prefix-list rule rather than by 0.0.0.0/0.
