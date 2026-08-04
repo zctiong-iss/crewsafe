@@ -66,18 +66,31 @@ what this ticket can promise — see *Known limitations*.
   `POST .../assignments` endpoint stays for staffing an existing shift later, which is not this
   ticket.
 
-### Open decision — routing shape
+### Routing shape (D-1) — RESOLVED 3 Aug: flat. [ADR 0010](../adr/0010-flat-routing-site-scoped-screens.md)
 
-Not settled. Every route in [`App.tsx`](../../web/src/app/App.tsx) is currently flat
-(`/shifts`, `/approvals`), with no `siteId` in any URL.
+Every route in [`App.tsx`](../../web/src/app/App.tsx) is flat (`/shifts`, `/approvals`), with no
+`siteId` in any URL.
 
-- **Flat** (`/shifts/new`, site resolved from `/api/v1/me`) — simpler, matches what exists,
-  and closes the typed-URL path to a cross-site request.
+- **Flat** (`/shifts/new`, site resolved from `GET /api/v1/me`) — simpler, matches what exists,
+  and keeps a user-editable site id out of the address bar. **Chosen.**
 - **Nested** (`/sites/:siteId/shifts/new`) — deep-linkable and shareable, which scales to
   SCRUM-134's multi-site view, but puts a user-editable site id in the address bar.
 
-Neither is wrong. Whoever builds the next site-scoped screen inherits this, so it wants an ADR
-line once decided. AC-4 holds either way.
+Both met **AC-4** — server-side object authorization is the control either way — so the
+tie-break was front-end attack surface, not the URL itself. Nested sources `:siteId` from
+`useParams()` and flows it into the API request path, opening a **client-side path traversal**
+vector: a crafted `../` value can rewrite which endpoint the browser calls, on the victim's own
+authenticated session. Flat resolves the site from the signed-in user's `siteIds` — the already-loaded auth context
+read by `useCurrentUser()`, not a fresh fetch — removing the user-controlled path segment by
+construction. Nested stays the likely choice **for SCRUM-134**, paired with a
+UUID-format guard on the param; the ADR records that revisit trigger.
+
+**Consequence for Steps 6–7:** `CreateShiftPage` resolves the site from the already-loaded auth
+context (`useCurrentUser().siteIds`, the same context `HomePage`/`AppShell` read) — no fresh
+`/api/v1/me` call. The form tests still need a signed-in auth context, because `AppShell` calls
+`useCurrentUser()`; reusing `<AuthProvider>` + `fakeUserManager` (per `authStates.test.tsx`)
+fetches `/api/v1/me`, so add a `/api/v1/me` handler returning a signed-in `CurrentUser`. That is
+an `AppShell` cost — it holds under nested too — not one caused by flat.
 
 ## Acceptance criteria
 
