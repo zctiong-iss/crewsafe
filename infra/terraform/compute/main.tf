@@ -179,6 +179,19 @@ resource "aws_cloudwatch_log_group" "backend" {
 # assertable — the convention network/main.tf established.
 # ---------------------------------------------------------------------------
 
+# Apply run 30894811215 deleted the legacy ALB, then failed while deleting its
+# empty security group because the apply role could not inspect attached ENIs.
+# This temporary declaration adopts only that surviving group under its original
+# identity. A fresh final-cleanup revision removes it after the narrow read
+# permission is deployed and validated.
+resource "aws_security_group" "lb" {
+  name        = "${local.name_prefix}-lb"
+  description = "Internal load balancer fronting the backend. Reached only through the CloudFront VPC origin; forwards to the application runtime and nothing else."
+  vpc_id      = local.network.vpc_id
+
+  tags = { Name = "${local.name_prefix}-lb" }
+}
+
 resource "aws_security_group" "public_lb" {
   name        = "${local.name_prefix}-public-lb"
   description = "Parallel public load balancer for SCRUM-204. Ingress is limited to CloudFronts managed origin-facing prefix list."

@@ -86,6 +86,7 @@
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeInternetGateways",
         "ec2:DescribeManagedPrefixLists",
+        "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeSecurityGroupRules",
         "ec2:DescribeSecurityGroups",
         "ec2:DescribeSubnets",
