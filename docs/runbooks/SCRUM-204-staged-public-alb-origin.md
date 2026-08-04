@@ -208,10 +208,9 @@ was enabled. The plan is stale after those state changes and must never be retri
 
 Remediation uses a fresh reviewed revision and plan to re-declare only the surviving internal ALB
 and its still-attached empty security group, changing `enable_deletion_protection` from `true` to
-`false`. The remediation plan must contain exactly that one in-place ALB change: no add, destroy,
-replacement, public-path change, listener/target-group/rule restoration, or ECS attachment change.
-After it applies, a second fresh final-cleanup revision removes the two temporary declarations and
-uses another reviewed plan to delete only the unprotected ALB and its security group.
+`false`. After it applies, a second fresh final-cleanup revision removes the two temporary
+declarations and uses another reviewed plan to delete only the unprotected ALB and its security
+group.
 
 The remediation test-only checkpoint is revision `96e2f18` on draft PR
 [#77](https://github.com/zctiong-iss/crewsafe/pull/77). Terraform Validation
@@ -227,3 +226,12 @@ security group, with the ALB's prior identity/topology unchanged and deletion pr
 passed formatting, initialization without the remote backend, validation, mocked Terraform tests,
 the 31-check remediation source guard, lockfile/component/workflow guards, Gitleaks, and
 infrastructure scanning. Every workflow job passed; no Terraform command ran locally.
+
+The fresh remediation plan [run 30893830305](https://github.com/zctiong-iss/crewsafe/actions/runs/30893830305)
+contained no additions or destroys and two reviewed in-place changes: it disabled deletion
+protection on the legacy ALB and reconciled the ECS service from the partially applied dual
+attachment state to its already-declared public target group only. Apply
+[run 30893902562, job 91942130252](https://github.com/zctiong-iss/crewsafe/actions/runs/30893902562/job/91942130252)
+matched that exact `0 added, 2 changed, 0 destroyed` plan and completed successfully. The public
+CloudFront health endpoint returned HTTP 200 after apply. The earlier partially applied cleanup
+plan remains stale and must never be retried.
