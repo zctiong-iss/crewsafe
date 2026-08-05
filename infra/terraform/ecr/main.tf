@@ -5,13 +5,13 @@ data "aws_caller_identity" "current" {}
 locals {
   # Must stay under crewsafe/* - that's the prefix the secrets component's task
   # role already has pull access to.
-  repository_name = "crewsafe/backend"
+  repository_name     = "crewsafe/backend"
   web_repository_name = "crewsafe/web"
 
-  push_role_name = "crewsafe-shared-dev-ecr-push"
+  push_role_name     = "crewsafe-shared-dev-ecr-push"
   web_push_role_name = "crewsafe-shared-dev-ecr-web-push"
 
-  repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
+  repository_arn     = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
   web_repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
 
   ecr_push_assume_role_policy = jsonencode({
