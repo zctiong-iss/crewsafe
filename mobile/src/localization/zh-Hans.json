@@ -182,7 +182,6 @@
     "deleting": "正在删除",
     "deletedToast": "班次已删除",
     "deleteFailedTitle": "班次未删除",
-
     "form": {
       "timesSection": "时间",
       "startsAt": "开始",
@@ -205,7 +204,6 @@
       "createdToast": "班次已创建",
       "unstaffedNotice": "该班次创建时不含任何人员，您可稍后再安排。"
     },
-
     "validation": {
       "startRequired": "请选择班次开始时间。",
       "endRequired": "请选择班次结束时间。",
@@ -252,7 +250,8 @@
     "retryButton": "重试",
     "failed": "确认信息发送失败。",
     "safeToRetry": "可以放心再次点击，不会重复确认。",
-    "noInstruction": "未提供更多说明。"
+    "noInstruction": "未提供更多说明。",
+    "restRemaining": "剩余 {{time}}"
   },
 
   "lightning": {
@@ -300,7 +299,6 @@
     "REST_10_MIN_HOURLY": "每小时连续休息 10 分钟",
     "REST_15_MIN_HOURLY": "每小时连续休息 15 分钟",
     "CLOSE_MONITORING": "密切留意自己和同伴是否出现中暑症状",
-
     "REST_10_MIN": "休息 10 分钟",
     "REST_15_MIN": "休息 15 分钟",
     "HYDRATE": "立即饮水",

@@ -25,7 +25,12 @@ import AppSwitch from "@/components/inputs/AppSwitch";
 import DispatchCard from "@/components/inbox/DispatchCard";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { acknowledge, loadInbox, resetAcknowledgements } from "@/store/reducers/dispatchInboxSlice";
+import {
+  acknowledge,
+  dismissed,
+  loadInbox,
+  resetAcknowledgements,
+} from "@/store/reducers/dispatchInboxSlice";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { isMockApi } from "@/auth/authMode";
 import {
@@ -44,8 +49,17 @@ export default function InboxScreen() {
   const dispatch = useAppDispatch();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { status, pending, acknowledged, inFlight, failures, errorKey, requestId, refreshing } =
-    useAppSelector((state) => state.dispatchInbox);
+  const {
+    status,
+    pending,
+    acknowledged,
+    inFlight,
+    failures,
+    dismissedIds,
+    errorKey,
+    requestId,
+    refreshing,
+  } = useAppSelector((state) => state.dispatchInbox);
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -74,8 +88,17 @@ export default function InboxScreen() {
     for (const record of Object.values(acknowledged)) {
       byId.set(record.dispatch.id, record.dispatch);
     }
+    /*
+     * Dismissed ids come out last, and the order matters.
+     *
+     * The acknowledgement records deliberately survive dismissal — they are what keeps a
+     * replayed acknowledgement idempotent — so the loop above happily puts a dismissed card
+     * back into the map. Filtering after the union is what makes "hidden" stick; filtering
+     * only `pending` would let the acknowledged copy resurrect it on the next render.
+     */
+    for (const id of dismissedIds) byId.delete(id);
     return [...byId.values()].sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt));
-  }, [pending, acknowledged]);
+  }, [pending, acknowledged, dismissedIds]);
 
   if (status === "loading") {
     return (
@@ -170,7 +193,7 @@ export default function InboxScreen() {
          * when one fails, because FlatList is a PureComponent and `data` did not change.
          * Language and theme are here for the same reason.
          */
-        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}|${inFlight.join(",")}|${Object.keys(failures).join(",")}`}
+        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}|${inFlight.join(",")}|${Object.keys(failures).join(",")}|${dismissedIds.length}`}
         contentContainerStyle={[styles.content, items.length === 0 && styles.contentEmpty]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={header}
@@ -192,6 +215,8 @@ export default function InboxScreen() {
             failureKey={failures[item.id] ?? null}
             onAcknowledge={() => void dispatch(acknowledge({ dispatchId: item.id }))}
             locale={i18n.language}
+            dismissAt={acknowledged[item.id]?.dismissAt ?? null}
+            onExpire={() => dispatch(dismissed(item.id))}
           />
         )}
       />
