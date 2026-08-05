@@ -6,6 +6,22 @@ mitigations that a supervisor approves. See
 [WBGT-CrewSafe-SG-AD-Project-Plan.md](WBGT-CrewSafe-SG-AD-Project-Plan.md) for the product
 and architecture source of truth, and [AGENTS.md](AGENTS.md) for the working agreement.
 
+## Security and quality
+
+[![Quality Gate status](https://sonarcloud.io/api/project_badges/measure?project=zctiong-iss_crewsafe&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=zctiong-iss_crewsafe)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=zctiong-iss_crewsafe&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=zctiong-iss_crewsafe)
+
+SonarQube Cloud provides the repository's SAST and quality-gate results. The README shows
+only the gate status and vulnerability count: these are the most useful signals for
+reviewers. Coverage is intentionally omitted until web, mobile, and backend coverage are
+reported consistently; Bugs, Code Smells, duplicated lines, and lines of code are better
+reviewed in SonarCloud than used as headline repository badges.
+
+The badges use tokenless project URLs. Do not commit a Sonar badge token or other
+credential-like value to the repository; if the project is private and tokenless badges do
+not render, use the SonarCloud link above or configure access through SonarCloud rather than
+embedding a token in `README.md`.
+
 ## Prerequisites
 
 - `gh` (authenticated — `gh auth status` must succeed), `jq`, `ruby`, `curl`
