@@ -78,12 +78,6 @@
   font-weight: var(--weight-medium);
   cursor: pointer;
 }
-.shift-card__assignment {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-}
 .shift-card__worker { font-weight: var(--weight-medium); color: var(--ink); }
 .shift-card__worker--missing { color: var(--band-high); }
 .shift-card__task { color: var(--ink-secondary); }
