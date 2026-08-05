@@ -10,10 +10,10 @@
 #      group and nothing else. Membership of that group is the ONLY thing granting
 #      database access; a task placed elsewhere fails with a connection timeout
 #      rather than an authorization error, which is far harder to diagnose.
-#   2. "boundary" — the load balancer must be internal, and the single inbound rule
-#      this component writes into the network component's group must reference that
-#      group by id. A CIDR-based rule would satisfy connectivity and quietly widen
-#      the boundary that SCRUM-173 deliberately left for this component to close.
+#   2. "boundary" — the public ALB must stay in public subnets while accepting
+#      port 80 only from CloudFront's managed origin-facing prefix list. Its
+#      application-group ingress and egress stay restricted to port 8080 by
+#      security-group reference.
 #   3. "credentials" — every credential appears under the container definition's
 #      secrets list and never its environment list, with no version pinned. A
 #      pinned reference turns the managed service's own credential rotation into an
@@ -88,6 +88,7 @@ override_data {
     outputs = {
       vpc_id                = "vpc-0test00000000000"
       private_subnet_ids    = ["subnet-0private000000a", "subnet-0private000000b"]
+      public_subnet_ids     = ["subnet-0public0000000a", "subnet-0public0000000b"]
       app_security_group_id = "sg-0app00000000000000"
     }
   }
@@ -125,12 +126,11 @@ override_data {
   }
 }
 
-# The mock fabricates a random string for cidr_block, which fails the provider's
-# CIDR validation before any assertion runs. Pin a realistic value matching the
-# network component's 10.0.0.0/16.
+# AWS-published. Preparation assertions prove this managed identifier is the
+# public ALB's only ingress source rather than a caller-supplied CIDR.
 override_data {
-  target = data.aws_vpc.main
-  values = { cidr_block = "10.0.0.0/16" }
+  target = data.aws_ec2_managed_prefix_list.cloudfront
+  values = { id = "pl-00a54069" }
 }
 
 # The two managed policies are AWS-published; the mock fabricates their ids, which
@@ -236,54 +236,99 @@ run "placement" {
   }
 }
 
-run "boundary" {
+# SCRUM-204 US3 — the verified public path becomes the only runtime attachment.
+# Legacy-resource absence is categorical and therefore covered by the source
+# guard; these provider-backed assertions prove the surviving topology.
+run "public_origin_cleanup" {
   command = apply
 
   assert {
-    condition     = aws_lb.main.internal == true
-    error_message = "The load balancer must be internal — the origin must have no public address (FR-021)."
+    condition     = aws_lb.public.internal == false
+    error_message = "Cleanup must preserve the active internet-facing public ALB."
   }
 
   assert {
-    condition = tolist(aws_lb.main.subnets) == tolist([
-      "subnet-0private000000a", "subnet-0private000000b"
+    condition = tolist(aws_lb.public.subnets) == tolist([
+      "subnet-0public0000000a", "subnet-0public0000000b"
     ])
-    error_message = "The internal load balancer belongs in the private subnets (FR-021)."
-  }
-
-  # The distribution forwards viewer headers verbatim, so the load balancer is the
-  # last hop that can reject a malformed one before the application sees it.
-  assert {
-    condition     = aws_lb.main.drop_invalid_header_fields == true
-    error_message = "Non-conforming header fields must be dropped at the load balancer, not passed through to the task."
-  }
-
-  # The one rule this component writes into an upstream resource. SCRUM-173 left
-  # the application security group with no inbound rule and said so in the
-  # resource's own description: load balancer ingress belongs here.
-  assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.security_group_id == "sg-0app00000000000000"
-    error_message = "The single inbound rule must target the network component's application security group (FR-019)."
+    error_message = "The parallel public ALB must use exactly the network component's public subnets."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.referenced_security_group_id == aws_security_group.lb.id
-    error_message = "Inbound must be admitted by security group reference, never a CIDR — a CIDR rule connects and quietly widens the boundary (FR-019, SC-007)."
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.prefix_list_id == data.aws_ec2_managed_prefix_list.cloudfront.id
+    error_message = "Public-origin ingress must reference AWS's managed CloudFront origin-facing prefix list."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.cidr_ipv4 == null
-    error_message = "No CIDR may admit the application port (SC-007)."
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.cidr_ipv4 == null
+    error_message = "No CIDR may admit traffic to the public ALB; the managed prefix list is its only source."
   }
 
   assert {
-    condition     = aws_vpc_security_group_ingress_rule.app_from_lb.from_port == 8080 && aws_vpc_security_group_ingress_rule.app_from_lb.to_port == 8080
-    error_message = "Only the application port may be admitted (FR-019)."
+    condition     = aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.from_port == 80 && aws_vpc_security_group_ingress_rule.public_lb_from_cloudfront.to_port == 80
+    error_message = "CloudFront may reach only the public ALB's HTTP listener port."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.referenced_security_group_id == "sg-0app00000000000000"
+    error_message = "The public ALB may send traffic only to the existing application security group."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.from_port == 8080 && aws_vpc_security_group_egress_rule.public_lb_to_app.to_port == 8080
+    error_message = "The public ALB may send traffic only to the application port."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.app_from_public_lb.security_group_id == "sg-0app00000000000000" && aws_vpc_security_group_ingress_rule.app_from_public_lb.referenced_security_group_id == aws_security_group.public_lb.id
+    error_message = "Application ingress must name the parallel ALB security group, never an address range."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_ingress_rule.app_from_public_lb.cidr_ipv4 == null && aws_vpc_security_group_ingress_rule.app_from_public_lb.from_port == 8080 && aws_vpc_security_group_ingress_rule.app_from_public_lb.to_port == 8080
+    error_message = "The parallel ALB may enter the application group by security-group reference on port 8080 only."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.default_action[0].type == "forward" && aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
+    error_message = "The public listener must forward to its distinct target group and never answer on the application's behalf."
+  }
+
+  assert {
+    condition     = aws_lb_target_group.public.health_check[0].path == "/actuator/health" && aws_lb_target_group.public.health_check[0].matcher == "200"
+    error_message = "The parallel target group must expose the existing application health signal before cutover."
+  }
+
+  assert {
+    condition = toset([
+      for attachment in aws_ecs_service.backend.load_balancer : attachment.target_group_arn
+    ]) == toset([aws_lb_target_group.public.arn])
+    error_message = "Cleanup must leave exactly the active public target-group attachment."
+  }
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
+    error_message = "Cleanup must preserve the existing backend origin on the verified public ALB."
+  }
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).custom_origin_config).origin_protocol_policy == "http-only"
+    error_message = "CloudFront must reach the temporary public origin over the reviewed HTTP-only transport."
+  }
+
+  assert {
+    condition     = one(one(aws_cloudfront_distribution.main.origin).custom_origin_config).http_port == 80
+    error_message = "The custom origin must use only the prefix-list-fenced public listener on port 80."
   }
 }
 
 run "public_edge" {
   command = apply
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
+    error_message = "The stable distribution must select the verified public ALB after cutover."
+  }
 
   assert {
     condition     = aws_cloudfront_distribution.main.default_cache_behavior[0].viewer_protocol_policy == "redirect-to-https"
@@ -462,24 +507,24 @@ run "container_hardening" {
 }
 
 # ---------------------------------------------------------------------------
-# US3 — health drives traffic
+# Health drives traffic
 # ---------------------------------------------------------------------------
 
 run "health_drives_traffic" {
   command = apply
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].path == "/actuator/health"
+    condition     = aws_lb_target_group.public.health_check[0].path == "/actuator/health"
     error_message = "The probe must ask the application, not the root path or a synthetic port check (FR-026, SC-016)."
   }
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].matcher == "200"
+    condition     = aws_lb_target_group.public.health_check[0].matcher == "200"
     error_message = "Actuator returns 503 when down; only 200 may count as healthy (SC-016)."
   }
 
   assert {
-    condition     = aws_lb_target_group.backend.health_check[0].port == "traffic-port"
+    condition     = aws_lb_target_group.public.health_check[0].port == "traffic-port"
     error_message = "The probe must reach the container's own port (SC-016)."
   }
 
@@ -498,12 +543,12 @@ run "health_drives_traffic" {
   # A rule that answers on the application path never reaches the application, so
   # every authorization control the application enforces is skipped.
   assert {
-    condition     = aws_lb_listener.backend.default_action[0].type == "forward"
+    condition     = aws_lb_listener.public.default_action[0].type == "forward"
     error_message = "The listener must forward. A fixed-response or redirect action is a path to the endpoint that bypasses the application (FR-018, SC-004)."
   }
 
   assert {
-    condition     = length(aws_lb_listener.backend.default_action) == 1
+    condition     = length(aws_lb_listener.public.default_action) == 1
     error_message = "Exactly one default action (FR-018)."
   }
 }

@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "我的班次",
-    "inbox": "收件箱",
+    "alerts": "提醒",
+    "alertsA11yCount": "提醒，{{count}} 项未确认",
+    "alertsA11yAllDone": "提醒，全部已确认",
     "weather": "天气",
     "shifts": "班次",
     "profile": "我的",
@@ -182,7 +184,6 @@
     "deleting": "正在删除",
     "deletedToast": "班次已删除",
     "deleteFailedTitle": "班次未删除",
-
     "form": {
       "timesSection": "时间",
       "startsAt": "开始",
@@ -205,7 +206,6 @@
       "createdToast": "班次已创建",
       "unstaffedNotice": "该班次创建时不含任何人员，您可稍后再安排。"
     },
-
     "validation": {
       "startRequired": "请选择班次开始时间。",
       "endRequired": "请选择班次结束时间。",
@@ -252,7 +252,9 @@
     "retryButton": "重试",
     "failed": "确认信息发送失败。",
     "safeToRetry": "可以放心再次点击，不会重复确认。",
-    "noInstruction": "未提供更多说明。"
+    "noInstruction": "未提供更多说明。",
+    "restRemaining": "剩余 {{time}}",
+    "swipeToClear": "清除"
   },
 
   "lightning": {
@@ -264,11 +266,9 @@
     "clearBody": "{{time}} 评估为安全。",
     "expiredTitle": "雷电警报已过期",
     "expiredBody": "警报已于 {{time}} 失效。请在主管确认解除警报后再复工。",
-    "nearestStrike": "最近落雷距离 {{km}} 公里",
-    "observedAt": "观测时间 {{time}}",
     "validUntil": "有效至 {{time}}",
-    "expiresInMinutes": "{{minutes}} 分钟后失效",
-    "expiresInSeconds": "{{seconds}} 秒后失效",
+    "refreshesInMinutes": "{{minutes}} 分钟后刷新",
+    "refreshesInSeconds": "{{seconds}} 秒后刷新",
     "overrideNotice": "停工期间，防暑方案暂停执行。"
   },
 
@@ -277,11 +277,6 @@
     "reading": "WBGT",
     "noReading": "暂无读数",
     "superseded": "已被雷电停工指令取代",
-    "forecast": "未来一小时：{{band}}",
-    "observedAt": "观测时间 {{time}}",
-    "temperature": "气温",
-    "humidity": "湿度",
-    "wind": "风速",
     "band": {
       "BELOW_31": "低于 31°C",
       "31_TO_BELOW_32": "31 至 32°C",
@@ -307,13 +302,13 @@
     "REST_10_MIN_HOURLY": "每小时连续休息 10 分钟",
     "REST_15_MIN_HOURLY": "每小时连续休息 15 分钟",
     "CLOSE_MONITORING": "密切留意自己和同伴是否出现中暑症状",
-
     "REST_10_MIN": "休息 10 分钟",
     "REST_15_MIN": "休息 15 分钟",
     "HYDRATE": "立即饮水",
     "STOP_WORK": "停止作业",
     "SEEK_SHADE": "转移至阴凉处",
-    "RESUME_WORK": "恢复作业"
+    "RESUME_WORK": "恢复作业",
+    "ROTATE_TO_LIGHT_DUTY": "轮换至轻度工作"
   },
 
   "shift": {
@@ -357,7 +352,12 @@
     "forbiddenHint": "该场景平时无法触发 — 选择器只会列出您所属的工地。触发后应保持登录状态并显示说明。",
     "scenarioClear": "安全",
     "scenarioAdvisory": "预警",
-    "scenarioStopWork": "停工"
+    "scenarioStopWork": "停工",
+    "mockInstruction": {
+      "REST_15_MIN": "请到工地办公室旁的遮阴休息点连续休息 15 分钟。",
+      "HYDRATE": "立即饮用 500 毫升水，返回作业前请重新装满水瓶。",
+      "ROTATE_TO_LIGHT_DUTY": "接下来一小时改到工具库工作。主管已安排人手接替。"
+    }
   },
 
   "placeholder": {

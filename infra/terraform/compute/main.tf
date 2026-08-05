@@ -14,8 +14,9 @@ data "aws_caller_identity" "current" {}
 # at init rather than silently producing wrong values. The plan role already holds
 # s3:GetObject on crewsafe/*, so a fourth state read needs no IAM change.
 #
-# public_subnet_ids is deliberately NOT read. The load balancer is internal
-# (FR-021), so this component has no use for the public tier.
+# SCRUM-204 completed the origin migration in separately reviewed preparation,
+# cutover, and cleanup revisions. The compute component now consumes both private
+# task subnets and public load-balancer subnets from the same network state.
 # ---------------------------------------------------------------------------
 
 data "terraform_remote_state" "network" {
@@ -73,11 +74,11 @@ data "terraform_remote_state" "ecr" {
 # host-based routing and the origin's health semantics behave unpredictably.
 # ---------------------------------------------------------------------------
 
-# Read for its CIDR only, so the load balancer's inbound rule has a source. The
-# network component publishes no CIDR by design; reading it here changes nothing
-# upstream.
-data "aws_vpc" "main" {
-  id = local.network.vpc_id
+# AWS maintains this list as the CloudFront edge fleet changes. The public ALB
+# admits only these origin-facing addresses;
+# manually maintained CIDRs and 0.0.0.0/0 are forbidden by the source guard.
+data "aws_ec2_managed_prefix_list" "cloudfront" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
 }
 
 data "aws_cloudfront_cache_policy" "caching_disabled" {
@@ -171,127 +172,94 @@ resource "aws_cloudwatch_log_group" "backend" {
 # ---------------------------------------------------------------------------
 # Access control
 #
-# Both rules on the load balancer's own group, and the ONE rule this component
+# Both rules on the load balancer's own group, and the one rule this component
 # writes into an upstream resource, are separate aws_vpc_security_group_*_rule
 # resources rather than inline blocks. Mixing the two styles causes rules to be
 # perpetually added and removed, and separate resources make rule counts directly
 # assertable — the convention network/main.tf established.
 # ---------------------------------------------------------------------------
 
-# AWS restricts security group descriptions to a-zA-Z0-9 and . _-:/()#,@[]+=&;{}!$*
-# An apostrophe is not in that set and fails at CreateSecurityGroup, not at plan.
-# That is what broke SCRUM-173's first apply, 16 resources in.
-resource "aws_security_group" "lb" {
-  name        = "${local.name_prefix}-lb"
-  description = "Internal load balancer fronting the backend. Reached only through the CloudFront VPC origin; forwards to the application runtime and nothing else."
+resource "aws_security_group" "public_lb" {
+  name        = "${local.name_prefix}-public-lb"
+  description = "Parallel public load balancer for SCRUM-204. Ingress is limited to CloudFronts managed origin-facing prefix list."
   vpc_id      = local.network.vpc_id
 
-  tags = { Name = "${local.name_prefix}-lb" }
+  tags = { Name = "${local.name_prefix}-public-lb" }
 }
 
-# The VPC origin's network interfaces live inside this VPC, and the resource
-# exposes no security group of its own to reference — so the source is the VPC's
-# own CIDR. That is wider than a group reference would be, and the width is worth
-# stating: it admits anything already inside the VPC, which today is the tasks and
-# the database and nothing else. It does NOT admit anything from the internet,
-# because the load balancer is internal and has no public address (FR-021).
-#
-# The CIDR is read from the VPC rather than added to the network component's
-# outputs. SCRUM-173 deliberately publishes no CIDR — "consumers have no legitimate
-# need for them, and a smaller surface stays stable" — and a read here needs no
-# change to a Done component (FR-053).
-resource "aws_vpc_security_group_ingress_rule" "lb_from_vpc_origin" {
-  security_group_id = aws_security_group.lb.id
-  description       = "HTTP from the CloudFront VPC origin, whose network interfaces are inside this VPC. The load balancer is internal, so this is the only path in."
-  cidr_ipv4         = data.aws_vpc.main.cidr_block
-  from_port         = 80
-  to_port           = 80
-  ip_protocol       = "tcp"
-}
-
-resource "aws_vpc_security_group_egress_rule" "lb_to_app" {
-  security_group_id            = aws_security_group.lb.id
-  description                  = "To the application runtime on its own port only, by security group reference so no address range can widen it."
-  referenced_security_group_id = local.network.app_security_group_id
-  from_port                    = local.container_port
-  to_port                      = local.container_port
-  ip_protocol                  = "tcp"
-}
-
-# FR-019 — the single rule this component writes into a resource another component
-# owns, and the only such write in the whole component.
+# FR-019 — the application ingress rule below is the one rule this component
+# writes into a resource another component owns.
 #
 # SCRUM-173 created the application security group with NO inbound rule and said so
 # in that resource's own description: "no inbound rule is defined here because load
 # balancer ingress belongs to the compute component" (network/main.tf:145). This
 # discharges that delegation.
 #
-# By security group reference, never a CIDR. A CIDR rule would satisfy connectivity
-# and quietly widen the boundary — and membership of this group is the ONLY thing
-# granting database access, so widening it widens database reachability too.
-resource "aws_vpc_security_group_ingress_rule" "app_from_lb" {
+# The ALB has a public address, but port 80 is
+# reachable only from AWS's managed CloudFront origin-facing fleet. That list is
+# fleet-wide rather than distribution-specific; the runbook records the trade.
+resource "aws_vpc_security_group_ingress_rule" "public_lb_from_cloudfront" {
+  security_group_id = aws_security_group.public_lb.id
+  description       = "HTTP from CloudFronts managed origin-facing address range only. Fleet-wide; see the SCRUM-204 runbook."
+  prefix_list_id    = data.aws_ec2_managed_prefix_list.cloudfront.id
+  from_port         = 80
+  to_port           = 80
+  ip_protocol       = "tcp"
+}
+
+resource "aws_vpc_security_group_egress_rule" "public_lb_to_app" {
+  security_group_id            = aws_security_group.public_lb.id
+  description                  = "To the existing private application runtime on its single container port."
+  referenced_security_group_id = local.network.app_security_group_id
+  from_port                    = local.container_port
+  to_port                      = local.container_port
+  ip_protocol                  = "tcp"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "app_from_public_lb" {
   security_group_id            = local.network.app_security_group_id
-  description                  = "Application port from the internal load balancer only. Created by the compute component under the delegation SCRUM-173 recorded."
-  referenced_security_group_id = aws_security_group.lb.id
+  description                  = "Application port from the SCRUM-204 parallel public load balancer only."
+  referenced_security_group_id = aws_security_group.public_lb.id
   from_port                    = local.container_port
   to_port                      = local.container_port
   ip_protocol                  = "tcp"
 }
 
 # ---------------------------------------------------------------------------
-# Origin
+# Origins
 #
-# internal = true is the single most consequential argument in this component.
-#
-# A publicly trusted certificate cannot be issued for a load-balancer-owned
-# *.elb.amazonaws.com name, so the hop from the distribution to its origin cannot
-# be secured by TLS. Keeping that hop off the public internet is the substitute,
-# and making the origin internal is what turns FR-021 into a structural property
-# rather than a rule a later edit could widen.
-#
-# The rejected alternative — a public load balancer fenced by CloudFront's managed
-# prefix list plus a shared origin header — needed a secret in Terraform state,
-# which SCRUM-174 and SCRUM-175 forbid categorically. The prefix list alone would
-# have admitted any distribution in the fleet, including one created in an
-# unrelated account.
+# SCRUM-204 selects the verified public ALB for CloudFront's existing backend
+# origin. The legacy internal path was retained through cutover validation and is
+# removed by the separately reviewed cleanup revision.
 # ---------------------------------------------------------------------------
 
-resource "aws_lb" "main" {
-  name               = "${local.name_prefix}-backend"
-  internal           = true
+# This ALB is intentionally public (AWS-0053), with reachability fenced by the
+# managed-prefix-list rule rather than by 0.0.0.0/0.
+#trivy:ignore:AWS-0053
+resource "aws_lb" "public" {
+  name               = "${local.name_prefix}-public"
+  internal           = false
   load_balancer_type = "application"
-  subnets            = local.network.private_subnet_ids
-  security_groups    = [aws_security_group.lb.id]
+  subnets            = local.network.public_subnet_ids
+  security_groups    = [aws_security_group.public_lb.id]
 
   enable_deletion_protection = true
-
-  # Strip headers that do not conform to RFC 7230 before they reach the task. The
-  # distribution forwards viewer headers verbatim under Managed-AllViewerExceptHostHeader,
-  # so without this the load balancer is a pass-through for anything a viewer sends.
-  # Dropping them here means the application never has to be the first thing that
-  # decides a malformed header is malformed.
   drop_invalid_header_fields = true
 
-  tags = { Name = "${local.name_prefix}-backend" }
+  tags = { Name = "${local.name_prefix}-public" }
 }
 
-resource "aws_lb_target_group" "backend" {
-  name        = "${local.name_prefix}-backend"
+# The public target group probes the application and registers the existing ECS
+# workload; no second runtime is created.
+resource "aws_lb_target_group" "public" {
+  name        = "${local.name_prefix}-public"
   port        = local.container_port
   protocol    = "HTTP"
   vpc_id      = local.network.vpc_id
   target_type = "ip"
 
-  # Shorter than the 300s default. One task, no long-lived requests, so holding a
-  # draining target open for five minutes only slows a replacement down.
   deregistration_delay = 30
 
-  # The probe asks the APPLICATION, not the process. /actuator/health is exposed
-  # with show-details: never and is permitAll() in SecurityConfig, so it answers
-  # without credentials. Spring's default health group includes the datastore,
-  # which is what makes REL-002 work: a database the task cannot reach marks the
-  # endpoint down, the target deregisters, and the task is replaced — rather than
-  # serving errors as though healthy.
   health_check {
     path                = "/actuator/health"
     port                = "traffic-port"
@@ -304,29 +272,18 @@ resource "aws_lb_target_group" "backend" {
   }
 }
 
-# One default action, and it forwards. A fixed-response or redirect action would be
-# a path to the endpoint that answers without reaching the application, skipping
-# every authorization control the application enforces (FR-018).
-#
-# Plaintext on 80 is correct HERE and is not a public plaintext listener: the load
-# balancer is internal and unreachable from the internet. TLS is terminated at the
-# distribution, which redirects plaintext viewers (FR-025).
-#
-# AWS-0054 fires on protocol = "HTTP" without inspecting `internal`. The finding is
-# accepted, not worked around: the alternative it asks for is unreachable, because a
-# publicly trusted certificate cannot be issued for the *.elb.amazonaws.com name this
-# listener answers on — the same constraint that produced internal = true above. If
-# this load balancer ever becomes public, this exemption becomes wrong, which is why
-# the source guard forbids `internal = false` outright.
+# HTTP is the documented temporary origin transport: no trusted certificate can
+# be issued for the AWS-owned ALB hostname. Its security group accepts only the
+# managed CloudFront prefix list, and all requests still reach backend authn/z.
 #trivy:ignore:AWS-0054
-resource "aws_lb_listener" "backend" {
-  load_balancer_arn = aws_lb.main.arn
+resource "aws_lb_listener" "public" {
+  load_balancer_arn = aws_lb.public.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.backend.arn
+    target_group_arn = aws_lb_target_group.public.arn
   }
 }
 
@@ -334,101 +291,34 @@ resource "aws_lb_listener" "backend" {
 # Public edge
 # ---------------------------------------------------------------------------
 
-# The name is "-vpc-origin" rather than "-backend", and the difference is doing work.
-#
-# The first VPC origin was created in the wake of the apply that died INSIDE
-# CreateVpcOrigin (run 30796767337, wrong service-linked-role principal). It reported
-# Deployed and routed nothing: the distribution returned 504 on every request while the
-# load balancer's RequestCount stayed at 0 for a whole day. Every configurable element
-# was verified correct — listener :80 forwarding to a target group with a healthy
-# target, security group admitting tcp/80 from the VPC CIDR, no network ACLs, the
-# distribution naming the right load balancer DNS and the right VPC origin id, the
-# origin itself carrying the right load balancer ARN and http-only on 80. VPC
-# Reachability Analyzer then confirmed the path from a CloudFront interface to a load
-# balancer interface was reachable. Nothing was misconfigured and nothing arrived, which
-# leaves the association itself.
-#
-# Renaming forces a replacement, which is the only way to rebuild that association from
-# Terraform: the plan and apply workflows accept no per-dispatch arguments, so -replace
-# is unreachable. create_before_destroy is REQUIRED, not tidiness — CloudFront refuses to
-# delete a VPC origin a distribution still references, so a destroy-first replacement
-# fails partway and strands the distribution, which is the only thing holding the stable
-# public URL. The new name must differ from the old for the same reason: both exist at
-# once during the replacement.
-#
-# Renaming was tried first and does NOT work: plan run 30874184699 reported
-# "will be updated in-place", 0 to add / 2 to change / 0 to destroy. `name` is not a
-# force-new attribute, so a rename relabels the same broken origin and rebuilds nothing.
-#
-# So the rebuild is two resources across two applies, which is also the only shape that
-# cannot strand the distribution:
-#
-#   Apply 1 (this commit): create `rebuilt` and repoint the distribution at it. The old
-#                          origin stays in place, referenced by nothing.
-#   Apply 2 (next commit): delete the `backend` block below. Unreferenced by then, so
-#                          CloudFront will let it go.
-#
-# Doing it in one step is what fails — CloudFront refuses to delete a VPC origin a
-# distribution still references, and the distribution is the only thing holding the stable
-# public URL.
-resource "aws_cloudfront_vpc_origin" "rebuilt" {
-  vpc_origin_endpoint_config {
-    name                   = "${local.name_prefix}-vpc-origin"
-    arn                    = aws_lb.main.arn
-    http_port              = 80
-    https_port             = 443
-    origin_protocol_policy = "http-only"
-
-    origin_ssl_protocols {
-      quantity = 1
-      items    = ["TLSv1.2"]
-    }
-  }
-}
-
-# SUPERSEDED — delete this block in the follow-up apply once `rebuilt` is serving.
-#
-# Kept for exactly one apply so the distribution can be repointed before this is removed.
-# Its name is left at the original value deliberately: changing it would add a pointless
-# in-place update to a resource that is about to be destroyed.
-#
-# If you are reading this and the distribution already references `rebuilt`, this block's
-# only remaining job is to be deleted.
-resource "aws_cloudfront_vpc_origin" "backend" {
-  vpc_origin_endpoint_config {
-    name                   = "${local.name_prefix}-backend"
-    arn                    = aws_lb.main.arn
-    http_port              = 80
-    https_port             = 443
-    origin_protocol_policy = "http-only"
-
-    origin_ssl_protocols {
-      quantity = 1
-      items    = ["TLSv1.2"]
-    }
-  }
-}
-
 # AWS-0011 (no web ACL) is accepted for shared-dev. A WAF is a production edge
 # control with a per-account monthly cost and a rule set that has to be tuned against
 # real traffic; this distribution fronts a single-task development environment whose
 # only client is the team. Attaching an untuned managed rule group here would buy a
 # passing scan and a source of false blocks, not protection. The controls this
-# environment actually depends on are structural and are in this file: the origin is
-# unreachable except through the distribution, every route requires a Cognito-issued
-# token, and authorization is enforced server-side per object and site.
+# environment actually depends on are structural and are in this file: every route
+# requires a Cognito-issued token, and authorization is enforced server-side per
+# object and site — properties of the application, unaffected by the origin now
+# being publicly addressed.
 #trivy:ignore:AWS-0011
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
-  comment         = "crewsafe shared-dev backend API. Origin is an internal load balancer with no public address (SCRUM-176)."
+  comment         = "crewsafe shared-dev backend API. CloudFront reaches the prefix-list-fenced public ALB (SCRUM-204 cutover)."
   is_ipv6_enabled = true
 
   origin {
     origin_id   = "backend"
-    domain_name = aws_lb.main.dns_name
+    domain_name = aws_lb.public.dns_name
 
-    vpc_origin_config {
-      vpc_origin_id = aws_cloudfront_vpc_origin.rebuilt.id
+    # No trusted certificate can be issued for the AWS-owned ALB hostname. This
+    # temporary shared-development hop therefore uses HTTP, with network access
+    # limited to AWS's managed CloudFront origin-facing prefix list on port 80.
+    # Viewer TLS and backend Cognito authorization remain unchanged.
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "http-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
 
@@ -652,7 +542,7 @@ resource "aws_ecs_service" "backend" {
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.backend.arn
+    target_group_arn = aws_lb_target_group.public.arn
     container_name   = local.container_name
     container_port   = local.container_port
   }
@@ -669,7 +559,7 @@ resource "aws_ecs_service" "backend" {
     rollback = true
   }
 
-  depends_on = [aws_lb_listener.backend]
+  depends_on = [aws_lb_listener.public]
 
   # -------------------------------------------------------------------------
   # THE DECLARED DIVERGENCE (FR-042, Q4).

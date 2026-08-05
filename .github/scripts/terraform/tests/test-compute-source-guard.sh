@@ -17,16 +17,16 @@
 #      value in a task definition undoes both at once, and it is the likeliest way
 #      this design is quietly broken because writing an environment variable is the
 #      more obvious thing to do.
-#   2. The load balancer must stay internal. An `internal = false` here would give
-#      the origin a public address and make the distribution bypassable — the whole
-#      reason a VPC origin was chosen over a prefix-list variant.
+#   2. The recovery-stage load balancer must stay internal. Apply run 30880087606
+#      proved that replacing it while CloudFront still references its surviving
+#      VPC origin creates a destructive dependency race.
 #   3. The application owns its schema transition. Flyway runs in-process before
 #      traffic is accepted, with Hibernate pinned to `validate`. A task-definition
 #      override, a second container, or a command override would re-open what
 #      SCRUM-175's obligations 1 and 2 closed.
-#   4. No shared origin-authentication secret may exist. The rejected
-#      prefix-list-plus-header design needed one in state; forbidding it outright
-#      stops it returning by accident when someone "hardens" the origin later.
+#   4. No shared origin-authentication secret may exist. The attempted public
+#      variant needed no header, and the recovery VPC-origin path needs none either;
+#      forbidding one stops it returning by accident.
 set -euo pipefail
 source "$(dirname "$0")/helpers/test-helpers.sh"
 
@@ -44,10 +44,30 @@ scan() {
 
 forbid() {
   local pattern="$1" label="$2" reason="$3"
-  if scan | grep -Eq -- "$pattern"; then
+  # Process substitution, NOT `scan | grep -Eq`. With `set -o pipefail`, grep -q's
+  # early exit on the FIRST match can SIGPIPE sed before it finishes writing the
+  # rest of scan()'s output; pipefail then reports the pipeline's exit status as
+  # sed's SIGPIPE death (141) rather than grep's successful match (0), and this
+  # `if` silently takes the wrong branch — the guard reports a clean pass while the
+  # forbidden pattern is sitting in the file. Confirmed reproducible against
+  # `internal = false` while writing SCRUM-176's public-load-balancer change: the
+  # match is real, `grep -n` finds it, but `if scan | grep -Eq ...` took the pass
+  # branch anyway. `< <(scan)` reads from a substituted process whose exit status
+  # is not part of this command's pipeline, so pipefail cannot poison it.
+  if grep -Eq -- "$pattern" < <(scan); then
     printf 'FAIL: %s declares %s.\n  %s\n' "$component_dir" "$label" "$reason" >&2
-    scan | grep -En -- "$pattern" | head -5 >&2
+    grep -En -- "$pattern" < <(scan) | head -5 >&2
     grep -En -- "$pattern" "${tf_files[@]}" | head -5 >&2
+    exit 1
+  fi
+}
+
+# Positive companion to forbid(). Stage migrations need to prove that old and new
+# identities coexist; categorical absence checks alone cannot see a missing path.
+require() {
+  local pattern="$1" label="$2" reason="$3"
+  if ! grep -Eq -- "$pattern" < <(scan); then
+    printf 'FAIL: %s is missing %s.\n  %s\n' "$component_dir" "$label" "$reason" >&2
     exit 1
   fi
 }
@@ -79,12 +99,14 @@ forbid ':(AWSCURRENT|AWSPENDING|AWSPREVIOUS)|:[0-9a-fA-F-]{36}:"|::[0-9a-fA-F-]{
   'a version-pinned secret reference' \
   'A pinned reference breaks when the managed service rotates the credential (FR-028). Leave the version id and stage empty.'
 
-# FR-022a. The rejected origin-protection design fenced a public load balancer with
-# a shared header. It required a secret in state, which SCRUM-174 and SCRUM-175
-# forbid. The VPC origin makes the control structural instead.
+# FR-022a. The header-based variant of a fenced public load balancer needed a
+# shared secret in state, which SCRUM-174 and SCRUM-175 forbid categorically. This
+# component fences with CloudFront's managed prefix list alone (see
+# aws_security_group.public_lb in main.tf) and was never entitled to grow a header back in
+# as a "belt and suspenders" addition.
 forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header' \
   'an origin-authentication header' \
-  'The rejected prefix-list-plus-header design needed a secret in state (FR-022a). The VPC origin replaces it; the origin has no public address to fence.'
+  "A shared origin-authentication secret would need to live in Terraform state (FR-022a, forbidden categorically). The prefix list is the origin's only fence and needs no secret."
 
 # --- Constructs that would move the schema boundary ----------------------------
 
@@ -117,12 +139,53 @@ forbid 'containerPath[^,]*"/tmp"' \
 
 # --- Constructs that would open a bypass or widen the boundary -----------------
 
-# FR-021. The single most consequential argument in this component. An internet
-# facing load balancer would give the origin a public address, and every other
-# control here assumes it has none.
-forbid '^[[:space:]]*internal[[:space:]]*=[[:space:]]*false' \
-  'an internet-facing load balancer' \
-  'The origin must have no public address (FR-021). That is what makes the distribution unbypassable by construction rather than by a rule someone can widen.'
+require 'resource[[:space:]]+"aws_lb"[[:space:]]+"public"' \
+  'the active public load balancer identity' \
+  'Cleanup must preserve the verified origin selected by CloudFront.'
+
+forbid 'resource[[:space:]]+"aws_security_group"[[:space:]]+"lb"' \
+  'the legacy load-balancer security group' \
+  'Final cleanup removes the adopted orphan after the apply role gains the provider read permission required for deletion.'
+
+forbid 'resource[[:space:]]+"aws_lb"[[:space:]]+"main"' \
+  'the legacy internal load balancer' \
+  'Final cleanup removes the unprotected legacy ALB; only the verified public origin may remain.'
+
+require 'data[[:space:]]+"aws_ec2_managed_prefix_list"[[:space:]]+"cloudfront"' \
+  'the AWS-managed CloudFront origin-facing prefix list' \
+  'The parallel origin must fail closed to CloudFronts published origin-facing addresses.'
+
+require 'custom_origin_config[[:space:]]*\{' \
+  'the public ALB custom-origin configuration' \
+  'Cutover must select the verified public ALB rather than the failing VPC-origin route.'
+
+require 'domain_name[[:space:]]*=[[:space:]]*aws_lb\.public\.dns_name' \
+  'the public ALB as the existing distribution origin' \
+  'The stable backend origin must point to the public ALB without replacing the distribution.'
+
+forbid 'resource[[:space:]]+"aws_cloudfront_vpc_origin"' \
+  'a legacy CloudFront VPC origin' \
+  'Cleanup is allowed only after CloudFront has deployed and passed evidence on the public custom origin.'
+
+forbid 'resource[[:space:]]+"aws_lb_target_group"[[:space:]]+"backend"' \
+  'the legacy target group' \
+  'The ECS service must retain only its active public target-group attachment.'
+
+forbid 'resource[[:space:]]+"aws_lb_listener"[[:space:]]+"backend"' \
+  'the legacy listener' \
+  'Cleanup removes the unreferenced internal path.'
+
+forbid 'resource[[:space:]]+"aws_vpc_security_group_(ingress|egress)_rule"[[:space:]]+"(lb_from_vpc_origin|lb_to_app|app_from_lb)"' \
+  'legacy load-balancer connectivity rules' \
+  'Final cleanup permits no legacy traffic path to return.'
+
+load_balancer_blocks="$(grep -Ec '^[[:space:]]*load_balancer[[:space:]]*\{' < <(scan))"
+[[ "$load_balancer_blocks" -eq 1 ]] ||
+  fail "$component_dir must retain exactly one ECS load_balancer attachment after cleanup (found $load_balancer_blocks)"
+
+forbid '(^|[[:space:]])cidr_ipv4[[:space:]]*=[[:space:]]*"0\.0\.0\.0/0"' \
+  'a security group rule admitting the whole internet' \
+  'No recovery-stage resource may admit the whole internet (FR-021).'
 
 # FR-018. A rule that answers on the application path never reaches the
 # application, so every authorization control the application enforces is skipped.
@@ -152,4 +215,39 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gat
   'a resource owned by an upstream component' \
   'The network, secrets, and database components own these (FR-053). Changes to them are changes to those components.'
 
-printf 'ok: %s source guard passed (%d checks)\n' "$component_dir" 11
+# Terraform reads the entries behind the AWS-managed CloudFront prefix list while
+# refreshing the data source. Both workflows refresh it, so both roles need this
+# read-only verb; DescribeManagedPrefixLists alone is insufficient.
+for policy in plan-role-policy.json apply-role-policy.json; do
+  jq -e '
+    any(.Statement[];
+      .Effect == "Allow" and
+      ((.Action | arrays | index("ec2:GetManagedPrefixListEntries")) != null)
+    )
+  ' "$ROOT/$component_dir/iam/$policy" >/dev/null ||
+    fail "$component_dir/iam/$policy must allow ec2:GetManagedPrefixListEntries"
+done
+
+# Reviewed source reaches final least privilege. The already-deployed policies
+# retain these verbs through the cleanup refresh/deletion and are reconciled from
+# these narrower files immediately after the VPC origin is gone.
+for policy in plan-role-policy.json apply-role-policy.json; do
+  jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:GetVpcOrigin") == null' \
+    "$ROOT/$component_dir/iam/$policy" >/dev/null ||
+    fail "$component_dir/iam/$policy must remove cloudfront:GetVpcOrigin after cleanup"
+done
+
+jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") == null' \
+  "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must remove cloudfront:DeleteVpcOrigin after cleanup"
+
+jq -e '
+  any(.Statement[];
+    .Sid == "ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule"
+    and (.Effect == "Allow")
+    and ((.Action | arrays | index("ec2:DescribeNetworkInterfaces")) != null)
+  )
+' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must allow ec2:DescribeNetworkInterfaces so the provider can delete the orphaned legacy security group"
+
+printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 31

@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "मेरी शिफ़्ट",
-    "inbox": "इनबॉक्स",
+    "alerts": "अलर्ट",
+    "alertsA11yCount": "अलर्ट, {{count}} अस्वीकृत",
+    "alertsA11yAllDone": "अलर्ट, सभी स्वीकृत",
     "weather": "मौसम",
     "shifts": "शिफ़्ट",
     "profile": "प्रोफ़ाइल",
@@ -182,7 +184,6 @@
     "deleting": "हटाया जा रहा है",
     "deletedToast": "शिफ़्ट हटा दी गई",
     "deleteFailedTitle": "शिफ़्ट नहीं हटाई गई",
-
     "form": {
       "timesSection": "कब",
       "startsAt": "शुरू",
@@ -205,7 +206,6 @@
       "createdToast": "शिफ़्ट बन गई",
       "unstaffedNotice": "यह शिफ़्ट बिना किसी वर्कर के बनेगी। आप बाद में लोग जोड़ सकते हैं।"
     },
-
     "validation": {
       "startRequired": "शिफ़्ट शुरू होने का समय चुनें।",
       "endRequired": "शिफ़्ट समाप्त होने का समय चुनें।",
@@ -252,7 +252,9 @@
     "retryButton": "फिर कोशिश करें",
     "failed": "आपकी पुष्टि नहीं भेजी जा सकी।",
     "safeToRetry": "दोबारा टैप करना सुरक्षित है — पुष्टि दो बार दर्ज नहीं होगी।",
-    "noInstruction": "और कोई विवरण नहीं दिया गया।"
+    "noInstruction": "और कोई विवरण नहीं दिया गया।",
+    "restRemaining": "{{time}} शेष",
+    "swipeToClear": "हटाएँ"
   },
 
   "lightning": {
@@ -264,11 +266,9 @@
     "clearBody": "{{time}} पर सुरक्षित आँका गया।",
     "expiredTitle": "बिजली की चेतावनी समाप्त",
     "expiredBody": "चेतावनी {{time}} पर समाप्त हो गई। काम तभी शुरू करें जब आपका सुपरवाइज़र पुष्टि करे।",
-    "nearestStrike": "निकटतम बिजली {{km}} किमी दूर",
-    "observedAt": "{{time}} पर दर्ज",
     "validUntil": "{{time}} तक मान्य",
-    "expiresInMinutes": "{{minutes}} मिनट में समाप्त",
-    "expiresInSeconds": "{{seconds}} सेकंड में समाप्त",
+    "refreshesInMinutes": "{{minutes}} मिनट में ताज़ा होगा",
+    "refreshesInSeconds": "{{seconds}} सेकंड में ताज़ा होगा",
     "overrideNotice": "काम रुका रहने तक गर्मी सम्बन्धी योजना स्थगित है।"
   },
 
@@ -277,11 +277,6 @@
     "reading": "WBGT",
     "noReading": "कोई रीडिंग उपलब्ध नहीं",
     "superseded": "बिजली के कारण काम रोकने का आदेश लागू — यह रीडिंग अब मान्य नहीं",
-    "forecast": "अगले घंटे: {{band}}",
-    "observedAt": "{{time}} पर दर्ज",
-    "temperature": "तापमान",
-    "humidity": "नमी",
-    "wind": "हवा",
     "band": {
       "BELOW_31": "31°C से कम",
       "31_TO_BELOW_32": "31 से 32°C",
@@ -307,13 +302,13 @@
     "REST_10_MIN_HOURLY": "हर घंटे लगातार 10 मिनट विश्राम करें",
     "REST_15_MIN_HOURLY": "हर घंटे लगातार 15 मिनट विश्राम करें",
     "CLOSE_MONITORING": "अपने और साथियों में गर्मी से बीमारी के लक्षण ध्यान से देखें",
-
     "REST_10_MIN": "10 मिनट विश्राम करें",
     "REST_15_MIN": "15 मिनट विश्राम करें",
     "HYDRATE": "अभी पानी पिएँ",
     "STOP_WORK": "काम रोकें",
     "SEEK_SHADE": "छाया में जाएँ",
-    "RESUME_WORK": "काम फिर शुरू करें"
+    "RESUME_WORK": "काम फिर शुरू करें",
+    "ROTATE_TO_LIGHT_DUTY": "हल्के काम पर चले जाएँ"
   },
 
   "shift": {
@@ -357,7 +352,12 @@
     "forbiddenHint": "यह स्थिति सामान्यतः नहीं आती — चयनकर्ता केवल आपकी साइटें दिखाता है। ऐसा होने पर आप साइन इन रहेंगे और स्पष्टीकरण दिखेगा।",
     "scenarioClear": "सुरक्षित",
     "scenarioAdvisory": "चेतावनी",
-    "scenarioStopWork": "काम रोकें"
+    "scenarioStopWork": "काम रोकें",
+    "mockInstruction": {
+      "REST_15_MIN": "साइट कार्यालय के पास छायादार विश्राम स्थल पर लगातार 15 मिनट आराम करें।",
+      "HYDRATE": "अभी 500 मिली पानी पिएँ और काम पर लौटने से पहले अपनी बोतल फिर से भरें।",
+      "ROTATE_TO_LIGHT_DUTY": "अगले एक घंटे के लिए टूल स्टोर पर चले जाएँ। आपके सुपरवाइज़र ने आपकी जगह इंतज़ाम कर दिया है।"
+    }
   },
 
   "placeholder": {

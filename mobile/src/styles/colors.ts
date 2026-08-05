@@ -47,6 +47,20 @@ export interface AppPalette {
   danger: string;
   /** Advisory lightning risk, stale data, degraded states. */
   warning: string;
+  /**
+   * `warning` darkened until white text clears AA on top of it.
+   *
+   * Exists because `warning` is the one semantic colour that cannot carry white text.
+   * Measured against white: `#B26A00` is 4.24:1 — under the 4.5:1 floor for normal text —
+   * while `danger` (5.79:1) and `success` (7.87:1) both pass comfortably. So the filled
+   * lightning advisory banner needed a fill that the others did not.
+   *
+   * Only ever a *fill*. `warning` remains the colour for warning text and borders on a
+   * light surface, where it is the value that has already been checked in the other
+   * direction. Two names because they solve opposite problems: one is legible *on* white,
+   * the other is legible *under* it.
+   */
+  warningFill: string;
   /** Acknowledged, fresh, healthy. */
   success: string;
   /** Simulated / mocked data badges. Never used for a real reading. */
@@ -77,6 +91,10 @@ const standard: AppPalette = {
 
   danger: "#C71A34",
   warning: "#B26A00",
+  // 5.43:1 with white, against 4.24:1 for `warning` itself. Darkened only as far as AA
+  // needs — far enough to be legal, not so far that the advisory stops reading as amber
+  // and starts reading as brown.
+  warningFill: "#9A5B00",
   success: "#1B5E20",
   simulated: "#5A4B8C",
 
@@ -110,6 +128,10 @@ const highContrast: AppPalette = {
   // carrying it.
   danger: "#B3001B",
   warning: "#7A4600",
+  // Already 7.77:1 with white — high contrast darkens every semantic colour until it clears
+  // AA *on* white, and that happens to make it safe *under* white too. No separate value
+  // needed here; the field exists so the two palettes keep the same shape.
+  warningFill: "#7A4600",
   success: "#0B3D0B",
   simulated: "#3D2E75",
 

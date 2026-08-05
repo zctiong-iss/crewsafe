@@ -7,8 +7,15 @@
  * — not sorted by severity, not moved by any state. A worker who opens this screen mid-storm
  * sees the stop-work before anything else, without scrolling.
  *
- * The heat plan below it is suspended, in words, whenever a stop-work is active. See
- * `HeatGuidance` for why dimming alone was not enough.
+ * The rest of the order is a product decision and was changed after review: the task the
+ * worker is actually doing now sits directly under the banner, and heat conditions moved to
+ * the bottom. FR-12a is still satisfied — it constrains lightning to be *above* the WBGT
+ * reading, which moving the reading further down only reinforces.
+ *
+ * The heat plan that used to sit between them is behind `features.heatGuidanceCard`, which
+ * is currently off. Read that flag before assuming this screen is complete: the "suspended
+ * during a stop-work" wording lives there, and `WbgtCard`'s own superseded label is what
+ * carries it while the card is hidden.
  *
  * ── EVERYTHING HERE IS MOCKED ───────────────────────────────────────────────────────────
  * None of the three endpoints this screen needs exists: lightning (SCRUM-170), site
@@ -47,6 +54,7 @@ import {
   type LightningScenario,
 } from "@/api/mock/scenario";
 import type { WeatherQualityStatus } from "@/types/domain";
+import { features } from "@/constants/features";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 
@@ -159,6 +167,11 @@ export default function MyShiftScreen() {
           <LightningBanner risk={lightning} locale={i18n.language} now={now} />
         ) : null}
 
+        {/* Directly under the banner: what this worker is doing right now, which is the
+            thing they opened the screen for. Above the heat reading by product decision —
+            FR-12a only constrains lightning to sit above the reading, not the task. */}
+        {shift ? <ShiftCard shift={shift} locale={i18n.language} /> : null}
+
         {shift === null && status === "ready" ? (
           <View style={styles.empty}>
             <AppText variant="title" style={styles.emptyTitle}>
@@ -170,9 +183,15 @@ export default function MyShiftScreen() {
           </View>
         ) : null}
 
-        {/* Above the reading, below the lightning banner. The order is the argument: a
-            worker should know whether to trust the number before they read it, and nothing
-            outranks the stop-work warning. */}
+        {/* Off by default — see `features.heatGuidanceCard` for what is lost while it is.
+            Rendered from a flag rather than commented out so it stays typechecked. */}
+        {features.heatGuidanceCard && policy ? (
+          <HeatGuidance policy={policy} suspended={stopWorkActive} />
+        ) : null}
+
+        {/* Heat conditions last, and the freshness notice stays immediately above it: a
+            worker should know whether to trust the number before they read it, so the two
+            move together or not at all. */}
         {conditions ? (
           <View style={styles.block}>
             <FreshnessNotice status={conditions.qualityStatus} />
@@ -180,17 +199,8 @@ export default function MyShiftScreen() {
         ) : null}
 
         {conditions ? (
-          <WbgtCard
-            conditions={conditions}
-            policy={policy}
-            locale={i18n.language}
-            superseded={stopWorkActive}
-          />
+          <WbgtCard conditions={conditions} superseded={stopWorkActive} />
         ) : null}
-
-        {policy ? <HeatGuidance policy={policy} suspended={stopWorkActive} /> : null}
-
-        {shift ? <ShiftCard shift={shift} locale={i18n.language} /> : null}
 
         {__DEV__ ? (
           <View

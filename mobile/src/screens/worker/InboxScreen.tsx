@@ -11,7 +11,7 @@
  * length, which is exactly the case virtualisation exists for. (The demo-user picker and
  * the scenario switchers are `.map`, correctly — three compile-time fixtures each.)
  */
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { vs } from "react-native-size-matters";
@@ -23,10 +23,16 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import AppSwitch from "@/components/inputs/AppSwitch";
 import DispatchCard from "@/components/inbox/DispatchCard";
+import SwipeToDismiss from "@/components/inbox/SwipeToDismiss";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { acknowledge, loadInbox, resetAcknowledgements } from "@/store/reducers/dispatchInboxSlice";
-import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
+import {
+  acknowledge,
+  dismissed,
+  loadInbox,
+  resetAcknowledgements,
+  selectVisibleDispatches,
+} from "@/store/reducers/dispatchInboxSlice";
 import { isMockApi } from "@/auth/authMode";
 import {
   acknowledgementCount,
@@ -36,7 +42,6 @@ import {
 } from "@/api/mock/dispatch";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
-import type { ActionDispatch } from "@/types/domain";
 
 export default function InboxScreen() {
   const { t, i18n } = useTranslation();
@@ -44,7 +49,7 @@ export default function InboxScreen() {
   const dispatch = useAppDispatch();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { status, pending, acknowledged, inFlight, failures, errorKey, requestId, refreshing } =
+  const { status, acknowledged, inFlight, failures, dismissedIds, errorKey, requestId, refreshing } =
     useAppSelector((state) => state.dispatchInbox);
 
   const load = useCallback(
@@ -55,27 +60,21 @@ export default function InboxScreen() {
     [dispatch, user],
   );
 
-  // The NFR is "visible to an online worker within 60 seconds"; polling at half that
-  // leaves room for a slow round trip and still meets it.
-  useAutoRefresh(
-    useCallback(() => load(false), [load]),
-    REFRESH_INTERVALS.INBOX_MS,
-  );
+  /*
+   * No poll here. Since SCRUM-208 the dispatch poll lives in `WorkerTabs`, because the
+   * Alerts badge is drawn on the tab bar and has to stay current while the worker is on
+   * another screen. Polling here as well would double every request whenever this screen
+   * happened to be the one in front.
+   *
+   * Pull-to-refresh below is unchanged, and is still how a worker forces an immediate check.
+   */
 
   /*
-   * Pending from the server, plus everything this device has acknowledged, newest first.
-   *
-   * De-duplicated by id because the two sources can briefly overlap: a refetch that started
-   * before an acknowledgement landed will still carry the row as PENDING.
+   * Derived by the slice, not here. `WorkerTabs` counts exactly these rows for the Alerts
+   * badge, and two copies of "what is on screen" would drift the moment one of them learned
+   * about a new state — leaving a count of outstanding safety instructions quietly wrong.
    */
-  const items = useMemo(() => {
-    const byId = new Map<string, ActionDispatch>();
-    for (const item of pending) byId.set(item.id, item);
-    for (const record of Object.values(acknowledged)) {
-      byId.set(record.dispatch.id, record.dispatch);
-    }
-    return [...byId.values()].sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt));
-  }, [pending, acknowledged]);
+  const items = useAppSelector(selectVisibleDispatches);
 
   if (status === "loading") {
     return (
@@ -170,7 +169,7 @@ export default function InboxScreen() {
          * when one fails, because FlatList is a PureComponent and `data` did not change.
          * Language and theme are here for the same reason.
          */
-        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}|${inFlight.join(",")}|${Object.keys(failures).join(",")}`}
+        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}|${inFlight.join(",")}|${Object.keys(failures).join(",")}|${dismissedIds.length}`}
         contentContainerStyle={[styles.content, items.length === 0 && styles.contentEmpty]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={header}
@@ -185,6 +184,15 @@ export default function InboxScreen() {
           />
         }
         renderItem={({ item }) => (
+          /*
+           * Only an acknowledged card is swipeable. A pending one is still owed and the
+           * supervisor has not been told; a failed one carries the retry button, so
+           * dismissing it would remove the only way back. See `SwipeToDismiss`.
+           */
+          <SwipeToDismiss
+            enabled={Boolean(acknowledged[item.id]) && !inFlight.includes(item.id)}
+            onDismiss={() => dispatch(dismissed(item.id))}
+          >
           <DispatchCard
             dispatch={item}
             acknowledgedAt={acknowledged[item.id]?.acknowledgedAt ?? null}
@@ -192,7 +200,11 @@ export default function InboxScreen() {
             failureKey={failures[item.id] ?? null}
             onAcknowledge={() => void dispatch(acknowledge({ dispatchId: item.id }))}
             locale={i18n.language}
+            dismissAt={acknowledged[item.id]?.dismissAt ?? null}
+            onExpire={() => dispatch(dismissed(item.id))}
+            hasRestTimer={acknowledged[item.id]?.hasRestTimer ?? false}
           />
+          </SwipeToDismiss>
         )}
       />
     </AppSafeView>

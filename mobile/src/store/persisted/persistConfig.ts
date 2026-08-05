@@ -175,11 +175,17 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
  *
  *   idempotencyKeys  So a retry after a kill replays rather than writes again.
  *   acknowledged     So an acknowledged action still renders as acknowledged, even though
- *                    the server's PENDING-only query no longer returns it.
+ *                    the server's PENDING-only query no longer returns it. Since SCRUM-206
+ *                    each record also carries its `dismissAt`, which is what lets a
+ *                    fifteen-minute rest survive the app being killed instead of restarting.
+ *   dismissedIds     So a card that has already run its course does not come back. Without
+ *                    it, relaunching the app would resurrect every card the worker had
+ *                    already seen out — the acknowledgement records survive by design, so
+ *                    the list would rebuild itself from them.
  */
 export const dispatchInboxPersistConfig = {
   key: "crewsafe.dispatchInbox",
   version: PERSIST_VERSION,
   storage: AsyncStorage,
-  whitelist: ["idempotencyKeys", "acknowledged"],
+  whitelist: ["idempotencyKeys", "acknowledged", "dismissedIds"],
 };

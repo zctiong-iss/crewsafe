@@ -30,7 +30,14 @@ scan() {
 
 forbid() {
   local pattern="$1" label="$2" reason="$3"
-  if scan | grep -Eq -- "$pattern"; then
+  # `< <(scan)`, not `scan | grep -Eq`. With `set -o pipefail`, grep -q's early exit
+  # on the first match can SIGPIPE sed before it finishes writing scan()'s output;
+  # pipefail then reports the SIGPIPE death (141) instead of grep's match (0), and
+  # this `if` silently takes the wrong branch. Found and fixed in the compute
+  # component's identical guard while debugging SCRUM-176 — see that file's forbid()
+  # for the reproduction. Process substitution's exit status is not part of this
+  # command's pipeline, so pipefail cannot poison it.
+  if grep -Eq -- "$pattern" < <(scan); then
     fail "$component_dir declares $label. $reason"
   fi
 }

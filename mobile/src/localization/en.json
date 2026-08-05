@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "My shift",
-    "inbox": "Inbox",
+    "alerts": "Alerts",
+    "alertsA11yCount": "Alerts, {{count}} unacknowledged",
+    "alertsA11yAllDone": "Alerts, all acknowledged",
     "weather": "Weather",
     "shifts": "Shifts",
     "profile": "Profile",
@@ -182,7 +184,6 @@
     "deleting": "Deleting",
     "deletedToast": "Shift deleted",
     "deleteFailedTitle": "Shift not deleted",
-
     "form": {
       "timesSection": "When",
       "startsAt": "Starts",
@@ -205,7 +206,6 @@
       "createdToast": "Shift created",
       "unstaffedNotice": "This shift will be created with nobody assigned. You can staff it later."
     },
-
     "validation": {
       "startRequired": "Choose when the shift starts.",
       "endRequired": "Choose when the shift ends.",
@@ -252,7 +252,9 @@
     "retryButton": "Try again",
     "failed": "Could not send your acknowledgement.",
     "safeToRetry": "Tapping again is safe — it will not acknowledge twice.",
-    "noInstruction": "No further detail given."
+    "noInstruction": "No further detail given.",
+    "restRemaining": "{{time}} left",
+    "swipeToClear": "Clear"
   },
 
   "lightning": {
@@ -264,11 +266,9 @@
     "clearBody": "Assessed clear at {{time}}.",
     "expiredTitle": "Lightning warning expired",
     "expiredBody": "The warning lapsed at {{time}}. Resume work only when your supervisor confirms the all-clear.",
-    "nearestStrike": "Nearest strike {{km}} km away",
-    "observedAt": "Observed {{time}}",
     "validUntil": "Valid until {{time}}",
-    "expiresInMinutes": "Expires in {{minutes}} min",
-    "expiresInSeconds": "Expires in {{seconds}} s",
+    "refreshesInMinutes": "Refreshes in {{minutes}} min",
+    "refreshesInSeconds": "Refreshes in {{seconds}} s",
     "overrideNotice": "Heat plan suspended while stop-work is in effect."
   },
 
@@ -277,11 +277,6 @@
     "reading": "WBGT",
     "noReading": "No reading available",
     "superseded": "Superseded by the lightning stop-work",
-    "forecast": "Next hour: {{band}}",
-    "observedAt": "Observed {{time}}",
-    "temperature": "Air temp",
-    "humidity": "Humidity",
-    "wind": "Wind",
     "band": {
       "BELOW_31": "Below 31°C",
       "31_TO_BELOW_32": "31 to 32°C",
@@ -307,13 +302,13 @@
     "REST_10_MIN_HOURLY": "Rest 10 minutes without a break, every hour",
     "REST_15_MIN_HOURLY": "Rest 15 minutes without a break, every hour",
     "CLOSE_MONITORING": "Watch yourself and your crew closely for heat illness",
-
     "REST_10_MIN": "Rest for 10 minutes",
     "REST_15_MIN": "Rest for 15 minutes",
     "HYDRATE": "Drink water now",
     "STOP_WORK": "Stop work",
     "SEEK_SHADE": "Move into shade",
-    "RESUME_WORK": "Resume work"
+    "RESUME_WORK": "Resume work",
+    "ROTATE_TO_LIGHT_DUTY": "Rotate to light duty"
   },
 
   "shift": {
@@ -357,7 +352,13 @@
     "forbiddenHint": "The story's 403 case is otherwise unreachable — the picker only offers sites you belong to. You should stay signed in and see an explanation.",
     "scenarioClear": "Clear",
     "scenarioAdvisory": "Advisory",
-    "scenarioStopWork": "Stop work"
+    "scenarioStopWork": "Stop work",
+    "_mockInstructionNote": "Fixture instruction bodies for the mock dispatch server. Under dev.* because they stand in for supervisor-authored server data that does not exist in mock mode. Underscore-prefixed, so the parity check skips it. See api/mock/dispatch.ts and the untranslatable-instruction note in the README.",
+    "mockInstruction": {
+      "REST_15_MIN": "Take a continuous 15-minute rest in the shaded rest point by the site office.",
+      "HYDRATE": "Drink 500ml of water now and refill your bottle before returning to the verge.",
+      "ROTATE_TO_LIGHT_DUTY": "Swap to the tool store for the next hour. Your supervisor has arranged cover."
+    }
   },
 
   "placeholder": {

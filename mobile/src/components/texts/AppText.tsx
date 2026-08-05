@@ -7,9 +7,11 @@
  */
 import { StyleSheet, Text, type TextProps, type TextStyle, type StyleProp } from "react-native";
 import type { FC, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { s } from "react-native-size-matters";
 import { useTheme } from "@/theme/ThemeProvider";
-import { AppFonts } from "@/styles/fonts";
+import { AppFonts, familyFor, lineHeightBoostFor, type AppFontWeight } from "@/styles/fonts";
+import { isSupportedLanguage } from "@/localization/languagesList";
 
 export type AppTextVariant =
   /** One-off hero numbers — the WBGT reading. */
@@ -22,13 +24,21 @@ export type AppTextVariant =
 
 export type AppTextTone = "primary" | "secondary" | "inverse" | "danger" | "warning" | "success";
 
-const VARIANTS: Record<AppTextVariant, { size: number; family: string }> = {
-  display: { size: 40, family: AppFonts.bold },
-  title: { size: 22, family: AppFonts.bold },
-  subtitle: { size: 18, family: AppFonts.semiBold },
-  body: { size: 16, family: AppFonts.regular },
-  label: { size: 14, family: AppFonts.medium },
-  caption: { size: 12, family: AppFonts.regular },
+/**
+ * Size, and which *weight* the variant uses — not which family.
+ *
+ * The family is resolved per render from the active language (SCRUM-205), because Tamil,
+ * Bengali and Myanmar each need their own face and Gelasio has no glyphs for any of them.
+ * Naming the weight here rather than a concrete family name is what lets one table serve
+ * every script.
+ */
+const VARIANTS: Record<AppTextVariant, { size: number; weight: AppFontWeight }> = {
+  display: { size: 40, weight: "bold" },
+  title: { size: 22, weight: "bold" },
+  subtitle: { size: 18, weight: "semiBold" },
+  body: { size: 16, weight: "regular" },
+  label: { size: 14, weight: "medium" },
+  caption: { size: 12, weight: "regular" },
 };
 
 /**
@@ -44,9 +54,20 @@ export const LINE_HEIGHT_RATIO = 1.35;
  * first line's axis, say — can derive the offset instead of hardcoding a magic number that
  * silently stops matching when the variant, the device scale or the user's text size
  * changes. See `DispatchCard`'s header.
+ *
+ * `language` is optional but should be passed by anyone doing that alignment. Tamil, Bengali
+ * and Myanmar carry a taller line box (see `lineHeightBoostFor`), so an offset computed
+ * without it is correct in English and a few pixels out in three other languages — which is
+ * precisely the kind of drift this function exists to prevent.
  */
-export function lineHeightFor(variant: AppTextVariant, fontScale: number): number {
-  return s(VARIANTS[variant].size) * fontScale * LINE_HEIGHT_RATIO;
+export function lineHeightFor(
+  variant: AppTextVariant,
+  fontScale: number,
+  language?: string,
+): number {
+  const boost =
+    language && isSupportedLanguage(language) ? lineHeightBoostFor(language) : 1;
+  return s(VARIANTS[variant].size) * fontScale * LINE_HEIGHT_RATIO * boost;
 }
 
 interface AppTextProps extends TextProps {
@@ -64,7 +85,20 @@ const AppText: FC<AppTextProps> = ({
   ...rest
 }) => {
   const theme = useTheme();
+  const { i18n } = useTranslation();
   const spec = VARIANTS[variant];
+
+  /*
+   * Family and line height both follow the active language.
+   *
+   * Read from i18n rather than from the preferences slice because i18n is what actually
+   * decided which string is being rendered. Taking the family from a different source than
+   * the text would let the two disagree for a frame during a language change — Tamil words
+   * in Gelasio, which is tofu.
+   */
+  const language = isSupportedLanguage(i18n.language) ? i18n.language : "en";
+  const fontFamily = familyFor(language)[spec.weight];
+  const lineHeightRatio = LINE_HEIGHT_RATIO * lineHeightBoostFor(language);
 
   const colorForTone: Record<AppTextTone, string> = {
     primary: theme.colors.textPrimary,
@@ -85,16 +119,17 @@ const AppText: FC<AppTextProps> = ({
         styles.base,
         {
           fontSize: s(spec.size) * theme.fontScale,
-          fontFamily: spec.family,
+          fontFamily,
           color: colorForTone[tone],
           // Gelasio is a serif with tall ascenders; RN's default line height clips
-          // descenders on Android at larger scales.
+          // descenders on Android at larger scales. Tamil, Bengali and Myanmar need more
+          // again — see `lineHeightBoostFor`.
           //
           // This is derived from the variant's size, so overriding `fontSize` through the
           // `style` prop leaves the line height behind and the text overlaps itself on
           // wrap. Size text by choosing a variant; if you genuinely must override, set
           // `lineHeight` in the same style object.
-          lineHeight: s(spec.size) * theme.fontScale * 1.35,
+          lineHeight: s(spec.size) * theme.fontScale * lineHeightRatio,
         },
         style,
       ]}

@@ -20,11 +20,35 @@ import { initReactI18next } from "react-i18next";
 import en from "./en.json";
 import zhHans from "./zh-Hans.json";
 import hi from "./hi.json";
+import ms from "./ms.json";
+import ta from "./ta.json";
+import bn from "./bn.json";
+import my from "./my.json";
 
+/*
+ * ── TRANSLATION REVIEW STATUS ───────────────────────────────────────────────────────────
+ * `ms`, `ta`, `bn` and `my` (SCRUM-205) are machine-drafted and have NOT been reviewed by
+ * native speakers. Their safety strings — `lightning.*`, `actions.*`, `guidance.*`,
+ * `wbgt.superseded`, `freshness.staleWarning` — must be signed off before those languages
+ * are offered in production. Each locale file carries the same warning in its
+ * `_translationStatus` key, which is metadata rather than a string the app renders.
+ *
+ * ── FONTS ARE PART OF THIS ──────────────────────────────────────────────────────────────
+ * Registering a language here is only half of supporting it. Tamil, Bengali and Burmese
+ * have no glyphs in Gelasio, so each also needs its Noto family loaded in `App.tsx` and
+ * mapped in `styles/fonts.ts`. Adding a locale file without that renders tofu — a language
+ * that is present in the picker and unreadable on screen.
+ *
+ * `my` is Myanmar **Unicode**, not Zawgyi. See `my.json`'s `_encoding` key and the README.
+ */
 export const resources = {
   en: { translation: en },
   "zh-Hans": { translation: zhHans },
   hi: { translation: hi },
+  ms: { translation: ms },
+  ta: { translation: ta },
+  bn: { translation: bn },
+  my: { translation: my },
 } as const;
 
 void i18n.use(initReactI18next).init({

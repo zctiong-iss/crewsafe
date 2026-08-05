@@ -53,27 +53,22 @@
       "Resource": "*"
     },
     {
-      "Sid": "ManageDistributionAndVpcOrigin",
+      "Sid": "ManageDistribution",
       "Effect": "Allow",
       "Action": [
         "cloudfront:CreateDistribution",
-        "cloudfront:CreateVpcOrigin",
         "cloudfront:DeleteDistribution",
-        "cloudfront:DeleteVpcOrigin",
         "cloudfront:GetCachePolicy",
         "cloudfront:GetDistribution",
         "cloudfront:GetDistributionConfig",
         "cloudfront:GetOriginRequestPolicy",
-        "cloudfront:GetVpcOrigin",
         "cloudfront:ListCachePolicies",
         "cloudfront:ListDistributions",
         "cloudfront:ListOriginRequestPolicies",
         "cloudfront:ListTagsForResource",
-        "cloudfront:ListVpcOrigins",
         "cloudfront:TagResource",
         "cloudfront:UntagResource",
-        "cloudfront:UpdateDistribution",
-        "cloudfront:UpdateVpcOrigin"
+        "cloudfront:UpdateDistribution"
       ],
       "Resource": "*"
     },
@@ -90,10 +85,13 @@
         "ec2:DescribeAccountAttributes",
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeInternetGateways",
+        "ec2:DescribeManagedPrefixLists",
+        "ec2:DescribeNetworkInterfaces",
         "ec2:DescribeSecurityGroupRules",
         "ec2:DescribeSecurityGroups",
         "ec2:DescribeSubnets",
         "ec2:DescribeVpcs",
+        "ec2:GetManagedPrefixListEntries",
         "ec2:ModifySecurityGroupRules",
         "ec2:RevokeSecurityGroupEgress",
         "ec2:RevokeSecurityGroupIngress"
@@ -182,19 +180,6 @@
       "Condition": {
         "StringLike": {
           "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
-        }
-      }
-    },
-    {
-      "Sid": "CreateCloudFrontVpcOriginServiceLinkedRole",
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateServiceLinkedRole"
-      ],
-      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/vpcorigin.cloudfront.amazonaws.com/AWSServiceRoleForCloudFrontVPCOrigin",
-      "Condition": {
-        "StringLike": {
-          "iam:AWSServiceName": "vpcorigin.cloudfront.amazonaws.com"
         }
       }
     }
