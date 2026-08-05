@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "My shift",
-    "inbox": "Inbox",
+    "alerts": "Alerts",
+    "alertsA11yCount": "Alerts, {{count}} unacknowledged",
+    "alertsA11yAllDone": "Alerts, all acknowledged",
     "weather": "Weather",
     "shifts": "Shifts",
     "profile": "Profile",

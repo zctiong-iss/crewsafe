@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "मेरी शिफ़्ट",
-    "inbox": "इनबॉक्स",
+    "alerts": "अलर्ट",
+    "alertsA11yCount": "अलर्ट, {{count}} अस्वीकृत",
+    "alertsA11yAllDone": "अलर्ट, सभी स्वीकृत",
     "weather": "मौसम",
     "shifts": "शिफ़्ट",
     "profile": "प्रोफ़ाइल",
