@@ -32,3 +32,7 @@ export function createShift(siteId: string, body: ShiftCreateRequest): Promise<S
         body: JSON.stringify(body)
         });
     }
+
+export function fetchSiteShifts(siteId: string): Promise<Shift[]> {
+    return apiFetch<Shift[]>(`/api/v1/sites/${siteId}/shifts`);
+    }

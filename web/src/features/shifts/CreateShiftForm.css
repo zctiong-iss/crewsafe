@@ -43,6 +43,25 @@
   outline-offset: 1px;
 }
 
+.shift-form__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  cursor: pointer;
+}
+.shift-form__back:hover {
+  background: var(--surface-sunken);
+}
+
+
 /* Each worker row carries the .card utility (global.css) — add only layout + padding here. */
 .shift-form__row {
   display: flex;
@@ -79,12 +98,22 @@
   color: var(--ink);
   cursor: pointer;
 }
+
 .shift-form button[type="submit"] {
   background: var(--action);
   border-color: var(--action);
   color: var(--action-ink);
 }
+
 .shift-form button[type="submit"]:disabled {
   opacity: 0.6;
   cursor: default;
+}
+.shift-form__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.shift-form__actions button {
+  align-self: auto;
 }

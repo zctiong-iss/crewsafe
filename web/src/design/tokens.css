@@ -15,9 +15,9 @@
   /* ---- Surfaces -------------------------------------------------------- */
   /* The console is used outdoors on bright screens, so the canvas is a cool grey rather
      than white: it lets white cards read as raised without needing heavy shadows. */
-  --canvas: #eef1f6;
-  --surface: #ffffff;
-  --surface-sunken: #f6f8fb;
+  --canvas: #f0ece6;
+  --surface: #f5f2ec;
+  --surface-sunken: #f5f2ec;
   --navy: #0f2540; /* sidebar, headings — the anchor colour of the product */
   --navy-raised: #1b3557; /* active nav item, cards that sit on the navy */
 
@@ -29,11 +29,12 @@
   --ink-on-navy-muted: #94a8c0;
 
   /* ---- Lines ----------------------------------------------------------- */
-  --line: #dde4ed;
-  --line-strong: #c3cedd;
+  --line: #ddd8d0;
+  --line-strong: #c5bfb5;
 
   /* ---- Action ---------------------------------------------------------- */
   --action: #1d4ed8;
+  --action-sidebar: #ffffff;
   --action-hover: #1e40af;
   --action-ink: #ffffff;
   --action-quiet: #eff4ff;
@@ -43,27 +44,34 @@
      that the user does not control. Sequential low -> extreme. */
   --band-low: #0f7b6c;
   --band-low-wash: #dff3ef;
-  --band-moderate: #a15c07;
+  --band-moderate: #ea913f;
   --band-moderate-wash: #fdf0d5;
   --band-high: #b42318;
   --band-high-wash: #fde8e6;
   --band-extreme: #7a1d1d;
   --band-extreme-wash: #fbdad7;
+  --band-gradient: linear-gradient(
+      to right,
+      var(--band-low),
+      var(--band-moderate),
+      var(--band-high),
+      var(--band-extreme)
+      );
 
   /* ---- Hazard scale 2: work intensity ---------------------------------- */
   /* What the *crew* is doing. Rendered outlined, so a glance never confuses "hard work"
      with "dangerous conditions" — they share a hue family but not a treatment. */
   --intensity-light: #3f6212;
-  --intensity-moderate: #92400e;
+  --intensity-moderate: #ea913f;
   --intensity-heavy: #9f1239;
 
   /* ---- Status ---------------------------------------------------------- */
   --status-ok: #15803d;
   --status-ok-wash: #e3f5e9;
-  --status-waiting: #a15c07;
+  --status-waiting: #ea913f;
   --status-waiting-wash: #fdf0d5;
   --status-none: #64748b;
-  --status-none-wash: #eef1f6;
+  --status-none-wash: #f0ece6;
 
   /* ---- Type ------------------------------------------------------------ */
   /* IBM Plex was drawn for technical interfaces and has true tabular figures, which is

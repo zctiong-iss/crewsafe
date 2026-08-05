@@ -20,10 +20,10 @@ export interface NavItem {
  * still typeable.
  */
 export const NAVIGATION: readonly NavItem[] = [
-  { to: "/", label: "Live board", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
-  { to: "/shifts", label: "Shifts & tasks", roles: ["SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
+  { to: "/", label: "Live Board", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
+  { to: "/shifts", label: "Shifts & Tasks", roles: ["SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
   { to: "/approvals", label: "Approvals", roles: ["SUPERVISOR", "SAFETY_MANAGER"] },
-  { to: "/audit", label: "Audit trail", roles: ["SAFETY_MANAGER", "ADMIN"] },
+  { to: "/audit", label: "Audit Trail", roles: ["SAFETY_MANAGER", "ADMIN"] },
   { to: "/settings", label: "Settings", roles: ["ADMIN"] },
 ];
 

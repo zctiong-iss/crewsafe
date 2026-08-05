@@ -15,6 +15,8 @@ import {
 import { validateShift, type FieldErrors } from "./validateShift";
 import { WorkIntensitySegmented } from "./WorkIntensitySegmented";
 import "./CreateShiftForm.css";
+import { Link } from "react-router-dom";
+import { type Site } from "@/api/identity";
 
 interface AssignmentRow {
   workerId: string;
@@ -34,10 +36,11 @@ type Submit =
   | { status: "created"; shift: Shift }
   | { status: "error"; message: string; requestId: string | null };
 
-export function CreateShiftForm({ siteId }: { siteId: string }) {
+export function CreateShiftForm({ sites }: { sites: Site[] }) {
   const [workersLoad, setWorkersLoad] = useState<WorkersLoad>({ status: "loading" });
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
+  const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submit, setSubmit] = useState<Submit>({ status: "idle" });
@@ -112,17 +115,36 @@ export function CreateShiftForm({ siteId }: { siteId: string }) {
   }
   if (submit.status === "created") {
     return (
-      <AppShell title="Create shift">
-        <EmptyState headline="Shift created" body={`Shift ${submit.shift.id} is ${submit.shift.status}.`} />
+      <AppShell title="Create Shift" >
+        <EmptyState headline="Shift created" body={`Shift ${submit.shift.id} is ${submit.shift.status}.`}
+          action={<Link to="/shifts" className="NavButton"> Back to Shifts Page</Link>} />
       </AppShell>
     );
   }
 
+  const noWorkers = workersLoad.workers.length === 0;
+
   return (
-    <AppShell title="Create shift">
+    <AppShell title="Create Shift" >
       <form className="shift-form" onSubmit={handleSubmit}>
         <section className="shift-form__section">
-        <h2 className="shift-form__section-title">When</h2>
+        <h2 className="shift-form__section-title">Shift Details</h2>
+          <label htmlFor="siteId">Worksite</label>
+          <select
+            id="siteId"
+            required
+            value={siteId}
+            onChange={(e) => {
+              setSiteId(e.target.value);
+              setRows([]);                    // clear crew — workers belong to the old site
+              setWorkersLoad({ status: "loading" });  // trigger visual reload
+            }}
+          >
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+
           <label htmlFor="startsAt">Starts at</label>
           <input id="startsAt" type="datetime-local" required value={startsAt}
             onChange={(e) => setStartsAt(e.target.value)} />
@@ -134,7 +156,7 @@ export function CreateShiftForm({ siteId }: { siteId: string }) {
         </section>
 
         <section className="shift-form__section">
-        <h2 className="shift-form__section-title">Crew</h2>
+        <h2 className="shift-form__section-title">Crew Assigned</h2>
           {rows.map((row, i) => (
             <fieldset key={i} className="shift-form__row card">
               <legend>Worker {i + 1}</legend>
@@ -171,15 +193,22 @@ export function CreateShiftForm({ siteId }: { siteId: string }) {
             </fieldset>
           ))}
 
-          <button type="button" onClick={addRow}>Add worker</button>
+          {noWorkers && (
+            <p className="shift-form__note" role="status">
+              No workers are assigned to this worksite yet. You can still create the shift and staff it later.
+            </p>
+          )}
+          {!noWorkers && (
+            <button type="button" onClick={addRow}>Add worker</button>
+          )}        
         </section>
 
-
-        {rows.length === 0 && (
+        {!noWorkers && rows.length === 0 && (
           <p className="shift-form__note">
             No workers assigned — you can add them after creating the shift.
           </p>
         )}
+
 
         {submit.status === "error" && (
           <p className="shift-form__error" role="alert">
@@ -188,9 +217,14 @@ export function CreateShiftForm({ siteId }: { siteId: string }) {
           </p>
         )}
 
-        <button type="submit" disabled={submit.status === "submitting"}>
-          {submit.status === "submitting" ? "Creating…" : "Create shift"}
-        </button>
+        <div className="shift-form__actions">
+          <Link className="shift-form__back" to="/shifts">Cancel</Link>
+
+          <button type="submit" disabled={submit.status === "submitting"}>
+            {submit.status === "submitting" ? "Creating…" : "Create Shift"}
+          </button>
+        </div>
+
       </form>
     </AppShell>
   );

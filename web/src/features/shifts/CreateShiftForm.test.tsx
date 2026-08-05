@@ -52,9 +52,35 @@ describe("CreateShiftForm", () => {
     renderApp();
     await screen.findByLabelText("Starts at"); // signed-in + workers loaded
     await addOneAssignment(user);
-    await user.click(screen.getByRole("button", { name: "Create shift" }));
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText("Shift created")).toBeInTheDocument();
   });
+
+  it ("Changing worksite in Shift Creation Page clears the crew rows", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByLabelText("Worksite");
+    await addOneAssignment(user);
+    expect (screen.getByText("Worker 1")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("Worksite"), "site-2");
+    expect(screen.queryByText("Worker 1")).toBeNull();
+    });
+
+  it("Hide the 'Add worker' button when the selected worksite has no workers", async () => {
+  server.use(
+    http.get("*/api/v1/sites/:siteId/workers", ({ params }) =>
+      HttpResponse.json(params.siteId === "site-2" ? [] : [
+        { id: WORKER_ONE, displayName: "Worker One" },
+      ]),
+    ),
+  );
+  const user = userEvent.setup();
+  renderApp();
+  await user.selectOptions(await screen.findByLabelText("Worksite"), "site-2");
+
+  expect(await screen.findByText(/No workers are assigned/i)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Add worker" })).toBeNull();  // queryBy → null when absent
+});
 
   it("AC-2 — a reversed date order sends no request", async () => {
     const posted = spyOnPost();
@@ -63,7 +89,7 @@ describe("CreateShiftForm", () => {
     await screen.findByLabelText("Starts at");
     setDateTime("Starts at", "2026-08-10T16:00");
     setDateTime("Ends at", "2026-08-10T08:00");
-    await user.click(screen.getByRole("button", { name: "Create shift" }));
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The shift must end after it starts.");
     expect(posted.count).toBe(0);
   });
@@ -80,7 +106,7 @@ describe("CreateShiftForm", () => {
     await user.type(acclimatisationDay, value);
 
     expect (acclimatisationDay).toBeInvalid();
-    await user.click(screen.getByRole("button", { name: "Create shift" }));
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(posted.count).toBe(0);
   });
 
@@ -92,12 +118,17 @@ describe("CreateShiftForm", () => {
           role: "SUPERVISOR", siteIds: ["unauthorised-worksite"],
         }),
       ),
+      http.get("*/api/v1/sites", () =>
+        HttpResponse.json([
+          { id: "unauthorised-worksite", name: "Restricted Site", latitude: 1.30, longitude: 103.80, timezone: "Asia/Singapore" },
+        ]),
+      ),
     );
     const user = userEvent.setup();
     renderApp();
     await screen.findByLabelText("Starts at");
     await addOneAssignment(user);
-    await user.click(screen.getByRole("button", { name: "Create shift" }));
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText(/do not have access/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Starts at")).toHaveValue("2026-08-10T08:00"); // nothing thrown away
   });
@@ -109,7 +140,7 @@ describe("CreateShiftForm", () => {
     setDateTime("Starts at", "2026-08-10T08:00");
     setDateTime("Ends at", "2026-08-10T16:00");
     expect(screen.getByText(/No workers assigned/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Create shift" }));
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText("Shift created")).toBeInTheDocument();
   });
 });

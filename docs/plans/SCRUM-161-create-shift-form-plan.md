@@ -154,6 +154,13 @@ readable against its own history.
   it in the same screen will report that as a bug regardless of what the ticket says.
 - **Shift status transitions** — no endpoints exist (`PLANNED` only).
 - **The conditions screen and anything SSE** — SCRUM-169, blocked on W-03/W-04.
+- **Audit export of shift times.** No export feature exists in SCRUM-161; `/audit` is a
+  placeholder route. Recorded here so the timezone question is decided *deliberately* when it is
+  built rather than inherited by accident: an audit export should be **UTC-canonical** (matching
+  storage per [ADR 0013](../adr/0013-utc-storage-singapore-display-zone.md)) with an explicitly
+  *labelled* Singapore rendering alongside — never a bare local time, which is the ambiguity that
+  breaks a forensic timeline. That is a record-keeping default and is deliberately different from
+  the on-screen SGT display; give it its own decision under the `/audit` ticket.
 
 ## Known limitations
 
