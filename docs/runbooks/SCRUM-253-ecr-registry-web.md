@@ -77,8 +77,10 @@ Verify through CI outputs or approved read-only AWS checks:
 - `web_push_role_arn` names `crewsafe-shared-dev-ecr-web-push`.
 - Trust is limited to the GitHub OIDC provider, `sts.amazonaws.com`, and the exact `main` subject.
 - Repository-scoped push actions name only `web_repository_arn`; the token action is the sole `*` grant.
-- The future runtime pull grant uses `web_repository_arn` and read actions only; it receives no push,
-  delete, lifecycle, repository-management, or Terraform permission.
+- The future runtime pull grant uses `web_repository_arn` with only
+  `ecr:BatchCheckLayerAvailability`, `ecr:BatchGetImage`, and
+  `ecr:GetDownloadUrlForLayer`; it may use `ecr:GetAuthorizationToken` on the AWS-required `*`
+  resource and must not receive push, delete, lifecycle, repository-management, or Terraform permissions.
 
 ## 6. Recovery and no-destroy controls
 

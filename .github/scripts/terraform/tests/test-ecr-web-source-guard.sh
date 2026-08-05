@@ -7,8 +7,7 @@ outputs_tf="infra/terraform/ecr/outputs.tf"
 variables_tf="infra/terraform/ecr/variables.tf"
 tests_tf="infra/terraform/ecr/tests/ecr.tftest.hcl"
 apply_policy="infra/terraform/ecr/iam/apply-role-policy.json"
-pull_contract="specs/013-ecr-registry-web/contracts/pull-consumer.md"
-quickstart="specs/013-ecr-registry-web/quickstart.md"
+runbook="docs/runbooks/SCRUM-253-ecr-registry-web.md"
 catalog=".github/terraform/components.json"
 
 assert_file "$main_tf"
@@ -16,8 +15,7 @@ assert_file "$outputs_tf"
 assert_file "$variables_tf"
 assert_file "$tests_tf"
 assert_file "$apply_policy"
-assert_file "$pull_contract"
-assert_file "$quickstart"
+assert_file "$runbook"
 
 # The web registry stays inside the existing component and state boundary.
 assert_contains "$main_tf" 'web_repository_name = "crewsafe/web"'
@@ -46,7 +44,7 @@ jq -e '
   .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate" and
   .components["ecr-shared-dev"].allow_destroy == false
 ' "$ROOT/$catalog" >/dev/null
-assert_contains "$quickstart" 'Do not execute Terraform locally.'
+assert_contains "$runbook" 'Never run Terraform or make AWS mutations from a workstation.'
 
 web_repo_arn='arn:aws:ecr:ap-southeast-1:<ACCOUNT_ID>:repository/crewsafe/web'
 web_role_arn='arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-ecr-web-push'
@@ -67,9 +65,9 @@ fi
 
 # The future runtime receives a pull-only contract; publication and deletion
 # remain outside its permission boundary.
-assert_contains "$pull_contract" 'web_repository_arn'
-assert_contains "$pull_contract" 'ecr:GetDownloadUrlForLayer'
-assert_contains "$pull_contract" 'must not receive push, delete, lifecycle, repository-management, or Terraform permissions'
-assert_not_contains "$pull_contract" 'ecr:PutImage'
-assert_not_contains "$pull_contract" 'ecr:DeleteRepository'
-assert_contains "$quickstart" '4 to add, 0 to change, 0 to destroy'
+assert_contains "$runbook" 'web_repository_arn'
+assert_contains "$runbook" 'ecr:GetDownloadUrlForLayer'
+assert_contains "$runbook" 'must not receive push, delete, lifecycle, repository-management, or Terraform permissions'
+assert_not_contains "$runbook" 'ecr:PutImage'
+assert_not_contains "$runbook" 'ecr:DeleteRepository'
+assert_contains "$runbook" '4 to add, 0 to change, 0 to destroy'
