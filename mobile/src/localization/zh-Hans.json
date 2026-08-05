@@ -251,7 +251,8 @@
     "failed": "确认信息发送失败。",
     "safeToRetry": "可以放心再次点击，不会重复确认。",
     "noInstruction": "未提供更多说明。",
-    "restRemaining": "剩余 {{time}}"
+    "restRemaining": "剩余 {{time}}",
+    "swipeToClear": "清除"
   },
 
   "lightning": {

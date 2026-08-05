@@ -253,7 +253,8 @@
     "failed": "Pengakuan anda tidak dapat dihantar.",
     "safeToRetry": "Selamat untuk tekan sekali lagi — ia tidak akan mengakui dua kali.",
     "noInstruction": "Tiada butiran lanjut diberikan.",
-    "restRemaining": "Tinggal {{time}}"
+    "restRemaining": "Tinggal {{time}}",
+    "swipeToClear": "Padam"
   },
 
   "lightning": {

@@ -76,6 +76,52 @@ export function restDeadlineFor(
   return start + minutes * 60_000;
 }
 
+/**
+ * How long a non-rest acknowledged card stays on screen before it clears itself.
+ *
+ * ── THIS IS A DWELL TIME, NOT A POLICY VALUE ────────────────────────────────────────────
+ * It answers "how long should a confirmation remain visible", and nothing else. Nothing
+ * about the worker's obligation changes at three minutes: the action was owed before they
+ * acknowledged it and is discharged after, and the card going is a UI event with no safety
+ * meaning at all.
+ *
+ * That distinction is why it lives here as a named constant rather than anywhere near the
+ * policy engine, and why it is not in `application.yml` beside the WBGT thresholds. FR-15
+ * makes the backend authoritative for anything that decides what a worker must do; a
+ * confirmation's screen time is not that, and filing it with things that are would invite
+ * someone to treat it as if it were.
+ */
+export const DEFAULT_DISMISS_MS = 3 * 60_000;
+
+/**
+ * When an acknowledged card should leave the list — the rest deadline if it has one, three
+ * minutes otherwise.
+ *
+ * The fallback covers two cases that would otherwise sit in the inbox forever:
+ *
+ *   • Every non-rest code: HYDRATE, ROTATE_TO_LIGHT_DUTY, SEEK_SHADE, and whatever the
+ *     backend adds next.
+ *   • A `REST_*` code this app cannot parse. The catalogue is open-ended by design, so an
+ *     unrecognised rest is not a defect — but leaving it visible indefinitely would be,
+ *     because it is the one outcome this epic exists to remove.
+ *
+ * One rule, one place. `dismissAtFor` is what the slice calls; `restDeadlineFor` stays
+ * separate because the *bar* needs to know specifically whether there is a rest to show, and
+ * "three minutes because we did not understand the code" is not a rest.
+ */
+export function dismissAtFor(dispatch: ActionDispatch, acknowledgedAt: string): number | null {
+  const rest = restDeadlineFor(dispatch, acknowledgedAt);
+  if (rest !== null) return rest;
+
+  const start = Date.parse(acknowledgedAt);
+  // Only when the acknowledgement timestamp itself is unusable. Returning null here leaves
+  // the card visible, which is the right failure: better a card that lingers than one that
+  // vanishes at a time computed from a value we could not read.
+  if (Number.isNaN(start)) return null;
+
+  return start + DEFAULT_DISMISS_MS;
+}
+
 /** `m:ss`, for a countdown that has to stay readable at arm's length. */
 export function formatRemaining(millis: number): string {
   const total = Math.max(0, Math.ceil(millis / 1000));
