@@ -114,12 +114,41 @@ check "sast job uses the official Sonar scan action, not the Maven plugin" \
 check "backend is compiled (Java bytecode analysis needs .class files)" \
   "$([[ "$sast" == *"compile"* ]] && echo true || echo false)"
 
+check "Java test bytecode is configured" \
+  "$(grep -q '^sonar\.java\.test\.binaries=backend/target/test-classes$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java dependency libraries are configured" \
+  "$(grep -q '^sonar\.java\.libraries=backend/target/dependency/\*\.jar$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java test dependency libraries are configured" \
+  "$(grep -q '^sonar\.java\.test\.libraries=backend/target/dependency/\*\.jar,backend/target/test-dependency/\*\.jar$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "SAST prepares backend dependency libraries before scanning" \
+  "$([[ "$sast" == *"maven-dependency-plugin:3.8.1:copy-dependencies"* ]] && \
+     [[ "$sast" == *"target/test-dependency"* ]] && echo true || echo false)"
+
 check "mobile LCOV import path is declared" \
   "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
 
 check "SAST generates and prepares mobile coverage before scanning" \
   "$([[ "$sast" == *"npm run test:coverage"* ]] && \
      [[ "$sast" == *"mobile/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
+
+check "web dependencies are installed for TypeScript analysis" \
+  "$([[ "$sast" == *"Install web dependencies for analysis"* ]] && \
+     [[ "$sast" == *"working-directory: web"* ]] && echo true || echo false)"
+
+check "TypeScript project configurations are declared" \
+  "$(grep -q '^sonar\.typescript\.tsconfigPaths=web/tsconfig\.json,mobile/tsconfig\.json$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java analysis version is declared" \
+  "$(grep -q '^sonar\.java\.source=21$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Python analysis version is declared" \
+  "$(grep -q '^sonar\.python\.version=3\.9$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "PostgreSQL SQL is not treated as Oracle PL/SQL" \
+  "$(grep -q '^sonar\.plsql\.file\.suffixes=\.pls,\.plb,\.pck,\.pkb,\.pks$' "$SONAR_PROPS" && echo true || echo false)"
 
 # Kept as a lightweight style guard, not a correctness requirement: the scan
 # action's own properties reader handles Java-properties backslash

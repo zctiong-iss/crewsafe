@@ -98,6 +98,12 @@ plugin and the stock gate would block every merge at 0% coverage for a non-secur
 
 ## Post-implementation changes
 
+**2026-08-05 — precision inputs.** Addressed SonarQube's analysis warnings by compiling
+test bytecode, supplying main/test dependency jars, declaring Java 21 and the currently
+documented Python 3.9 baseline, selecting the web/mobile TypeScript configurations, and
+preventing PostgreSQL `.sql` migrations from being interpreted as Oracle PL/SQL. The
+workflow self-test now protects these settings.
+
 **2026-08-06 — SAST scope.** The original design ran analysis via `sonar-maven-plugin`
 bound to `backend/pom.xml`. That plugin resolves `sonar.sources` relative to the invoked
 module's own basedir and is documented to silently skip paths outside it, even with

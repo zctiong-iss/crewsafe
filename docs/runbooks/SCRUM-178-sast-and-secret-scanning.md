@@ -48,6 +48,27 @@ Detected secret values are never printed. The raw gitleaks report contains the c
 in its `Secret` and `Match` fields; `scan-secrets.sh` projects only rule, file, line, and
 commit, and deletes the raw report on exit.
 
+## SAST analysis precision inputs
+
+The SAST job prepares the inputs that SonarQube needs for cross-file analysis before the
+scanner runs:
+
+- `backend/target/classes` and `backend/target/test-classes` are compiled with
+  `test-compile`.
+- Maven runtime and test dependency jars are copied into
+  `backend/target/dependency/` and `backend/target/test-dependency/` and supplied through
+  `sonar.java.libraries` and `sonar.java.test.libraries`.
+- Java 21, Python 3.9, and both frontend TypeScript configurations are declared in
+  `sonar-project.properties`.
+- Web and mobile dependencies are installed before analysis so TypeScript resolution can
+  use the committed dependency graphs.
+- PostgreSQL `.sql` migrations are excluded from the Oracle PL/SQL suffix set; no Oracle
+  data-dictionary credentials are added to CI.
+
+If the ML service runtime is later pinned to a different Python version, update
+`sonar.python.version` together with that runtime decision. Do not add database passwords
+to enable the PL/SQL analyzer for PostgreSQL migrations.
+
 ## A secret was found — what to do
 
 **Rotate the credential at its source first.** Removing a secret from git does not make an

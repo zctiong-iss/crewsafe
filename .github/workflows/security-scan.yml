@@ -148,7 +148,13 @@ jobs:
         with:
           node-version: "22.x"
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: |
+            mobile/package-lock.json
+            web/package-lock.json
+
+      - name: Install web dependencies for analysis
+        working-directory: web
+        run: npm ci
 
       - name: Install mobile dependencies for coverage
         working-directory: mobile
@@ -175,12 +181,26 @@ jobs:
           test -s mobile/coverage/sonar-lcov.info
           grep -q '^SF:mobile/src/' mobile/coverage/sonar-lcov.info
 
-      # Java bytecode only -- no Sonar plugin runs here. The Java analyzer
-      # needs compiled classes (sonar.java.binaries=backend/target/classes) for
-      # full analysis; the actual scan is a separate step below.
-      - name: Compile backend for Java bytecode analysis
+      # Java bytecode only -- no Sonar plugin runs here. The Java analyzer needs
+      # compiled main and test classes plus dependency jars for precise
+      # cross-file analysis; the actual scan is a separate step below.
+      - name: Compile backend and tests for Java bytecode analysis
         working-directory: backend
-        run: ./mvnw -B -DskipTests compile
+        run: ./mvnw -B -DskipTests test-compile
+
+      - name: Prepare backend dependencies for SonarQube
+        working-directory: backend
+        run: |
+          ./mvnw -B -DskipTests \
+            -DincludeScope=runtime \
+            -DoutputDirectory=target/dependency \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
+          ./mvnw -B -DskipTests \
+            -DincludeScope=test \
+            -DoutputDirectory=target/test-dependency \
+            org.apache.maven.plugins:maven-dependency-plugin:3.8.1:copy-dependencies
+          test -n "$(find target/dependency -maxdepth 1 -type f -name '*.jar' -print -quit)"
+          test -n "$(find target/test-dependency -maxdepth 1 -type f -name '*.jar' -print -quit)"
 
       # SCRUM-178, 2026-08-06: this used to run via sonar-maven-plugin bound to
       # backend/pom.xml. That silently under-scanned the repo -- the Sonar
