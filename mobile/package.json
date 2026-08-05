@@ -1,6 +1,7 @@
 {
   "name": "mobile",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/gelasio": "^0.4.1",
@@ -46,8 +47,13 @@
     "yup": "^1.7.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.66.0"
   },
   "//port": [
     "Metro runs on 8082, not its default 8081.",
@@ -69,6 +75,8 @@
     "//web:pkce": "Port 5173 is not cosmetic — it is the callback already registered on the Cognito web client, so AUTH_MODE=cognito-pkce works here with no infrastructure change.",
     "web:pkce": "expo start --web --port 5173",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "build": "expo export --platform ios && expo export --platform android",
     "//check:locales": "Fails when a locale drifts from en.json. A missing key is silent — i18next falls back to English and renders it mid-screen on a safety surface. See scripts/check-locale-parity.mjs.",
     "check:locales": "node scripts/check-locale-parity.mjs",
     "doctor": "expo-doctor"
