@@ -130,15 +130,14 @@ check "sonar-project.properties values are single-line (style)" \
 check "no coverage condition configured while JaCoCo is absent" \
   "$(grep -qi 'jacoco' "$POM" && echo skip || (without_comments "$SONAR_PROPS" | grep -qi 'coverage' && echo false || echo true))"
 
-# --- frontend coverage (FR-004 / US3) ---------------------------------------
-# web/ and mobile/ landed real TypeScript/React source during this branch's
-# lifetime (SCRUM-161/172/186 for mobile) -- they are analysed now, not left as
-# a future TODO. ml-service/ remains .gitkeep-only and stays listed so it picks
-# up analysis automatically once it gains source, with no pipeline edit.
+# --- frontend/service coverage (FR-004 / US3) -------------------------------
+# web/, mobile/, and ml-service/ all landed real source during this branch's
+# lifetime -- all three are analysed now, not left as a future TODO.
 
-check "web/ and mobile/ are in sonar.sources, not just mentioned in prose" \
+check "web/, mobile/, and ml-service are in sonar.sources, not just mentioned in prose" \
   "$(grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'web/' && \
      grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'mobile/' && \
+     grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'ml-service' && \
      echo true || echo false)"
 
 # --- secret gate must not be path-filtered (FR-001) ------------------------
