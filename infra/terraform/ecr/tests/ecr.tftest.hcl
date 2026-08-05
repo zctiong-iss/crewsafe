@@ -169,7 +169,7 @@ run "entry_shape" {
       for r in jsondecode(aws_ecr_lifecycle_policy.web.policy).rules :
       r.selection.tagStatus == "untagged" &&
       r.selection.countType == "sinceImagePushed" &&
-      r.selection.countUnit == "days" &&
+      try(r.selection.countUnit, null) == "days" &&
       r.selection.countNumber == 1 &&
       r.action.type == "expire"
     ])
