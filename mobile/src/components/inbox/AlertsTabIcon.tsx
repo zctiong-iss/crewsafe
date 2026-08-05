@@ -33,10 +33,11 @@ const AlertsTabIcon: FC<AlertsTabIconProps> = ({ color, size, allAcknowledged })
     // `accessible={false}` so the tick does not become a second stop for a screen reader
     // walking the tab bar. The tab itself already announces the state in words.
     <View style={styles.container} accessible={false}>
-      <Ionicons name="notifications" size={size} color={color} />
+      <Ionicons testID="alerts-tab-bell" name="notifications" size={size} color={color} />
 
       {allAcknowledged ? (
         <Ionicons
+          testID="alerts-tab-tick"
           name="checkmark-circle"
           size={size * 0.6}
           color={theme.colors.success}
