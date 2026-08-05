@@ -138,12 +138,19 @@ produced, then add the condition — and update the assertion in
 `.github/scripts/tests/test-sast-gate-config.sh` that currently guards against exactly this
 misconfiguration.
 
-## Adding a new source tree (web/, mobile/, ml-service/)
+## Adding a new source tree or deployment surface
 
 Append the path to `sonar.sources` in `sonar-project.properties`, and check free-plan
-line-of-code headroom at the same time (see quota below). This is a manual step: unlike the
-secret gate, which needs no per-tree configuration, Sonar will not analyse a tree it has
-not been told about, and it will not warn you that it skipped one.
+line-of-code headroom at the same time (see quota below). The current scope includes
+application code, `infra/terraform/`, `.github/workflows/`, `.github/scripts/`, the
+repository deployment metadata under `.github/`, `backend/Dockerfile`, and
+`local/compose.yaml`. Generated output, Terraform state/plans, dependency directories,
+and documentation remain excluded.
+
+This is a manual step: unlike the secret gate, which needs no per-tree configuration, Sonar
+will not analyse a tree it has not been told about, and it will not warn you that it skipped
+one. Any new generated or state-bearing path must be added to `sonar.exclusions` rather than
+silently broadening the scan.
 
 ## Free-plan quota
 

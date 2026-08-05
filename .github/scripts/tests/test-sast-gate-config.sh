@@ -169,12 +169,33 @@ check "no Java coverage condition configured while JaCoCo is absent" \
 # --- frontend coverage (FR-004 / US3) ---------------------------------------
 # web/ and mobile/ landed real TypeScript/React source during this branch's
 # lifetime (SCRUM-161/172/186 for mobile) -- they are analysed now, not left as
-# a future TODO. ml-service/ remains .gitkeep-only and stays listed so it picks
-# up analysis automatically once it gains source, with no pipeline edit.
+# a future TODO. ml-service/ is also included because it contains the Python
+# FastAPI spike.
+
+sonar_sources="$(grep -E '^sonar\.sources=' "$SONAR_PROPS")"
 
 check "web/ and mobile/ are in sonar.sources, not just mentioned in prose" \
-  "$(grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'web/' && \
-     grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'mobile/' && \
+  "$(printf '%s' "$sonar_sources" | grep -q 'web/' && \
+     printf '%s' "$sonar_sources" | grep -q 'mobile/' && \
+     echo true || echo false)"
+
+check "infrastructure and deployment paths are in sonar.sources" \
+  "$(printf '%s' "$sonar_sources" | grep -q 'infra/terraform' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/workflows' && \
+     printf '%s' "$sonar_sources" | grep -q 'backend/Dockerfile' && \
+     printf '%s' "$sonar_sources" | grep -q 'local/compose.yaml' && \
+     echo true || echo false)"
+
+check "deployment metadata paths are in sonar.sources" \
+  "$(printf '%s' "$sonar_sources" | grep -q '\.github/terraform' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/cognito' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/scripts' && \
+     echo true || echo false)"
+
+check "generated and Terraform state paths are excluded" \
+  "$(grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/\.terraform/\*\*' && \
+     grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/\*\.tfstate\*' && \
+     grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/coverage/\*\*' && \
      echo true || echo false)"
 
 # --- secret gate must not be path-filtered (FR-001) ------------------------
