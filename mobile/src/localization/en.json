@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "My shift",
-    "inbox": "Inbox",
+    "alerts": "Alerts",
+    "alertsA11yCount": "Alerts, {{count}} unacknowledged",
+    "alertsA11yAllDone": "Alerts, all acknowledged",
     "weather": "Weather",
     "shifts": "Shifts",
     "profile": "Profile",
@@ -182,7 +184,6 @@
     "deleting": "Deleting",
     "deletedToast": "Shift deleted",
     "deleteFailedTitle": "Shift not deleted",
-
     "form": {
       "timesSection": "When",
       "startsAt": "Starts",
@@ -205,7 +206,6 @@
       "createdToast": "Shift created",
       "unstaffedNotice": "This shift will be created with nobody assigned. You can staff it later."
     },
-
     "validation": {
       "startRequired": "Choose when the shift starts.",
       "endRequired": "Choose when the shift ends.",
@@ -252,7 +252,9 @@
     "retryButton": "Try again",
     "failed": "Could not send your acknowledgement.",
     "safeToRetry": "Tapping again is safe — it will not acknowledge twice.",
-    "noInstruction": "No further detail given."
+    "noInstruction": "No further detail given.",
+    "restRemaining": "{{time}} left",
+    "swipeToClear": "Clear"
   },
 
   "lightning": {
@@ -300,7 +302,6 @@
     "REST_10_MIN_HOURLY": "Rest 10 minutes without a break, every hour",
     "REST_15_MIN_HOURLY": "Rest 15 minutes without a break, every hour",
     "CLOSE_MONITORING": "Watch yourself and your crew closely for heat illness",
-
     "REST_10_MIN": "Rest for 10 minutes",
     "REST_15_MIN": "Rest for 15 minutes",
     "HYDRATE": "Drink water now",
@@ -352,7 +353,6 @@
     "scenarioClear": "Clear",
     "scenarioAdvisory": "Advisory",
     "scenarioStopWork": "Stop work",
-
     "_mockInstructionNote": "Fixture instruction bodies for the mock dispatch server. Under dev.* because they stand in for supervisor-authored server data that does not exist in mock mode. Underscore-prefixed, so the parity check skips it. See api/mock/dispatch.ts and the untranslatable-instruction note in the README.",
     "mockInstruction": {
       "REST_15_MIN": "Take a continuous 15-minute rest in the shaded rest point by the site office.",

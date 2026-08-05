@@ -1,5 +1,9 @@
 # CrewSafe
 
+[![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=zctiong-iss_crewsafe&metric=alert_status&token=7e698685c5afc1fe181a8bcfd6fff34f6d4164eb)](https://sonarcloud.io/summary/new_code?id=zctiong-iss_crewsafe)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=zctiong-iss_crewsafe&metric=vulnerabilities&token=7e698685c5afc1fe181a8bcfd6fff34f6d4164eb)](https://sonarcloud.io/summary/new_code?id=zctiong-iss_crewsafe)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=zctiong-iss_crewsafe&metric=coverage&token=7e698685c5afc1fe181a8bcfd6fff34f6d4164eb)](https://sonarcloud.io/summary/new_code?id=zctiong-iss_crewsafe)
+
 WBGT CrewSafe SG — a heat-stress safety platform for outdoor crews in Singapore. It
 forecasts WBGT, applies a deterministic safety policy, and lets an agentic layer draft
 mitigations that a supervisor approves. See

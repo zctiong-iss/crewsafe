@@ -757,6 +757,302 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-208 — Alerts rename and unacknowledged badge
+
+Plan: [`docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md`](../docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md).
+
+The Inbox is now **Alerts**, and its tab icon carries a live count of the actions the worker
+still owes: `3`, then `2`, then no number and a bell with a tick.
+
+### The count, and what it deliberately includes
+
+```
+unacknowledged = visibleDispatches.filter(item => !acknowledged[item.id]).length
+```
+
+| Case | Counts? | Why |
+|---|---|---|
+| Pending | yes | owed |
+| Acknowledgement **in flight** | yes | stops counting when the *server* confirms, not when the button is pressed |
+| Acknowledgement **failed** | yes | owed until the server says otherwise; the card keeps its retry |
+| **Rest in progress** | **no** | the record exists the moment the server confirmed — the timer is a separate concern |
+| Dismissed (SCRUM-207) | no | already gone from the list |
+
+The rest case is the one the story asked for by name, and it needed no code: it falls out of
+"has an acknowledgement record". Special-casing it would have been the way to get it wrong.
+
+### The count lives in the slice, not the screen
+
+`selectVisibleDispatches` / `selectUnacknowledgedCount` / `selectAllAcknowledged` are memoised
+selectors on `dispatchInboxSlice`, and `InboxScreen` now reads the first of them instead of
+deriving its own list.
+
+The badge is drawn by the tab navigator while other screens are in front, so the screen cannot
+own the derivation. Two copies of "what is on screen" drift the moment one of them learns
+about a new state — and the thing that would then be quietly wrong is a count of outstanding
+safety instructions.
+
+### The poll had to move, and that is the real change
+
+`useAutoRefresh` is `useFocusEffect`-based: the inbox polled only while its own screen was
+focused. That is correct for a screen's own data, and the battery reasoning in that file
+stands.
+
+It is wrong for a badge. A tab badge exists to report what arrived **while the worker was
+somewhere else**, so under the old arrangement a newly dispatched action would not move the
+count until the worker opened the very screen the badge was meant to send them to. The NFR is
+"visible to an online worker within 60 seconds" and focus-gated polling cannot meet it from
+another tab.
+
+So the dispatch poll moved to `WorkerTabs` via a new `useForegroundRefresh` — same
+foreground-awareness, no focus gate. **Nothing polls while the app is backgrounded**; the
+battery argument still holds there, and a phone in a pocket has nobody to show a badge to.
+`InboxScreen`'s own poll was removed rather than left in place, or every request would have
+doubled whenever Alerts happened to be the screen in front.
+
+Weather and shifts stay focus-gated. Neither drives anything visible from another screen.
+
+### Icon states
+
+| State | Icon | Badge |
+|---|---|---|
+| One or more unacknowledged | bell | the count |
+| All acknowledged, cards still on screen | bell + green tick | none |
+| List empty | bell | none |
+
+An empty list gets the **plain** bell. "Nothing has arrived" and "you have dealt with
+everything" are different facts and only the second earns a tick — `selectAllAcknowledged`
+checks `visible.length > 0` for exactly that reason.
+
+The tick is composed over the bell rather than swapped for a different glyph, so the icon
+gains a mark instead of appearing to change shape. It is drawn in the success colour, not the
+tab tint: the tint says which tab is selected, the tick says the work is done, and those must
+not be the same signal.
+
+The count is also stated in words via `tabBarAccessibilityLabel` — "Alerts, 2 unacknowledged"
+— because a small numeral on a tab icon is the first thing to disappear in glare, and is
+invisible to a screen reader entirely.
+
+### Rename scope
+
+`tabs.inbox` → `tabs.alerts`, valued "Alerts" in all seven locales. One key drives both the
+tab label and the stack header, so they cannot drift.
+
+`InboxScreen.tsx`, the `inbox.*` block, `dispatchInboxSlice` and `api/endpoints/dispatch.ts`
+keep their names. They track the API concept —
+`GET /api/action-dispatch/worker/{id}/pending` really is an inbox of dispatched actions — not
+the label a worker reads. Renaming them would bury the behaviour change in a large diff and
+move the code further from the endpoint it mirrors.
+
+### Verified on device
+
+Badge showed `3` **while on My shift**, which is the whole point — then `2` after
+acknowledging the rest card *with its timer still running*, then `1`, then no badge and the
+checked bell. Header and tab both read "Alerts".
+
+**One finding worth a decision.** In Burmese the badge renders `3` in ASCII while the shift
+times on the same screen render `၉:၁၄` in Burmese numerals, because `Intl` formats the times
+and React Navigation renders the badge value directly. Left as ASCII deliberately: the badge
+is a compact glyph on an icon where Burmese numerals are wider, and the count is already
+announced in words for anyone the numeral fails. It is an inconsistency, not a defect — but
+it is a product call, so it is recorded here rather than left to be discovered.
+
+No tab label truncated in Burmese, which was the other flagged risk.
+
+---
+
+## SCRUM-207 — Auto-dismiss and swipe-to-clear
+
+Plan: [`docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md`](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md).
+Builds directly on [SCRUM-206](#scrum-206--rest-timer-and-progress-bar) — same deadline
+field, same removal path, second source for the deadline.
+
+Acknowledged cards leave the inbox on their own. A rest card leaves when the rest is served;
+everything else leaves three minutes later. A swipe makes it sooner.
+
+### One deadline, three sources
+
+| Action | Dwell | Bar |
+|---|---|---|
+| `REST_<n>_MIN` | the parsed duration | yes |
+| Any other code — `HYDRATE`, `ROTATE_TO_LIGHT_DUTY`, … | 3 minutes | no |
+| A `REST_*` code that cannot be parsed | 3 minutes | no |
+| Swipe, any acknowledged card | immediate | — |
+
+`dismissAtFor` is the single entry point; `restDeadlineFor` stays separate because the *bar*
+needs a different question answered. "Three minutes because we did not understand the code"
+is not a rest, and a bar counting down against it would be counting down to nothing. That
+distinction is stored as `hasRestTimer` on the acknowledgement record rather than re-derived
+per render, so a later change to the parsing rules cannot retroactively change what
+already-acknowledged cards display.
+
+The unparseable-rest case matters more than it looks: the action catalogue is deliberately
+open-ended server-side, so an unknown `REST_*` code is expected eventually. Without the
+fallback it would sit in the inbox forever — the one outcome this epic exists to remove.
+
+### Three minutes is a dwell time, not a policy value
+
+`DEFAULT_DISMISS_MS` lives in `helpers/restDuration.ts`, not in the policy engine and not in
+`application.yml` beside the WBGT thresholds. Nothing about the worker's obligation changes at
+three minutes: the action was owed before they acknowledged it and discharged after, and the
+card going is a UI event with no safety meaning. FR-15 makes the backend authoritative for
+anything that decides what a worker must do — a confirmation's screen time is not that, and
+filing it beside things that are would invite someone to treat it as if it were.
+
+### Two timers, deliberately
+
+- **Card with a bar** — `useNow` at 1Hz. The component re-renders every second anyway to move
+  the countdown, so the clock is free, and it reports its own completion.
+- **Card without a bar** — `useExpiryTimer`, a single `setTimeout`. Nothing to redraw, so
+  ticking at 1Hz would be ~180 renders over three minutes to discover that nothing changed.
+
+`useExpiryTimer` also listens to `AppState`. A JS timeout is not reliable across
+backgrounding and a long one can be throttled or dropped, so the deadline is re-checked on
+return to foreground; the timeout is the fast path and `AppState` is what makes it correct.
+Both funnel through one guarded `fire()`, so a race produces exactly one call. The callback is
+held in a ref — callers pass an inline arrow, and as a dependency it would rebuild the timeout
+on every render, meaning a three-minute timer would never fire at all.
+
+Only one of the two is active per card, so nothing races to dismiss the same row twice.
+
+### The swipe
+
+`Swipeable` from `react-native-gesture-handler` 2.32 — already a dependency, with
+`GestureHandlerRootView` already at the app root. **Not** `ReanimatedSwipeable`:
+`react-native-reanimated` is not installed, and adding it is a native dependency on a project
+that has never produced an EAS build.
+
+**Only acknowledged cards are swipeable.** A pending action is still owed and the supervisor
+has not been told — flicking it away would make the inbox lie about what is outstanding. A
+failed one is worse: the retry button lives on that card, so dismissing it removes the only
+route back. Both are blocked, and the card still renders normally.
+
+Either direction, because a worker in gloves should not have to remember which. The revealed
+panel fades in with the drag so a partial swipe reads as "keep going" rather than "done" — on
+a gloved hand, most swipes are partial. Threshold is a generous 96pt: brushing the list while
+scrolling and losing a card is a worse failure than having to swipe a little further.
+
+Removal is from the rendered list only. The persisted acknowledgement record is untouched, so
+idempotent replay (SCRUM-186) and SCRUM-130's queue are unaffected.
+
+### Verified on two device geometries
+
+`Pixel_9_Pro_XL` (1344×2992 @480) and `Pixel_10_Pro_Fold` (2076×2152 @390) — the pair that
+exposed [Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first),
+where one reproduced a bug the other did not from the same bundle.
+
+| Check | XL | Fold |
+|---|---|---|
+| Swipe on a **pending** card does nothing | ✅ | ✅ |
+| Swipe on an acknowledged card removes it | ✅ | ✅ |
+| Neighbouring card untouched | ✅ | ✅ |
+| Reveal panel renders and tracks the drag | ✅ | ✅ (`Padam`, in Malay) |
+| Acknowledged non-rest card shows **no** bar | ✅ | ✅ |
+| 3-minute auto-dismiss | ✅ removed at t=182s | — |
+| List still scrolls with a swipe half-open | — | ✅ |
+
+> Two invalid test runs are worth recording, because both looked like product bugs. The first
+> half-swipe-then-scroll test targeted a **pending** card, which by design cannot open — so it
+> proved nothing about gesture conflict. An earlier removal test reported `~5s` because the
+> card had already been dismissed in a previous run and `dismissedIds` had correctly persisted
+> it. **Check the fixture is in the state you think it is before believing a timing result.**
+
+---
+
+## SCRUM-206 — Rest timer and progress bar
+
+Plan: [`docs/plans/SCRUM-206-rest-timer-progress-plan.md`](../docs/plans/SCRUM-206-rest-timer-progress-plan.md).
+[SCRUM-207](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md) — the 3-minute rule
+and swipe-to-clear — builds on the same mechanism and is not implemented yet.
+
+Acknowledging a `REST_*` action shows a progress bar and a countdown; the card removes itself
+when the rest is served.
+
+### The duration never comes from the title
+
+`helpers/restDuration.ts`. Resolution is **server `endTime` → `REST_<n>_MIN` parsed from
+`actionCode` → no bar.** The rendered heading is a translated string:
+
+| Locale | Title |
+|---|---|
+| `en` | Rest for 15 minutes |
+| `ta` | 15 நிமிடம் ஓய்வெடுங்கள் |
+| `my` | ၁၅ မိနစ် အနားယူပါ — Burmese numerals, not ASCII |
+| `bn` | ১৫ মিনিট বিশ্রাম নিন — Bengali numerals |
+
+A regex over that works in English and fails in six of the seven shipped languages, and
+breaks again the first time a translator rewords a sentence.
+
+The pattern is **anchored** (`^REST_(\d+)_MIN$`) and the anchoring is load-bearing:
+`REST_10_MIN_HOURLY` is a *policy* action from the heat plan — "rest 10 minutes every hour" —
+with no single deadline. An unanchored pattern would match it and start a countdown against a
+rule that does not have one. An unrecognised code gets no bar at all, which is a requirement
+rather than a fallback: the action catalogue is deliberately open-ended server-side.
+
+### What is persisted, and why the timer survives a kill
+
+`dismissAt` is computed **once**, at acknowledgement, and stored on the acknowledgement record
+that `dispatchInboxPersistConfig` already persists. Two consequences:
+
+- A fifteen-minute rest survives the app being killed. Recomputing from "now" on relaunch
+  would restart it, punishing a worker for something they did not do — and on a site phone a
+  process death mid-shift is not an edge case.
+- The deadline cannot drift. Deriving it during render would push the finish line forward on
+  every tick.
+
+Wall-clock rather than elapsed-since-mount, because a monotonic timer cannot survive process
+death. **Accepted cost:** changing the device clock can end a rest early. Documented rather
+than defended against — the threat model is a worker skipping a rest, their supervisor can
+already see the acknowledgement, and clock-tamper detection is more code and more edge cases
+than the risk earns.
+
+`dismissedIds` is persisted separately. The acknowledgement records deliberately survive
+dismissal — they are what keeps a replayed acknowledgement idempotent (SCRUM-186) — so
+without a dismissed list, relaunching would rebuild every expired card from them.
+
+### Card-driven expiry, not list-driven
+
+The card already ticks for its own countdown, so the card is what notices the deadline and
+dispatches `dismissed(id)`. A clock at the list would re-render every row once a second to
+discover that nothing had changed. The list then re-renders on a real event instead of on a
+schedule.
+
+`onComplete` fires from an effect, not the render body, and is guarded by a ref — `useNow`
+keeps ticking past the deadline, so without the guard every subsequent second would fire
+again.
+
+### The bar is essential motion
+
+Exempt from the in-app Reduce Motion preference, still stopped by the OS setting — the same
+carve-out `AnimatedIcon`'s `essential` prop defines for the stop-work pulse. SCRUM-199 made
+the in-app preference default to *on*, so without the exemption the bar would be frozen for
+every worker who has never opened Settings, and a progress bar that does not progress is a
+broken feature rather than a calmer one.
+
+**The numeric countdown always renders**, bar or no bar. It is the copy that survives an OS
+that has been told to stop animating, a screen reader, and glare at arm's length. The
+animation is the pleasant version of the truth, never the only copy of it.
+
+### Verified on device
+
+| Check | Result |
+|---|---|
+| No bar before acknowledgement, or on a non-rest card | Confirmed |
+| `REST_15_MIN` → `14:56 left`, bar filling | Confirmed |
+| `REST_1_MIN` → `0:55 left` — same code, different duration | Confirmed |
+| Kill and relaunch mid-rest resumes (`13:22 left`, not 15:00) | Confirmed |
+| Card auto-removes at the deadline | Confirmed via logcat timestamps |
+
+> **A measurement note worth keeping.** The auto-removal looked broken twice — it appeared to
+> fire at ~17s instead of 60s. It was not: the elapsed time was being measured from the start
+> of each *tooling command*, while the acknowledgement had happened in a previous one, so ~43s
+> had already passed unrecorded. `adb logcat` settled it in one step because its lines carry
+> **absolute** timestamps: acknowledged 00:35:41.178, `dismissAt` 00:36:41.178, countdown
+> running continuously to 8100ms at 00:36:33. When a timing result looks wrong, check what the
+> clock is anchored to before changing the code.
+
+---
+
 ## SCRUM-205 — Localisation
 
 Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).
