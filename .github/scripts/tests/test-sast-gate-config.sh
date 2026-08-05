@@ -89,30 +89,37 @@ check "sonar.sources is declared" \
   "$(grep -qE '^sonar\.sources=.+' "$SONAR_PROPS" && echo true || echo false)"
 
 # --- sonar-project.properties is actually consumed --------------------------
-# The Maven Sonar plugin does NOT read sonar-project.properties itself -- that
-# format is a sonar-scanner-CLI convention only. A prior version of this
-# workflow declared the file but never loaded it, which failed CI with "you
-# must define sonar.organization" the moment it ran (SCRUM-178, 2026-08-06).
-# These assertions exist so that regression cannot recur silently.
+# The Sonar Maven plugin does NOT read sonar-project.properties -- this repo
+# used to invoke it (org.sonarsource.scanner.maven), which failed CI with "you
+# must define sonar.organization", and then -- even after that specific
+# property was patched in -- silently dropped web/ and mobile/ from analysis,
+# because the Maven plugin resolves sonar.sources relative to the invoked
+# module's own basedir and is documented to skip paths outside it, which
+# sonar.projectBaseDir does not override for a non-multi-module project
+# (SCRUM-178, 2026-08-06). Switching to the official standalone scanner action
+# removes the whole class of problem: it has no Maven module-scoping concept
+# and reads this file directly. These assertions exist so a regression back to
+# the Maven-plugin approach cannot recur silently.
 
-check "sast job loads sonar-project.properties" \
-  "$([[ "$sast" == *"sonar-project.properties"* ]] && echo true || echo false)"
-
-check "sast job sets sonar.projectBaseDir" \
-  "$([[ "$sast" == *"sonar.projectBaseDir"* ]] && echo true || echo false)"
-
-check "sast job absolutizes every Sonar path-list entry" \
-  "$([[ "$sast" == *"absolutize_path_list"* ]] && \
-     [[ "$sast" == *'sonar.sources|sonar.tests|sonar.java.binaries'* ]] && \
-     [[ "$sast" == *'"${GITHUB_WORKSPACE}/${path}"'* ]] && \
+# Comments stripped for the negative half: the workflow's own history comment
+# names sonar-maven-plugin in prose (explaining what was replaced), which would
+# otherwise trip this check on the very explanation of why it's gone.
+sast_code_only="$(without_comments <(printf '%s' "$sast"))"
+check "sast job uses the official Sonar scan action, not the Maven plugin" \
+  "$([[ "$sast" == *"SonarSource/sonarqube-scan-action"* ]] && \
+     [[ "$sast_code_only" != *"sonar-maven-plugin"* ]] && \
+     [[ "$sast_code_only" != *"org.sonarsource.scanner.maven"* ]] && \
      echo true || echo false)"
 
-# Every value in sonar-project.properties MUST be a single line: the workflow's
-# loader does not understand Java-properties backslash continuation, and a
-# continued line would be split into a malformed key and a value-only
-# fragment. Fail loudly here rather than let CI discover it.
+check "backend is compiled (Java bytecode analysis needs .class files)" \
+  "$([[ "$sast" == *"compile"* ]] && echo true || echo false)"
+
+# Kept as a lightweight style guard, not a correctness requirement: the scan
+# action's own properties reader handles Java-properties backslash
+# continuation correctly (unlike the removed hand-rolled bash loader), but
+# single-line values stay simpler to diff and to eyeball for drift.
 continuation_re='\\[[:space:]]*$'
-check "sonar-project.properties has no line-continuation backslashes" \
+check "sonar-project.properties values are single-line (style)" \
   "$(without_comments "$SONAR_PROPS" | grep -qE "$continuation_re" && echo false || echo true)"
 
 # --- Quality Gate composition (research R2a) -------------------------------
