@@ -70,7 +70,10 @@ class WeatherControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.observedAt").value("2026-08-03T01:15:00Z"))
                 .andExpect(jsonPath("$.source").value("NEA"))
                 .andExpect(jsonPath("$.qualityStatus").value("LIVE"))
-                .andExpect(jsonPath("$.stationId").value("S-test"));
+                .andExpect(jsonPath("$.stationId").value("S-test"))
+                // Evaluated server-side and shipped beside the reading (SCRUM-209): a client
+                // renders the band, it never derives one. 31.4 sits in the 31-to-below-32 band.
+                .andExpect(jsonPath("$.band").value("31_TO_BELOW_32"));
     }
 
     @Test
