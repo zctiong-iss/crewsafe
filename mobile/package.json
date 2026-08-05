@@ -48,10 +48,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "29.5.14",
     "@types/react": "~19.2.2",
     "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",
+    "jest": "~29.7.0",
+    "jest-expo": "~57.0.3",
+    "react-test-renderer": "^19.2.3",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.66.0"
   },
@@ -77,6 +82,11 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "build": "expo export --platform ios && expo export --platform android",
+    "//test": "jest-expo preset: transforms the RN/Expo module graph that plain jest cannot parse. --ci in CI keeps snapshots from being written silently.",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "//test:coverage": "Writes coverage/lcov.info, which sonar-project.properties points at. Sonar reads coverage from that file - it does not run tests itself.",
+    "test:coverage": "jest --coverage --ci",
     "//check:locales": "Fails when a locale drifts from en.json. A missing key is silent — i18next falls back to English and renders it mid-screen on a safety surface. See scripts/check-locale-parity.mjs.",
     "check:locales": "node scripts/check-locale-parity.mjs",
     "doctor": "expo-doctor"

@@ -11,7 +11,7 @@
  * length, which is exactly the case virtualisation exists for. (The demo-user picker and
  * the scenario switchers are `.map`, correctly — three compile-time fixtures each.)
  */
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { vs } from "react-native-size-matters";
@@ -31,8 +31,8 @@ import {
   dismissed,
   loadInbox,
   resetAcknowledgements,
+  selectVisibleDispatches,
 } from "@/store/reducers/dispatchInboxSlice";
-import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { isMockApi } from "@/auth/authMode";
 import {
   acknowledgementCount,
@@ -42,7 +42,6 @@ import {
 } from "@/api/mock/dispatch";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
-import type { ActionDispatch } from "@/types/domain";
 
 export default function InboxScreen() {
   const { t, i18n } = useTranslation();
@@ -50,17 +49,8 @@ export default function InboxScreen() {
   const dispatch = useAppDispatch();
 
   const user = useAppSelector((state) => state.auth.user);
-  const {
-    status,
-    pending,
-    acknowledged,
-    inFlight,
-    failures,
-    dismissedIds,
-    errorKey,
-    requestId,
-    refreshing,
-  } = useAppSelector((state) => state.dispatchInbox);
+  const { status, acknowledged, inFlight, failures, dismissedIds, errorKey, requestId, refreshing } =
+    useAppSelector((state) => state.dispatchInbox);
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -70,36 +60,21 @@ export default function InboxScreen() {
     [dispatch, user],
   );
 
-  // The NFR is "visible to an online worker within 60 seconds"; polling at half that
-  // leaves room for a slow round trip and still meets it.
-  useAutoRefresh(
-    useCallback(() => load(false), [load]),
-    REFRESH_INTERVALS.INBOX_MS,
-  );
+  /*
+   * No poll here. Since SCRUM-208 the dispatch poll lives in `WorkerTabs`, because the
+   * Alerts badge is drawn on the tab bar and has to stay current while the worker is on
+   * another screen. Polling here as well would double every request whenever this screen
+   * happened to be the one in front.
+   *
+   * Pull-to-refresh below is unchanged, and is still how a worker forces an immediate check.
+   */
 
   /*
-   * Pending from the server, plus everything this device has acknowledged, newest first.
-   *
-   * De-duplicated by id because the two sources can briefly overlap: a refetch that started
-   * before an acknowledgement landed will still carry the row as PENDING.
+   * Derived by the slice, not here. `WorkerTabs` counts exactly these rows for the Alerts
+   * badge, and two copies of "what is on screen" would drift the moment one of them learned
+   * about a new state — leaving a count of outstanding safety instructions quietly wrong.
    */
-  const items = useMemo(() => {
-    const byId = new Map<string, ActionDispatch>();
-    for (const item of pending) byId.set(item.id, item);
-    for (const record of Object.values(acknowledged)) {
-      byId.set(record.dispatch.id, record.dispatch);
-    }
-    /*
-     * Dismissed ids come out last, and the order matters.
-     *
-     * The acknowledgement records deliberately survive dismissal — they are what keeps a
-     * replayed acknowledgement idempotent — so the loop above happily puts a dismissed card
-     * back into the map. Filtering after the union is what makes "hidden" stick; filtering
-     * only `pending` would let the acknowledged copy resurrect it on the next render.
-     */
-    for (const id of dismissedIds) byId.delete(id);
-    return [...byId.values()].sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt));
-  }, [pending, acknowledged, dismissedIds]);
+  const items = useAppSelector(selectVisibleDispatches);
 
   if (status === "loading") {
     return (

@@ -106,7 +106,9 @@
 
   "tabs": {
     "shift": "আমার শিফট",
-    "inbox": "ইনবক্স",
+    "alerts": "সতর্কতা",
+    "alertsA11yCount": "সতর্কতা, {{count}}টি অস্বীকৃত",
+    "alertsA11yAllDone": "সতর্কতা, সব স্বীকৃত",
     "weather": "আবহাওয়া",
     "shifts": "শিফট",
     "profile": "প্রোফাইল",

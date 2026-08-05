@@ -46,5 +46,9 @@ jobs:
         run: npm run lint
       - name: Type-check
         run: npm run typecheck
+      - name: Locale parity
+        run: npm run check:locales
+      - name: Unit tests
+        run: npm run test:coverage
       - name: Production bundle exports
         run: npm run build

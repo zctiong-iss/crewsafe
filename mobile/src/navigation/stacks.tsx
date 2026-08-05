@@ -92,7 +92,7 @@ export function InboxStack() {
       <InboxStackNavigator.Screen
         name="Inbox"
         component={InboxScreen}
-        options={{ title: t("tabs.inbox") }}
+        options={{ title: t("tabs.alerts") }}
       />
     </InboxStackNavigator.Navigator>
   );
