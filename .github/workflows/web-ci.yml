@@ -1,17 +1,17 @@
-name: Mobile CI
+name: Web CI
 
 on:
   pull_request:
     branches: [main]
     paths:
-      - "mobile/**"
-      - ".github/workflows/mobile-ci.yml"
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
       - ".github/scripts/tests/**"
   push:
     branches: [main]
     paths:
-      - "mobile/**"
-      - ".github/workflows/mobile-ci.yml"
+      - "web/**"
+      - ".github/workflows/web-ci.yml"
       - ".github/scripts/tests/**"
   workflow_dispatch:
 
@@ -19,16 +19,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: mobile-ci-${{ github.ref }}
+  group: web-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  mobile:
-    name: Mobile CI
+  web:
+    name: Web CI
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: mobile
+        working-directory: web
     steps:
       - name: Check out exact revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -39,16 +39,14 @@ jobs:
         with:
           node-version: "22.x"
           cache: npm
-          cache-dependency-path: mobile/package-lock.json
+          cache-dependency-path: web/package-lock.json
       - name: Install dependencies
         run: npm ci
       - name: Lint
         run: npm run lint
       - name: Type-check
         run: npm run typecheck
-      - name: Locale parity
-        run: npm run check:locales
       - name: Unit tests
-        run: npm run test:coverage
-      - name: Production bundle exports
+        run: npm test
+      - name: Production build
         run: npm run build

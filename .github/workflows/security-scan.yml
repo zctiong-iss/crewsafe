@@ -144,6 +144,37 @@ jobs:
             exit 1
           fi
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install mobile dependencies for coverage
+        working-directory: mobile
+        run: npm ci
+
+      - name: Generate mobile coverage
+        working-directory: mobile
+        run: npm run test:coverage
+
+      - name: Prepare mobile LCOV for SonarQube
+        shell: bash
+        run: |
+          test -s mobile/coverage/lcov.info
+          awk -v prefix="mobile/" '
+            /^SF:/ {
+              path = substr($0, 4)
+              sub(/^\.\//, "", path)
+              if (path !~ /^\// && index(path, prefix) != 1) {
+                $0 = "SF:" prefix path
+              }
+            }
+            { print }
+          ' mobile/coverage/lcov.info > mobile/coverage/sonar-lcov.info
+          test -s mobile/coverage/sonar-lcov.info
+          grep -q '^SF:mobile/src/' mobile/coverage/sonar-lcov.info
+
       # Java bytecode only -- no Sonar plugin runs here. The Java analyzer
       # needs compiled classes (sonar.java.binaries=backend/target/classes) for
       # full analysis; the actual scan is a separate step below.
