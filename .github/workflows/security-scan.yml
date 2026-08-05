@@ -173,7 +173,7 @@ jobs:
             { print }
           ' mobile/coverage/lcov.info > mobile/coverage/sonar-lcov.info
           test -s mobile/coverage/sonar-lcov.info
-          rg -q '^SF:mobile/src/' mobile/coverage/sonar-lcov.info
+          grep -q '^SF:mobile/src/' mobile/coverage/sonar-lcov.info
 
       # Java bytecode only -- no Sonar plugin runs here. The Java analyzer
       # needs compiled classes (sonar.java.binaries=backend/target/classes) for
