@@ -43,4 +43,15 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ['jest.config.cjs', 'jest.setup.cjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        jest: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+      },
+    },
+  },
 );
