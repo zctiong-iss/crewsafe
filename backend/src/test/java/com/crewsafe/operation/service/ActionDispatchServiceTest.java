@@ -190,14 +190,14 @@ class ActionDispatchServiceTest {
     void testGetDispatch_NotFound() {
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> service.getDispatch(dispatchId));
+        assertThrows(IllegalArgumentException.class, () -> service.getDispatch(dispatchId, principal));
     }
 
     @Test
     void testGetDispatch_Success() {
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
 
-        ActionDispatch result = service.getDispatch(dispatchId);
+        ActionDispatch result = service.getDispatch(dispatchId, principal);
         assertEquals(dispatchId, result.getId());
         assertEquals("REST_10_MIN", result.getActionCode());
     }
