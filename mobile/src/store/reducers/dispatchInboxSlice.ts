@@ -24,6 +24,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";
 import { acknowledgeDispatch, fetchPendingDispatches } from "@/api/endpoints/dispatch";
+import { restDeadlineFor } from "@/helpers/restDuration";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { ActionDispatch } from "@/types/domain";
 import type { RootState } from "../store";
@@ -47,6 +48,23 @@ export interface AcknowledgementRecord {
    * SCRUM-130's territory since that story already has to reason about queue lifetime.
    */
   dispatch: ActionDispatch;
+  /**
+   * When this action stops being owed, as epoch ms — or null if it has no derivable end.
+   *
+   * Computed once, at acknowledgement, and persisted with the record. Two consequences that
+   * are the whole point:
+   *
+   *   • A fifteen-minute rest survives the app being killed. Recomputing from "now" on
+   *     relaunch would restart it, which punishes a worker for something they did not do —
+   *     and on a site phone a process death mid-shift is not an edge case.
+   *   • The deadline cannot drift. Deriving it during render would push the finish line
+   *     forward on every tick.
+   *
+   * Wall-clock rather than elapsed-since-mount, because a monotonic timer cannot survive
+   * process death. The accepted cost is that changing the device clock can end a rest early;
+   * see `restDuration.ts` and the SCRUM-206 plan.
+   */
+  dismissAt: number | null;
 }
 
 export interface DispatchInboxState {
@@ -61,6 +79,18 @@ export interface DispatchInboxState {
   inFlight: string[];
   /** Per-dispatch failure, so one failed card does not blank the whole list. */
   failures: Record<string, string>;
+  /**
+   * Ids the worker no longer needs to see. Persisted.
+   *
+   * Hiding rather than deleting. The acknowledgement record itself has to survive: it is
+   * what renders the acknowledged state until the card goes, what keeps a replayed
+   * acknowledgement idempotent (SCRUM-186), and what SCRUM-130 will build its queue on.
+   * Deleting it to clear the card would throw all of that away to achieve a visual change.
+   *
+   * Persisted for the same reason the deadline is: a card dismissed at 07:51 must not
+   * reappear because the app was relaunched at 07:52 and the server still had opinions.
+   */
+  dismissedIds: string[];
   errorKey: string | null;
   requestId: string | null;
   refreshing: boolean;
@@ -73,6 +103,7 @@ const initialState: DispatchInboxState = {
   idempotencyKeys: {},
   inFlight: [],
   failures: {},
+  dismissedIds: [],
   errorKey: null,
   requestId: null,
   refreshing: false,
@@ -133,13 +164,17 @@ export const acknowledge = createAsyncThunk<
 
   try {
     const result = await acknowledgeDispatch(dispatchId, idempotencyKey);
+    // Prefer the server's own timestamp; fall back to now only if it sent none.
+    const acknowledgedAt = result.startTime ?? new Date().toISOString();
     return {
       dispatchId,
       record: {
-        // Prefer the server's own timestamp; fall back to now only if it sent none.
-        acknowledgedAt: result.startTime ?? new Date().toISOString(),
+        acknowledgedAt,
         idempotencyKey,
         dispatch: result,
+        // Resolved here, once, so it is persisted with the record rather than recomputed
+        // per render. Null for any code with no derivable duration — see `restDuration.ts`.
+        dismissAt: restDeadlineFor(result, acknowledgedAt),
       },
     };
   } catch (error) {
@@ -182,11 +217,33 @@ const dispatchInboxSlice = createSlice({
     dismissFailure: (state, action: PayloadAction<string>) => {
       delete state.failures[action.payload];
     },
+    /**
+     * Take a card off the list. Fired by the card itself when its deadline passes.
+     *
+     * Card-driven rather than list-driven on purpose. A clock at the list would re-render
+     * every row once a second to discover that nothing had changed; a card already ticking
+     * for its own countdown knows the moment it expires and can say so once. The list then
+     * re-renders on a real event instead of on a schedule.
+     *
+     * Guarded against duplicates: a card can expire and be swiped in the same tick, and an
+     * id appearing twice would make the filter below do the same work twice forever.
+     */
+    dismissed: (state, action: PayloadAction<string>) => {
+      if (!state.dismissedIds.includes(action.payload)) {
+        state.dismissedIds.push(action.payload);
+      }
+      // Drop it from `pending` too. The server returns PENDING rows only, so an
+      // acknowledged action should already be gone from that list — but a refetch that
+      // started before the acknowledgement landed can still carry it, and without this the
+      // card would flicker back for one poll interval.
+      state.pending = state.pending.filter((item) => item.id !== action.payload);
+    },
     /** Dev only, paired with the mock's reset so the flow can be replayed. */
     resetAcknowledgements: (state) => {
       state.acknowledged = {};
       state.idempotencyKeys = {};
       state.failures = {};
+      state.dismissedIds = [];
     },
   },
   extraReducers: (builder) => {
@@ -264,7 +321,7 @@ const dispatchInboxSlice = createSlice({
   },
 });
 
-export const { idempotencyKeyAssigned, dismissFailure, resetAcknowledgements } =
+export const { idempotencyKeyAssigned, dismissFailure, dismissed, resetAcknowledgements } =
   dispatchInboxSlice.actions;
 
 export default dispatchInboxSlice.reducer;

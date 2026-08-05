@@ -19,6 +19,7 @@ import { s, vs } from "react-native-size-matters";
 import AppText, { lineHeightFor } from "../texts/AppText";
 import AppButton from "../buttons/AppButton";
 import AnimatedIcon from "../feedback/AnimatedIcon";
+import RestProgressBar from "./RestProgressBar";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
 import { formatTime } from "@/helpers/dateTime";
@@ -33,6 +34,15 @@ interface DispatchCardProps {
   failureKey: string | null;
   onAcknowledge: () => void;
   locale: string;
+  /**
+   * Epoch ms this action stops being owed, or null if it has no derivable end.
+   *
+   * Only meaningful once acknowledged — see `restDuration.ts` for where it comes from and
+   * why it is never parsed out of the rendered title.
+   */
+  dismissAt?: number | null;
+  /** Fired once when `dismissAt` passes. */
+  onExpire?: () => void;
 }
 
 const DispatchCard: FC<DispatchCardProps> = ({
@@ -42,11 +52,29 @@ const DispatchCard: FC<DispatchCardProps> = ({
   failureKey,
   onAcknowledge,
   locale,
+  dismissAt = null,
+  onExpire,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
   const acknowledged = acknowledgedAt !== null;
+
+  /*
+   * The bar appears only once the server has confirmed.
+   *
+   * Not while the request is in flight, and not after a failure. An action the supervisor
+   * has not been told about must not look like an action already under way — a worker
+   * watching a countdown believes their rest is being credited, and if the acknowledgement
+   * never landed it is not.
+   */
+  const startedAt = acknowledgedAt ? Date.parse(acknowledgedAt) : Number.NaN;
+  const showRestProgress =
+    acknowledged &&
+    dismissAt !== null &&
+    onExpire !== undefined &&
+    !Number.isNaN(startedAt) &&
+    dismissAt > startedAt;
 
   // Both scale with the device and with the user's text setting, so the icon stays on the
   // title's first line on a 320dp phone at 0.85x and a tablet at 1.5x alike.
@@ -134,6 +162,14 @@ const DispatchCard: FC<DispatchCardProps> = ({
             : t("inbox.pending")}
         </AppText>
       </View>
+
+      {showRestProgress ? (
+        <RestProgressBar
+          startedAt={startedAt}
+          dismissAt={dismissAt}
+          onComplete={onExpire}
+        />
+      ) : null}
 
       {failureKey ? (
         <View style={styles.failure}>

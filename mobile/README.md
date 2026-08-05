@@ -757,6 +757,100 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-206 — Rest timer and progress bar
+
+Plan: [`docs/plans/SCRUM-206-rest-timer-progress-plan.md`](../docs/plans/SCRUM-206-rest-timer-progress-plan.md).
+[SCRUM-207](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md) — the 3-minute rule
+and swipe-to-clear — builds on the same mechanism and is not implemented yet.
+
+Acknowledging a `REST_*` action shows a progress bar and a countdown; the card removes itself
+when the rest is served.
+
+### The duration never comes from the title
+
+`helpers/restDuration.ts`. Resolution is **server `endTime` → `REST_<n>_MIN` parsed from
+`actionCode` → no bar.** The rendered heading is a translated string:
+
+| Locale | Title |
+|---|---|
+| `en` | Rest for 15 minutes |
+| `ta` | 15 நிமிடம் ஓய்வெடுங்கள் |
+| `my` | ၁၅ မိနစ် အနားယူပါ — Burmese numerals, not ASCII |
+| `bn` | ১৫ মিনিট বিশ্রাম নিন — Bengali numerals |
+
+A regex over that works in English and fails in six of the seven shipped languages, and
+breaks again the first time a translator rewords a sentence.
+
+The pattern is **anchored** (`^REST_(\d+)_MIN$`) and the anchoring is load-bearing:
+`REST_10_MIN_HOURLY` is a *policy* action from the heat plan — "rest 10 minutes every hour" —
+with no single deadline. An unanchored pattern would match it and start a countdown against a
+rule that does not have one. An unrecognised code gets no bar at all, which is a requirement
+rather than a fallback: the action catalogue is deliberately open-ended server-side.
+
+### What is persisted, and why the timer survives a kill
+
+`dismissAt` is computed **once**, at acknowledgement, and stored on the acknowledgement record
+that `dispatchInboxPersistConfig` already persists. Two consequences:
+
+- A fifteen-minute rest survives the app being killed. Recomputing from "now" on relaunch
+  would restart it, punishing a worker for something they did not do — and on a site phone a
+  process death mid-shift is not an edge case.
+- The deadline cannot drift. Deriving it during render would push the finish line forward on
+  every tick.
+
+Wall-clock rather than elapsed-since-mount, because a monotonic timer cannot survive process
+death. **Accepted cost:** changing the device clock can end a rest early. Documented rather
+than defended against — the threat model is a worker skipping a rest, their supervisor can
+already see the acknowledgement, and clock-tamper detection is more code and more edge cases
+than the risk earns.
+
+`dismissedIds` is persisted separately. The acknowledgement records deliberately survive
+dismissal — they are what keeps a replayed acknowledgement idempotent (SCRUM-186) — so
+without a dismissed list, relaunching would rebuild every expired card from them.
+
+### Card-driven expiry, not list-driven
+
+The card already ticks for its own countdown, so the card is what notices the deadline and
+dispatches `dismissed(id)`. A clock at the list would re-render every row once a second to
+discover that nothing had changed. The list then re-renders on a real event instead of on a
+schedule.
+
+`onComplete` fires from an effect, not the render body, and is guarded by a ref — `useNow`
+keeps ticking past the deadline, so without the guard every subsequent second would fire
+again.
+
+### The bar is essential motion
+
+Exempt from the in-app Reduce Motion preference, still stopped by the OS setting — the same
+carve-out `AnimatedIcon`'s `essential` prop defines for the stop-work pulse. SCRUM-199 made
+the in-app preference default to *on*, so without the exemption the bar would be frozen for
+every worker who has never opened Settings, and a progress bar that does not progress is a
+broken feature rather than a calmer one.
+
+**The numeric countdown always renders**, bar or no bar. It is the copy that survives an OS
+that has been told to stop animating, a screen reader, and glare at arm's length. The
+animation is the pleasant version of the truth, never the only copy of it.
+
+### Verified on device
+
+| Check | Result |
+|---|---|
+| No bar before acknowledgement, or on a non-rest card | Confirmed |
+| `REST_15_MIN` → `14:56 left`, bar filling | Confirmed |
+| `REST_1_MIN` → `0:55 left` — same code, different duration | Confirmed |
+| Kill and relaunch mid-rest resumes (`13:22 left`, not 15:00) | Confirmed |
+| Card auto-removes at the deadline | Confirmed via logcat timestamps |
+
+> **A measurement note worth keeping.** The auto-removal looked broken twice — it appeared to
+> fire at ~17s instead of 60s. It was not: the elapsed time was being measured from the start
+> of each *tooling command*, while the acknowledgement had happened in a previous one, so ~43s
+> had already passed unrecorded. `adb logcat` settled it in one step because its lines carry
+> **absolute** timestamps: acknowledged 00:35:41.178, `dismissAt` 00:36:41.178, countdown
+> running continuously to 8100ms at 00:36:33. When a timing result looks wrong, check what the
+> clock is anchored to before changing the code.
+
+---
+
 ## SCRUM-205 — Localisation
 
 Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).

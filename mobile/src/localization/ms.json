@@ -184,7 +184,6 @@
     "deleting": "Memadam",
     "deletedToast": "Syif dipadam",
     "deleteFailedTitle": "Syif tidak dipadam",
-
     "form": {
       "timesSection": "Bila",
       "startsAt": "Bermula",
@@ -207,7 +206,6 @@
       "createdToast": "Syif dibuat",
       "unstaffedNotice": "Syif ini akan dibuat tanpa sesiapa ditugaskan. Anda boleh menugaskan pekerja kemudian."
     },
-
     "validation": {
       "startRequired": "Pilih bila syif bermula.",
       "endRequired": "Pilih bila syif tamat.",
@@ -254,7 +252,8 @@
     "retryButton": "Cuba lagi",
     "failed": "Pengakuan anda tidak dapat dihantar.",
     "safeToRetry": "Selamat untuk tekan sekali lagi — ia tidak akan mengakui dua kali.",
-    "noInstruction": "Tiada butiran lanjut diberikan."
+    "noInstruction": "Tiada butiran lanjut diberikan.",
+    "restRemaining": "Tinggal {{time}}"
   },
 
   "lightning": {
@@ -302,7 +301,6 @@
     "REST_10_MIN_HOURLY": "Rehat 10 minit tanpa henti, setiap jam",
     "REST_15_MIN_HOURLY": "Rehat 15 minit tanpa henti, setiap jam",
     "CLOSE_MONITORING": "Perhatikan diri anda dan kru anda dengan teliti untuk tanda penyakit haba",
-
     "REST_10_MIN": "Rehat selama 10 minit",
     "REST_15_MIN": "Rehat selama 15 minit",
     "HYDRATE": "Minum air sekarang",
