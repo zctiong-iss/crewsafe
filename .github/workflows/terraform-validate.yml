@@ -136,12 +136,18 @@ jobs:
 
   security:
     runs-on: ubuntu-latest
+    # Secret scanning moved to .github/workflows/security-scan.yml (SCRUM-178).
+    # The gitleaks step that used to live here only ran when a Terraform or
+    # Cognito path changed, because this workflow is path-filtered -- so a
+    # backend-only pull request got no secret scan at all. The replacement runs
+    # on every pull request and push, scans the PR's full commit range, and
+    # sweeps the whole history weekly.
+    #
+    # Trivy stays: it scans Terraform configuration for misconfiguration, which
+    # is a different concern from secret detection.
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with: { fetch-depth: 0 }
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           scan-type: config

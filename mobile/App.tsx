@@ -34,6 +34,24 @@ import {
   Gelasio_600SemiBold,
   Gelasio_700Bold,
 } from "@expo-google-fonts/gelasio";
+import {
+  NotoSansTamil_400Regular,
+  NotoSansTamil_500Medium,
+  NotoSansTamil_600SemiBold,
+  NotoSansTamil_700Bold,
+} from "@expo-google-fonts/noto-sans-tamil";
+import {
+  NotoSansBengali_400Regular,
+  NotoSansBengali_500Medium,
+  NotoSansBengali_600SemiBold,
+  NotoSansBengali_700Bold,
+} from "@expo-google-fonts/noto-sans-bengali";
+import {
+  NotoSansMyanmar_400Regular,
+  NotoSansMyanmar_500Medium,
+  NotoSansMyanmar_600SemiBold,
+  NotoSansMyanmar_700Bold,
+} from "@expo-google-fonts/noto-sans-myanmar";
 
 import { persistor, store } from "@/store/store";
 import i18n from "@/localization/i18n";
@@ -50,11 +68,38 @@ void SplashScreen.preventAutoHideAsync();
 installSessionBridge();
 
 export default function App() {
+  /*
+   * Every script's family, loaded up front rather than on demand (SCRUM-205).
+   *
+   * The same reasoning that keeps translations in the bundle applies to the faces that draw
+   * them: a worker who loses signal mid-shift must not lose their language. Loading a font
+   * at the moment someone switches language would need a loading state, and would fail
+   * outright on a site phone with no connection — which is the operating condition, not an
+   * edge case. The cost is a larger bundle and a slightly slower cold start, paid once.
+   *
+   * Gelasio covers Latin. Tamil, Bengali and Myanmar have no glyphs in it at all, so each
+   * gets its Noto family — see `styles/fonts.ts` for how one is chosen per language.
+   */
   const [fontsLoaded, fontError] = useFonts({
     Gelasio_400Regular,
     Gelasio_500Medium,
     Gelasio_600SemiBold,
     Gelasio_700Bold,
+
+    NotoSansTamil_400Regular,
+    NotoSansTamil_500Medium,
+    NotoSansTamil_600SemiBold,
+    NotoSansTamil_700Bold,
+
+    NotoSansBengali_400Regular,
+    NotoSansBengali_500Medium,
+    NotoSansBengali_600SemiBold,
+    NotoSansBengali_700Bold,
+
+    NotoSansMyanmar_400Regular,
+    NotoSansMyanmar_500Medium,
+    NotoSansMyanmar_600SemiBold,
+    NotoSansMyanmar_700Bold,
   });
 
   // A font that fails to load must not hold the splash forever — the app is still usable
@@ -63,7 +108,10 @@ export default function App() {
 
   useEffect(() => {
     if (fontError) {
-      console.warn("Gelasio failed to load; falling back to the system font.", fontError);
+      // Worth more than a shrug now that four families load here: in Latin the fallback is
+      // merely a different serif, but for Tamil, Bengali or Myanmar it is the difference
+      // between readable text and tofu.
+      console.warn("A font failed to load; falling back to the system face.", fontError);
     }
   }, [fontError]);
 

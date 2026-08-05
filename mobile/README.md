@@ -344,9 +344,10 @@ worker's face above the next worker's name.
 Not decoration — these are the operating conditions: a phone at arm's length in Singapore
 sun, held by someone who may not read English, possibly in gloves.
 
-- **Three languages** (English, 简体中文, हिन्दी), each listed in its own script. The picker
-  is reachable **from the sign-in screen**, not only from Settings — otherwise a shared
-  phone left in a language you cannot read is a trap with no way out.
+- **Seven languages** (English, 简体中文, हिन्दी, Bahasa Melayu, தமிழ், বাংলা, မြန်မာ), each
+  listed in its own script. The picker is reachable **from the sign-in screen**, not only from
+  Settings — otherwise a shared phone left in a language you cannot read is a trap with no way
+  out. See [SCRUM-205](#scrum-205--localisation) below.
 - **Text size** 0.85–1.5×, applied by `AppText` on top of device scaling. No raw `<Text>`
   exists anywhere in `src/`, so nothing opts out. Capped at 1.5 because fixed-height
   controls clip their own labels past that.
@@ -756,6 +757,489 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-208 — Alerts rename and unacknowledged badge
+
+Plan: [`docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md`](../docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md).
+
+The Inbox is now **Alerts**, and its tab icon carries a live count of the actions the worker
+still owes: `3`, then `2`, then no number and a bell with a tick.
+
+### The count, and what it deliberately includes
+
+```
+unacknowledged = visibleDispatches.filter(item => !acknowledged[item.id]).length
+```
+
+| Case | Counts? | Why |
+|---|---|---|
+| Pending | yes | owed |
+| Acknowledgement **in flight** | yes | stops counting when the *server* confirms, not when the button is pressed |
+| Acknowledgement **failed** | yes | owed until the server says otherwise; the card keeps its retry |
+| **Rest in progress** | **no** | the record exists the moment the server confirmed — the timer is a separate concern |
+| Dismissed (SCRUM-207) | no | already gone from the list |
+
+The rest case is the one the story asked for by name, and it needed no code: it falls out of
+"has an acknowledgement record". Special-casing it would have been the way to get it wrong.
+
+### The count lives in the slice, not the screen
+
+`selectVisibleDispatches` / `selectUnacknowledgedCount` / `selectAllAcknowledged` are memoised
+selectors on `dispatchInboxSlice`, and `InboxScreen` now reads the first of them instead of
+deriving its own list.
+
+The badge is drawn by the tab navigator while other screens are in front, so the screen cannot
+own the derivation. Two copies of "what is on screen" drift the moment one of them learns
+about a new state — and the thing that would then be quietly wrong is a count of outstanding
+safety instructions.
+
+### The poll had to move, and that is the real change
+
+`useAutoRefresh` is `useFocusEffect`-based: the inbox polled only while its own screen was
+focused. That is correct for a screen's own data, and the battery reasoning in that file
+stands.
+
+It is wrong for a badge. A tab badge exists to report what arrived **while the worker was
+somewhere else**, so under the old arrangement a newly dispatched action would not move the
+count until the worker opened the very screen the badge was meant to send them to. The NFR is
+"visible to an online worker within 60 seconds" and focus-gated polling cannot meet it from
+another tab.
+
+So the dispatch poll moved to `WorkerTabs` via a new `useForegroundRefresh` — same
+foreground-awareness, no focus gate. **Nothing polls while the app is backgrounded**; the
+battery argument still holds there, and a phone in a pocket has nobody to show a badge to.
+`InboxScreen`'s own poll was removed rather than left in place, or every request would have
+doubled whenever Alerts happened to be the screen in front.
+
+Weather and shifts stay focus-gated. Neither drives anything visible from another screen.
+
+### Icon states
+
+| State | Icon | Badge |
+|---|---|---|
+| One or more unacknowledged | bell | the count |
+| All acknowledged, cards still on screen | bell + green tick | none |
+| List empty | bell | none |
+
+An empty list gets the **plain** bell. "Nothing has arrived" and "you have dealt with
+everything" are different facts and only the second earns a tick — `selectAllAcknowledged`
+checks `visible.length > 0` for exactly that reason.
+
+The tick is composed over the bell rather than swapped for a different glyph, so the icon
+gains a mark instead of appearing to change shape. It is drawn in the success colour, not the
+tab tint: the tint says which tab is selected, the tick says the work is done, and those must
+not be the same signal.
+
+The count is also stated in words via `tabBarAccessibilityLabel` — "Alerts, 2 unacknowledged"
+— because a small numeral on a tab icon is the first thing to disappear in glare, and is
+invisible to a screen reader entirely.
+
+### Rename scope
+
+`tabs.inbox` → `tabs.alerts`, valued "Alerts" in all seven locales. One key drives both the
+tab label and the stack header, so they cannot drift.
+
+`InboxScreen.tsx`, the `inbox.*` block, `dispatchInboxSlice` and `api/endpoints/dispatch.ts`
+keep their names. They track the API concept —
+`GET /api/action-dispatch/worker/{id}/pending` really is an inbox of dispatched actions — not
+the label a worker reads. Renaming them would bury the behaviour change in a large diff and
+move the code further from the endpoint it mirrors.
+
+### Verified on device
+
+Badge showed `3` **while on My shift**, which is the whole point — then `2` after
+acknowledging the rest card *with its timer still running*, then `1`, then no badge and the
+checked bell. Header and tab both read "Alerts".
+
+**One finding worth a decision.** In Burmese the badge renders `3` in ASCII while the shift
+times on the same screen render `၉:၁၄` in Burmese numerals, because `Intl` formats the times
+and React Navigation renders the badge value directly. Left as ASCII deliberately: the badge
+is a compact glyph on an icon where Burmese numerals are wider, and the count is already
+announced in words for anyone the numeral fails. It is an inconsistency, not a defect — but
+it is a product call, so it is recorded here rather than left to be discovered.
+
+No tab label truncated in Burmese, which was the other flagged risk.
+
+---
+
+## SCRUM-207 — Auto-dismiss and swipe-to-clear
+
+Plan: [`docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md`](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md).
+Builds directly on [SCRUM-206](#scrum-206--rest-timer-and-progress-bar) — same deadline
+field, same removal path, second source for the deadline.
+
+Acknowledged cards leave the inbox on their own. A rest card leaves when the rest is served;
+everything else leaves three minutes later. A swipe makes it sooner.
+
+### One deadline, three sources
+
+| Action | Dwell | Bar |
+|---|---|---|
+| `REST_<n>_MIN` | the parsed duration | yes |
+| Any other code — `HYDRATE`, `ROTATE_TO_LIGHT_DUTY`, … | 3 minutes | no |
+| A `REST_*` code that cannot be parsed | 3 minutes | no |
+| Swipe, any acknowledged card | immediate | — |
+
+`dismissAtFor` is the single entry point; `restDeadlineFor` stays separate because the *bar*
+needs a different question answered. "Three minutes because we did not understand the code"
+is not a rest, and a bar counting down against it would be counting down to nothing. That
+distinction is stored as `hasRestTimer` on the acknowledgement record rather than re-derived
+per render, so a later change to the parsing rules cannot retroactively change what
+already-acknowledged cards display.
+
+The unparseable-rest case matters more than it looks: the action catalogue is deliberately
+open-ended server-side, so an unknown `REST_*` code is expected eventually. Without the
+fallback it would sit in the inbox forever — the one outcome this epic exists to remove.
+
+### Three minutes is a dwell time, not a policy value
+
+`DEFAULT_DISMISS_MS` lives in `helpers/restDuration.ts`, not in the policy engine and not in
+`application.yml` beside the WBGT thresholds. Nothing about the worker's obligation changes at
+three minutes: the action was owed before they acknowledged it and discharged after, and the
+card going is a UI event with no safety meaning. FR-15 makes the backend authoritative for
+anything that decides what a worker must do — a confirmation's screen time is not that, and
+filing it beside things that are would invite someone to treat it as if it were.
+
+### Two timers, deliberately
+
+- **Card with a bar** — `useNow` at 1Hz. The component re-renders every second anyway to move
+  the countdown, so the clock is free, and it reports its own completion.
+- **Card without a bar** — `useExpiryTimer`, a single `setTimeout`. Nothing to redraw, so
+  ticking at 1Hz would be ~180 renders over three minutes to discover that nothing changed.
+
+`useExpiryTimer` also listens to `AppState`. A JS timeout is not reliable across
+backgrounding and a long one can be throttled or dropped, so the deadline is re-checked on
+return to foreground; the timeout is the fast path and `AppState` is what makes it correct.
+Both funnel through one guarded `fire()`, so a race produces exactly one call. The callback is
+held in a ref — callers pass an inline arrow, and as a dependency it would rebuild the timeout
+on every render, meaning a three-minute timer would never fire at all.
+
+Only one of the two is active per card, so nothing races to dismiss the same row twice.
+
+### The swipe
+
+`Swipeable` from `react-native-gesture-handler` 2.32 — already a dependency, with
+`GestureHandlerRootView` already at the app root. **Not** `ReanimatedSwipeable`:
+`react-native-reanimated` is not installed, and adding it is a native dependency on a project
+that has never produced an EAS build.
+
+**Only acknowledged cards are swipeable.** A pending action is still owed and the supervisor
+has not been told — flicking it away would make the inbox lie about what is outstanding. A
+failed one is worse: the retry button lives on that card, so dismissing it removes the only
+route back. Both are blocked, and the card still renders normally.
+
+Either direction, because a worker in gloves should not have to remember which. The revealed
+panel fades in with the drag so a partial swipe reads as "keep going" rather than "done" — on
+a gloved hand, most swipes are partial. Threshold is a generous 96pt: brushing the list while
+scrolling and losing a card is a worse failure than having to swipe a little further.
+
+Removal is from the rendered list only. The persisted acknowledgement record is untouched, so
+idempotent replay (SCRUM-186) and SCRUM-130's queue are unaffected.
+
+### Verified on two device geometries
+
+`Pixel_9_Pro_XL` (1344×2992 @480) and `Pixel_10_Pro_Fold` (2076×2152 @390) — the pair that
+exposed [Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first),
+where one reproduced a bug the other did not from the same bundle.
+
+| Check | XL | Fold |
+|---|---|---|
+| Swipe on a **pending** card does nothing | ✅ | ✅ |
+| Swipe on an acknowledged card removes it | ✅ | ✅ |
+| Neighbouring card untouched | ✅ | ✅ |
+| Reveal panel renders and tracks the drag | ✅ | ✅ (`Padam`, in Malay) |
+| Acknowledged non-rest card shows **no** bar | ✅ | ✅ |
+| 3-minute auto-dismiss | ✅ removed at t=182s | — |
+| List still scrolls with a swipe half-open | — | ✅ |
+
+> Two invalid test runs are worth recording, because both looked like product bugs. The first
+> half-swipe-then-scroll test targeted a **pending** card, which by design cannot open — so it
+> proved nothing about gesture conflict. An earlier removal test reported `~5s` because the
+> card had already been dismissed in a previous run and `dismissedIds` had correctly persisted
+> it. **Check the fixture is in the state you think it is before believing a timing result.**
+
+---
+
+## SCRUM-206 — Rest timer and progress bar
+
+Plan: [`docs/plans/SCRUM-206-rest-timer-progress-plan.md`](../docs/plans/SCRUM-206-rest-timer-progress-plan.md).
+[SCRUM-207](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md) — the 3-minute rule
+and swipe-to-clear — builds on the same mechanism and is not implemented yet.
+
+Acknowledging a `REST_*` action shows a progress bar and a countdown; the card removes itself
+when the rest is served.
+
+### The duration never comes from the title
+
+`helpers/restDuration.ts`. Resolution is **server `endTime` → `REST_<n>_MIN` parsed from
+`actionCode` → no bar.** The rendered heading is a translated string:
+
+| Locale | Title |
+|---|---|
+| `en` | Rest for 15 minutes |
+| `ta` | 15 நிமிடம் ஓய்வெடுங்கள் |
+| `my` | ၁၅ မိနစ် အနားယူပါ — Burmese numerals, not ASCII |
+| `bn` | ১৫ মিনিট বিশ্রাম নিন — Bengali numerals |
+
+A regex over that works in English and fails in six of the seven shipped languages, and
+breaks again the first time a translator rewords a sentence.
+
+The pattern is **anchored** (`^REST_(\d+)_MIN$`) and the anchoring is load-bearing:
+`REST_10_MIN_HOURLY` is a *policy* action from the heat plan — "rest 10 minutes every hour" —
+with no single deadline. An unanchored pattern would match it and start a countdown against a
+rule that does not have one. An unrecognised code gets no bar at all, which is a requirement
+rather than a fallback: the action catalogue is deliberately open-ended server-side.
+
+### What is persisted, and why the timer survives a kill
+
+`dismissAt` is computed **once**, at acknowledgement, and stored on the acknowledgement record
+that `dispatchInboxPersistConfig` already persists. Two consequences:
+
+- A fifteen-minute rest survives the app being killed. Recomputing from "now" on relaunch
+  would restart it, punishing a worker for something they did not do — and on a site phone a
+  process death mid-shift is not an edge case.
+- The deadline cannot drift. Deriving it during render would push the finish line forward on
+  every tick.
+
+Wall-clock rather than elapsed-since-mount, because a monotonic timer cannot survive process
+death. **Accepted cost:** changing the device clock can end a rest early. Documented rather
+than defended against — the threat model is a worker skipping a rest, their supervisor can
+already see the acknowledgement, and clock-tamper detection is more code and more edge cases
+than the risk earns.
+
+`dismissedIds` is persisted separately. The acknowledgement records deliberately survive
+dismissal — they are what keeps a replayed acknowledgement idempotent (SCRUM-186) — so
+without a dismissed list, relaunching would rebuild every expired card from them.
+
+### Card-driven expiry, not list-driven
+
+The card already ticks for its own countdown, so the card is what notices the deadline and
+dispatches `dismissed(id)`. A clock at the list would re-render every row once a second to
+discover that nothing had changed. The list then re-renders on a real event instead of on a
+schedule.
+
+`onComplete` fires from an effect, not the render body, and is guarded by a ref — `useNow`
+keeps ticking past the deadline, so without the guard every subsequent second would fire
+again.
+
+### The bar is essential motion
+
+Exempt from the in-app Reduce Motion preference, still stopped by the OS setting — the same
+carve-out `AnimatedIcon`'s `essential` prop defines for the stop-work pulse. SCRUM-199 made
+the in-app preference default to *on*, so without the exemption the bar would be frozen for
+every worker who has never opened Settings, and a progress bar that does not progress is a
+broken feature rather than a calmer one.
+
+**The numeric countdown always renders**, bar or no bar. It is the copy that survives an OS
+that has been told to stop animating, a screen reader, and glare at arm's length. The
+animation is the pleasant version of the truth, never the only copy of it.
+
+### Verified on device
+
+| Check | Result |
+|---|---|
+| No bar before acknowledgement, or on a non-rest card | Confirmed |
+| `REST_15_MIN` → `14:56 left`, bar filling | Confirmed |
+| `REST_1_MIN` → `0:55 left` — same code, different duration | Confirmed |
+| Kill and relaunch mid-rest resumes (`13:22 left`, not 15:00) | Confirmed |
+| Card auto-removes at the deadline | Confirmed via logcat timestamps |
+
+> **A measurement note worth keeping.** The auto-removal looked broken twice — it appeared to
+> fire at ~17s instead of 60s. It was not: the elapsed time was being measured from the start
+> of each *tooling command*, while the acknowledgement had happened in a previous one, so ~43s
+> had already passed unrecorded. `adb logcat` settled it in one step because its lines carry
+> **absolute** timestamps: acknowledged 00:35:41.178, `dismissAt` 00:36:41.178, countdown
+> running continuously to 8100ms at 00:36:33. When a timing result looks wrong, check what the
+> clock is anchored to before changing the code.
+
+---
+
+## SCRUM-205 — Localisation
+
+Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-localisation-plan.md).
+**All seven languages have landed.**
+
+| Language | Code | Script | Family | Status |
+|---|---|---|---|---|
+| English | `en` | Latin | Gelasio | Shipped — source of truth |
+| Simplified Chinese | `zh-Hans` | Han | Gelasio + system | Shipped |
+| Hindi | `hi` | Devanagari | Gelasio + system | Shipped — see the Hindi note below |
+| Malay | `ms` | Latin | Gelasio | Shipped — machine-drafted, awaiting native review |
+| **Tamil** | `ta` | Tamil | **Noto Sans Tamil** | Shipped — machine-drafted, awaiting native review |
+| **Bengali** | `bn` | Bengali | **Noto Sans Bengali** | Shipped — machine-drafted, awaiting native review |
+| **Burmese** | `my` | Myanmar | **Noto Sans Myanmar** | Shipped — Unicode only, awaiting native review |
+
+### Why Malay went first
+
+It was the only one of the four in Latin script, so it rendered in Gelasio with no font work
+at all. That made it the vertical slice: it exercised `languagesArr`, the `AppLanguage` type,
+`resolveDeviceLanguage`, the i18n registration and both pickers — the Settings sheet and the
+sign-in screen — with the font problem held out. It also surfaced a latent `AppButton` layout
+bug (Problem 10) that had nothing to do with localisation and everything to do with being the
+first two-word label in the app.
+
+### The font layer
+
+Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek and has **no glyphs at all**
+for Tamil, Bengali or Myanmar. Rendering them in it produces tofu, or a silent fall back to
+whatever the system has. So each script gets its Noto family:
+
+- `familyFor(language)` resolves the family from the **active language**, not by inspecting
+  each string. Every string is in one language at a time, so per-string script detection
+  would cost work on every text node to answer a question the language already answers.
+- The Noto families include basic Latin, so `32.4 °C WBGT` on a Tamil screen draws from one
+  face instead of falling back per glyph.
+- `lineHeightBoostFor(language)` widens the line box for the three new scripts. Bengali hangs
+  a matra across the top of a word and all three carry vowel signs below the baseline; the
+  1.35 ratio tuned for Gelasio clips them, and it clips *subtly* — a diacritic loses its top
+  and the word is still nearly right, which is how a wrong word reaches a worker.
+- All four weights (400/500/600/700) were **checked to exist** in all four families rather
+  than assumed. Noto subsets do not uniformly ship every weight.
+- Every family loads at startup in `App.tsx`. The same reasoning that bundles translations
+  applies to the faces that draw them: a worker who loses signal mid-shift must not lose
+  their language, and a font fetched on language-switch would fail on exactly the site phone
+  this app is built for.
+
+**Hindi is deliberately still on the system fallback.** It is Devanagari, which Gelasio also
+lacks, but it shipped long before this change and has been rendering through the OS all
+along. Moving it to a Noto family is a visual change to an already-shipped language and
+deserves its own ticket with its own before-and-after — not a silent ride-along in this one.
+
+### Burmese is Unicode only
+
+Recorded here because the plan required the decision be made explicitly and because the
+failure mode looks like a bad translation rather than an encoding mismatch.
+
+`my.json` is Myanmar **Unicode** (U+1000–U+109F), not Zawgyi. Myanmar's national migration to
+Unicode completed in 2019 and Android 12+ ships Unicode Myanmar fonts, so Zawgyi is treated as
+legacy: not detected, not transcoded. A worker on a Zawgyi-only device sees garbled Burmese
+and can switch language from the sign-in picker, which is reachable precisely so that a phone
+left in an unreadable language is never a dead end.
+
+**Do not "fix" garbled Burmese by transcoding the file to Zawgyi.** The file carries the same
+warning in its `_encoding` key.
+
+### Translation review status — read before shipping `ms`
+
+`ms.json` is **machine-drafted and has not been reviewed by a native speaker.** The file
+carries this warning in its own `_translationStatus` key, and `i18n.ts` repeats it at the
+registration site.
+
+The same is true of `ta.json`, `bn.json` and `my.json`.
+
+These keys must be signed off by a native speaker of each language before it is offered in
+production:
+
+- `lightning.*` — the stop-work and advisory banners
+- `actions.*` — every dispatched instruction
+- `guidance.*` — the heat plan (currently behind `features.heatGuidanceCard`)
+- `wbgt.superseded`, `freshness.staleWarning`, `freshness.delayedWarning`
+
+A mistranslated stop-work instruction is an incident, not a typo.
+
+Two judgement calls in the draft worth a reviewer's attention:
+
+- **`lightning.stopWorkTitle` → "BERHENTI KERJA".** Kept in caps to match the English, which
+  is the loudest string in the app.
+- **`inbox.acknowledgeButton` → "Akui terima"** rather than a bare "Akui". The worker is
+  confirming *receipt* of an instruction, not agreeing with it, and the distinction matters
+  on a screen whose whole purpose is proving the instruction arrived.
+
+### `id` (Indonesian) is deliberately not mapped to `ms`
+
+`resolveDeviceLanguage` does **not** route Indonesian device locales to Malay, despite the
+two being largely mutually intelligible in writing. They diverge in exactly the register
+this app occupies — safety and workplace vocabulary — and silently showing an Indonesian
+speaker Malay would be a guess made on their behalf about a stop-work instruction.
+Indonesian falls through to English, and the worker can pick Malay themselves if they prefer
+it. Same reasoning as the existing `zh-Hant` carve-out.
+
+### Server-authored text cannot be translated by this app
+
+Found while reviewing the Inbox in Malay: the action **titles** translated, the instruction
+**bodies** stayed in English.
+
+That is not a missing key. `ActionDispatch.instruction` is free text the server authors — a
+supervisor's own words attached to a dispatched action — and `DispatchCard` renders it
+verbatim. No locale file can reach it, because it is runtime data rather than a key.
+
+```
+Rehat selama 15 minit                              ← actions.REST_15_MIN, translated
+Take a continuous 15-minute rest in the shaded…    ← dispatch.instruction, server text
+```
+
+**What was done here.** The mock dispatch server now resolves its instruction bodies through
+i18n at read time, which is what a localising server would do — the seed holds a key under
+`dev.mockInstruction.*` and `materialise()` renders it per request. A language change shows
+up on the next inbox poll rather than needing a restart.
+
+**What that does not fix.** The real `ActionDispatchController` still returns whatever text
+the supervisor typed. A Malay-speaking worker on the real backend reads the instruction in
+the supervisor's language. The action title carries the safety meaning and *is* translated,
+so this degrades rather than fails — but it needs a backend answer, and the options are the
+usual three: translate at dispatch time, store a structured code plus parameters instead of
+prose, or accept it and make the title authoritative. **Worth its own ticket.**
+
+`ROTATE_TO_LIGHT_DUTY` was also added to `actions.*` in all four locales. It had been left
+out deliberately so the card would demonstrate its `humaniseActionCode` fallback — but a
+real catalogue code rendering in English on a localised screen is too high a price for a
+demonstration. The fallback still guards every code the backend adds ahead of this app's
+translations, which is the case it exists for.
+
+### Verified on device, and what that turned up
+
+All three new languages were driven on a 1344×2992 @480dpi emulator: language picker, My
+shift, Inbox, Settings, and a force-stop-and-relaunch to confirm the choice persists.
+
+- **All three scripts render.** No tofu, no system fallback. Burmese even picks up Burmese
+  numerals in the shift window (`၁၉:၃၉ မှ ၂:၃၉`), because `Intl` formats against the active
+  locale.
+- **The Inbox is fully translated**, instruction bodies included — those come from
+  `dev.mockInstruction.*` via the mock dispatch server, which resolves them through i18n at
+  read time. Server-authored instruction text on the *real* backend is still untranslatable;
+  see the note above.
+- **Tab labels had to be shortened for Tamil and Burmese.** `என் பணிமுறை` and
+  `ကျွန်ုပ်၏ အလှည့်` both truncated to `…` in the tab bar. No font or layout change fixes
+  this — a tab bar has a hard width budget, and the honest fix is a shorter label. Tamil
+  `tabs.shift`/`tabs.inbox` and Burmese `tabs.shift`/`tabs.profile` are therefore *not*
+  literal translations of the English; they are tab-sized. This is the text-expansion risk
+  the plan predicted, landing exactly where it said it would.
+
+Still unverified: **iOS**, and the largest text setting in the new scripts. Both are where
+the extra line-height matters most.
+
+### Locale parity check
+
+```bash
+npm run check:locales
+```
+
+Fails the build when any locale drifts from `en.json`. Four fault classes, all of them
+otherwise silent:
+
+1. **Missing key** — i18next falls back to English and renders it mid-screen. No error, no
+   warning, no crash. Invisible to `tsc` and to anyone reviewing a diff in a language they
+   do not read.
+2. **Extra key** — a stale key left behind by a removal, which is how a translator's work
+   quietly stops being rendered.
+3. **Placeholder drift** — a dropped `{{time}}` leaves a sentence with a hole in it; a
+   renamed one prints literal braces to the user.
+4. **Wrong script** — a string written in a script that belongs to a different locale.
+   Added because it actually happened while drafting the three new files: one value in
+   `ta.json` was Bengali. Valid JSON, right key, right placeholders, and unreadable to the
+   person it was written for. A reviewer catches that only if they read both scripts.
+
+The script check ignores Latin, which legitimately appears in every file — "CrewSafe",
+"WBGT", "°C", the email placeholder. It also excludes U+0964/U+0965, the danda and double
+danda: Unicode files them under Devanagari but they are shared Indic punctuation, and
+treating them as Devanagari flagged every correctly written Bengali sentence. That was four
+false positives before a single true one, and **a check that cries wolf on correct input is
+worse than no check, because the next person turns it off.**
+
+Keys beginning with `_` are metadata and are skipped. The script exits non-zero on failure,
+so it can be wired into CI beside `tsc --noEmit`.
+
+---
+
 ## SCRUM-196 / 197 — My shift screen reorder and strip
 
 Two ordering tickets that arrived alongside a set of content removals. **Everything removed
@@ -919,6 +1403,88 @@ text beside them. There was no clash to fix.
 `title` vs `subtitle` heading, and the `urgent` pulse against Advisory's `steady` and Clear's
 stillness. That redundancy is load-bearing — colour washes out first in glare and fails first
 for red-green colour blindness — and a future consistency pass should not flatten it.
+
+---
+
+### Problem 10 — Button labels silently truncated at a space, on every card but the first
+
+**Symptom.** The Malay inbox rendered the acknowledge button as **"Akui terima"** on the
+first card and **"Akui"** on every card below it. No ellipsis, no error, no warning. It
+survived a full reload, so it was not Fast Refresh leaving stale cells.
+
+**What it was not.** The first instinct — a missing or wrong translation — was wrong, and
+checking cost nothing: `ms.json` contains exactly one `inbox.acknowledgeButton`, its value is
+`"Akui terima"`, and no key anywhere in the file produces a bare `"Akui"`. All three buttons
+were being handed the same string. `AppButton`, `AppText` and `DispatchCard` have no
+`numberOfLines`, `ellipsizeMode` or `adjustsFontSizeToFit` between them, so nothing was
+deliberately truncating either.
+
+**Two wrong diagnoses first**, both plausible, both shipped, neither correct. Recorded because
+the reasoning that produced them is the trap:
+
+1. *"The row is under-measured in a virtualised cell."* Gave the content row `width: "100%"`.
+   No effect.
+2. *"A `Text` that is itself the flex-shrinking node clips instead of wrapping."* Moved the
+   shrink onto a `View` wrapper. No effect.
+
+Both were inferred from the symptom without measuring. The device split — a Fold rendering
+correctly beside an XL that did not, same bundle — was read as evidence *for* a
+geometry-dependent measurement path, when it was really just a clue that something depended
+on available width. **Reasoning about layout produced two confident, wrong answers; the
+first measurement produced the right one in a single step.**
+
+**What measurement showed.** An `onLayout` probe on every node, plus Android's own
+accessibility tree via `uiautomator dump`, on a 1344×2992 @480dpi emulator:
+
+```
+Yoga    "Akui terima"  content=326.0  wrap=97.3  text=97.3  h=24.3   ← identical on all 3
+Android text="Akui terima"  bounds [525,1038][817,1111]              ← 292px = 97.33dp × 3
+        text="Akui terima"  bounds [525,1931][817,2004]              ← renders as "Akui"
+```
+
+The string was never truncated, the node was never wrong, and all three cards measured
+**identically**. Yoga measured one line, 97.33dp wide. Android was handed a text box of
+exactly that width, decided the line needed marginally more, and **broke at the space**. The
+box is one line tall because Yoga measured one line — so the second line was clipped, and
+`textAlign: center` re-centred the survivor. A clipped line disguised as a shorter string.
+
+**The controlled experiment that proved it.** Same glyphs, space removed — `"Akuiterima"` —
+rendered in full on every card. That isolates the line break as the trigger and rules out
+width, font, virtualisation and locale in one step.
+
+**Fix.** `flex: 1` on the label wrapper, so the label's box is derived from the button's
+width instead of from its own measured content. There is then nothing marginal to get wrong.
+Two device-independent pixels of slack were tried first and did *not* help, which is what
+ruled out simple sub-pixel rounding.
+
+Icon buttons keep the old shrink-to-fit sizing (`titleWrap`), because a full-width label
+pushes the icon to the far edge and breaks the centred icon-plus-label pairing. They are not
+exposed to the bug today: every icon button lives on a plain `ScrollView` screen, none inside
+a recycled cell. **If an icon button is ever placed in a virtualised list, give it
+`titleFill` and find another way to keep the icon adjacent.**
+
+**Why English never showed it.** "Acknowledge" is a single word with nowhere to break. The bug
+has been latent since the button was written and needed a two-word label to surface — which
+localisation duly provided. Hindi and Chinese labels are long, but none had yet offered a
+clean break point in the middle.
+
+Verified on-device after the fix: both cards render "Akui terima", and `⚙ Tetapan` keeps its
+icon beside the label.
+
+> **Verify on more than one device.** This was invisible on one emulator and reproducible on
+> another from the same bundle. A single-device pass would have signed it off twice: once
+> because English has no space to break at, and once because the Fold is wide enough not to
+> care.
+
+> **Measure before theorising about layout.** Two fixes were shipped on inference and neither
+> worked. `onLayout` logging and `adb shell uiautomator dump` — which reports the real text
+> and bounds of every node — answered it immediately, and the no-space experiment confirmed
+> it. Both are cheap; neither was tried until the third attempt.
+
+> The general lesson is the one worth keeping: **a label that renders correctly in English is
+> not evidence the layout is correct.** Truncation bugs hide behind single-word labels, and a
+> translation is the first thing that will find them. This is an argument for reviewing
+> screens in the *longest* language, not the default one.
 
 ---
 

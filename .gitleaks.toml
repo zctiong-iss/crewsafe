@@ -1,0 +1,85 @@
+# gitleaks configuration for WBGT CrewSafe SG (SCRUM-178)
+#
+# Runs on every pull request and push to main, plus a weekly full-history sweep.
+# See docs/runbooks/SCRUM-178-sast-and-secret-scanning.md for how to read a
+# finding and what to do about one.
+#
+# ---------------------------------------------------------------------------
+# ALLOWLIST POLICY -- read before adding an entry
+# ---------------------------------------------------------------------------
+# A finding is a signal to ROTATE the credential at its source. Removing a
+# secret from git does not make an exposed secret safe, and neither does
+# allowlisting it. Allowlist entries are for genuine false positives only.
+#
+# Every entry MUST:
+#   1. carry a `description` stating why the match is not a real credential;
+#   2. be scoped to a specific path and/or regex -- never a whole directory.
+#
+# Never add a directory-wide exclusion. Excluding, say, .github/cognito/**
+# would blind this gate in precisely the area that handles identity
+# credentials, which is the opposite of what it exists to do.
+#
+# Never add an entry to accommodate a test fixture. The gate's own tests
+# generate synthetic credentials at runtime inside throwaway repositories
+# (.github/scripts/tests/lib/harness.sh), so no secret-shaped fixture is
+# committed and none needs allowlisting. An allowlist broad enough to permit a
+# fixture would also be broad enough to mask a real leak.
+# ---------------------------------------------------------------------------
+
+title = "CrewSafe gitleaks config"
+
+# Inherit the upstream default rule set, then narrow with the allowlist below.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated and vendored content, plus this config's own examples. Not authored code."
+paths = [
+  # Build output and dependency locks are generated, not authored. A match here
+  # is noise that would mask real findings in hand-written code.
+  '''^backend/target/''',
+  '''(^|/)node_modules/''',
+  '''\.terraform\.lock\.hcl$''',
+
+  # This file documents credential-shaped example patterns in its own comments.
+  '''^\.gitleaks\.toml$''',
+]
+
+# ---------------------------------------------------------------------------
+# SCRUM-178 baseline sweep, 2026-08-04
+# ---------------------------------------------------------------------------
+# The first full-history sweep (253 commits) produced 5 findings, all in
+# documentation authored 2026-07-29 and since deleted from main. Each was
+# inspected individually and is a placeholder, not a credential:
+#
+#   backend/COGNITO_SETUP_GUIDE.md:135,136  truncated JWT examples ("eyJ...")
+#   TESTING_REPORT.md:286                   "Bearer invalid-token" (a 401 test)
+#   COGNITO_LOCAL_TESTING.md:328            "Bearer COGNITO_TOKEN" placeholder
+#   BACKEND_IMPLEMENTATION_ROADMAP.md:722   example idempotency key
+#
+# No rotation was required because no real credential was exposed.
+#
+# These are scoped by COMMIT, not by path. Commits are immutable, so the
+# exemption covers exactly the five historical matches and nothing else: if any
+# of these files ever returns carrying a genuine secret, the new commit is still
+# scanned and still blocked. A path-scoped entry would have blinded the gate to
+# that, in files that discuss identity credentials.
+[[allowlists]]
+description = "SCRUM-178 baseline: placeholder JWTs and example idempotency key in Cognito/backend documentation (deleted from main). Inspected 2026-08-04; not real credentials."
+commits = [
+  "a1c607ef19c9b2bb0f2e5be32ec0469544e6aecd",
+]
+
+[[allowlists]]
+description = "SCRUM-178 baseline: literal 'Bearer invalid-token' in a 401-response test example. Inspected 2026-08-04; not a real credential."
+commits = [
+  "c925b8e9cf83538990fee2bb006a69cd40dda322",
+]
+
+[[allowlists]]
+description = "SCRUM-178 baseline: literal 'Bearer COGNITO_TOKEN' placeholder in the local Cognito testing guide. Inspected 2026-08-04; not a real credential."
+commits = [
+  "40aaf60251b5fed7ecff81d52a1553a533aff1cf",
+]
+
+# New entries go below, one per finding, each with its own description.

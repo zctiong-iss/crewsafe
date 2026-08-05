@@ -61,6 +61,12 @@ const AppButton: FC<AppButtonProps> = ({
 
   const active = palette[variant];
 
+  /*
+   * Whether anything sits to the left of the label, which decides how the label is sized.
+   * See `titleFill` for the measured reason the two cases differ.
+   */
+  const hasLeading = loading || Boolean(icon);
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -92,16 +98,26 @@ const AppButton: FC<AppButtonProps> = ({
         ) : (
           icon && <View style={styles.icon}>{icon}</View>
         )}
-        <AppText
-          variant="label"
-          style={[
-            styles.title,
-            { color: isInactive ? theme.colors.onDisabled : active.text },
-            styleTitle,
-          ]}
-        >
-          {title}
-        </AppText>
+        {/*
+          The label is wrapped, and the wrapper is what flexes — never the Text.
+
+          A `Text` that is itself the flex-sizing node gets its box sized to its own measured
+          content, and Android then lays the string out inside a box that can be a hair
+          narrower than the width Yoga reported. It breaks the line at a space and, because
+          the box is only one line tall, silently drops everything after the break.
+        */}
+        <View style={hasLeading ? styles.titleWrap : styles.titleFill}>
+          <AppText
+            variant="label"
+            style={[
+              styles.title,
+              { color: isInactive ? theme.colors.onDisabled : active.text },
+              styleTitle,
+            ]}
+          >
+            {title}
+          </AppText>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -122,17 +138,60 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    // Without this the row keeps its intrinsic width and the label runs past the button's
-    // rounded edge. Hindi and Simplified Chinese labels are materially longer than the
-    // English ones they were laid out against — "खाते का अनुरोध करें" for "Request an
-    // account" — so this is load-bearing, not defensive.
+    /*
+     * A definite width rather than shrink-to-fit.
+     *
+     * The row previously sized to its own content, which made the width available to the
+     * label depend on when the row happened to be measured. That is not stable inside a
+     * virtualised list.
+     */
+    width: "100%",
+  },
+  /*
+   * ── WHY THE LABEL TAKES THE WHOLE ROW WHEN IT CAN ───────────────────────────────────────
+   * Measured on a 1344x2992 @480dpi emulator, Malay inbox, three identical buttons:
+   *
+   *   Yoga measured the label at 97.33dp x 24.3dp — one line, full width of "Akui terima".
+   *   Android's accessibility tree agreed: text="Akui terima", bounds 292px wide.
+   *   The screen drew "Akui", centred, on every card except the first.
+   *
+   * The string was never truncated and the node was never wrong. Android was handed a text
+   * box sized to the label's own measured width, decided the line needed marginally more
+   * than that, and broke at the space. The box is one line tall because Yoga measured one
+   * line, so the second line was clipped — and `textAlign: center` re-centred the survivor,
+   * which is what disguised a clipped line as a shorter string.
+   *
+   * Proof it was the line break and not the width, the font, the list or the locale: the
+   * same glyphs with the space removed ("Akuiterima") rendered in full on every card.
+   *
+   * `flex: 1` gives the label a box derived from the button's width instead of from its own
+   * content, so there is nothing marginal to get wrong. Two device-independent pixels of
+   * slack were tried first and did not fix it, which is what ruled out simple rounding.
+   *
+   * English hid this for the life of the app: "Acknowledge" is one word with nowhere to
+   * break. It took a two-word label to surface, and a narrower device — a Fold rendered the
+   * same bundle correctly beside an XL that did not.
+   */
+  titleFill: {
+    flex: 1,
+  },
+  /*
+   * The icon case keeps the old shrink-to-fit sizing, so an icon still sits beside its label
+   * as a centred pair rather than being pushed to the far edge by a full-width label.
+   *
+   * That leaves icon buttons theoretically exposed to the bug above. They are not exposed in
+   * practice: every one of them lives on a plain ScrollView screen — Profile, Settings,
+   * sign-in, the shift-list header — and none is rendered inside a recycled `FlatList` cell,
+   * which is where the width instability comes from. **If an icon button is ever put inside
+   * a virtualised list, give it `titleFill` and find another way to keep the icon adjacent.**
+   */
+  titleWrap: {
     flexShrink: 1,
   },
   title: {
     textAlign: "center",
-    // Lets the text wrap inside the button instead of overflowing it. The button uses
-    // minHeight rather than height precisely so a wrapped label can grow the button.
-    flexShrink: 1,
+    // Deliberately no flex properties. Giving the Text itself a flex role is the defect
+    // described above; it inherits a settled width from its wrapper and wraps inside it.
   },
   icon: {
     marginEnd: s(8),

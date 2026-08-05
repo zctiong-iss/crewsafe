@@ -235,3 +235,37 @@ attachment state to its already-declared public target group only. Apply
 matched that exact `0 added, 2 changed, 0 destroyed` plan and completed successfully. The public
 CloudFront health endpoint returned HTTP 200 after apply. The earlier partially applied cleanup
 plan remains stale and must never be retried.
+
+### Security-group cleanup remediation after apply run 30894811215
+
+Final-cleanup apply
+[run 30894811215, job 91945094565](https://github.com/zctiong-iss/crewsafe/actions/runs/30894811215/job/91945094565)
+used reviewed plan `30894744664` from source
+`be78323cb459c057696ce3324f9b961df158fea8`. It successfully deleted the unprotected legacy ALB,
+then failed deleting `aws_security_group.lb` because the apply role lacked
+`ec2:DescribeNetworkInterfaces`, which the AWS provider uses to inspect ENI dependencies during
+security-group deletion. The plan is stale after the ALB deletion and must never be retried.
+
+The remediation revision temporarily re-declares only the surviving empty security group under its
+original name, description, VPC, and tags. It also adds only `ec2:DescribeNetworkInterfaces` to
+`ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule` in the reviewed apply-role policy; the plan
+role does not receive the permission. Before generating a remediation plan, an operator must update
+the live `CrewSafeComputeTerraformApply` customer-managed policy from
+`infra/terraform/compute/iam/apply-role-policy.json` as described in the SCRUM-176 runbook. The
+remediation plan should then be no-change for the adopted security group. A subsequent fresh
+final-cleanup revision removes the temporary declaration and uses a new reviewed plan to delete only
+that group. Confirm the public health endpoint remains HTTP 200 after each apply.
+
+The remediation plan applied in
+[run 30895356128, job 91946851517](https://github.com/zctiong-iss/crewsafe/actions/runs/30895356128/job/91946851517)
+from merged source `26fb591a222a9c3446d8aeb1b9605c49e343a8e8` completed with
+`0 added, 0 changed, 0 destroyed`. This proves the temporary declaration adopted the surviving
+security group without drift after the live apply-role policy was updated. The public health path
+remained available.
+
+The final revision removes only the temporary `aws_security_group.lb` declaration and restores the
+categorical source guard that forbids the legacy group. Its fresh reviewed plan must show exactly
+one destroy for `aws_security_group.lb`, with no additions, changes, replacements, or public-path
+effects. Apply only that exact plan once, then verify `/actuator/health` returns HTTP 200 and run a
+fresh convergence plan expecting no changes. `ec2:DescribeNetworkInterfaces` remains a required
+provider read permission for the apply role's authorized security-group deletion capability.
