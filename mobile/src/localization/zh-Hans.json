@@ -104,7 +104,9 @@
 
   "tabs": {
     "shift": "我的班次",
-    "inbox": "收件箱",
+    "alerts": "提醒",
+    "alertsA11yCount": "提醒，{{count}} 项未确认",
+    "alertsA11yAllDone": "提醒，全部已确认",
     "weather": "天气",
     "shifts": "班次",
     "profile": "我的",

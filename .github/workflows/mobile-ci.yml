@@ -1,0 +1,72 @@
+name: Mobile CI
+
+# The mobile app had no CI of its own: typecheck, locale parity and (until now)
+# tests were only ever run by hand. Everything here is fast and hermetic — no
+# emulator, no Metro, no network — so it can gate every pull request that
+# touches mobile/ without slowing the queue.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  workflow_dispatch:
+
+# Path-filtered deliberately, unlike the security workflow: a secret can be
+# committed anywhere, but a mobile typecheck tells you nothing about a
+# Terraform change.
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, locales and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # A missing translation key does not error, warn or crash — i18next falls
+      # back to English and renders it mid-screen on a safety surface. This is
+      # the only thing that catches it.
+      - name: Locale parity
+        run: npm run check:locales
+
+      # `--ci` keeps a missing snapshot a failure rather than something quietly
+      # written into the workspace and committed later.
+      - name: Tests
+        run: npm run test:coverage
+
+      # Retained so a coverage regression is visible in the PR even though
+      # SonarQube does not yet read it — see docs/plans for the JaCoCo
+      # prerequisite that blocks wiring coverage into the Quality Gate.
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: mobile-coverage
+          path: mobile/coverage/lcov.info
+          if-no-files-found: warn
+          retention-days: 7

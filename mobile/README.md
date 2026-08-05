@@ -757,6 +757,110 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-208 — Alerts rename and unacknowledged badge
+
+Plan: [`docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md`](../docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md).
+
+The Inbox is now **Alerts**, and its tab icon carries a live count of the actions the worker
+still owes: `3`, then `2`, then no number and a bell with a tick.
+
+### The count, and what it deliberately includes
+
+```
+unacknowledged = visibleDispatches.filter(item => !acknowledged[item.id]).length
+```
+
+| Case | Counts? | Why |
+|---|---|---|
+| Pending | yes | owed |
+| Acknowledgement **in flight** | yes | stops counting when the *server* confirms, not when the button is pressed |
+| Acknowledgement **failed** | yes | owed until the server says otherwise; the card keeps its retry |
+| **Rest in progress** | **no** | the record exists the moment the server confirmed — the timer is a separate concern |
+| Dismissed (SCRUM-207) | no | already gone from the list |
+
+The rest case is the one the story asked for by name, and it needed no code: it falls out of
+"has an acknowledgement record". Special-casing it would have been the way to get it wrong.
+
+### The count lives in the slice, not the screen
+
+`selectVisibleDispatches` / `selectUnacknowledgedCount` / `selectAllAcknowledged` are memoised
+selectors on `dispatchInboxSlice`, and `InboxScreen` now reads the first of them instead of
+deriving its own list.
+
+The badge is drawn by the tab navigator while other screens are in front, so the screen cannot
+own the derivation. Two copies of "what is on screen" drift the moment one of them learns
+about a new state — and the thing that would then be quietly wrong is a count of outstanding
+safety instructions.
+
+### The poll had to move, and that is the real change
+
+`useAutoRefresh` is `useFocusEffect`-based: the inbox polled only while its own screen was
+focused. That is correct for a screen's own data, and the battery reasoning in that file
+stands.
+
+It is wrong for a badge. A tab badge exists to report what arrived **while the worker was
+somewhere else**, so under the old arrangement a newly dispatched action would not move the
+count until the worker opened the very screen the badge was meant to send them to. The NFR is
+"visible to an online worker within 60 seconds" and focus-gated polling cannot meet it from
+another tab.
+
+So the dispatch poll moved to `WorkerTabs` via a new `useForegroundRefresh` — same
+foreground-awareness, no focus gate. **Nothing polls while the app is backgrounded**; the
+battery argument still holds there, and a phone in a pocket has nobody to show a badge to.
+`InboxScreen`'s own poll was removed rather than left in place, or every request would have
+doubled whenever Alerts happened to be the screen in front.
+
+Weather and shifts stay focus-gated. Neither drives anything visible from another screen.
+
+### Icon states
+
+| State | Icon | Badge |
+|---|---|---|
+| One or more unacknowledged | bell | the count |
+| All acknowledged, cards still on screen | bell + green tick | none |
+| List empty | bell | none |
+
+An empty list gets the **plain** bell. "Nothing has arrived" and "you have dealt with
+everything" are different facts and only the second earns a tick — `selectAllAcknowledged`
+checks `visible.length > 0` for exactly that reason.
+
+The tick is composed over the bell rather than swapped for a different glyph, so the icon
+gains a mark instead of appearing to change shape. It is drawn in the success colour, not the
+tab tint: the tint says which tab is selected, the tick says the work is done, and those must
+not be the same signal.
+
+The count is also stated in words via `tabBarAccessibilityLabel` — "Alerts, 2 unacknowledged"
+— because a small numeral on a tab icon is the first thing to disappear in glare, and is
+invisible to a screen reader entirely.
+
+### Rename scope
+
+`tabs.inbox` → `tabs.alerts`, valued "Alerts" in all seven locales. One key drives both the
+tab label and the stack header, so they cannot drift.
+
+`InboxScreen.tsx`, the `inbox.*` block, `dispatchInboxSlice` and `api/endpoints/dispatch.ts`
+keep their names. They track the API concept —
+`GET /api/action-dispatch/worker/{id}/pending` really is an inbox of dispatched actions — not
+the label a worker reads. Renaming them would bury the behaviour change in a large diff and
+move the code further from the endpoint it mirrors.
+
+### Verified on device
+
+Badge showed `3` **while on My shift**, which is the whole point — then `2` after
+acknowledging the rest card *with its timer still running*, then `1`, then no badge and the
+checked bell. Header and tab both read "Alerts".
+
+**One finding worth a decision.** In Burmese the badge renders `3` in ASCII while the shift
+times on the same screen render `၉:၁၄` in Burmese numerals, because `Intl` formats the times
+and React Navigation renders the badge value directly. Left as ASCII deliberately: the badge
+is a compact glyph on an icon where Burmese numerals are wider, and the count is already
+announced in words for anyone the numeral fails. It is an inconsistency, not a defect — but
+it is a product call, so it is recorded here rather than left to be discovered.
+
+No tab label truncated in Burmese, which was the other flagged risk.
+
+---
+
 ## SCRUM-207 — Auto-dismiss and swipe-to-clear
 
 Plan: [`docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md`](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md).

@@ -106,7 +106,9 @@
 
   "tabs": {
     "shift": "Syif saya",
-    "inbox": "Peti masuk",
+    "alerts": "Makluman",
+    "alertsA11yCount": "Makluman, {{count}} belum diakui",
+    "alertsA11yAllDone": "Makluman, semua telah diakui",
     "weather": "Cuaca",
     "shifts": "Syif",
     "profile": "Profil",

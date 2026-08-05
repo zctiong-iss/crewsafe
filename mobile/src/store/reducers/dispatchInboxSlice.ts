@@ -21,7 +21,7 @@
  * scope here, but the ticket is explicit that the key must not be skipped now, because
  * retrofitting one onto already-queued items is not possible.
  */
-import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";
 import { acknowledgeDispatch, fetchPendingDispatches } from "@/api/endpoints/dispatch";
 import { dismissAtFor, restDeadlineFor } from "@/helpers/restDuration";
@@ -339,5 +339,72 @@ const dispatchInboxSlice = createSlice({
 
 export const { idempotencyKeyAssigned, dismissFailure, dismissed, resetAcknowledgements } =
   dispatchInboxSlice.actions;
+
+/* ------------------------------- Selectors ------------------------------- */
+
+/**
+ * What the worker can actually see: the server's PENDING rows plus this device's own
+ * acknowledgements, minus anything already dismissed.
+ *
+ * ── WHY THIS LIVES HERE AND NOT IN THE SCREEN ───────────────────────────────────────────
+ * The Alerts tab badge (SCRUM-208) counts the same rows the list renders, and it is drawn by
+ * the tab navigator while other screens are in front. If the screen owned this derivation the
+ * badge would need its own copy, and two copies of "what is on screen" drift the first time
+ * one of them learns about a new state — which for a count of outstanding safety instructions
+ * is a number that would then be quietly wrong.
+ *
+ * Memoised, because it is read by both the list and the navigator on every render.
+ */
+export const selectVisibleDispatches = createSelector(
+  [
+    (state: RootState) => state.dispatchInbox.pending,
+    (state: RootState) => state.dispatchInbox.acknowledged,
+    (state: RootState) => state.dispatchInbox.dismissedIds,
+  ],
+  (pending, acknowledged, dismissedIds) => {
+    const byId = new Map<string, ActionDispatch>();
+    for (const item of pending) byId.set(item.id, item);
+    for (const record of Object.values(acknowledged)) {
+      byId.set(record.dispatch.id, record.dispatch);
+    }
+    /*
+     * Dismissed ids come out last, and the order matters. The acknowledgement records
+     * deliberately survive dismissal — they keep a replayed acknowledgement idempotent — so
+     * the loop above happily puts a dismissed card back. Filtering after the union is what
+     * makes "hidden" stick.
+     */
+    for (const id of dismissedIds) byId.delete(id);
+    return [...byId.values()].sort((a, b) => b.dispatchedAt.localeCompare(a.dispatchedAt));
+  },
+);
+
+/**
+ * How many visible actions the worker still owes.
+ *
+ * "Owed" means no acknowledgement record, which has three consequences worth stating because
+ * each is a decision rather than a side effect:
+ *
+ *   • A **failed** acknowledgement still counts. The action is owed until the server says
+ *     otherwise, and the card keeps its retry button.
+ *   • An **in-flight** acknowledgement still counts. It stops counting when the server
+ *     confirms, not when the button is pressed — the badge must never report work the
+ *     supervisor has not been told about.
+ *   • A **rest in progress** does not count. The record is written the moment the server
+ *     confirms; the running timer is a separate concern. This is the behaviour SCRUM-208
+ *     asks for and it falls out of the definition — special-casing it would be the way to
+ *     get it wrong.
+ */
+export const selectUnacknowledgedCount = createSelector(
+  [selectVisibleDispatches, (state: RootState) => state.dispatchInbox.acknowledged],
+  (visible, acknowledged) => visible.filter((item) => !acknowledged[item.id]).length,
+);
+
+/** True when there is something on screen and every last one of it is acknowledged. */
+export const selectAllAcknowledged = createSelector(
+  [selectVisibleDispatches, selectUnacknowledgedCount],
+  // The length check is the difference between "you have dealt with everything" and "nothing
+  // ever arrived". Only the first earns a tick on the icon.
+  (visible, outstanding) => visible.length > 0 && outstanding === 0,
+);
 
 export default dispatchInboxSlice.reducer;
