@@ -23,7 +23,7 @@ the repository already carried Cognito testing documentation.
 |---|---|
 | `.github/workflows/security-scan.yml` | Three checks: `Secret Scan`, `SAST (SonarQube)`, `Gate Self-Tests`. No path filter. |
 | `.github/scripts/security/install-scanners.sh` | Pinned gitleaks 8.30.1, SHA-256 verified before execution |
-| `.github/scripts/security/scan-secrets.sh` | Commit-range scan on PRs, full history on `main` and weekly |
+| `.github/scripts/security/scan-secrets.sh` | Commit-range scan on PRs, full history on a daily schedule |
 | `.github/scripts/security/report-findings.sh` | Annotations + job summary; the only script that reads a raw report |
 | `.github/scripts/tests/` | 39 tests: 12 secret gate, 12 reporter, 15 config lint |
 | `.gitleaks.toml` | Allowlist with the baseline-sweep entries |
@@ -95,6 +95,31 @@ check fails rather than skips. `pull_request_target` is deliberately not used.
 plugin and the stock gate would block every merge at 0% coverage for a non-security reason.
 
 **Adding a new source tree needs a `sonar.sources` edit**, unlike the secret gate.
+
+## Post-implementation changes
+
+**2026-08-06 — SAST scope.** The original design ran analysis via `sonar-maven-plugin`
+bound to `backend/pom.xml`. That plugin resolves `sonar.sources` relative to the invoked
+module's own basedir and is documented to silently skip paths outside it, even with
+`sonar.projectBaseDir` set — a known upstream limitation for non-multi-module Maven
+projects. `web/` and `mobile/` were never actually analysed despite being declared and
+despite the check reporting green. Replaced with the official
+`SonarSource/sonarqube-scan-action` (the standalone `sonar-scanner` CLI, pinned by commit
+SHA), which has no Maven module-scoping concept and reads `sonar-project.properties`
+natively. Full account in
+[ADR 0010's 2026-08-06 addendum](../adr/0010-sonarqube-cloud-for-sast.md).
+
+**2026-08-07 — triggers.** Moved the full-history secret sweep from weekly to daily. The
+`push`-to-`main` trigger was removed the same day, then **restored a few hours later**
+once its second purpose became clear: `push` is the only thing that refreshes
+SonarQube's own `main` branch snapshot (the Code tab / dashboard view — separate from
+each PR's own analysis, which is unaffected either way). With `push` gone and `SAST`
+already excluding `schedule` runs by design, `main`'s snapshot had no trigger left at
+all, and was found stuck showing a stale, backend-only analysis from *before* the
+`sonar-maven-plugin` → scan-action fix above — the exact under-scanning bug this branch
+exists to fix, just frozen in place on `main` instead of live. `push` stays; the daily
+sweep stays too, as an independent backstop for anything that lands outside a normal
+pull request.
 
 ## Remaining manual steps
 

@@ -8,13 +8,21 @@ on:
     branches: [main]
   push:
     branches: [main]
+    # Also the ONLY thing that refreshes SonarQube's own "main" branch
+    # snapshot (the Code/dashboard view, distinct from PR-scoped analysis).
+    # Removed briefly on 2026-08-07 to save SAST's analysis quota on merge
+    # commits, then restored the same day: with no push trigger, main's
+    # snapshot never updates at all (SAST already excludes schedule below,
+    # by design), and it was discovered stuck on a stale, wrong-scope
+    # analysis from before the sonar-maven-plugin -> scan-action fix. See
+    # docs/plans/SCRUM-178-sast-and-secret-scanning-plan.md.
   schedule:
-    # Weekly full-history sweep (FR-002a), midnight Sunday Singapore time
-    # (UTC+8). cron: is always UTC on GitHub Actions, so 00:00 SGT Sunday is
-    # 16:00 UTC the preceding Saturday. GitHub disables scheduled workflows
-    # after 60 days of repository inactivity -- a quiet period is not a clean
-    # sweep. See docs/runbooks/SCRUM-178-sast-and-secret-scanning.md.
-    - cron: "0 16 * * 6"
+    # Daily full-history sweep (FR-002a), midnight Singapore time (UTC+8).
+    # cron: is always UTC on GitHub Actions, so 00:00 SGT is 16:00 UTC the
+    # preceding day. GitHub disables scheduled workflows after 60 days of
+    # repository inactivity -- a quiet period is not a clean sweep. See
+    # docs/runbooks/SCRUM-178-sast-and-secret-scanning.md.
+    - cron: "0 16 * * *"
   workflow_dispatch:
 
 permissions:
@@ -32,7 +40,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           # Full history: required for merge-base resolution on pull requests
-          # and for the full-history sweep on main and on schedule.
+          # and for the full-history sweep on push, schedule, and
+          # workflow_dispatch.
           fetch-depth: 0
 
       - name: Install scanners
@@ -100,7 +109,9 @@ jobs:
     runs-on: ubuntu-latest
     # A scheduled run adds nothing for SAST -- it analyses the current tree, not
     # history -- and would consume free-plan quota for no signal. The secret
-    # sweep is the point of the scheduled run.
+    # sweep is the point of the scheduled run. SAST still runs on push, though:
+    # that is what keeps SonarQube's own "main" branch snapshot (the
+    # Code/dashboard view) current, distinct from each PR's own analysis.
     if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
@@ -133,75 +144,37 @@ jobs:
             exit 1
           fi
 
+      # Java bytecode only -- no Sonar plugin runs here. The Java analyzer
+      # needs compiled classes (sonar.java.binaries=backend/target/classes) for
+      # full analysis; the actual scan is a separate step below.
+      - name: Compile backend for Java bytecode analysis
+        working-directory: backend
+        run: ./mvnw -B -DskipTests compile
+
+      # SCRUM-178, 2026-08-06: this used to run via sonar-maven-plugin bound to
+      # backend/pom.xml. That silently under-scanned the repo -- the Sonar
+      # Maven plugin resolves sonar.sources relative to the invoked module's
+      # own basedir and is documented to skip paths outside it even when
+      # sonar.projectBaseDir is set (a known upstream limitation for
+      # non-multi-module Maven projects, not something our config could work
+      # around). web/ and mobile/ were being silently dropped.
+      #
+      # The official scanner action has no such module-scoping concept: it
+      # reads sonar-project.properties natively from the repo root (its
+      # projectBaseDir default is ".", i.e. wherever the step runs, which is
+      # the checkout root) and analyses exactly the sources declared there --
+      # backend/, web/, and mobile/ alike. No manual property-loading or path
+      # rewriting needed; that hand-rolled bash block is gone.
       - name: Analyse with SonarQube Cloud
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # -DskipTests is deliberate: the Quality Gate carries no coverage
-        # condition (backend/pom.xml has no JaCoCo plugin), and backend-ci.yml
-        # already runs the tests. Re-running them would duplicate the slowest
-        # part of CI.
-        #
-        # sonar.qualitygate.wait=true is what makes this a gate at all. Without
-        # it the step exits 0 regardless of the Quality Gate result.
-        #
-        # sonar-project.properties is loaded explicitly below and passed as -D
-        # flags. The Maven Sonar plugin does NOT read that file itself -- that
-        # format is a sonar-scanner-CLI convention only, and it being silently
-        # ignored was the root cause of a "must define sonar.organization"
-        # failure here (SCRUM-178, 2026-08-06): every property in that file,
-        # including the analysed-paths list, was invisible to this step.
-        #
-        # sonar.projectBaseDir is required because paths in that file are
-        # written relative to the REPO ROOT (so they can reach web/ and
-        # mobile/, which sit outside the backend/ Maven module), while this
-        # step's working directory is backend/. Without it, every path would
-        # resolve relative to backend/ and silently match nothing outside it
-        # -- a passing gate that quietly analyses less than it claims to.
-        run: |
-          set -euo pipefail
-          props_file="${GITHUB_WORKSPACE}/sonar-project.properties"
-          if [ ! -f "$props_file" ]; then
-            echo "::error::sonar-project.properties not found at repo root"
-            exit 1
-          fi
-
-          absolutize_path_list() {
-            local value="$1"
-            local path
-            local absolute_paths=()
-            IFS=',' read -ra paths <<<"$value"
-            for path in "${paths[@]}"; do
-              absolute_paths+=("${GITHUB_WORKSPACE}/${path}")
-            done
-            local IFS=','
-            printf '%s' "${absolute_paths[*]}"
-          }
-
-          args=()
-          while IFS= read -r line || [ -n "$line" ]; do
-            case "$line" in
-              ''|'#'*) continue ;;
-            esac
-            key="${line%%=*}"
-            value="${line#*=}"
-            [ -n "$key" ] || continue
-            case "$key" in
-              sonar.sources|sonar.tests|sonar.java.binaries)
-                value="$(absolutize_path_list "$value")"
-                ;;
-            esac
-            args+=("-D${key}=${value}")
-          done <"$props_file"
-
-          # Run the Maven wrapper from the repo root and point it at the
-          # backend module. Running mvnw from inside `backend/` caused the
-          # Sonar plugin to resolve relative paths against the module base,
-          # producing duplicated paths like backend/backend/src/main.
-          ./backend/mvnw -B -DskipTests -f backend/pom.xml compile \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:5.1.0.4751:sonar \
-            "${args[@]}" \
-            -Dsonar.projectBaseDir="${GITHUB_WORKSPACE}" \
-            -Dsonar.qualitygate.wait=true \
+        with:
+          # sonar.qualitygate.wait=true is what makes this a gate at all.
+          # Without it the step exits 0 regardless of the Quality Gate result
+          # -- the single most likely way to ship a SAST gate that never gates.
+          args: >
+            -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=600
 
   gate-tests:

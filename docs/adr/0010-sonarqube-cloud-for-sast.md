@@ -170,6 +170,43 @@ this trial capability must not become the *permanent* basis for a required check
 deliberate follow-up decision — if the trial lapses before a subscription decision is made,
 the project reverts to Sonar way and this addendum's constraint applies again.
 
+## Addendum, 2026-08-06 — the Maven-plugin mechanism silently under-scanned the repo
+
+The Decision above originally specified analysis "via `sonar-maven-plugin`", invoked as
+`org.sonarsource.scanner.maven:sonar-maven-plugin:sonar` bound to `backend/pom.xml`. This
+failed in CI in two stages, and the second failure was the more serious of the two because
+it did not fail loudly.
+
+**First**: the plugin does not read `sonar-project.properties` at all — that file format is
+a `sonar-scanner`-CLI convention, and the Maven plugin ignores it entirely. CI failed
+immediately with *"You must define the following mandatory properties for
+'com.crewsafe:crewsafe-backend': sonar.organization"*, because every property in that file,
+including `sonar.organization`, was invisible to the step.
+
+**Second**, after a workaround that manually parsed the properties file in bash and passed
+each value as a Maven `-D` flag: analysis ran and reported a passing gate, but it was
+silently analysing less than it claimed. The Sonar Maven plugin resolves `sonar.sources`
+relative to the *invoked module's own basedir* — here, `backend/` — and is documented to
+skip source paths outside it, even with `sonar.projectBaseDir` explicitly set to the repo
+root. This is a known upstream limitation for non-multi-module Maven projects (see
+[Sonar Community: "sonar.projectBaseDir doesn't work with non-multi-module projects"](https://community.sonarsource.com/t/sonar-projectbasedir-doesnt-work-with-non-multi-module-projects/321)).
+Concretely, `web/` and `mobile/` were never analysed, despite `sonar.sources` naming them,
+and despite the check reporting green — exactly the "passing gate that quietly analyses
+less than it claims to" failure mode Principle II exists to prevent.
+
+**Resolution**: replaced the Maven-plugin invocation with the official
+`SonarSource/sonarqube-scan-action` (the standalone `sonar-scanner` CLI, pinned by commit
+SHA per this repo's convention). It has no Maven module-scoping concept and reads
+`sonar-project.properties` natively from the repository root — which is what that file
+format was designed for, and what this ADR's own Decision table already assumed before the
+implementation quietly diverged from it. Maven is still used, but only to `compile` the
+backend module so the Java analyzer has bytecode to read (`sonar.java.binaries`); no Sonar
+plugin runs as part of that step.
+
+`.github/scripts/tests/test-sast-gate-config.sh` now asserts the workflow uses the scan
+action and does not reference the Maven plugin, so this class of regression cannot recur
+silently a second time.
+
 ## References
 
 - `docs/runbooks/SCRUM-178-sast-and-secret-scanning.md` — operating the gates

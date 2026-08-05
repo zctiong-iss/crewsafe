@@ -8,18 +8,29 @@ Tool choice and its trade-offs are recorded in
 
 | Check | Tool | Blocks on | Triggers |
 |---|---|---|---|
-| `Secret Scan` | gitleaks 8.30.1 (pinned, checksum-verified) | any secret finding | PR, push to `main`, weekly, manual |
+| `Secret Scan` | gitleaks 8.30.1 (pinned, checksum-verified) | any secret finding | PR, push to `main`, daily, manual |
 | `SAST (SonarQube)` | SonarQube Cloud, free plan | Quality Gate fail (`Blocker`/`High` in new code) | PR, push to `main`, manual |
-| `Gate Self-Tests` | shell | any gate test failing | PR, push to `main`, manual |
+| `Gate Self-Tests` | shell | any gate test failing | PR, push to `main`, daily, manual |
 
 The workflow has **no `paths:` filter**, deliberately. A secret can be committed
 anywhere. Before this change the only gitleaks run lived inside the path-filtered
 Terraform workflow, so a `backend/`-only pull request received no secret scan at all.
 
+**push-to-`main` is required, not optional — it is the only thing that refreshes
+SonarQube's own "main" branch snapshot** (the Code tab / dashboard view, distinct from
+each PR's own analysis). This was removed briefly on 2026-08-07 to save SAST's analysis
+quota on merge commits, then restored the same day: with no push trigger, `main`'s
+snapshot never updates at all — `SAST (SonarQube)` already excludes `schedule` runs, by
+design — and it was found stuck showing a stale, wrong-scope analysis from before the
+`sonar-maven-plugin` → scan-action fix (`main` had last been scanned by the old,
+backend-only mechanism, and nothing had re-scanned it since). If you ever need to remove
+`push` again for cost reasons, add SAST to the daily schedule first so `main` keeps
+refreshing some other way.
+
 **Secret scan scope** differs by trigger: a pull request scans its own commit range
-(merge-base → HEAD), while `main` and the weekly schedule scan the full history. A
-secret added and then deleted within a branch is still caught — deleting it from the tip
-does not remove it from history.
+(merge-base → HEAD), while push to `main` and the daily schedule both scan the full
+history. A secret added and then deleted within a branch is still caught — deleting it
+from the tip does not remove it from history.
 
 ## Reading a result
 
@@ -139,7 +150,7 @@ green. Making a trial capability blocking is a new decision requiring its own re
 | Sonar reports "not authorized" | Token expired or revoked | Rotate `SONAR_TOKEN`. The gate fails closed meanwhile, which is correct. |
 | Secret scan exits 2 on a PR | Merge-base unresolvable, usually a shallow clone | Confirm `fetch-depth: 0` on checkout. |
 | SAST green suspiciously fast | `sonar.qualitygate.wait` missing — step exits 0 without waiting for the gate | `Gate Self-Tests` asserts this; check that job ran. |
-| Weekly sweep stopped appearing | GitHub disables scheduled workflows after 60 days of repository inactivity | Re-enable in the Actions tab. **A quiet period is not a clean sweep.** |
+| Daily sweep stopped appearing | GitHub disables scheduled workflows after 60 days of repository inactivity | Re-enable in the Actions tab. **A quiet period is not a clean sweep.** |
 
 ## Running the gates locally
 
