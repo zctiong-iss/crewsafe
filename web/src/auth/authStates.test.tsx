@@ -57,7 +57,7 @@ describe("auth states", () => {
   it("renders the app once the backend resolves the user", async () => {
     renderApp({}, vi.fn().mockResolvedValue(jsonResponse(currentUser)));
 
-    expect(await screen.findByRole("heading", { name: "Live board" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 
   /**
