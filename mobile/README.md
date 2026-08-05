@@ -757,6 +757,130 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-209 Part 3 — Condition backdrops on the Weather hero card
+
+Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
+
+The Conditions hero card now has a background that reflects the weather — a sun glow and a
+drifting cloud on a fair day, scattered rain under a cloud, stars at night. **Nothing else on
+the card changed**: same fields, same fonts, same layout, same copy.
+
+### A backdrop is data, not a component
+
+```
+types.ts       what a backdrop is: a wash + a list of motes
+registry.ts    what each condition looks like        ← the swap point
+shapes.ts      cloud() and rain() helpers, returning plain motes
+WeatherBackdrop.tsx   draws whatever the registry says, knows no condition by name
+```
+
+Replacing a backdrop is editing one entry in `registry.ts`. Deleting a key renders the plain
+card — never an empty frame, which is the same reasoning
+[`WeatherIcon`](src/components/weather/WeatherIcon.tsx) gives for refusing to ship a stub
+branch: a blank box reads as a broken asset, an absent one reads as a plain card.
+
+Keys are `FAIR`, `PARTLY_CLOUDY`, `CLOUDY`, `WINDY`, `RAIN`, `THUNDERY_SHOWERS`, plus
+`FAIR-night` and `PARTLY_CLOUDY-night` — the same `${condition}${night ? "-night" : ""}` string
+`WeatherIcon` already computes, and the same sparse night map (rain, wind, cloud and storms
+look the same after dark).
+
+### No new dependency and no assets
+
+The plan scoped this to "the mechanism and a coded default", with designed Lottie artwork
+explicitly out of scope — commissioning and licensing it is separate work with a different
+kind of decision in it. So the backdrops are built from `Animated` views, the same API
+`AnimatedIcon` already uses. When artwork does land, it replaces registry entries.
+
+### Reduce Motion is obeyed in full, with no `essential` carve-out
+
+`AnimatedIcon` has an `essential` escape hatch for motion that *carries* meaning — the
+stop-work pulse, where the tempo is the warning. This is the opposite case: the icon and the
+label already say "Rain", so the movement is atmosphere and nothing reads it. Taking the
+exemption here would weaken the argument protecting the one place it matters.
+
+Because SCRUM-199 defaults the preference **on**, the still state is the common case, not an
+edge one. Every spec is authored to look finished without motion.
+
+| Setting | Hero card |
+|---|---|
+| Motion allowed | animated backdrop |
+| Reduce Motion (in-app or OS) | still backdrop, same condition |
+| High contrast | **no backdrop at all** — plain surface |
+
+High contrast removes it entirely rather than dimming it. That mode exists so a worker can
+read the card in direct sun, and illustration behind a display-size WBGT reading defeats
+exactly that. Any wash that survived a contrast check against every text colour would be so
+scrimmed it is no longer a backdrop.
+
+Animation also stops when the Weather tab is not focused (`useIsFocused`) — the same battery
+argument that keeps the weather poll focus-gated.
+
+### The contrast budget is computed, not eyeballed
+
+The plan named legibility as the whole risk and asked for the **busiest** frame to be checked,
+not the calmest. A reviewer cannot reliably find the worst frame of a loop, so
+`backdropContrast.test.ts` does it: it samples the card on a grid, composites every mote whose
+travel envelope can reach each point, and fails if the darkest point drops any text colour
+below 4.5:1. Checked at three card aspect ratios, because the card gets taller as the font
+scale rises.
+
+**The first version of that test was wrong and had to be replaced.** It stacked every mote in
+a spec onto one pixel, which sounds conservative and is not: rain is eight drops spread across
+the card that can never coincide, and pricing them as one pixel forces every drop to an alpha
+where rain is invisible. Modelling the geometry is what lets the backdrop be visible and
+provably legible at once.
+
+`THUNDERY_SHOWERS` is dimmer than a storm wants to be for this reason — it failed at 4.36:1
+and its wash and drops were lowered until it passed. That is the budget working.
+
+### Two things that only showed up on the emulator
+
+Both were in the **still** state, which is the state most workers will see.
+
+**A frozen flash is not lightning, it is a beige blob.** The storm's flash mote parked at full
+opacity behind the WBGT reading. Fixed with `RESTING_FADE` in `WeatherBackdrop` — `flash`
+rests at 0.15 and only the animation reaches full. The contrast test still prices it at its
+peak.
+
+**A cloud drawn as one rounded rectangle reads as a UI panel** that has drifted onto the card,
+and eight raindrops parked at the same height read as a dashed rule. Fixed in `shapes.ts`: a
+cloud is three overlapping circles sharing one motion, and `rain()` scatters its drops across
+both axes.
+
+### Colours are literal, and night is cooler rather than darker
+
+The registry does not use `styles/colors.ts`. That palette is semantic — `danger` means stop
+work — and reaching into it for illustration would tie a decorative shape to a safety colour,
+so darkening the danger red for contrast would silently restyle the rain.
+
+Night could not be dark. CrewSafe has no dark palette; both themes put black text on a white
+surface, so a dark wash would fail AA on the one screen a supervisor reads a temperature from.
+Night is expressed as cooler and dimmer in *hue*.
+
+### Reverting
+
+Delete the `<WeatherBackdrop …>` element from `WeatherScreen.tsx` and the `overflow: "hidden"`
+line added to `styles.hero`. The card returns to exactly what it was. To drop one condition
+only, delete its key from `BACKDROPS`.
+
+### Verified on the emulator (Pixel, `mock` auth mode)
+
+- All six conditions via the dev scenario switcher; night via "Observed after dark".
+- Storm, fair and fair-night captured; text fully legible against each.
+- **High contrast: no backdrop**, plain card with thick borders — confirmed on device.
+- **Extra large text (1.5x)**: the backdrop scales with the card and stays in proportion,
+  which is what the percentage geometry is for.
+- Reduce Motion off: motion runs. Reduce Motion on (the default): still backdrop, not blank.
+- 13 tests — 6 behavioural, 7 contrast × conditions × ratios (49 assertions).
+
+**One pre-existing defect noticed, not touched.** In high contrast the metrics card's meta row
+truncates "After dark" to "After". It is the same class as
+[Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first)
+— a line broken at a space and clipped — and it is unrelated to this ticket, so it is recorded
+here rather than fixed in it.
+
+---
+
 ## SCRUM-209 Part 2 — Live weather from the ingestion API
 
 Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).

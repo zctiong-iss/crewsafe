@@ -30,6 +30,7 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import WeatherIcon from "@/components/weather/WeatherIcon";
+import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
 import FreshnessBadge from "@/components/safety/FreshnessBadge";
 import FreshnessNotice from "@/components/safety/FreshnessNotice";
 
@@ -193,6 +194,16 @@ export default function WeatherScreen() {
                 { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
               ]}
             >
+              {/* Absolutely positioned behind everything below it, and only on this card —
+                  the Heat conditions card on My shift was stripped to a single reading in
+                  SCRUM-196, and decoration behind a safety number there would reverse that
+                  with no discussion. Draws nothing in high contrast. */}
+              <WeatherBackdrop
+                condition={derived.condition}
+                night={derived.night}
+                radius={theme.metrics.radius}
+              />
+
               <WeatherIcon
                 condition={derived.condition}
                 night={derived.night}
@@ -364,6 +375,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: s(18),
     marginTop: vs(12),
+    // The backdrop is absolutely filled and its motes travel; without this a drifting cloud
+    // leaves the card. `overflow` clips children on both platforms even where a shadow is
+    // drawn outside, which is why `cardSurface`'s elevation still shows.
+    overflow: "hidden",
   },
   conditionLabel: {
     marginTop: vs(10),
