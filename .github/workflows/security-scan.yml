@@ -181,12 +181,16 @@ jobs:
           test -s mobile/coverage/sonar-lcov.info
           grep -q '^SF:mobile/src/' mobile/coverage/sonar-lcov.info
 
-      # Java bytecode only -- no Sonar plugin runs here. The Java analyzer needs
-      # compiled main and test classes plus dependency jars for precise
-      # cross-file analysis; the actual scan is a separate step below.
-      - name: Compile backend and tests for Java bytecode analysis
+      # Runs tests (not just compile) for two reasons: the Java analyzer needs
+      # compiled main and test classes (sonar.java.binaries/test.binaries), and
+      # jacoco-maven-plugin's report execution -- bound to the test phase --
+      # is what produces the coverage XML the Quality Gate's "Coverage on New
+      # Code" condition reads (sonar.coverage.jacoco.xmlReportPaths). This
+      # duplicates backend-ci.yml's test run; accepted so the gate reflects
+      # real coverage instead of a hardcoded 0%.
+      - name: Compile and test backend (bytecode + coverage for SonarQube)
         working-directory: backend
-        run: ./mvnw -B -DskipTests test-compile
+        run: ./mvnw -B test
 
       - name: Prepare backend dependencies for SonarQube
         working-directory: backend
