@@ -42,6 +42,11 @@ app:
     api-key: ${NEA_API_KEY:}
     connect-timeout: ${NEA_CONNECT_TIMEOUT:5s}
     read-timeout: ${NEA_READ_TIMEOUT:10s}
+    # Retry only temporary transport, rate-limit, and server failures. Backoff is bounded so
+    # one scheduled poll cannot wait indefinitely when data.gov.sg is unavailable.
+    max-attempts: ${NEA_MAX_ATTEMPTS:3}
+    initial-backoff: ${NEA_INITIAL_BACKOFF:250ms}
+    max-backoff: ${NEA_MAX_BACKOFF:2s}
 
   weather:
     data:

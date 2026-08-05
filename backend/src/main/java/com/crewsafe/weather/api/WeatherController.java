@@ -51,7 +51,8 @@ public class WeatherController {
             WeatherQualityStatus qualityStatus,
             String stationId) {
 
-        static LatestWeatherResponse from(WeatherObservation observation) {
+        static LatestWeatherResponse from(WeatherQueryService.LatestSiteWeather latest) {
+            WeatherObservation observation = latest.observation();
             return new LatestWeatherResponse(
                     observation.getId(),
                     observation.getSiteId(),
@@ -63,7 +64,7 @@ public class WeatherController {
                     observation.getObservedAt(),
                     observation.getIngestedAt(),
                     observation.getSource(),
-                    observation.getQualityStatus(),
+                    latest.qualityStatus(),
                     observation.getStationId());
         }
     }

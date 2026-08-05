@@ -1,5 +1,7 @@
 package com.crewsafe.weather.nea;
 
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -31,4 +33,23 @@ public class NeaApiProperties {
 
     @NotNull
     private Duration readTimeout;
+
+    /** Total attempts for retryable transport, rate-limit, and server failures. */
+    @Min(1)
+    private int maxAttempts = 3;
+
+    @NotNull
+    private Duration initialBackoff = Duration.ofMillis(250);
+
+    @NotNull
+    private Duration maxBackoff = Duration.ofSeconds(2);
+
+    @AssertTrue(message = "NEA retry backoff durations must be positive")
+    public boolean isRetryBackoffValid() {
+        return isPositive(initialBackoff) && isPositive(maxBackoff);
+    }
+
+    private boolean isPositive(Duration duration) {
+        return duration != null && !duration.isZero() && !duration.isNegative();
+    }
 }

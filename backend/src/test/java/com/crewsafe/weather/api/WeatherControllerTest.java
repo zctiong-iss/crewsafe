@@ -69,7 +69,8 @@ class WeatherControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.rainfall").value(0.0))
                 .andExpect(jsonPath("$.observedAt").value("2026-08-03T01:15:00Z"))
                 .andExpect(jsonPath("$.source").value("NEA"))
-                .andExpect(jsonPath("$.qualityStatus").value("LIVE"))
+                // Freshness is evaluated now, not frozen as LIVE when the old row was stored.
+                .andExpect(jsonPath("$.qualityStatus").value("STALE"))
                 .andExpect(jsonPath("$.stationId").value("S-test"));
     }
 

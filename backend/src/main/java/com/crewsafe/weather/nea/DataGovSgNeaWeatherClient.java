@@ -1,6 +1,7 @@
 package com.crewsafe.weather.nea;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -10,6 +11,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -36,6 +38,7 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
 @ConditionalOnProperty(prefix = "app.weather.data", name = "mode", havingValue = "live",
         matchIfMissing = true)
 @RequiredArgsConstructor
+@Slf4j
 public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
 
     private static final String WBGT_ENDPOINT_PATH = "/weather";
@@ -50,6 +53,7 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     );
 
     private final RestClient neaRestClient;
+    private final NeaApiProperties properties;
 
     @Override
     public NeaObservation fetch(NeaMetric metric) {
@@ -171,21 +175,65 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     }
 
     private <T> T execute(String operation, Supplier<T> request) {
-        try {
-            return request.get();
-        } catch (RestClientResponseException exception) {
-            throw new NeaApiException(HTTP,
-                    "data.gov.sg " + operation + " request failed with HTTP "
-                            + exception.getStatusCode().value(), exception);
-        } catch (ResourceAccessException exception) {
-            throw new NeaApiException(TRANSPORT,
-                    "data.gov.sg " + operation + " request could not be completed", exception);
-        } catch (NeaApiException exception) {
-            throw exception;
-        } catch (RestClientException exception) {
-            throw new NeaApiException(INVALID_RESPONSE,
-                    "data.gov.sg " + operation + " response could not be decoded", exception);
+        Duration backoff = properties.getInitialBackoff();
+        for (int attempt = 1; attempt <= properties.getMaxAttempts(); attempt++) {
+            try {
+                return request.get();
+            } catch (RestClientException exception) {
+                NeaApiException failure = translateFailure(operation, exception);
+                if (!isRetryable(exception) || attempt == properties.getMaxAttempts()) {
+                    throw failure;
+                }
+
+                log.warn("data.gov.sg {} attempt {}/{} failed; retrying after {}",
+                        operation, attempt, properties.getMaxAttempts(), backoff);
+                waitBeforeRetry(operation, backoff);
+                backoff = nextBackoff(backoff);
+            }
         }
+        throw new IllegalStateException("NEA retry loop completed without a result");
+    }
+
+    private NeaApiException translateFailure(String operation, RestClientException exception) {
+        if (exception instanceof RestClientResponseException responseException) {
+            return new NeaApiException(HTTP,
+                    "data.gov.sg " + operation + " request failed with HTTP "
+                            + responseException.getStatusCode().value(), responseException);
+        }
+        if (exception instanceof ResourceAccessException) {
+            return new NeaApiException(TRANSPORT,
+                    "data.gov.sg " + operation + " request could not be completed", exception);
+        }
+        return new NeaApiException(INVALID_RESPONSE,
+                "data.gov.sg " + operation + " response could not be decoded", exception);
+    }
+
+    private boolean isRetryable(RestClientException exception) {
+        if (exception instanceof ResourceAccessException) {
+            return true;
+        }
+        if (exception instanceof RestClientResponseException responseException) {
+            int status = responseException.getStatusCode().value();
+            return status == 429 || responseException.getStatusCode().is5xxServerError();
+        }
+        return false;
+    }
+
+    private void waitBeforeRetry(String operation, Duration backoff) {
+        try {
+            Thread.sleep(backoff);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new NeaApiException(TRANSPORT,
+                    "data.gov.sg " + operation + " retry was interrupted", exception);
+        }
+    }
+
+    private Duration nextBackoff(Duration current) {
+        Duration doubled = current.multipliedBy(2);
+        return doubled.compareTo(properties.getMaxBackoff()) > 0
+                ? properties.getMaxBackoff()
+                : doubled;
     }
 
     private void validateEnvelope(String operation, Integer code, String errorMessage) {
