@@ -1,8 +1,11 @@
-# SCRUM-209 — Rest swipe fix, and live weather from the ingestion API
+# SCRUM-209 — Rest swipe fix, live weather, and animated condition backgrounds
 
-Two pieces of work in one ticket. They are unrelated in mechanism and share only a release:
-the first is a regression fix in the Alerts list, the second replaces simulated weather with
-the readings the backend already ingests.
+Three pieces of work in one ticket. They are unrelated in mechanism and share only a release:
+a regression fix in the Alerts list, replacing simulated weather with the readings the backend
+already ingests, and giving the Weather hero card a backdrop that reflects the condition.
+
+Parts 2 and 3 both touch the Weather screen, so they are sequenced together — but Part 3
+depends on nothing in Part 2 and can ship first if the backend band work runs long.
 
 ---
 
@@ -156,8 +159,115 @@ concludes the wiring failed when a fixture value appears.
 
 ---
 
+## Part 3 — A condition backdrop on the Weather hero card
+
+### Outcome
+
+The Weather screen's hero card gains a background that reflects the current condition — rain
+falling, cloud drifting, sun turning — in the spirit of a consumer weather app. Backgrounds are
+**swappable by design**: replacing one is adding a file and a map entry, not editing a
+component.
+
+### The swap mechanism, which already has a documented shape
+
+`WeatherIcon.tsx` describes the pattern for its own icons, and Part 3 reuses it rather than
+inventing a second one:
+
+1. Assets live in `src/assets/animations/`.
+2. A `Record<string, ...>` keyed by `` `${condition}${night ? "-night" : ""}` `` — the string
+   the weather code already computes.
+3. A hit renders the asset; a miss falls through to the default. **A missing entry must render
+   the plain card, never an empty box** — a blank frame looks like a broken asset rather than an
+   unfinished registry, which is the same reason `WeatherIcon` refuses to ship a stub branch.
+4. A `.web.tsx` sibling if Lottie is used: `lottie-react-native`'s web entry breaks the web
+   bundle, which is why `LottieSpinner.web.tsx` exists.
+
+Six conditions — `FAIR`, `PARTLY_CLOUDY`, `CLOUDY`, `WINDY`, `RAIN`, `THUNDERY_SHOWERS` — plus
+optional night variants, so up to twelve keys.
+
+### What ships now: the mechanism and a coded default
+
+No designed artwork is commissioned by this ticket. What ships is the registry, the fallback
+behaviour, and a lightweight backdrop per condition built with the `Animated` API already used
+by `AnimatedIcon` — no new dependency, no new assets, no licensing question.
+
+That ordering is the point of the request. Once the registry exists, dropping in designed
+Lottie files later is a file and a map entry, and the decision about whether a given animation
+"fits the background card" becomes reversible in one line.
+
+### Reduce Motion: this one is decorative, and must behave like it
+
+The stop-work pulse and the rest progress bar are exempt from the in-app Reduce Motion
+preference because their motion *carries information* — urgency in one case, time remaining in
+the other. **A condition backdrop carries none.** The icon and the label already say "Rain";
+the animation is atmosphere.
+
+So it respects the preference in full, with no `essential` carve-out. Using that exemption here
+would weaken the argument protecting the stop-work pulse, which is the one place it genuinely
+matters.
+
+Because SCRUM-199 makes the preference default to **on**, that means most workers will never
+see the motion — so every condition ships a **still** state as well: a static frame or gradient
+that makes the card look designed rather than merely unanimated. The animation is the
+enhancement; the still is the feature.
+
+| Setting | Hero card |
+| --- | --- |
+| Motion allowed | animated backdrop |
+| Reduce Motion (in-app or OS) | still backdrop for the same condition |
+| High contrast | no backdrop at all — plain surface |
+
+### High contrast removes the backdrop entirely
+
+High contrast exists so a worker can read the screen in direct sun. The hero card carries the
+WBGT reading at `display` size plus four labels, and putting illustration behind them defeats
+the one mode that makes them legible. In high contrast the card renders exactly as it does
+today.
+
+This is not a compromise to revisit later. Any backdrop that survives a contrast check against
+every text colour on the card would be so heavily scrimmed that it is no longer the thing that
+was asked for.
+
+### Scope
+
+The **Weather hero card only**. The Heat conditions card on My shift was deliberately stripped
+to a single reading in SCRUM-196, and putting decoration behind a safety number on the worker's
+main screen would reverse that with no discussion.
+
+Nothing else on the card changes: same fields, same fonts, same layout, same copy.
+
+### Risks
+
+**Legibility is the whole risk.** Every text colour on that card must still pass AA against the
+busiest frame of each backdrop, not the calmest — a light rain animation with a bright flash is
+readable for 90% of its loop and not for the rest. Check the worst frame.
+
+**Battery and frame budget.** A looping full-card animation runs the whole time the screen is
+open, on a phone that has to last an outdoor shift. It should stop when the screen is not
+focused, the way the polls already do.
+
+**Bundle size** if Lottie assets land later: twelve JSON files is not free, and every one ships
+to every worker regardless of the weather they will see.
+
+### Acceptance
+
+- Each of the six conditions renders its own backdrop; night variants where provided.
+- An unmapped condition renders the plain card, with no empty box and no error.
+- Reduce Motion (in-app or OS) shows the still backdrop, not a frozen animation and not nothing.
+- High contrast shows no backdrop.
+- Every label and the WBGT reading pass AA against the busiest frame of every backdrop.
+- The animation stops when the Weather screen is not focused.
+- Swapping one condition's backdrop is a one-line change, demonstrated in review.
+- Verified on two device geometries and in a non-Latin language.
+
+---
+
 ## Out of scope
 
 Lightning (`GET /sites/{siteId}/lightning`) remains unimplemented server-side, so the stop-work
 banner stays mocked and its `SIMULATED` marker stays honest. The heat guidance card is still
 behind `features.heatGuidanceCard`; if the band lands, revisiting that flag is its own decision.
+
+Commissioning or licensing designed animation assets. Part 3 delivers the mechanism and a coded
+default; sourcing artwork — including checking the licence on anything taken from LottieFiles —
+is separate work with a different kind of decision in it.
