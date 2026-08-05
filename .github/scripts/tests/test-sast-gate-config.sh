@@ -114,6 +114,13 @@ check "sast job uses the official Sonar scan action, not the Maven plugin" \
 check "backend is compiled (Java bytecode analysis needs .class files)" \
   "$([[ "$sast" == *"compile"* ]] && echo true || echo false)"
 
+check "mobile LCOV import path is declared" \
+  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "SAST generates and prepares mobile coverage before scanning" \
+  "$([[ "$sast" == *"npm run test:coverage"* ]] && \
+     [[ "$sast" == *"mobile/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
+
 # Kept as a lightweight style guard, not a correctness requirement: the scan
 # action's own properties reader handles Java-properties backslash
 # continuation correctly (unlike the removed hand-rolled bash loader), but
@@ -123,12 +130,12 @@ check "sonar-project.properties values are single-line (style)" \
   "$(without_comments "$SONAR_PROPS" | grep -qE "$continuation_re" && echo false || echo true)"
 
 # --- Quality Gate composition (research R2a) -------------------------------
-# backend/pom.xml has no JaCoCo plugin, so a coverage condition would report 0%
-# and block every merge for a reason unrelated to security. If coverage is ever
-# introduced deliberately, JaCoCo must land first and this assertion updated.
+# backend/pom.xml has no JaCoCo plugin, so a Java coverage condition would
+# report 0% and block every merge for a reason unrelated to security. Mobile
+# JavaScript/TypeScript LCOV import is intentionally allowed independently.
 
-check "no coverage condition configured while JaCoCo is absent" \
-  "$(grep -qi 'jacoco' "$POM" && echo skip || (without_comments "$SONAR_PROPS" | grep -qi 'coverage' && echo false || echo true))"
+check "no Java coverage condition configured while JaCoCo is absent" \
+  "$(grep -qi 'jacoco' "$POM" && echo skip || (without_comments "$SONAR_PROPS" | grep -qE '(^|[[:space:]])sonar\\.coverage\\.jacoco\\.xmlReportPaths=' && echo false || echo true))"
 
 # --- frontend coverage (FR-004 / US3) ---------------------------------------
 # web/ and mobile/ landed real TypeScript/React source during this branch's
