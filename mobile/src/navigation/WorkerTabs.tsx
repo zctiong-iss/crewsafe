@@ -52,6 +52,20 @@ export default function WorkerTabs() {
     REFRESH_INTERVALS.INBOX_MS,
   );
 
+  /*
+   * The Alerts tab's spoken label, resolved as a flat sequence rather than a chained
+   * conditional inside the options object.
+   *
+   * Three states, and each one reads as its own sentence here: outstanding work, everything
+   * done, or nothing to say. Nesting them as ternaries put the least important case at the
+   * deepest indent and made the whole thing one expression to be parsed backwards.
+   */
+  const alertsLabel = (() => {
+    if (outstanding > 0) return t("tabs.alertsA11yCount", { count: outstanding });
+    if (allAcknowledged) return t("tabs.alertsA11yAllDone");
+    return t("tabs.alerts");
+  })();
+
   return (
     <Tab.Navigator screenOptions={tabScreenOptions(theme)}>
       <Tab.Screen
@@ -85,12 +99,7 @@ export default function WorkerTabs() {
            * reader entirely. The badge is the fast version; this is the one that always
            * works.
            */
-          tabBarAccessibilityLabel:
-            outstanding > 0
-              ? t("tabs.alertsA11yCount", { count: outstanding })
-              : allAcknowledged
-                ? t("tabs.alertsA11yAllDone")
-                : t("tabs.alerts"),
+          tabBarAccessibilityLabel: alertsLabel,
         }}
       />
       <Tab.Screen
