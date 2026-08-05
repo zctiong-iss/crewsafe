@@ -8,23 +8,29 @@ Tool choice and its trade-offs are recorded in
 
 | Check | Tool | Blocks on | Triggers |
 |---|---|---|---|
-| `Secret Scan` | gitleaks 8.30.1 (pinned, checksum-verified) | any secret finding | PR, daily, manual |
-| `SAST (SonarQube)` | SonarQube Cloud, free plan | Quality Gate fail (`Blocker`/`High` in new code) | PR, manual |
-| `Gate Self-Tests` | shell | any gate test failing | PR, daily, manual |
+| `Secret Scan` | gitleaks 8.30.1 (pinned, checksum-verified) | any secret finding | PR, push to `main`, daily, manual |
+| `SAST (SonarQube)` | SonarQube Cloud, free plan | Quality Gate fail (`Blocker`/`High` in new code) | PR, push to `main`, manual |
+| `Gate Self-Tests` | shell | any gate test failing | PR, push to `main`, daily, manual |
 
 The workflow has **no `paths:` filter**, deliberately. A secret can be committed
 anywhere. Before this change the only gitleaks run lived inside the path-filtered
 Terraform workflow, so a `backend/`-only pull request received no secret scan at all.
 
-**No push-to-`main` trigger.** Removed 2026-08-07: pull-request coverage plus the daily
-full-history sweep below was judged sufficient, and it avoids paying for a scan (SAST
-quota included) on every merge commit. `Secret Scan` and `Gate Self-Tests` still run daily
-regardless; `SAST (SonarQube)` runs only on a pull request or a manual dispatch.
+**push-to-`main` is required, not optional — it is the only thing that refreshes
+SonarQube's own "main" branch snapshot** (the Code tab / dashboard view, distinct from
+each PR's own analysis). This was removed briefly on 2026-08-07 to save SAST's analysis
+quota on merge commits, then restored the same day: with no push trigger, `main`'s
+snapshot never updates at all — `SAST (SonarQube)` already excludes `schedule` runs, by
+design — and it was found stuck showing a stale, wrong-scope analysis from before the
+`sonar-maven-plugin` → scan-action fix (`main` had last been scanned by the old,
+backend-only mechanism, and nothing had re-scanned it since). If you ever need to remove
+`push` again for cost reasons, add SAST to the daily schedule first so `main` keeps
+refreshing some other way.
 
 **Secret scan scope** differs by trigger: a pull request scans its own commit range
-(merge-base → HEAD), while the daily schedule scans the full history. A secret added and
-then deleted within a branch is still caught — deleting it from the tip does not remove it
-from history.
+(merge-base → HEAD), while push to `main` and the daily schedule both scan the full
+history. A secret added and then deleted within a branch is still caught — deleting it
+from the tip does not remove it from history.
 
 ## Reading a result
 

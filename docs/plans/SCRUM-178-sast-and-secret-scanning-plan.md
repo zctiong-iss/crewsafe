@@ -109,13 +109,17 @@ SHA), which has no Maven module-scoping concept and reads `sonar-project.propert
 natively. Full account in
 [ADR 0010's 2026-08-06 addendum](../adr/0010-sonarqube-cloud-for-sast.md).
 
-**2026-08-07 — triggers.** Removed the `push`-to-`main` trigger from
-`security-scan.yml` and moved the full-history secret sweep from weekly to daily.
-Pull-request coverage plus a daily sweep was judged sufficient, and it avoids running
-`SAST (SonarQube)` (which consumes free-plan analysis quota) on every merge commit in
-addition to its own pull request. `Secret Scan` and `Gate Self-Tests` still run daily
-via the schedule trigger; `SAST (SonarQube)` now runs only on a pull request or a manual
-`workflow_dispatch`.
+**2026-08-07 — triggers.** Moved the full-history secret sweep from weekly to daily. The
+`push`-to-`main` trigger was removed the same day, then **restored a few hours later**
+once its second purpose became clear: `push` is the only thing that refreshes
+SonarQube's own `main` branch snapshot (the Code tab / dashboard view — separate from
+each PR's own analysis, which is unaffected either way). With `push` gone and `SAST`
+already excluding `schedule` runs by design, `main`'s snapshot had no trigger left at
+all, and was found stuck showing a stale, backend-only analysis from *before* the
+`sonar-maven-plugin` → scan-action fix above — the exact under-scanning bug this branch
+exists to fix, just frozen in place on `main` instead of live. `push` stays; the daily
+sweep stays too, as an independent backstop for anything that lands outside a normal
+pull request.
 
 ## Remaining manual steps
 
