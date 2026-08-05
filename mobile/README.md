@@ -757,6 +757,104 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-207 — Auto-dismiss and swipe-to-clear
+
+Plan: [`docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md`](../docs/plans/SCRUM-207-inbox-auto-dismiss-and-swipe-plan.md).
+Builds directly on [SCRUM-206](#scrum-206--rest-timer-and-progress-bar) — same deadline
+field, same removal path, second source for the deadline.
+
+Acknowledged cards leave the inbox on their own. A rest card leaves when the rest is served;
+everything else leaves three minutes later. A swipe makes it sooner.
+
+### One deadline, three sources
+
+| Action | Dwell | Bar |
+|---|---|---|
+| `REST_<n>_MIN` | the parsed duration | yes |
+| Any other code — `HYDRATE`, `ROTATE_TO_LIGHT_DUTY`, … | 3 minutes | no |
+| A `REST_*` code that cannot be parsed | 3 minutes | no |
+| Swipe, any acknowledged card | immediate | — |
+
+`dismissAtFor` is the single entry point; `restDeadlineFor` stays separate because the *bar*
+needs a different question answered. "Three minutes because we did not understand the code"
+is not a rest, and a bar counting down against it would be counting down to nothing. That
+distinction is stored as `hasRestTimer` on the acknowledgement record rather than re-derived
+per render, so a later change to the parsing rules cannot retroactively change what
+already-acknowledged cards display.
+
+The unparseable-rest case matters more than it looks: the action catalogue is deliberately
+open-ended server-side, so an unknown `REST_*` code is expected eventually. Without the
+fallback it would sit in the inbox forever — the one outcome this epic exists to remove.
+
+### Three minutes is a dwell time, not a policy value
+
+`DEFAULT_DISMISS_MS` lives in `helpers/restDuration.ts`, not in the policy engine and not in
+`application.yml` beside the WBGT thresholds. Nothing about the worker's obligation changes at
+three minutes: the action was owed before they acknowledged it and discharged after, and the
+card going is a UI event with no safety meaning. FR-15 makes the backend authoritative for
+anything that decides what a worker must do — a confirmation's screen time is not that, and
+filing it beside things that are would invite someone to treat it as if it were.
+
+### Two timers, deliberately
+
+- **Card with a bar** — `useNow` at 1Hz. The component re-renders every second anyway to move
+  the countdown, so the clock is free, and it reports its own completion.
+- **Card without a bar** — `useExpiryTimer`, a single `setTimeout`. Nothing to redraw, so
+  ticking at 1Hz would be ~180 renders over three minutes to discover that nothing changed.
+
+`useExpiryTimer` also listens to `AppState`. A JS timeout is not reliable across
+backgrounding and a long one can be throttled or dropped, so the deadline is re-checked on
+return to foreground; the timeout is the fast path and `AppState` is what makes it correct.
+Both funnel through one guarded `fire()`, so a race produces exactly one call. The callback is
+held in a ref — callers pass an inline arrow, and as a dependency it would rebuild the timeout
+on every render, meaning a three-minute timer would never fire at all.
+
+Only one of the two is active per card, so nothing races to dismiss the same row twice.
+
+### The swipe
+
+`Swipeable` from `react-native-gesture-handler` 2.32 — already a dependency, with
+`GestureHandlerRootView` already at the app root. **Not** `ReanimatedSwipeable`:
+`react-native-reanimated` is not installed, and adding it is a native dependency on a project
+that has never produced an EAS build.
+
+**Only acknowledged cards are swipeable.** A pending action is still owed and the supervisor
+has not been told — flicking it away would make the inbox lie about what is outstanding. A
+failed one is worse: the retry button lives on that card, so dismissing it removes the only
+route back. Both are blocked, and the card still renders normally.
+
+Either direction, because a worker in gloves should not have to remember which. The revealed
+panel fades in with the drag so a partial swipe reads as "keep going" rather than "done" — on
+a gloved hand, most swipes are partial. Threshold is a generous 96pt: brushing the list while
+scrolling and losing a card is a worse failure than having to swipe a little further.
+
+Removal is from the rendered list only. The persisted acknowledgement record is untouched, so
+idempotent replay (SCRUM-186) and SCRUM-130's queue are unaffected.
+
+### Verified on two device geometries
+
+`Pixel_9_Pro_XL` (1344×2992 @480) and `Pixel_10_Pro_Fold` (2076×2152 @390) — the pair that
+exposed [Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first),
+where one reproduced a bug the other did not from the same bundle.
+
+| Check | XL | Fold |
+|---|---|---|
+| Swipe on a **pending** card does nothing | ✅ | ✅ |
+| Swipe on an acknowledged card removes it | ✅ | ✅ |
+| Neighbouring card untouched | ✅ | ✅ |
+| Reveal panel renders and tracks the drag | ✅ | ✅ (`Padam`, in Malay) |
+| Acknowledged non-rest card shows **no** bar | ✅ | ✅ |
+| 3-minute auto-dismiss | ✅ removed at t=182s | — |
+| List still scrolls with a swipe half-open | — | ✅ |
+
+> Two invalid test runs are worth recording, because both looked like product bugs. The first
+> half-swipe-then-scroll test targeted a **pending** card, which by design cannot open — so it
+> proved nothing about gesture conflict. An earlier removal test reported `~5s` because the
+> card had already been dismissed in a previous run and `dismissedIds` had correctly persisted
+> it. **Check the fixture is in the state you think it is before believing a timing result.**
+
+---
+
 ## SCRUM-206 — Rest timer and progress bar
 
 Plan: [`docs/plans/SCRUM-206-rest-timer-progress-plan.md`](../docs/plans/SCRUM-206-rest-timer-progress-plan.md).

@@ -23,6 +23,7 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import AppSwitch from "@/components/inputs/AppSwitch";
 import DispatchCard from "@/components/inbox/DispatchCard";
+import SwipeToDismiss from "@/components/inbox/SwipeToDismiss";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
@@ -208,6 +209,15 @@ export default function InboxScreen() {
           />
         }
         renderItem={({ item }) => (
+          /*
+           * Only an acknowledged card is swipeable. A pending one is still owed and the
+           * supervisor has not been told; a failed one carries the retry button, so
+           * dismissing it would remove the only way back. See `SwipeToDismiss`.
+           */
+          <SwipeToDismiss
+            enabled={Boolean(acknowledged[item.id]) && !inFlight.includes(item.id)}
+            onDismiss={() => dispatch(dismissed(item.id))}
+          >
           <DispatchCard
             dispatch={item}
             acknowledgedAt={acknowledged[item.id]?.acknowledgedAt ?? null}
@@ -217,7 +227,9 @@ export default function InboxScreen() {
             locale={i18n.language}
             dismissAt={acknowledged[item.id]?.dismissAt ?? null}
             onExpire={() => dispatch(dismissed(item.id))}
+            hasRestTimer={acknowledged[item.id]?.hasRestTimer ?? false}
           />
+          </SwipeToDismiss>
         )}
       />
     </AppSafeView>

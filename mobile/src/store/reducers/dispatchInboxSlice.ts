@@ -24,7 +24,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";
 import { acknowledgeDispatch, fetchPendingDispatches } from "@/api/endpoints/dispatch";
-import { restDeadlineFor } from "@/helpers/restDuration";
+import { dismissAtFor, restDeadlineFor } from "@/helpers/restDuration";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { ActionDispatch } from "@/types/domain";
 import type { RootState } from "../store";
@@ -65,6 +65,16 @@ export interface AcknowledgementRecord {
    * see `restDuration.ts` and the SCRUM-206 plan.
    */
   dismissAt: number | null;
+  /**
+   * True only when the deadline above came from a parsed rest duration.
+   *
+   * A `HYDRATE` card and an unparseable `REST_999_MIN` both get a three-minute dwell, but
+   * neither is a rest the worker is serving — so neither shows a progress bar. Without this
+   * flag the card would have to re-derive the distinction on every render from a
+   * `dispatch` snapshot, and any later change to the parsing rules would silently change
+   * what already-acknowledged cards display.
+   */
+  hasRestTimer: boolean;
 }
 
 export interface DispatchInboxState {
@@ -173,8 +183,14 @@ export const acknowledge = createAsyncThunk<
         idempotencyKey,
         dispatch: result,
         // Resolved here, once, so it is persisted with the record rather than recomputed
-        // per render. Null for any code with no derivable duration — see `restDuration.ts`.
-        dismissAt: restDeadlineFor(result, acknowledgedAt),
+        // per render. The rest deadline when there is one, three minutes otherwise — see
+        // `dismissAtFor`. Null only if the acknowledgement timestamp itself is unreadable.
+        dismissAt: dismissAtFor(result, acknowledgedAt),
+        // Whether this card has a *rest* to show a bar for, as opposed to merely a dwell
+        // before it clears. Stored rather than re-derived so the two questions cannot drift:
+        // "when does this go" and "is there a rest in progress" have different answers for a
+        // HYDRATE card, and for a REST code we failed to parse.
+        hasRestTimer: restDeadlineFor(result, acknowledgedAt) !== null,
       },
     };
   } catch (error) {

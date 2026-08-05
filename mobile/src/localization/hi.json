@@ -251,7 +251,8 @@
     "failed": "आपकी पुष्टि नहीं भेजी जा सकी।",
     "safeToRetry": "दोबारा टैप करना सुरक्षित है — पुष्टि दो बार दर्ज नहीं होगी।",
     "noInstruction": "और कोई विवरण नहीं दिया गया।",
-    "restRemaining": "{{time}} शेष"
+    "restRemaining": "{{time}} शेष",
+    "swipeToClear": "हटाएँ"
   },
 
   "lightning": {

@@ -251,7 +251,8 @@
     "failed": "Could not send your acknowledgement.",
     "safeToRetry": "Tapping again is safe — it will not acknowledge twice.",
     "noInstruction": "No further detail given.",
-    "restRemaining": "{{time}} left"
+    "restRemaining": "{{time}} left",
+    "swipeToClear": "Clear"
   },
 
   "lightning": {

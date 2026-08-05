@@ -253,7 +253,8 @@
     "failed": "আপনার স্বীকৃতি পাঠানো যায়নি।",
     "safeToRetry": "আবার চাপা নিরাপদ — এটি দুবার স্বীকার করবে না।",
     "noInstruction": "আর কোনও বিবরণ দেওয়া হয়নি।",
-    "restRemaining": "{{time}} বাকি"
+    "restRemaining": "{{time}} বাকি",
+    "swipeToClear": "সরান"
   },
 
   "lightning": {
