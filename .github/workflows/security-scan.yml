@@ -144,12 +144,16 @@ jobs:
             exit 1
           fi
 
-      # Java bytecode only -- no Sonar plugin runs here. The Java analyzer
-      # needs compiled classes (sonar.java.binaries=backend/target/classes) for
-      # full analysis; the actual scan is a separate step below.
-      - name: Compile backend for Java bytecode analysis
+      # Runs tests (not just compile) for two reasons: the Java analyzer needs
+      # compiled classes (sonar.java.binaries=backend/target/classes), and
+      # jacoco-maven-plugin's report execution -- bound to the test phase --
+      # is what produces the coverage XML the Quality Gate's "Coverage on New
+      # Code" condition reads (sonar.coverage.jacoco.xmlReportPaths). This
+      # duplicates backend-ci.yml's test run; accepted so the gate reflects
+      # real coverage instead of a hardcoded 0%.
+      - name: Compile and test backend (bytecode + coverage for SonarQube)
         working-directory: backend
-        run: ./mvnw -B -DskipTests compile
+        run: ./mvnw -B test
 
       # SCRUM-178, 2026-08-06: this used to run via sonar-maven-plugin bound to
       # backend/pom.xml. That silently under-scanned the repo -- the Sonar

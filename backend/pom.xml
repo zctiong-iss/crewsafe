@@ -173,8 +173,13 @@
                         Mockito's inline mock maker requires instrumentation. Loading its
                         agent explicitly keeps tests working on JDKs that block dynamic
                         self-attachment and avoids relying on a deprecated JVM behaviour.
+
+                        @{argLine} carries the JaCoCo agent that jacoco-maven-plugin's
+                        prepare-agent execution injects below. Without it here, this
+                        hardcoded argLine would silently replace JaCoCo's, and coverage
+                        would stay at 0% despite the plugin being configured.
                     -->
-                    <argLine>-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
+                    <argLine>@{argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar</argLine>
                     <environmentVariables>
                         <!--
                             Testcontainers' Ryuk reaper bind-mounts the container socket, which
@@ -190,6 +195,30 @@
                         <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
                     </environmentVariables>
                 </configuration>
+            </plugin>
+            <plugin>
+                <!--
+                    Feeds the SonarCloud Quality Gate's "Coverage on New Code" condition
+                    (see sonar-project.properties). prepare-agent instruments the tests
+                    surefire runs; report, bound to the same test phase, turns that into
+                    the XML file Sonar reads.
+                -->
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
