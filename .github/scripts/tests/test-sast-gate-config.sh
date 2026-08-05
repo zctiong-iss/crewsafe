@@ -149,10 +149,17 @@ check "web/ and mobile/ are in sonar.sources, not just mentioned in prose" \
 check "workflow has no paths: filter" \
   "$(! grep -qE '^\s+paths:' "$WORKFLOW" && echo true || echo false)"
 
-check "workflow runs on pull_request and push to main" \
-  "$(grep -q 'pull_request:' "$WORKFLOW" && grep -q 'push:' "$WORKFLOW" && echo true || echo false)"
+check "workflow runs on pull_request" \
+  "$(grep -q 'pull_request:' "$WORKFLOW" && echo true || echo false)"
 
-check "workflow has a scheduled full-history sweep" \
-  "$(grep -q 'schedule:' "$WORKFLOW" && echo true || echo false)"
+# push-to-main triggers were deliberately removed 2026-08-07: PR coverage plus
+# a daily full-history sweep (below) was judged sufficient, and it avoids
+# paying for a scan on every merge commit. If a future change reintroduces
+# push:, this is not itself wrong -- just update this assertion to expect it.
+check "workflow does not run on push (deliberately removed)" \
+  "$(grep -q '^  push:' "$WORKFLOW" && echo false || echo true)"
+
+check "workflow has a scheduled full-history sweep, at least daily" \
+  "$(grep -qE '^\s+- cron: "0 [0-9]+ \* \* \*"' "$WORKFLOW" && echo true || echo false)"
 
 finish

@@ -6,15 +6,18 @@ name: Security Scan
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
   schedule:
-    # Weekly full-history sweep (FR-002a), midnight Sunday Singapore time
-    # (UTC+8). cron: is always UTC on GitHub Actions, so 00:00 SGT Sunday is
-    # 16:00 UTC the preceding Saturday. GitHub disables scheduled workflows
-    # after 60 days of repository inactivity -- a quiet period is not a clean
-    # sweep. See docs/runbooks/SCRUM-178-sast-and-secret-scanning.md.
-    - cron: "0 16 * * 6"
+    # Daily full-history sweep (FR-002a), midnight Singapore time (UTC+8).
+    # cron: is always UTC on GitHub Actions, so 00:00 SGT is 16:00 UTC the
+    # preceding day. GitHub disables scheduled workflows after 60 days of
+    # repository inactivity -- a quiet period is not a clean sweep. See
+    # docs/runbooks/SCRUM-178-sast-and-secret-scanning.md.
+    #
+    # 2026-08-07: push-to-main triggers were removed and the sweep moved from
+    # weekly to daily to compensate -- a daily full-history sweep catches
+    # anything that landed outside a normal pull request faster than the old
+    # weekly cadence did, without paying for a scan on every merge commit.
+    - cron: "0 16 * * *"
   workflow_dispatch:
 
 permissions:
@@ -32,7 +35,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           # Full history: required for merge-base resolution on pull requests
-          # and for the full-history sweep on main and on schedule.
+          # and for the full-history sweep on schedule and workflow_dispatch.
           fetch-depth: 0
 
       - name: Install scanners

@@ -23,7 +23,7 @@ the repository already carried Cognito testing documentation.
 |---|---|
 | `.github/workflows/security-scan.yml` | Three checks: `Secret Scan`, `SAST (SonarQube)`, `Gate Self-Tests`. No path filter. |
 | `.github/scripts/security/install-scanners.sh` | Pinned gitleaks 8.30.1, SHA-256 verified before execution |
-| `.github/scripts/security/scan-secrets.sh` | Commit-range scan on PRs, full history on `main` and weekly |
+| `.github/scripts/security/scan-secrets.sh` | Commit-range scan on PRs, full history on a daily schedule |
 | `.github/scripts/security/report-findings.sh` | Annotations + job summary; the only script that reads a raw report |
 | `.github/scripts/tests/` | 39 tests: 12 secret gate, 12 reporter, 15 config lint |
 | `.gitleaks.toml` | Allowlist with the baseline-sweep entries |
@@ -95,6 +95,27 @@ check fails rather than skips. `pull_request_target` is deliberately not used.
 plugin and the stock gate would block every merge at 0% coverage for a non-security reason.
 
 **Adding a new source tree needs a `sonar.sources` edit**, unlike the secret gate.
+
+## Post-implementation changes
+
+**2026-08-06 — SAST scope.** The original design ran analysis via `sonar-maven-plugin`
+bound to `backend/pom.xml`. That plugin resolves `sonar.sources` relative to the invoked
+module's own basedir and is documented to silently skip paths outside it, even with
+`sonar.projectBaseDir` set — a known upstream limitation for non-multi-module Maven
+projects. `web/` and `mobile/` were never actually analysed despite being declared and
+despite the check reporting green. Replaced with the official
+`SonarSource/sonarqube-scan-action` (the standalone `sonar-scanner` CLI, pinned by commit
+SHA), which has no Maven module-scoping concept and reads `sonar-project.properties`
+natively. Full account in
+[ADR 0010's 2026-08-06 addendum](../adr/0010-sonarqube-cloud-for-sast.md).
+
+**2026-08-07 — triggers.** Removed the `push`-to-`main` trigger from
+`security-scan.yml` and moved the full-history secret sweep from weekly to daily.
+Pull-request coverage plus a daily sweep was judged sufficient, and it avoids running
+`SAST (SonarQube)` (which consumes free-plan analysis quota) on every merge commit in
+addition to its own pull request. `Secret Scan` and `Gate Self-Tests` still run daily
+via the schedule trigger; `SAST (SonarQube)` now runs only on a pull request or a manual
+`workflow_dispatch`.
 
 ## Remaining manual steps
 
