@@ -278,7 +278,7 @@
     "title": "热风险状况",
     "reading": "WBGT",
     "noReading": "暂无读数",
-    "superseded": "已被雷电停工指令取代",
+    "stopWorkOverride": "高温规定暂停。",
     "band": {
       "BELOW_31": "低于 31°C",
       "31_TO_BELOW_32": "31 至 32°C",

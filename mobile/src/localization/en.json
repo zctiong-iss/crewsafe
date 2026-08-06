@@ -278,7 +278,7 @@
     "title": "Heat conditions",
     "reading": "WBGT",
     "noReading": "No reading available",
-    "superseded": "Superseded by the lightning stop-work",
+    "stopWorkOverride": "Heat rules paused.",
     "band": {
       "BELOW_31": "Below 31°C",
       "31_TO_BELOW_32": "31 to 32°C",

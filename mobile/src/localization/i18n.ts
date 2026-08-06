@@ -29,7 +29,7 @@ import my from "./my.json";
  * ── TRANSLATION REVIEW STATUS ───────────────────────────────────────────────────────────
  * `ms`, `ta`, `bn` and `my` (SCRUM-205) are machine-drafted and have NOT been reviewed by
  * native speakers. Their safety strings — `lightning.*`, `actions.*`, `guidance.*`,
- * `wbgt.superseded`, `freshness.staleWarning` — must be signed off before those languages
+ * `wbgt.stopWorkOverride`, `freshness.staleWarning` — must be signed off before those languages
  * are offered in production. Each locale file carries the same warning in its
  * `_translationStatus` key, which is metadata rather than a string the app renders.
  *

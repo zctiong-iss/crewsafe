@@ -1,5 +1,5 @@
 {
-  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.superseded, freshness.staleWarning — MUST be reviewed by a native Bengali speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
+  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.stopWorkOverride, freshness.staleWarning — MUST be reviewed by a native Bengali speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
 
   "common": {
     "appName": "CrewSafe",
@@ -280,7 +280,7 @@
     "title": "তাপের অবস্থা",
     "reading": "WBGT",
     "noReading": "কোনও পরিমাপ পাওয়া যায়নি",
-    "superseded": "বজ্রপাতজনিত কাজ বন্ধের নির্দেশ দ্বারা প্রতিস্থাপিত",
+    "stopWorkOverride": "তাপের নিয়ম স্থগিত।",
     "band": {
       "BELOW_31": "৩১°C-এর নিচে",
       "31_TO_BELOW_32": "৩১ থেকে ৩২°C",
