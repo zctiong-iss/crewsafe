@@ -100,8 +100,30 @@ const SCRIPT_BLOCKS = {
   bn: { name: "Bengali", re: /[ঀ-৿]/ },
   ta: { name: "Tamil", re: /[஀-௿]/ },
   my: { name: "Myanmar", re: /[က-႟]/ },
-  "zh-Hans": { name: "Han", re: /[一-鿿]/ },
+  /*
+   * Two ranges, not one. U+4E00–U+9FFF is the Han block; U+3000–U+303F is CJK Symbols and
+   * Punctuation, which is where 、。〇 and — the one that got through — U+3037 live.
+   *
+   * A stray U+3037 inside a Burmese sentence passed this check and shipped, because it is
+   * not a Han *ideograph*. It is still unmistakably CJK sitting in Burmese text, which is
+   * exactly what this check exists to catch. zh-Hans is unaffected: a locale is never
+   * tested against its own block.
+   */
+  "zh-Hans": { name: "Han", re: /[\u4E00-\u9FFF\u3000-\u303F]/ },
 };
+
+/**
+ * Traditional Han forms, which no block test can catch.
+ *
+ * Simplified and traditional characters share the Han block, so `zh-Hans` can be written
+ * entirely in traditional Chinese and still pass every check above. That happened: 難 and
+ * 電 shipped into zh-Hans alongside correctly simplified 规定暂停执行, and nothing noticed.
+ *
+ * This is a sample, not a mapping of the whole language — enough to catch a sentence
+ * drafted in the wrong variant, which is the realistic failure. Add to it when a new one
+ * slips through rather than trying to be exhaustive up front.
+ */
+const TRADITIONAL_ONLY = "難電規執溫業廠氣點聽讀說語當時開關門東車馬鳥風飛雲";
 
 /**
  * Any string containing a script that belongs to a *different* locale.
@@ -118,6 +140,14 @@ function foreignScripts(code, entries) {
     for (const [owner, block] of Object.entries(SCRIPT_BLOCKS)) {
       if (owner === code) continue;
       if (block.re.test(text)) findings.push({ key, script: block.name, owner });
+    }
+
+    // Only meaningful for the one locale that is explicitly a *simplified* variant.
+    if (code === "zh-Hans") {
+      const traditional = [...text].filter((ch) => TRADITIONAL_ONLY.includes(ch));
+      if (traditional.length > 0) {
+        findings.push({ key, script: `traditional Han (${traditional.join("")})`, owner: "zh-Hant" });
+      }
     }
   }
   return findings;
