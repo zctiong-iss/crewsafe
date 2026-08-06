@@ -53,7 +53,7 @@ flowchart LR
       end
     end
 
-    ecr[ECR repository\ncrewsafe/backend\nimmutable tags · scan on push]
+    ecr[ECR repositories\ncrewsafe/backend + crewsafe/web\nimmutable tags · scan on push]
     ssm[SSM Parameter Store\n/crewsafe/shared-dev/*\nconfiguration + DB URL]
     secrets[Secrets Manager\nweather API key\nRDS-managed master credential]
     logs[CloudWatch Logs\nbackend: 14 days\nPostgreSQL: 7 days]
@@ -77,7 +77,7 @@ flowchart LR
   nat --> igw
   alb --> igw
 
-  github -->|OIDC assume push role| ecr
+  github -->|Existing backend CI OIDC publisher| ecr
   ecr -->|Pull image layers at task start| ecs
   ecs -->|Read config parameters| ssm
   ecs -->|Read task secrets| secrets
@@ -138,5 +138,8 @@ flowchart LR
   into the secrets component through remote state before being consumed by ECS.
 - Terraform state is account-isolated in one versioned S3 bucket, with an
   independent state key for each component. No DynamoDB lock table is declared.
-- `web/`, `mobile/`, ML, and agent runtimes are not represented because their
+- The shared ECR boundary contains the existing backend repository and the web repository
+  provisioned by SCRUM-253. The GitHub Actions edge represents the existing backend publisher;
+  the future web publisher is intentionally not represented until its follow-up workflow exists.
+- `web/`, `mobile/`, ML, and agent runtimes are otherwise not represented because their
   Terraform roots do not yet exist.
