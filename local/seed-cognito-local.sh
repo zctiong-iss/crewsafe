@@ -15,21 +15,57 @@
 # bypassed; only the issuer is local.
 #
 # USAGE
-#   ./local/seed-cognito-local.sh              # start, seed, print env
-#   ./local/seed-cognito-local.sh --token      # also print a ready-to-use access token
+#   ./local/seed-cognito-local.sh --restart                 # the one you usually want
+#   ./local/seed-cognito-local.sh --env password            # seed + write mobile/.env
+#   ./local/seed-cognito-local.sh                           # seed, print env, change nothing
+#   ./local/seed-cognito-local.sh --token                   # also print an access token
 #
 # It is idempotent: re-running replaces the container and mints a fresh pool.
+#
+# ── RE-SEEDING INVALIDATES A RUNNING STACK ──────────────────────────────────────────────
+# Every run mints a new pool with new client ids and deletes the previous one, so the
+# backend, mobile/.env and Metro all have to move to it together. Leaving one behind gives
+# an error that names the wrong cause: a deleted client id surfaces in the app as "the app
+# is not configured", naming a variable you can see is set.
+#
+# `--restart` exists because doing that by hand is three steps that must not be interleaved,
+# and `--env` exists because the two printed blocks are easy to confuse — password and
+# hosted UI differ only in a few lines, and picking the wrong one fails much later.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PRINT_TOKEN=false
 RESET_DB=false
+RESTART_BACKEND=false
+WRITE_ENV=""
+
+usage() {
+  cat <<'USAGE'
+Usage: ./local/seed-cognito-local.sh [options]
+
+  --restart            Re-seed, write mobile/.env for cognito-password, and relaunch the
+                       backend. Implies --reset-db and --env password. The usual choice.
+  --env <mode>         Write mobile/.env for `password` or `hosted-ui` instead of printing
+                       two blocks to copy. Preserves every other line in the file and keeps
+                       a .env.bak.
+  --reset-db           Drop the database volume. Required whenever the pool changes.
+  --token              Also print a ready-to-use access token for curl.
+  -h, --help           This.
+USAGE
+}
+
 while (($#)); do
   case "$1" in
     --token) PRINT_TOKEN=true; shift ;;
     --reset-db) RESET_DB=true; shift ;;
-    -h|--help) echo "Usage: ./local/seed-cognito-local.sh [--token] [--reset-db]"; exit 0 ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    --restart) RESTART_BACKEND=true; RESET_DB=true; WRITE_ENV=password; shift ;;
+    --env)
+      WRITE_ENV="${2:-}"
+      [[ "$WRITE_ENV" == "password" || "$WRITE_ENV" == "hosted-ui" ]] || {
+        echo "--env takes 'password' or 'hosted-ui'." >&2; exit 1; }
+      shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
   esac
 done
 
@@ -198,6 +234,20 @@ for username in "${USERNAMES[@]}"; do
 done
 DEMO_USERS+="]"
 
+# One source of truth for the backend environment: --restart sources this, and a human can
+# too. Retyping it from the screen is how a stale client id gets left behind.
+BACKEND_ENV="$STATE_DIR/backend-env.sh"
+cat > "$BACKEND_ENV" <<ENVEOF
+export SPRING_PROFILES_ACTIVE=local
+export APP_COGNITO_ISSUER_URI='http://cognito-local/$POOL'
+export APP_COGNITO_JWK_SET_URI='http://localhost:$PORT/$POOL/.well-known/jwks.json'
+export APP_COGNITO_CLIENT_IDS='$CLIENT,$WEB_CLIENT'
+export APP_COGNITO_DEMO_USERS_JSON='$DEMO_USERS'
+export DB_URL='jdbc:postgresql://localhost:5434/crewsafe'
+export WEATHER_DATA_MODE=live
+export WEATHER_INGESTION_ENABLED=true
+ENVEOF
+
 cat <<EOF
 
 Cognito Local seeded. Pool $POOL, client $CLIENT.
@@ -216,6 +266,8 @@ export DB_URL='jdbc:postgresql://localhost:5434/crewsafe'
 export WEATHER_DATA_MODE=live
 export WEATHER_INGESTION_ENABLED=true
 cd backend && ./mvnw spring-boot:run
+
+  or, without retyping any of it:   source $BACKEND_ENV
 
 ── 2a. mobile/.env — Cognito (password), on the Android emulator ────────────────────────
 10.0.2.2 is the emulator's alias for this machine; use your LAN IP on a physical phone.
@@ -261,4 +313,108 @@ if [[ "$PRINT_TOKEN" == true ]]; then
 export TOKEN='$TOKEN'
 curl -s -H "Authorization: Bearer \$TOKEN" http://localhost:8080/api/v1/sites
 EOF
+fi
+
+# ── Writing mobile/.env ─────────────────────────────────────────────────────────────────
+# Rewrites only the keys that belong to the chosen mode and leaves every other line — the
+# comments, the region, the unused client ids — exactly as it found them. A wholesale
+# rewrite would silently discard whatever a developer had set for their own phone.
+#
+# Python rather than sed: the file has comment lines containing the same key names, and a
+# naive `sed s/^KEY=.*/` is fine right up until someone documents a key in a comment.
+if [[ -n "$WRITE_ENV" ]]; then
+  ENV_FILE="mobile/.env"
+  [[ -f "$ENV_FILE" ]] || cp mobile/.env.example "$ENV_FILE"
+  cp "$ENV_FILE" "$ENV_FILE.bak"
+
+  if [[ "$WRITE_ENV" == "password" ]]; then
+    ENV_PAIRS="EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080
+EXPO_PUBLIC_AUTH_MODE=cognito-password
+EXPO_PUBLIC_COGNITO_IDP_ENDPOINT=http://10.0.2.2:$PORT
+EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID=$CLIENT"
+  else
+    # localhost, not 10.0.2.2: the browser runs on this machine, not inside the emulator.
+    ENV_PAIRS="EXPO_PUBLIC_API_BASE_URL=http://localhost:8080
+EXPO_PUBLIC_AUTH_MODE=cognito-pkce
+EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN=http://localhost:$PORT
+EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID=$WEB_CLIENT"
+  fi
+
+  ENV_PAIRS="$ENV_PAIRS" python - "$ENV_FILE" <<'PYEOF'
+import io, os, re, sys
+
+path = sys.argv[1]
+pairs = dict(
+    line.split("=", 1) for line in os.environ["ENV_PAIRS"].splitlines() if line.strip()
+)
+lines = io.open(path, encoding="utf-8").read().splitlines()
+
+for key, value in pairs.items():
+    # Only a real assignment at the start of a line, never a mention inside a comment.
+    pattern = re.compile(rf"^{re.escape(key)}=")
+    for index, line in enumerate(lines):
+        if pattern.match(line):
+            lines[index] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+
+io.open(path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+print(f"Wrote {path}:")
+for key, value in pairs.items():
+    print(f"  {key}={value}")
+PYEOF
+
+  echo "  (previous file kept as $ENV_FILE.bak)"
+  echo
+  echo "  Metro must be restarted to pick this up: cd mobile && npm run start:clear"
+fi
+
+# ── Relaunching the backend ─────────────────────────────────────────────────────────────
+if [[ "$RESTART_BACKEND" == true ]]; then
+  echo
+  echo "Restarting the backend…"
+
+  # Whatever holds 8080 is a backend pointed at the pool this run just deleted, so it can
+  # only fail from here. No lsof on Git Bash for Windows, hence the two paths.
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -ti:8080 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command \
+      "Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction SilentlyContinue |
+       ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force }" >/dev/null 2>&1 || true
+  fi
+
+  BACKEND_LOG="$STATE_DIR/backend.log"
+  (
+    # A subshell with its own cd, so the caller's working directory is untouched. Both paths
+    # are absolute — STATE_DIR is built from $(pwd) — so they survive the cd unchanged.
+    cd backend
+    # shellcheck disable=SC1090
+    source "$BACKEND_ENV"
+    nohup ./mvnw -q -B spring-boot:run > "$BACKEND_LOG" 2>&1 &
+  )
+
+  echo "  log: $BACKEND_LOG"
+  printf "  waiting for the first NEA ingestion"
+
+  # Health alone is not the finish line: the app has nothing to show until the scheduler has
+  # run once, and "no reading yet" is exactly what a too-early check looks like.
+  for _ in $(seq 1 90); do
+    if grep -q "ingestion completed" "$BACKEND_LOG" 2>/dev/null; then
+      echo
+      grep -E "Reconciled|ingestion completed" "$BACKEND_LOG" | tail -2 | sed 's/^/  /'
+      break
+    fi
+    if grep -q "APPLICATION FAILED" "$BACKEND_LOG" 2>/dev/null; then
+      echo
+      echo "  Backend failed to start. Last lines:" >&2
+      tail -20 "$BACKEND_LOG" >&2
+      exit 1
+    fi
+    printf "."
+    sleep 2
+  done
+  echo
+  echo "  Backend ready. Now: cd mobile && npm run start:clear"
 fi

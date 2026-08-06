@@ -190,51 +190,51 @@ Whichever you use, one rule catches everybody:
 
 #### Route A — against the local emulator (no AWS account)
 
-**1. Seed.** From the repository root:
+Two commands, from the repository root and then `mobile/`:
 
 ```bash
-./local/seed-cognito-local.sh --reset-db
+./local/seed-cognito-local.sh --restart
+cd mobile && npm run start:clear
 ```
 
-It starts Postgres and `cognito-local`, creates a pool, two app clients and **all seven demo
-users**, and prints every value the next two steps need. `--reset-db` is required whenever
-you re-seed — see the warning below.
+`--restart` re-seeds the pool, writes `mobile/.env` for `cognito-password`, drops the
+database, relaunches the backend and waits for the first NEA ingestion before it returns.
+It is one step precisely because doing it by hand is three that must not be interleaved —
+see the warning below.
 
-**2. Backend.** Paste the `export` block it printed, then:
+Metro is deliberately **not** restarted for you: it is usually already running in a terminal
+you are watching, and killing it out from under you would be worse than telling you.
+
+<details>
+<summary>Doing it by hand, or for the hosted UI</summary>
 
 ```bash
-cd backend && ./mvnw spring-boot:run
+./local/seed-cognito-local.sh --reset-db      # or: --env hosted-ui
 ```
 
-`WEATHER_INGESTION_ENABLED=true` is in that block and is the point of the exercise: without
-it the scheduler never runs, `weather_observation` stays empty, and every site 404s.
+It prints an `export` block for the backend and, when `--env` is not used, two blocks to
+copy into `mobile/.env`. Start the backend with either the printed lines or, without
+retyping anything:
 
-**3. Mobile.** Copy the block it printed for the mode you want into `mobile/.env`:
-
-*Cognito (password)* — works in Expo Go, on the emulator or a phone:
-
-```
-EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080
-EXPO_PUBLIC_AUTH_MODE=cognito-password
-EXPO_PUBLIC_COGNITO_IDP_ENDPOINT=http://10.0.2.2:9229
-EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID=<printed>
+```bash
+cd backend && source ../local/.cognito-local/backend-env.sh && ./mvnw spring-boot:run
 ```
 
-*Cognito (hosted UI)* — Expo **web** only:
+Wait for `NEA weather ingestion completed`. `WEATHER_INGESTION_ENABLED=true` is in that
+block and is the point of the exercise: without it the scheduler never runs,
+`weather_observation` stays empty, and every site 404s.
 
-```
-EXPO_PUBLIC_API_BASE_URL=http://localhost:8080
-EXPO_PUBLIC_AUTH_MODE=cognito-pkce
-EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN=http://localhost:9229
-EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID=<printed>
-```
+The two `.env` blocks differ only in a few lines and **the wrong one fails much later**, at
+sign-in, with an unrelated-looking error. `--env password` and `--env hosted-ui` write the
+file for you and keep a `.env.bak`; prefer them.
 
 `10.0.2.2` for the emulator, `localhost` for the browser — the browser is on this machine,
-the emulator is not. On a physical phone use your LAN IP for both.
+the emulator is not. On a physical phone use your LAN IP for both. Hosted UI runs under
+`npm run web:pkce`, not `start:clear`.
 
-**4. Run.** `npm run start:clear` (password) or `npm run web:pkce` (hosted UI).
+</details>
 
-**5. Sign in.** All seven demo accounts are seeded, with the same roles and site codes
+**Sign in.** All seven demo accounts are seeded, with the same roles and site codes
 `AbstractIntegrationTest` uses. Every one takes the password `Test-Password-2026!`.
 
 | Username | Role | Sites | Tabs |
@@ -258,9 +258,12 @@ would be dead ends rather than merely empty — see `SupervisorTabs.tsx`.
 
 > **Re-seeding invalidates a running stack — all three must move together.** Each seed mints
 > a new pool with new client ids and new Cognito subjects, and deletes the previous one. So
-> after any re-seed you must restart the backend with the new exports, update `mobile/.env`
-> with the new client id, and restart Metro with `start:clear`. Leaving any one behind
-> produces a misleading error: a deleted client id reads as *"the app is not configured"*.
+> after any re-seed the backend, `mobile/.env` and Metro must all move to it. Leaving any one
+> behind produces a misleading error: a deleted client id reads as *"the app is not
+> configured"*, naming a variable you can see is set.
+>
+> `--restart` exists to make that one action rather than three. It still cannot restart
+> Metro, which is why `start:clear` is the second command above and not an afterthought.
 >
 > `--reset-db` is part of this, not optional. A Cognito subject is immutable, so
 > `DemoDataSeeder` refuses to remap `worker1` onto a new one and the backend will not start,
