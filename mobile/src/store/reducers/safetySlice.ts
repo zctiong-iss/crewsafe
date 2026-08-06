@@ -9,6 +9,8 @@
  * Not persisted. Safety data has a validity window, and rehydrating yesterday's stop-work
  * warning from AsyncStorage would be worse than showing nothing. Offline caching with a
  * visible staleness marker is FR-26a / SCRUM-130, and needs its own design.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {

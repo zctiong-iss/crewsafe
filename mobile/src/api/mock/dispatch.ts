@@ -20,6 +20,8 @@
  *
  * The real endpoints exist (`ActionDispatchController`), so this runs only in `mock` auth
  * mode. See `endpoints/dispatch.ts`.
+ *
+ * @author Justin Chua
  */
 import { ApiError } from "../errors";
 import i18n from "@/localization/i18n";

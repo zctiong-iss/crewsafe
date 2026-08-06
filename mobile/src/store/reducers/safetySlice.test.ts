@@ -5,6 +5,8 @@
  * UUID no deployment has, so using it would produce a 403 instead of a reading — and a 403
  * on this path blanks the heat card on the worker's main screen. That substitution is the
  * whole point of these tests, and it is invisible in review because both ids are UUIDs.
+ *
+ * @author Justin Chua
  */
 const mockIsMockApi = jest.fn();
 const mockFetchMyShift = jest.fn();

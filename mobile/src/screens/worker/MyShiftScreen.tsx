@@ -23,6 +23,8 @@
  * controller). Each is documented at its call site in `api/endpoints/safety.ts`. The
  * simulated badge on the reading and the notice below it are not placeholders to remove
  * later — FR-12 requires that marker whenever data is not live.
+ *
+ * @author Justin Chua
  */
 import { useCallback } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";

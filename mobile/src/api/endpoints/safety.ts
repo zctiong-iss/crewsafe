@@ -9,6 +9,8 @@
  * deployment. `fetchSiteWeather` (SCRUM-209) and `fetchLightningRisk` (SCRUM-261) both branch
  * on the auth mode like `identity.ts` and `sites.ts` do, because the endpoints they need are
  * real.
+ *
+ * @author Justin Chua
  */
 import type {
   LightningRisk,

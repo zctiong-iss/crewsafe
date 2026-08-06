@@ -6,6 +6,8 @@
  * the wire shape before it becomes a domain object, and which failures are answers rather
  * than errors. A band that arrives wrong or a 404 treated as a network fault both end with a
  * worker reading something untrue about the heat they are standing in.
+ *
+ * @author Justin Chua
  */
 import { ApiError } from "../errors";
 

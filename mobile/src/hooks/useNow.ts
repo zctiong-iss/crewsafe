@@ -9,6 +9,8 @@
  *
  * Use this in the smallest component that needs it. Called high in a tree it re-renders
  * everything below on every tick; called inside the banner it re-renders the banner.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useState } from "react";
 

@@ -5,6 +5,8 @@
  * Acclimatisation is shown whenever it applies rather than tucked into a detail view: a
  * worker on day 3 of 7 is under a restricted deployment they should be able to see, and it
  * is the field most likely to be news to them.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

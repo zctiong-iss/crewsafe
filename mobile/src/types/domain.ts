@@ -1,6 +1,8 @@
 /**
  * Domain types mirrored from the backend. Each block names the Java record or OpenAPI
  * schema it must stay in step with, so a contract change has an obvious landing site.
+ *
+ * @author Justin Chua
  */
 
 /** Mirrors `identity/domain/Role.java`. Stored without Spring's `ROLE_` prefix. */

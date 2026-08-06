@@ -31,6 +31,8 @@ import java.util.UUID;
  * <p>Polled, not streamed, on purpose. The ingestion runs on a two-minute cadence and the app
  * already refreshes the shift screen every sixty seconds, so a long-lived connection would buy
  * no freshness while costing battery on a phone that has to last an outdoor shift.
+ *
+ * @author Justin Chua
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/lightning")

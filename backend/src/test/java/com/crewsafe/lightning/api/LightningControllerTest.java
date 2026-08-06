@@ -38,6 +38,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>{@link #allowsAWorkerOnTheSite()} is the reason the endpoint exists at all: the conditions
  * SSE stream that already carries this state is restricted to supervisors and above, while the
  * banner that needs it is on the worker's own shift screen.
+ *
+ * @author Justin Chua
  */
 @AutoConfigureMockMvc
 class LightningControllerTest extends AbstractIntegrationTest {

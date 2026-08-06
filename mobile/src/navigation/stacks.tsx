@@ -4,6 +4,8 @@
  * Header options live here rather than on each screen so that the header title, the tab
  * label and the accessibility name all come from the same translation key and cannot drift
  * apart when the language changes.
+ *
+ * @author Justin Chua
  */
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useTranslation } from "react-i18next";

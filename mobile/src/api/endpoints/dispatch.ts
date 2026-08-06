@@ -14,6 +14,8 @@
  *    server's answer, which is why the client keeps its own record of what it has
  *    acknowledged — SCRUM-186 requires "clear acknowledged / pending states", and the
  *    server cannot supply the acknowledged half.
+ *
+ * @author Justin Chua
  */
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";

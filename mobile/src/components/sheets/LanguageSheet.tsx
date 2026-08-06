@@ -11,6 +11,8 @@
  *
  * Each option is labelled in its own script for the same reason — someone looking for Hindi
  * should not have to read the word "Hindi" in English to find it.
+ *
+ * @author Justin Chua
  */
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";

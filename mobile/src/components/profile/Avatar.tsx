@@ -1,3 +1,8 @@
+/**
+ * The profile avatar: an image when there is one, initials when there is not.
+ *
+ * @author Justin Chua
+ */
 import { Image, StyleSheet, View } from "react-native";
 import type { FC } from "react";
 import { s } from "react-native-size-matters";

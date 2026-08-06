@@ -9,6 +9,8 @@
  * Dev-only, and held as a module variable for the same reason `authMode` is: the store
  * imports the slices, which import the endpoints, which import this. Reading Redux from
  * here would close the loop.
+ *
+ * @author Justin Chua
  */
 export type LightningScenario = "clear" | "advisory" | "stop-work";
 

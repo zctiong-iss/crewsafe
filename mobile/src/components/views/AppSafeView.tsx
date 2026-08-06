@@ -14,6 +14,8 @@
  * Uses `SafeAreaView` from `react-native-safe-area-context`, not React Native's, which is
  * iOS-only and would fall back to `StatusBar.currentHeight` on Android — missing gesture
  * bars and punch-hole cutouts.
+ *
+ * @author Justin Chua
  */
 import {
   KeyboardAvoidingView,

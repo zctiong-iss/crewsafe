@@ -16,6 +16,8 @@
  * leave the old one on screen until the cache happened to evict it — the user picks a new
  * face and nothing changes, which reads as the feature being broken. A fresh filename each
  * time sidesteps the cache entirely; the previous file is deleted explicitly.
+ *
+ * @author Justin Chua
  */
 import { Directory, File, Paths } from "expo-file-system";
 

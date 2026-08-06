@@ -30,6 +30,8 @@
  * throughout.
  *
  * Usage: `npm run check:locales`
+ *
+ * @author Justin Chua
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
