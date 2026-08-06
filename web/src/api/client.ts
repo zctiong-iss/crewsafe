@@ -18,6 +18,10 @@ export function setTokenProvider(provider: TokenProvider): void {
   getToken = provider;
 }
 
+export function currentAccessToken(): Promise<string | null> {
+  return getToken();
+}
+
 const REQUEST_ID_HEADER = "X-Request-Id";
 
 function kindFor(status: number): ApiErrorKind {
