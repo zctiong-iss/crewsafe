@@ -1,4 +1,4 @@
-# ADR 0010 — Flat routing for site-scoped screens; resolve `siteId` server-side
+# ADR 0014 — Flat routing for site-scoped screens; resolve `siteId` server-side
 
 **Status:** Accepted
 **Date:** 2026-08-03
