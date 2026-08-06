@@ -54,6 +54,16 @@ done
 # both of which are recreated on the next start.
 if [[ "$RESET_DB" == true ]]; then
   echo "Dropping the local database volume…"
+
+  # Compose interpolates and validates EVERY service's `${VAR:?}` before it does anything,
+  # including services you did not name — so bringing up `postgres` alone still fails on the
+  # backend's and web's required Cognito variables. They are never read here: the containers
+  # those belong to are not started. Placeholders exist purely to satisfy interpolation.
+  export APP_COGNITO_ISSUER_URI=unused APP_COGNITO_JWK_SET_URI=unused \
+    APP_COGNITO_CLIENT_IDS=unused APP_COGNITO_DEMO_USERS_JSON='[]' \
+    VITE_COGNITO_AUTHORITY=unused VITE_COGNITO_CLIENT_ID=unused \
+    VITE_COGNITO_HOSTED_UI_DOMAIN=unused
+
   docker compose -f local/compose.yaml down -v >/dev/null 2>&1 || true
   docker compose -f local/compose.yaml up -d postgres >/dev/null
   for _ in $(seq 1 30); do
@@ -65,23 +75,35 @@ fi
 # The config is what allows plain usernames like `worker1`. Without it cognito-local demands
 # an email and AdminCreateUser fails with "Username should be an email".
 #
+# ── WHY A COPY, AND WHY A WHOLE DIRECTORY ───────────────────────────────────────────────
+# `/app/.cognito` is the emulator's own state directory: it rewrites config.json on boot and
+# persists pools beside it. Bind-mounting the checked-in fixture directly therefore modifies
+# a backend test resource — the first version of this script stripped its trailing newline
+# and produced a spurious diff. Mounting it `:ro` is worse, not better: the container needs
+# to write there and exits with EROFS. So the fixture is copied into a scratch directory and
+# that directory is mounted, which leaves the repository untouched and the container happy.
+#
+# Wiped each run, so a stale pool from a previous run can never be mistaken for a fresh one.
+#
 # Two Windows-only hazards, both of which cost real time here. Docker will not accept an MSYS
 # path (`/c/…`) for a bind mount, so it must be converted — `cygpath -m` yields `C:/…` and
 # does not exist off Windows, which is exactly the test. And MSYS rewrites anything that
 # looks like an absolute path in a command argument, which is why the container-side path is
 # built from a variable that MSYS_NO_PATHCONV protects rather than written inline.
-CONFIG="$(pwd)/backend/src/test/resources/cognito-local-config.json"
+STATE_DIR="$(pwd)/local/.cognito-local"
+rm -rf "$STATE_DIR"
+mkdir -p "$STATE_DIR"
+cp backend/src/test/resources/cognito-local-config.json "$STATE_DIR/config.json"
+
+MOUNT="$STATE_DIR"
 if command -v cygpath >/dev/null 2>&1; then
-  CONFIG="$(cygpath -m "$CONFIG")"
+  MOUNT="$(cygpath -m "$MOUNT")"
 fi
 
 echo "Starting $CONTAINER…"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-# Read-only, because it is a checked-in test resource and the container writes to its own
-# config directory: the first run of this script rewrote the file in place and stripped its
-# trailing newline, turning a verification run into a spurious diff on a backend fixture.
 MSYS_NO_PATHCONV=1 docker run -d --name "$CONTAINER" -p "$PORT:9229" \
-  -v "$CONFIG:/app/.cognito/config.json:ro" \
+  -v "$MOUNT:/app/.cognito" \
   "$IMAGE" >/dev/null
 
 # The emulator answers before it logs "running", so poll rather than sleep a guessed number.
@@ -101,8 +123,22 @@ cog() {
 jsonpath() { python -c "import sys,json;d=json.load(sys.stdin);print($1)"; }
 
 POOL=$(cog CreateUserPool '{"PoolName":"crewsafe-local"}' | jsonpath "d['UserPool']['Id']")
+
+# Two clients, mirroring the two real ones, because the app's two Cognito modes need
+# different things. `cognito-password` needs ALLOW_USER_PASSWORD_AUTH and no redirect;
+# `cognito-pkce` needs a registered callback and the authorization-code flow.
 CLIENT=$(cog CreateUserPoolClient \
   "{\"UserPoolId\":\"$POOL\",\"ClientName\":\"local-cli\",\"ExplicitAuthFlows\":[\"ALLOW_USER_PASSWORD_AUTH\",\"ALLOW_REFRESH_TOKEN_AUTH\"]}" \
+  | jsonpath "d['UserPoolClient']['ClientId']")
+
+# cognito-local really does serve the Hosted UI: /oauth2/authorize renders a username and
+# password form and honours PKCE. So `cognito-pkce` works locally too, with no code change —
+# it already reads its domain from EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN.
+#
+# 5173 is not arbitrary: it is the port `npm run web:pkce` serves on and the callback the
+# real web client registers, so the same URL works against AWS and against this.
+WEB_CLIENT=$(cog CreateUserPoolClient \
+  "{\"UserPoolId\":\"$POOL\",\"ClientName\":\"local-web\",\"CallbackURLs\":[\"http://localhost:5173/callback\"],\"LogoutURLs\":[\"http://localhost:5173/\"],\"AllowedOAuthFlows\":[\"code\"],\"AllowedOAuthScopes\":[\"openid\",\"email\",\"profile\"],\"AllowedOAuthFlowsUserPoolClient\":true,\"SupportedIdentityProviders\":[\"COGNITO\"]}" \
   | jsonpath "d['UserPoolClient']['ClientId']")
 
 # Only the users DemoDataSeeder needs for the worker and supervisor screens. Adding the rest
@@ -144,20 +180,32 @@ runs, weather_observation stays empty and every site 404s.
 export SPRING_PROFILES_ACTIVE=local
 export APP_COGNITO_ISSUER_URI='http://cognito-local/$POOL'
 export APP_COGNITO_JWK_SET_URI='http://localhost:$PORT/$POOL/.well-known/jwks.json'
-export APP_COGNITO_CLIENT_IDS='$CLIENT'
+export APP_COGNITO_CLIENT_IDS='$CLIENT,$WEB_CLIENT'
 export APP_COGNITO_DEMO_USERS_JSON='$DEMO_USERS'
 export DB_URL='jdbc:postgresql://localhost:5434/crewsafe'
 export WEATHER_DATA_MODE=live
 export WEATHER_INGESTION_ENABLED=true
 cd backend && ./mvnw spring-boot:run
 
-── 2. mobile/.env ──────────────────────────────────────────────────────────────────────
-10.0.2.2 is the Android emulator's alias for this machine; use your LAN IP on a phone.
+── 2a. mobile/.env — Cognito (password), on the Android emulator ────────────────────────
+10.0.2.2 is the emulator's alias for this machine; use your LAN IP on a physical phone.
+Restart Metro with \`npm run start:clear\` after editing .env — EXPO_PUBLIC_* is inlined at
+bundle time, so a running Metro will keep serving the old values.
 
 EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080
 EXPO_PUBLIC_AUTH_MODE=cognito-password
 EXPO_PUBLIC_COGNITO_IDP_ENDPOINT=http://10.0.2.2:$PORT
 EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID=$CLIENT
+
+── 2b. mobile/.env — Cognito (hosted UI), on Expo web only ──────────────────────────────
+Run with \`npm run web:pkce\`. Expo Go cannot complete this flow on a phone: its redirect is
+exp://, which is not a registered callback on any client. localhost here, not 10.0.2.2 —
+the browser is on this machine.
+
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8080
+EXPO_PUBLIC_AUTH_MODE=cognito-pkce
+EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN=http://localhost:$PORT
+EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID=$WEB_CLIENT
 
 ── 3. Sign in ──────────────────────────────────────────────────────────────────────────
 Username worker1 (or manager1, who has both sites), password $PASSWORD

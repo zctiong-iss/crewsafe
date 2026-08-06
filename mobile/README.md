@@ -175,6 +175,128 @@ exists to avoid ([ADR 0002](../docs/adr/0002-cookie-free-bearer-authentication.m
 because it is fenced to development and to synthetic accounts. The password lives in form
 state that dies with the screen — never Redux, never persisted, never logged.
 
+### Signing in: step by step
+
+There are two routes to a real token. **Route A needs no AWS account** and is what the
+screenshots in this README were taken with; Route B is the shared dev pool.
+
+Whichever you use, one rule catches everybody:
+
+> **Restart Metro with `npm run start:clear` after editing `.env`.** Metro inlines
+> `EXPO_PUBLIC_*` at bundle time by text substitution. A running Metro keeps serving the old
+> values, and the symptom is a config error naming a variable you can see is set.
+
+---
+
+#### Route A — against the local emulator (no AWS account)
+
+**1. Seed.** From the repository root:
+
+```bash
+./local/seed-cognito-local.sh --reset-db
+```
+
+It starts Postgres and `cognito-local`, creates a pool, two app clients and the demo users,
+and prints every value the next two steps need. `--reset-db` is required whenever you
+re-seed — see the warning below.
+
+**2. Backend.** Paste the `export` block it printed, then:
+
+```bash
+cd backend && ./mvnw spring-boot:run
+```
+
+`WEATHER_INGESTION_ENABLED=true` is in that block and is the point of the exercise: without
+it the scheduler never runs, `weather_observation` stays empty, and every site 404s.
+
+**3. Mobile.** Copy the block it printed for the mode you want into `mobile/.env`:
+
+*Cognito (password)* — works in Expo Go, on the emulator or a phone:
+
+```
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:8080
+EXPO_PUBLIC_AUTH_MODE=cognito-password
+EXPO_PUBLIC_COGNITO_IDP_ENDPOINT=http://10.0.2.2:9229
+EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID=<printed>
+```
+
+*Cognito (hosted UI)* — Expo **web** only:
+
+```
+EXPO_PUBLIC_API_BASE_URL=http://localhost:8080
+EXPO_PUBLIC_AUTH_MODE=cognito-pkce
+EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN=http://localhost:9229
+EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID=<printed>
+```
+
+`10.0.2.2` for the emulator, `localhost` for the browser — the browser is on this machine,
+the emulator is not. On a physical phone use your LAN IP for both.
+
+**4. Run.** `npm run start:clear` (password) or `npm run web:pkce` (hosted UI).
+
+**5. Sign in** as `worker1` — a WORKER, so you get *My shift* with the Heat conditions card —
+or `manager1`, who has both sites and the supervisor tabs. Password `Test-Password-2026!`.
+
+> **`--reset-db` is not optional on a re-run.** Each seed mints a new pool, so every user
+> gets a new Cognito subject — and a subject is immutable. `DemoDataSeeder` refuses to remap
+> one and the backend will not start, with *"Application-user mapping conflicts with an
+> existing immutable Cognito subject"*. That is the guard working correctly.
+
+**Hosted UI works locally too**, which is worth knowing because it is not obvious:
+cognito-local implements `/oauth2/authorize`, renders a real username and password form and
+honours PKCE. `signInWithPkce` already reads its domain from the environment, so this needs
+no code change at all — only a client with `http://localhost:5173/callback` registered,
+which the seed script creates.
+
+---
+
+#### Route B — against the shared dev pool (needs AWS)
+
+**1.** Get the non-secret ids (needs `gh` authenticated against the repo):
+
+```bash
+gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value \
+  | jq '.accounts.dev | {region, hosted_ui_url, web_client_id, cli_client_id}'
+```
+
+**2.** Get the synthetic users' passwords from AWS Secrets Manager — see the
+[root README](../README.md#cognito).
+
+**3.** Fill `mobile/.env`. Leave `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT` **empty**; it is what
+sends `cognito-password` to a local emulator instead of AWS.
+
+| Mode | Needs |
+|---|---|
+| `cognito-password` | `REGION`, `CLI_CLIENT_ID` |
+| `cognito-pkce` | `HOSTED_UI_DOMAIN`, `WEB_CLIENT_ID` |
+
+**4.** Start the backend with `./run.sh --account dev` from the repository root, which
+supplies every `APP_COGNITO_*` value from the same shared config.
+
+**5.** Sign in with a synthetic username and its Secrets Manager password.
+
+---
+
+#### Why hosted UI is web-only, in either route
+
+`signInWithPkce` throws `pkceUnavailableInExpoGo` before it opens a browser. Expo Go's
+redirect resolves to `exp://…`, which is not a registered callback on any client — the
+mobile client's is pinned to `crewsafe://callback`, a scheme only a native build can
+register. So the flow cannot complete in Expo Go on any amount of client-side effort.
+
+`npm run web:pkce` serves on 5173 because that is already a registered callback and an
+allowed CORS origin. A phone needs a development build.
+
+#### When something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| *"The app is not configured. Missing: …"* naming a variable you have set | Metro is serving a pre-`.env` bundle. `npm run start:clear`. |
+| *"Your sign-in worked, but this account has not been set up"* | A 401 on `/api/v1/me` — the token was rejected **or absent**. Check the client id is in `APP_COGNITO_CLIENT_IDS` and that the backend's issuer matches the pool. |
+| Backend will not start, *"conflicts with an existing immutable Cognito subject"* | You re-seeded without `--reset-db`. |
+| Weather shows *"No reading yet"* | Ingestion is off, or has not run. `WEATHER_INGESTION_ENABLED=true`. |
+| `redirect_mismatch` on hosted UI | Serving on a port other than 5173, or the callback is not registered on that client. |
+
 ### Verifying the live path without AWS
 
 `cognito-password` and `cognito-pkce` both need the shared dev pool, which means `gh`
@@ -189,18 +311,7 @@ signing genuine RS256 tokens and serving a genuine JWKS. Tokens it mints go thro
 resource server, the issuer and client-id checks and every `@PreAuthorize` for real. Only the
 issuer is local.
 
-```
-./local/seed-cognito-local.sh --reset-db     # prints the backend env and the mobile .env
-```
-
-Then paste the printed exports, start the backend, and set the four `.env` lines it gives
-you. Sign in as `worker1` or `manager1`.
-
-**`--reset-db` is not optional on a re-run.** Each run mints a new pool, so every user gets a
-new Cognito subject — and a subject is immutable. `DemoDataSeeder` refuses to remap one and
-the backend will not start, which is the guard working correctly.
-
-**The seam this relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
+See **Route A** above for the steps. **The seam it relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
 `idpEndpoint()` in [`auth/cognitoPasswordAuth.ts`](src/auth/cognitoPasswordAuth.ts). It is
 gated on `__DEV__` rather than on the auth mode, deliberately: this is the value that decides
 *who signs the token the backend will trust*, so no configuration may redirect a release
