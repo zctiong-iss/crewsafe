@@ -76,6 +76,11 @@ Collection is disabled by default. When enabled, it starts after five seconds an
 every fifteen minutes unless the deployment overrides the `WEATHER_INGESTION_*` settings in
 `backend/src/main/resources/application.yml`.
 
+Temporary connection failures, HTTP 429 responses, and server errors are attempted up to
+three times with bounded exponential backoff. `NEA_MAX_ATTEMPTS`, `NEA_INITIAL_BACKOFF`, and
+`NEA_MAX_BACKOFF` override those defaults. Invalid payloads and ordinary client errors fail
+immediately because repeating the same request is unlikely to repair them.
+
 ## Run without external endpoints
 
 Fixture mode replays the bundled synthetic scenario and never calls data.gov.sg:
@@ -118,3 +123,10 @@ complete.
 That is expected. PostgreSQL enforces uniqueness for a site, observation time, and source.
 Repeated fixture frames and concurrent ingestion attempts keep the first row and count later
 attempts as duplicates.
+
+### A previously live reading becomes delayed or stale
+
+That is expected. The database keeps the quality status recorded during ingestion, while the
+weather API recalculates live-reading freshness when it is requested. This ensures an outage
+cannot leave an old reading labelled `LIVE`. Fixture readings remain `SIMULATED` regardless
+of age.
