@@ -54,6 +54,7 @@ public class ShiftService {
         Shift shift = shifts.save(new Shift(siteId, startsAt, endsAt));
 
         for (AssignmentInput input : assignmentInputs) {
+            guardAgainstDoubleBooking(input.workerId(), startsAt, endsAt);
             assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
                     input.intensity(), input.acclimatisationDay()));
         }
@@ -178,9 +179,24 @@ public class ShiftService {
     @Transactional
     public Optional<Shift> addAssignment(UUID siteId, UUID shiftId, AssignmentInput input) {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            guardAgainstDoubleBooking(input.workerId(), shift.getStartsAt(), shift.getEndsAt());
             assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
                     input.intensity(), input.acclimatisationDay()));
             return shift;
         });
+    }
+
+    /**
+     * SCRUM-254: a worker cannot hold two assignments whose shifts' time ranges overlap —
+     * same site or not, same shift or not — this is a domain invariant, not a per-endpoint
+     * rule, so both {@link #createShift} and {@link #addAssignment} route through here
+     * rather than each re-implementing the check. Assigning the same worker to the same
+     * shift twice is caught by this too: the shift's own range trivially overlaps itself
+     * once the first assignment exists.
+     */
+    private void guardAgainstDoubleBooking(UUID workerId, Instant startsAt, Instant endsAt) {
+        if (!assignments.findOverlapping(workerId, startsAt, endsAt).isEmpty()) {
+            throw new BadRequestException("Worker " + workerId + " already has an overlapping shift assignment");
+        }
     }
 }
