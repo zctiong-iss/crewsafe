@@ -75,3 +75,7 @@ crash.*.log
 # Local orchestration run — logs from ./run.sh
 .local-run/
 .crewsafe-runtime/
+
+# Scratch state for local/seed-cognito-local.sh — the emulator rewrites its own config
+# and persists pools here, so it must never be the checked-in fixture.
+local/.cognito-local/

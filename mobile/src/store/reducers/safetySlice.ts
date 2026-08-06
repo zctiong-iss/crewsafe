@@ -15,7 +15,10 @@ import {
   fetchLightningRisk,
   fetchMyShift,
   fetchSiteConditions,
+  fetchSiteWeather,
 } from "@/api/endpoints/safety";
+import { fetchAccessibleSites } from "@/api/endpoints/sites";
+import { isMockApi } from "@/auth/authMode";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { LightningRisk, MyShift, PolicyEvaluation, SiteConditions } from "@/types/domain";
 
@@ -53,6 +56,55 @@ interface LoadedPayload {
 }
 
 /**
+ * The reading behind the Heat conditions card, and where it comes from.
+ *
+ * ── WHY THIS IS NOT SIMPLY `fetchSiteConditions` ────────────────────────────────────────
+ * `GET /api/v1/sites/{siteId}/conditions` (§12.1) does not exist, so the mock is the only
+ * source of a *policy*. But the card itself no longer shows a policy: SCRUM-196 stripped it
+ * to a bare WBGT reading and its freshness, and `features.heatGuidanceCard` is off. What it
+ * needs is a `SiteConditions`, and since SCRUM-209 there is a real endpoint serving exactly
+ * that from the NEA ingestion.
+ *
+ * ── THE SITE ID IS DELIBERATELY NOT THE SHIFT'S ─────────────────────────────────────────
+ * `fetchMyShift` is still mocked — `/shifts/me` does not exist either — and the site id it
+ * returns is a fixture UUID (`11111111-…`) that no deployment has, because `DemoDataSeeder`
+ * creates sites with generated ids. Asking the live endpoint about it yields a 403, not a
+ * reading. So outside mock mode the site is resolved from the real `GET /api/v1/sites`, the
+ * same way `weatherSlice` already does it.
+ *
+ * That makes the shift screen a **hybrid while `/shifts/me` is missing**: a fixture shift
+ * and task, with a live reading for the worker's first accessible site rather than for the
+ * site the fixture names. Honest for verification and wrong for production — which is
+ * survivable only because the whole shift above it is a fixture too. When `/shifts/me`
+ * lands, this collapses back to one line: pass `shift.siteId` and delete the lookup.
+ *
+ * The policy is null here rather than the mock's. Pairing a real reading with a fixture
+ * obligation would be worse than having none: it would look authoritative and be invented.
+ */
+async function loadConditions(
+  shift: MyShift,
+  workerId: string,
+): Promise<{ conditions: SiteConditions | null; policy: PolicyEvaluation | null }> {
+  if (isMockApi()) {
+    const response = await fetchSiteConditions(shift.siteId, shift.assignment.intensity, workerId);
+    return { conditions: response.observation, policy: response.policy };
+  }
+
+  // `siteIds` is a mock-only argument; the real endpoint filters by membership server-side.
+  const sites = await fetchAccessibleSites([]);
+  const siteId = sites[0]?.id;
+
+  // No memberships is a legitimate answer, not a failure — see `fetchAccessibleSites`. The
+  // card is simply absent, which is what it already does for a null reading.
+  if (!siteId) {
+    return { conditions: null, policy: null };
+  }
+
+  const weather = await fetchSiteWeather(siteId, workerId);
+  return { conditions: weather.observation, policy: null };
+}
+
+/**
  * Loads the shift first, then the site data it points at.
  *
  * Sequential by necessity, not by oversight: the site whose lightning and conditions matter
@@ -76,13 +128,13 @@ export const loadWorkerSafety = createAsyncThunk<
     // difference between one wait and two.
     const [lightning, conditions] = await Promise.all([
       fetchLightningRisk(shift.siteId),
-      fetchSiteConditions(shift.siteId, shift.assignment.intensity, workerId),
+      loadConditions(shift, workerId),
     ]);
 
     return {
       shift,
       lightning,
-      conditions: conditions.observation,
+      conditions: conditions.conditions,
       policy: conditions.policy,
     };
   } catch (error) {
