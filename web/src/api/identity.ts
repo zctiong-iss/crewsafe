@@ -18,8 +18,8 @@ export type Role = "WORKER" | "SUPERVISOR" | "SAFETY_MANAGER" | "ADMIN";
 export interface Site {
   id: string;
   name: string;
-  latitude: string;
-  longitude: string;
+  latitude: number;
+  longitude: number;
   timezone: string;
 }
 

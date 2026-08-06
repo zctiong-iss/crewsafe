@@ -54,7 +54,7 @@ export function HomePage() {
 
   return (
     <AppShell
-      title="Live board"
+      title="Live Board"
       subtitle={`Signed in as ${user.username}`}
     >
       {load.status === "loading" && (

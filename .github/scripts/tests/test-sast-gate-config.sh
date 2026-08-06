@@ -159,12 +159,16 @@ check "sonar-project.properties values are single-line (style)" \
   "$(without_comments "$SONAR_PROPS" | grep -qE "$continuation_re" && echo false || echo true)"
 
 # --- Quality Gate composition (research R2a) -------------------------------
-# backend/pom.xml has no JaCoCo plugin, so a Java coverage condition would
-# report 0% and block every merge for a reason unrelated to security. Mobile
-# JavaScript/TypeScript LCOV import is intentionally allowed independently.
+# JaCoCo landed in backend/pom.xml (SCRUM-168) specifically so the Quality
+# Gate's coverage condition reads real numbers. Both halves must be present
+# together: a coverage path with no plugin produces a report Sonar can never
+# find; a plugin with no declared path produces a report Sonar never looks for.
 
-check "no Java coverage condition configured while JaCoCo is absent" \
-  "$(grep -qi 'jacoco' "$POM" && echo skip || (without_comments "$SONAR_PROPS" | grep -qE '(^|[[:space:]])sonar\\.coverage\\.jacoco\\.xmlReportPaths=' && echo false || echo true))"
+check "JaCoCo plugin is configured in backend/pom.xml" \
+  "$(grep -qi 'jacoco-maven-plugin' "$POM" && echo true || echo false)"
+
+check "sonar.coverage.jacoco.xmlReportPaths is declared" \
+  "$(grep -qE '^sonar\.coverage\.jacoco\.xmlReportPaths=.+' "$SONAR_PROPS" && echo true || echo false)"
 
 # --- frontend coverage (FR-004 / US3) ---------------------------------------
 # web/ and mobile/ landed real TypeScript/React source during this branch's

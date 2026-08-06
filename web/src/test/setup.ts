@@ -1,9 +1,10 @@
 /**
- * @author Jemilin Beulah
+ * @author Jemilin Beulah, Tang Chee Seng
  */
 import "@testing-library/jest-dom/vitest";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
+import { server } from "./mocks/server";
 
 // The app reads these at module load. Set before any import that touches authConfig.
 vi.stubEnv("VITE_COGNITO_AUTHORITY", "https://cognito-idp.test.amazonaws.com/test_pool");
@@ -38,12 +39,21 @@ if (!window.localStorage) {
   });
 }
 
+beforeAll (() => server.listen({
+  onUnhandledRequest: "error"
+  })
+);
+
 beforeEach(() => {
   window.sessionStorage.clear();
   window.localStorage.clear();
 });
 
+afterAll(() => server.close());
+
 afterEach(() => {
+  server.resetHandlers();
   cleanup();
   vi.restoreAllMocks();
 });
+
