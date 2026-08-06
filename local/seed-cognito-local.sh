@@ -77,8 +77,11 @@ fi
 
 echo "Starting $CONTAINER…"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+# Read-only, because it is a checked-in test resource and the container writes to its own
+# config directory: the first run of this script rewrote the file in place and stripped its
+# trailing newline, turning a verification run into a spurious diff on a backend fixture.
 MSYS_NO_PATHCONV=1 docker run -d --name "$CONTAINER" -p "$PORT:9229" \
-  -v "$CONFIG:/app/.cognito/config.json" \
+  -v "$CONFIG:/app/.cognito/config.json:ro" \
   "$IMAGE" >/dev/null
 
 # The emulator answers before it logs "running", so poll rather than sleep a guessed number.
