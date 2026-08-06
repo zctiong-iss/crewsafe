@@ -222,6 +222,8 @@
     "site": "工地",
     "noSitesTitle": "尚未分配工地",
     "noSitesBody": "您还没有被分配到任何工地。请联系工地管理员为您添加。",
+    "noReadingTitle": "暂无读数",
+    "noReadingBody": "该工地尚无天气读数。下一次读数录入后即会显示。",
     "feelsLike": "湿球黑球温度",
     "airTemp": "气温",
     "humidity": "湿度",
