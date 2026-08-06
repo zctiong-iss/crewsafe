@@ -24,6 +24,9 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
      * reads as 404 rather than silently updating/removing the wrong shift's row. */
     Optional<ShiftAssignment> findByIdAndShiftId(UUID id, UUID shiftId);
 
+    /** Finds the caller's own assignment without exposing another worker's details. */
+    Optional<ShiftAssignment> findByShiftIdAndWorkerId(UUID shiftId, UUID workerId);
+
     /** Used to clear a shift's assignments before the shift itself is deleted — the
      * shift_assignment.shift_id foreign key has no ON DELETE CASCADE. */
     void deleteByShiftId(UUID shiftId);
