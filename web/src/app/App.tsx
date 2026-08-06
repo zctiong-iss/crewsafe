@@ -11,6 +11,7 @@ import { PlaceholderPage } from "@/features/placeholder/PlaceholderPage";
 import { NAVIGATION } from "./navigation";
 import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
+import { ConditionsPage } from "@/features/conditions/ConditionsPage";
 
 /**
  * Routes are chosen by auth state, not guarded per-route.
@@ -98,12 +99,14 @@ export function App() {
 
           {/* Every nav destination resolves to something. A link that 404s reads as a bug;
               a page that says "not built yet" reads as a roadmap. */}
-          {NAVIGATION.filter((item) => item.to !== "/" && item.to !== "/shifts").map((item) => (
-          <Route key={item.to} path={item.to} element={<PlaceholderPage title={item.label} />} />
+          {NAVIGATION.filter((item) => item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions").map((item) => (
+            <Route key={item.to} path={item.to} element={<PlaceholderPage title={item.label} />} />
           ))}
-
+          
           <Route path="/shifts/new" element={<CreateShiftPage />} />
           <Route path="/shifts" element={<ShiftsPage />} />
+          <Route path="/conditions" element={<ConditionsPage />} />
+
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
