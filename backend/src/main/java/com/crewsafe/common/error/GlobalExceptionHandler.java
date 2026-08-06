@@ -43,6 +43,18 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
     }
 
+    /**
+     * Handles {@link IllegalArgumentException} from business logic validation.
+     * Prevents typo'd or invalid IDs from returning 500 — bad input returns 400,
+     * matching the BadRequestException pattern.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
+        log.debug("Invalid argument: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
