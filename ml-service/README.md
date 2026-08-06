@@ -42,7 +42,48 @@ curl http://localhost:8000/health
 ```
 Response: `{"status": "ok"}`
 
-### 2. Verify Bedrock Access
+### 2. Forecast (SCRUM-188: Baseline Stub)
+**Versioned baseline prediction for WBGT, temperature, or humidity.**
+
+Implements the persistence baseline (naive: next value equals current) that SCRUM-114's trained model must beat. Every prediction is versioned for traceability.
+
+```bash
+curl -X POST http://localhost:8000/forecast \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric": "wbgt",
+    "horizon_minutes": 30,
+    "current_value": 35.5
+  }'
+```
+
+**Success Response** (200 OK):
+```json
+{
+  "metric": "wbgt",
+  "predicted_value": 35.5,
+  "horizon_minutes": 30,
+  "model_version": "baseline-1.0.0",
+  "confidence_interval_lower": 34.6125,
+  "confidence_interval_upper": 36.3875,
+  "timestamp": "2026-02-08T12:00:00Z"
+}
+```
+
+**Request Parameters:**
+- `metric` (required): `wbgt`, `temperature`, or `humidity`
+- `horizon_minutes` (optional, default 30): 30 or 60 minutes
+- `current_value` (required): Current observed value
+
+**Response Contract (Acceptance Criteria):**
+- `predicted_value`: Forecast at horizon (persistence baseline returns current value)
+- `model_version`: Traced version for US-06 traceability (currently `baseline-1.0.0`)
+- `confidence_interval_lower` and `confidence_interval_upper`: 95% confidence bounds
+- `timestamp`: Prediction creation time (ISO 8601)
+
+**Acceptance:** Backend consumes end-to-end via typed client. Replacing stub with trained model requires no consumer change.
+
+### 3. Verify Bedrock Access
 **Critical for spike acceptance criteria: confirms model access and region.**
 
 ```bash
@@ -68,7 +109,7 @@ curl http://localhost:8000/bedrock/access
 }
 ```
 
-### 3. Generate Mitigations (Schema-Validated)
+### 4. Generate Mitigations (Schema-Validated)
 **Demonstrates Pydantic struct validation: returns only schema-valid JSON.**
 
 ```bash
@@ -164,10 +205,22 @@ export AWS_SECRET_ACCESS_KEY=...
 
 ## Testing Locally
 
-### Unit Tests
+### Unit and Integration Tests (Forecast Service)
 ```bash
-# Currently: manual testing only (Pydantic model validation happens at runtime)
-# Run integration tests from Spring Boot client instead
+# Option 1: Run tests in Docker
+cd .. && docker-compose run --rm ml-service-test
+
+# Option 2: Run tests locally (requires Python 3.11+)
+pip install -r requirements.txt
+pytest test_forecast.py -v
+
+# Coverage: 20 tests covering:
+# - Persistence baseline forecasting for WBGT, temperature, humidity
+# - Request/response schema validation
+# - Confidence interval calculations
+# - Versioned predictions
+# - Edge cases (zero values, negative values, invalid requests)
+# - Integration with existing endpoints
 ```
 
 ### Integration Test (via Spring Boot)
@@ -212,7 +265,7 @@ ERROR:    ✗ Model not available in ap-southeast-1. Try us-east-1 as fallback.
 ERROR:    Failed to parse Bedrock response: json.JSONDecodeError
 ```
 
-## Spike Acceptance Criteria Checklist
+## SCRUM-187: Bedrock Spike Acceptance Criteria Checklist
 
 - ✅ **Model access confirmed in writing**: See `/bedrock/access` endpoint (documented in response)
 - ✅ **Documented round-trip with schema-valid object**: POST `/bedrock/suggest` returns Pydantic-validated `MitigationBatch`
@@ -220,6 +273,17 @@ ERROR:    Failed to parse Bedrock response: json.JSONDecodeError
 - ✅ **Failure mode documented**: All error codes documented in responses for SCRUM-141 degradation
 - ✅ **Latency and cost recorded**: Logged on every invocation; documented in README
 - ✅ **No out-of-scope features**: No agents, no tool calling, no prompt engineering
+
+## SCRUM-188: Forecast Service Contract and Baseline Stub Acceptance Criteria
+
+- ✅ **Contract committed and reviewed**: HTTP contract defined in `models.py` (ForecastRequest, ForecastPrediction)
+- ✅ **Versioned baseline prediction**: Every prediction includes `model_version` field for traceability (US-06)
+- ✅ **Persistence baseline implemented**: Naive forecast (next value = current) in `forecast_service.py`
+- ✅ **Endpoint returns valid predictions**: POST `/forecast` returns Pydantic-validated `ForecastPrediction`
+- ✅ **Backend consumes end-to-end**: Contract supports 30/60-min horizons, confidence intervals, model version
+- ✅ **Replacing stub requires no change**: Contract is versioned; trained model (SCRUM-114) swaps without interface change
+- ✅ **Tested locally**: 20 tests (11 forecast-specific + 9 integration) all passing in Docker
+- ✅ **Honest comparison point**: Persistence baseline is the baseline US-06 requires ("baselines measured")
 
 ## References
 

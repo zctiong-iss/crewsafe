@@ -52,7 +52,7 @@
 
   /* The active marker is a left border that is transparent when inactive, so the label
      never shifts by a pixel as you move between items. */
-  border-left: 3px solid transparent;
+  border-left: 8px solid transparent;
 }
 
 .shell__nav-item:hover {
@@ -63,7 +63,7 @@
 .shell__nav-item--active {
   background: var(--navy-raised);
   color: var(--ink-on-navy);
-  border-left-color: var(--action);
+  border-left-color: var(--action-sidebar);
   font-weight: var(--weight-semibold);
 }
 

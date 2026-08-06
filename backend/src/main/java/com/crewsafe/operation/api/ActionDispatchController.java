@@ -102,10 +102,11 @@ public class ActionDispatchController {
     @GetMapping("/{dispatchId}")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'WORKER', 'SAFETY_MANAGER')")
     public ResponseEntity<ActionDispatchResponse> getDispatch(
-            @PathVariable UUID dispatchId) {
+            @PathVariable UUID dispatchId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         log.info("Fetching action dispatch: {}", dispatchId);
 
-        ActionDispatch dispatch = actionDispatchService.getDispatch(dispatchId);
+        ActionDispatch dispatch = actionDispatchService.getDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));
     }
 }

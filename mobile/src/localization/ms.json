@@ -224,6 +224,8 @@
     "site": "Tapak",
     "noSitesTitle": "Tiada tapak diberikan",
     "noSitesBody": "Anda belum ditugaskan ke mana-mana tapak. Minta pentadbir tapak anda menambah anda.",
+    "noReadingTitle": "Tiada bacaan lagi",
+    "noReadingBody": "Tapak ini belum mempunyai bacaan cuaca. Ia akan dipaparkan sebaik bacaan seterusnya diterima.",
     "feelsLike": "Suhu glob bebuli basah",
     "airTemp": "Suhu udara",
     "humidity": "Kelembapan",

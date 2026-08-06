@@ -64,7 +64,7 @@ package "AWS account · ap-southeast-1 · shared-dev" as aws {
     }
   }
 
-  database "ECR repository\ncrewsafe/backend\nimmutable tags · scan on push" as ecr
+  database "ECR repositories\ncrewsafe/backend + crewsafe/web\nimmutable tags · scan on push" as ecr
   database "SSM Parameter Store\n/crewsafe/shared-dev/*\nconfiguration + DB URL" as ssm
   database "Secrets Manager\nweather API key\nRDS-managed master credential" as secrets
   artifact "CloudWatch Logs\nbackend: 14 days\nPostgreSQL: 7 days" as logs

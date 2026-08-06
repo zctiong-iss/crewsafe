@@ -5,11 +5,21 @@
  * to the mock that currently answers it. Switching to the real backend is deleting a
  * branch, not rewriting a call site — the screens above never learn which one ran.
  *
- * All three are mocked unconditionally today, not just in `mock` auth mode, because none of
- * the endpoints exist on any deployment. That is the difference between this and
- * `identity.ts`, where the real path works and only mock mode diverges.
+ * The shift and lightning calls are mocked unconditionally — not just in `mock` auth mode —
+ * because no deployment exposes those endpoints at all. `fetchSiteWeather` is no longer in
+ * that group: since SCRUM-209 it branches on the auth mode like `identity.ts` and
+ * `sites.ts` do, because the endpoint it needs is real.
  */
-import type { LightningRisk, MyShift, PolicyEvaluation, SiteConditions } from "@/types/domain";
+import type {
+  LightningRisk,
+  MyShift,
+  PolicyEvaluation,
+  SiteConditions,
+  WbgtBand,
+} from "@/types/domain";
+import { request } from "../client";
+import { isMockApi } from "@/auth/authMode";
+import { isApiError } from "../errors";
 import { mockLightningRisk } from "../mock/lightning";
 import { mockConditions } from "../mock/conditions";
 import { mockMyShift } from "../mock/myShift";
@@ -70,4 +80,70 @@ export function fetchSiteConditions(
   workerId: string,
 ): Promise<SiteConditionsResponse> {
   return delay(mockConditions(siteId, intensity, workerId));
+}
+
+/**
+ * A reading and the band it falls into — everything the weather screen shows, and nothing
+ * it does not.
+ *
+ * Both are nullable, and for different reasons. `observation` is null when the site has no
+ * stored reading yet; `band` is null when the reading exists but its WBGT could not be
+ * derived. Collapsing either into a default would make "we do not know" look like a fact.
+ */
+export interface SiteWeatherResponse {
+  observation: SiteConditions | null;
+  band: WbgtBand | null;
+}
+
+/** The wire shape of `GET /api/v1/sites/{siteId}/weather/latest`. */
+interface LatestWeatherWire extends SiteConditions {
+  /** The observation row's own id. Nothing on the client needs it. */
+  id: string;
+  band: WbgtBand | null;
+}
+
+/**
+ * `GET /api/v1/sites/{siteId}/weather/latest` — real, and live outside mock mode since
+ * SCRUM-209.
+ *
+ * The band comes down evaluated. The client must never derive it: §12.2 forbids a client
+ * submitting or overriding a WBGT risk band, and FR-15 makes the backend engine
+ * authoritative for anything that decides what a worker must do. `api/mock/conditions.ts`
+ * still contains that arithmetic and still keeps it out of `src/helpers/` for exactly this
+ * reason — it is a stand-in server, not a utility.
+ *
+ * `workerId` is a mock-only argument, kept because `mockConditions` evaluates a whole
+ * policy locally and needs someone to attribute the actions to. This function discards
+ * that policy: the weather screen shows a reading for a site, not one worker's
+ * obligations, which is why intensity is not a parameter here at all.
+ *
+ * A 404 is not an error. It is the backend saying this site has nothing ingested yet —
+ * true for a newly created site, and a state the screen has to render rather than blame
+ * the network for.
+ */
+export async function fetchSiteWeather(
+  siteId: string,
+  workerId: string,
+): Promise<SiteWeatherResponse> {
+  if (isMockApi()) {
+    const mock = await delay(mockConditions(siteId, "MODERATE", workerId));
+    return { observation: mock.observation, band: mock.policy.currentBand };
+  }
+
+  try {
+    const wire = await request<LatestWeatherWire>({
+      url: `/api/v1/sites/${siteId}/weather/latest`,
+      method: "GET",
+    });
+
+    // Destructured apart rather than passed through whole: `id` and `band` are not part of
+    // `SiteConditions`, and a spread would smuggle both into it.
+    const { id: _id, band, ...observation } = wire;
+    return { observation, band };
+  } catch (error) {
+    if (isApiError(error) && error.kind === "not-found") {
+      return { observation: null, band: null };
+    }
+    throw error;
+  }
 }

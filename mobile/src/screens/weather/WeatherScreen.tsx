@@ -1,14 +1,15 @@
 /**
  * NEA-ingested conditions for a site.
  *
- * ── SAME MISSING ENDPOINT AS THE SHIFT SCREEN ───────────────────────────────────────────
- * `GET /api/v1/sites/{siteId}/conditions` does not exist. The data behind it does —
- * `weather_observation` is populated by a real NEA ingestion scheduler, with `source`,
- * `observed_at`, `ingested_at` and `quality_status` already modelled as FR-11 requires —
- * but no controller exposes it. See `api/mock/conditions.ts` for the shape this commits to.
+ * ── LIVE SINCE SCRUM-209 ────────────────────────────────────────────────────────────────
+ * Outside mock mode every number here comes from `GET /api/v1/sites/{siteId}/weather/latest`
+ * — the real NEA ingestion, with `source`, `observed_at`, `ingested_at` and `quality_status`
+ * as FR-11 requires — and the WBGT band comes down beside it already evaluated. The client
+ * does not derive the band (§12.2, FR-15). `GET /api/v1/sites` behind the picker was already
+ * real, so this screen no longer has a mock in its path at all outside `mock` auth mode.
  *
- * `GET /api/v1/sites` on the other hand is real, so the site picker below runs against the
- * live endpoint outside mock mode.
+ * `api/mock/conditions.ts` still answers in mock mode and is still the contract for the
+ * unbuilt `/conditions` endpoint the shift screen needs.
  *
  * ── WHAT THIS SCREEN IS NOT ─────────────────────────────────────────────────────────────
  * It shows the reading and its band. It does not show the required heat actions, and that
@@ -29,6 +30,7 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import WeatherIcon from "@/components/weather/WeatherIcon";
+import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
 import FreshnessBadge from "@/components/safety/FreshnessBadge";
 import FreshnessNotice from "@/components/safety/FreshnessNotice";
 
@@ -75,7 +77,7 @@ export default function WeatherScreen() {
   const dispatch = useAppDispatch();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { status, sites, selectedSiteId, conditions, policy, errorKey, requestId, refreshing } =
+  const { status, sites, selectedSiteId, conditions, band, errorKey, requestId, refreshing } =
     useAppSelector((state) => state.weather);
 
   const load = useCallback(
@@ -192,6 +194,16 @@ export default function WeatherScreen() {
                 { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
               ]}
             >
+              {/* Absolutely positioned behind everything below it, and only on this card —
+                  the Heat conditions card on My shift was stripped to a single reading in
+                  SCRUM-196, and decoration behind a safety number there would reverse that
+                  with no discussion. Draws nothing in high contrast. */}
+              <WeatherBackdrop
+                condition={derived.condition}
+                night={derived.night}
+                radius={theme.metrics.radius}
+              />
+
               <WeatherIcon
                 condition={derived.condition}
                 night={derived.night}
@@ -222,9 +234,11 @@ export default function WeatherScreen() {
                 {t("weather.feelsLike")}
               </AppText>
 
-              {policy ? (
+              {/* Absent when the reading exists but its WBGT could not be derived. Showing
+                  the coolest band instead would turn "unknown" into "safe". */}
+              {band ? (
                 <AppText variant="label" style={styles.band}>
-                  {t(`wbgt.band.${policy.currentBand}`)}
+                  {t(`wbgt.band.${band}`)}
                 </AppText>
               ) : null}
 
@@ -279,6 +293,23 @@ export default function WeatherScreen() {
               </View>
             </View>
           </>
+        ) : status === "ready" && selectedSiteId !== null ? (
+          /*
+           * A site with nothing ingested yet. Only reachable live — the mock always has a
+           * reading — and previously it rendered an empty screen under a site picker, which
+           * reads as a broken app rather than as "no data for this site".
+           *
+           * `selectedSiteId !== null` is what separates this from the no-memberships case
+           * above, which is also conditions-less and would otherwise stack two empty states.
+           */
+          <View style={styles.empty}>
+            <AppText variant="title" style={styles.centre}>
+              {t("weather.noReadingTitle")}
+            </AppText>
+            <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
+              {t("weather.noReadingBody")}
+            </AppText>
+          </View>
         ) : null}
 
         {/* Without this only FAIR is reachable — the fixture returns one set of metrics, so
@@ -344,6 +375,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: s(18),
     marginTop: vs(12),
+    // The backdrop is absolutely filled and its motes travel; without this a drifting cloud
+    // leaves the card. `overflow` clips children on both platforms even where a shadow is
+    // drawn outside, which is why `cardSurface`'s elevation still shows.
+    overflow: "hidden",
   },
   conditionLabel: {
     marginTop: vs(10),

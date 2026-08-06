@@ -195,7 +195,7 @@ class ActionDispatchControllerTest extends AbstractIntegrationTest {
 
     @Test
     void testGetDispatch_Success() throws Exception {
-        when(actionDispatchService.getDispatch(eq(dispatchId))).thenReturn(dispatch);
+        when(actionDispatchService.getDispatch(eq(dispatchId), any(CrewSafeUserPrincipal.class))).thenReturn(dispatch);
 
         mockMvc.perform(get("/api/action-dispatch/" + dispatchId)
                 .header("Authorization", "Bearer " + supervisorToken))

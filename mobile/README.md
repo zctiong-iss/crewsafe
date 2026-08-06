@@ -175,6 +175,252 @@ exists to avoid ([ADR 0002](../docs/adr/0002-cookie-free-bearer-authentication.m
 because it is fenced to development and to synthetic accounts. The password lives in form
 state that dies with the screen — never Redux, never persisted, never logged.
 
+### Signing in: step by step
+
+There are two routes to a real token. **Route A needs no AWS account** and is what the
+screenshots in this README were taken with; Route B is the shared dev pool.
+
+Whichever you use, one rule catches everybody:
+
+> **Restart Metro with `npm run start:clear` after editing `.env`.** Metro inlines
+> `EXPO_PUBLIC_*` at bundle time by text substitution. A running Metro keeps serving the old
+> values, and the symptom is a config error naming a variable you can see is set.
+
+---
+
+#### Route A — against the local emulator (no AWS account)
+
+Two commands, from the repository root and then `mobile/`:
+
+```bash
+./local/seed-cognito-local.sh --restart
+cd mobile && npm run start:clear
+```
+
+`--restart` re-seeds the pool, writes `mobile/.env` for `cognito-password`, drops the
+database, relaunches the backend and waits for the first NEA ingestion before it returns.
+It is one step precisely because doing it by hand is three that must not be interleaved —
+see the warning below.
+
+Metro is deliberately **not** restarted for you: it is usually already running in a terminal
+you are watching, and killing it out from under you would be worse than telling you.
+
+<details>
+<summary>Doing it by hand, or for the hosted UI</summary>
+
+```bash
+./local/seed-cognito-local.sh --reset-db      # or: --env hosted-ui
+```
+
+It prints an `export` block for the backend and, when `--env` is not used, two blocks to
+copy into `mobile/.env`. Start the backend with either the printed lines or, without
+retyping anything:
+
+```bash
+cd backend && source ../local/.cognito-local/backend-env.sh && ./mvnw spring-boot:run
+```
+
+In **PowerShell** — where `&&` is a parse error in 5.1, `source` does not exist, and
+`./mvnw` runs the shell script rather than `mvnw.cmd` — the seed script writes a twin file
+for exactly this:
+
+```powershell
+. .\local\.cognito-localackend-env.ps1
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+The seed script itself is bash. Run it from Git Bash, or from PowerShell as
+`bash ./local/seed-cognito-local.sh --restart`.
+
+Wait for `NEA weather ingestion completed`. `WEATHER_INGESTION_ENABLED=true` is in that
+block and is the point of the exercise: without it the scheduler never runs,
+`weather_observation` stays empty, and every site 404s.
+
+The two `.env` blocks differ only in a few lines and **the wrong one fails much later**, at
+sign-in, with an unrelated-looking error. `--env password` and `--env hosted-ui` write the
+file for you and keep a `.env.bak`; prefer them.
+
+`10.0.2.2` for the emulator, `localhost` for the browser — the browser is on this machine,
+the emulator is not. On a physical phone use your LAN IP for both. Hosted UI runs under
+`npm run web:pkce`, not `start:clear`.
+
+</details>
+
+**Sign in.** All seven demo accounts are seeded, with the same roles and site codes
+`AbstractIntegrationTest` uses. Every one takes the password `Test-Password-2026!`.
+
+| Username | Role | Sites | Tabs |
+|---|---|---|---|
+| `worker1` `worker2` `worker3` | WORKER | Bishan | My shift · Alerts · Weather · Profile |
+| `supervisor1` | SUPERVISOR | Bishan | Shifts · Weather · Profile |
+| `supervisor2` | SUPERVISOR | NUS Campus | Shifts · Weather · Profile |
+| `manager1` | SAFETY_MANAGER | **both** | Shifts · Weather · Profile |
+| `admin1` | ADMIN | **none** | Shifts · Weather · Profile |
+
+Pick by what you need to look at:
+
+- **The Heat conditions card** is on *My shift*, which is WORKER-only — use `worker1`.
+- **Two sites in the picker** needs `manager1`; a supervisor sees only their own.
+- **The empty-membership state** is `admin1`, who holds every permission a supervisor does
+  but belongs to no site. That is the account that catches code assuming a membership exists.
+
+Only a WORKER gets *My shift* and *Alerts*. `/shifts/me` is scoped to the caller's own
+assignment and 403s for anyone else, and the dispatch inbox is WORKER-only, so those tabs
+would be dead ends rather than merely empty — see `SupervisorTabs.tsx`.
+
+> **Re-seeding invalidates a running stack — all three must move together.** Each seed mints
+> a new pool with new client ids and new Cognito subjects, and deletes the previous one. So
+> after any re-seed the backend, `mobile/.env` and Metro must all move to it. Leaving any one
+> behind produces a misleading error: a deleted client id reads as *"the app is not
+> configured"*, naming a variable you can see is set.
+>
+> `--restart` exists to make that one action rather than three. It still cannot restart
+> Metro, which is why `start:clear` is the second command above and not an afterthought.
+>
+> `--reset-db` is part of this, not optional. A Cognito subject is immutable, so
+> `DemoDataSeeder` refuses to remap `worker1` onto a new one and the backend will not start,
+> with *"Application-user mapping conflicts with an existing immutable Cognito subject"*.
+> That is the guard working correctly.
+
+**Hosted UI works locally too**, which is worth knowing because it is not obvious:
+cognito-local implements `/oauth2/authorize`, renders a real username and password form and
+honours PKCE. `signInWithPkce` already reads its domain from the environment, so this needs
+no code change at all — only a client with `http://localhost:5173/callback` registered,
+which the seed script creates.
+
+---
+
+#### Route B — against the shared dev pool (needs AWS)
+
+**1.** Get the non-secret ids (needs `gh` authenticated against the repo):
+
+```bash
+gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value \
+  | jq '.accounts.dev | {region, hosted_ui_url, web_client_id, cli_client_id}'
+```
+
+**2.** Get the synthetic users' passwords from AWS Secrets Manager — see the
+[root README](../README.md#cognito).
+
+**3.** Fill `mobile/.env`. Leave `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT` **empty**; it is what
+sends `cognito-password` to a local emulator instead of AWS.
+
+| Mode | Needs |
+|---|---|
+| `cognito-password` | `REGION`, `CLI_CLIENT_ID` |
+| `cognito-pkce` | `HOSTED_UI_DOMAIN`, `WEB_CLIENT_ID` |
+
+**4.** Start the backend with `./run.sh --account dev` from the repository root, which
+supplies every `APP_COGNITO_*` value from the same shared config.
+
+**5.** Sign in with a synthetic username and its Secrets Manager password.
+
+---
+
+#### Why hosted UI is web-only, in either route
+
+`signInWithPkce` throws `pkceUnavailableInExpoGo` before it opens a browser. Expo Go's
+redirect resolves to `exp://…`, which is not a registered callback on any client — the
+mobile client's is pinned to `crewsafe://callback`, a scheme only a native build can
+register. So the flow cannot complete in Expo Go on any amount of client-side effort.
+
+`npm run web:pkce` serves on 5173 because that is already a registered callback and an
+allowed CORS origin. A phone needs a development build.
+
+#### When something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| *"The app is not configured. Missing: …"* naming a variable you have set | Metro is serving a pre-`.env` bundle. `npm run start:clear`. |
+| *"Your sign-in worked, but this account has not been set up"* | A 401 on `/api/v1/me` — the token was rejected **or absent**. Check the client id is in `APP_COGNITO_CLIENT_IDS` and that the backend's issuer matches the pool. |
+| Backend will not start, *"conflicts with an existing immutable Cognito subject"* | You re-seeded without `--reset-db`. |
+| Sign-in fails after a re-seed, or the client id "is missing" | A re-seed mints a **new pool**. The backend, `mobile/.env` and Metro must all be moved to it together — see the warning below. |
+| Weather shows *"No reading yet"* | Ingestion is off, or has not run. `WEATHER_INGESTION_ENABLED=true`. |
+| `redirect_mismatch` on hosted UI | Serving on a port other than 5173, or the callback is not registered on that client. |
+
+### Verifying the live path without AWS
+
+`cognito-password` and `cognito-pkce` both need the shared dev pool, which means `gh`
+authenticated against the repo *and* the synthetic users' passwords from AWS Secrets Manager.
+Without an AWS account you cannot sign in at all — so every screen falls back to fixtures and
+nothing that reads live data can be checked.
+
+[`local/seed-cognito-local.sh`](../local/seed-cognito-local.sh) replaces the pool, **not the
+security**. It runs `jagregory/cognito-local` — the same digest-pinned image
+`AbstractIntegrationTest` uses — which is the real Cognito Identity Provider HTTP API,
+signing genuine RS256 tokens and serving a genuine JWKS. Tokens it mints go through the
+resource server, the issuer and client-id checks and every `@PreAuthorize` for real. Only the
+issuer is local.
+
+See **Route A** above for the steps. **The seam it relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
+`idpEndpoint()` in [`auth/cognitoPasswordAuth.ts`](src/auth/cognitoPasswordAuth.ts). It is
+gated on `__DEV__` rather than on the auth mode, deliberately: this is the value that decides
+*who signs the token the backend will trust*, so no configuration may redirect a release
+bundle's authentication, whatever mode it thinks it is in. `cognitoPasswordAuth.test.ts`
+asserts that.
+
+The alternative considered was a dev-only unauthenticated endpoint on the backend. It was
+rejected: a second way into a safety API is a much larger thing to get wrong than one string.
+
+#### A defect this turned up
+
+cognito-local omits `ExpiresIn` from its `InitiateAuth` response. AWS always sends it, so
+this had never been exercised — and the failure was silent and pointed somewhere else
+entirely:
+
+```
+undefined * 1000       -> NaN
+saveSession writes     -> "NaN"
+loadSession rejects it -> the session reads as corrupt, correctly
+the interceptor        -> sends NO Authorization header
+the server             -> 401
+the app                -> "this account has not been set up for CrewSafe yet"
+```
+
+A missing number in the login response surfaced to the worker as a **provisioning problem
+with their account**. `expiresInSeconds()` now defaults to an hour; the worst case is one
+early re-login, against a sign-in that silently authenticated nothing. Found only because the
+backend's `DEBUG` log said `Set SecurityContextHolder to anonymous SecurityContext` — the
+request had no token at all, rather than a rejected one.
+
+#### What is live, and what is still a fixture
+
+| Screen | Element | Outside mock mode |
+|---|---|---|
+| Weather | Everything — WBGT, band, metrics, station, freshness | **Live NEA** |
+| My shift | Heat conditions card | **Live NEA** |
+| My shift | Shift, task, intensity, acclimatisation | Fixture — `/shifts/me` does not exist |
+| My shift | Lightning banner | Fixture — `/lightning` does not exist |
+| My shift | Heat guidance actions | Absent — see below |
+
+**The shift screen is a hybrid while `/shifts/me` is missing.** Its heat card needs a site id,
+and the fixture shift's is `11111111-…`, which no deployment has — `DemoDataSeeder` generates
+site ids, so asking the live endpoint about it returns 403, not a reading. Outside mock mode
+`loadConditions` in [`safetySlice`](src/store/reducers/safetySlice.ts) therefore resolves the
+site from the real `GET /api/v1/sites`, as `weatherSlice` already does. So the card shows a
+live reading for the worker's **first accessible site**, not for the site the fixture names.
+
+Honest for verification and wrong for production — survivable only because the whole shift
+above it is a fixture too. When `/shifts/me` lands this collapses to one line: pass
+`shift.siteId` and delete the lookup.
+
+The policy is `null` there rather than the mock's. Pairing a real reading with a fixture
+obligation would be worse than having none — it would look authoritative and be invented.
+Nothing renders it today anyway: `features.heatGuidanceCard` is off.
+
+#### Verified on the emulator
+
+Signed in as `manager1`, then `worker1`, against live NEA data ingested that minute:
+
+- **Weather** — WBGT 29.2 °C, band "Below 31°C" from the server, station S128, observed 09:30
+  / received 09:42, a green **Live** badge, and no "Simulated data" notice. The SCRUM-209
+  Part 3 backdrop renders over it unchanged.
+- **My shift** — Heat conditions reads the same **29.2 °C WBGT** with a **Live** badge, while
+  the stop-work banner and task stay fixtures.
+
+Both readings match `GET /api/v1/sites/{siteId}/weather/latest` for Bishan.
+
 ---
 
 ## What was built
@@ -754,6 +1000,274 @@ per-user change exists to close.
 attributing it to anyone. Nothing in persisted state can name the person it belonged to,
 precisely because `auth` is not persisted. Guessing would be wrong on a shared phone, so one
 person re-sets one switch once.
+
+---
+
+## SCRUM-209 Part 3 — Condition backdrops on the Weather hero card
+
+Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
+
+The Conditions hero card now has a background that reflects the weather — a sun glow and a
+drifting cloud on a fair day, scattered rain under a cloud, stars at night. **Nothing else on
+the card changed**: same fields, same fonts, same layout, same copy.
+
+### A backdrop is data, not a component
+
+```
+types.ts       what a backdrop is: a wash + a list of motes
+registry.ts    what each condition looks like        ← the swap point
+shapes.ts      cloud() and rain() helpers, returning plain motes
+WeatherBackdrop.tsx   draws whatever the registry says, knows no condition by name
+```
+
+Replacing a backdrop is editing one entry in `registry.ts`. Deleting a key renders the plain
+card — never an empty frame, which is the same reasoning
+[`WeatherIcon`](src/components/weather/WeatherIcon.tsx) gives for refusing to ship a stub
+branch: a blank box reads as a broken asset, an absent one reads as a plain card.
+
+Keys are `FAIR`, `PARTLY_CLOUDY`, `CLOUDY`, `WINDY`, `RAIN`, `THUNDERY_SHOWERS`, plus
+`FAIR-night` and `PARTLY_CLOUDY-night` — the same `${condition}${night ? "-night" : ""}` string
+`WeatherIcon` already computes, and the same sparse night map (rain, wind, cloud and storms
+look the same after dark).
+
+### No new dependency and no assets
+
+The plan scoped this to "the mechanism and a coded default", with designed Lottie artwork
+explicitly out of scope — commissioning and licensing it is separate work with a different
+kind of decision in it. So the backdrops are built from `Animated` views, the same API
+`AnimatedIcon` already uses. When artwork does land, it replaces registry entries.
+
+### Reduce Motion is obeyed in full, with no `essential` carve-out
+
+`AnimatedIcon` has an `essential` escape hatch for motion that *carries* meaning — the
+stop-work pulse, where the tempo is the warning. This is the opposite case: the icon and the
+label already say "Rain", so the movement is atmosphere and nothing reads it. Taking the
+exemption here would weaken the argument protecting the one place it matters.
+
+Because SCRUM-199 defaults the preference **on**, the still state is the common case, not an
+edge one. Every spec is authored to look finished without motion.
+
+| Setting | Hero card |
+|---|---|
+| Motion allowed | animated backdrop |
+| Reduce Motion (in-app or OS) | still backdrop, same condition |
+| High contrast | **no backdrop at all** — plain surface |
+
+High contrast removes it entirely rather than dimming it. That mode exists so a worker can
+read the card in direct sun, and illustration behind a display-size WBGT reading defeats
+exactly that. Any wash that survived a contrast check against every text colour would be so
+scrimmed it is no longer a backdrop.
+
+Animation also stops when the Weather tab is not focused (`useIsFocused`) — the same battery
+argument that keeps the weather poll focus-gated.
+
+### The contrast budget is computed, not eyeballed
+
+The plan named legibility as the whole risk and asked for the **busiest** frame to be checked,
+not the calmest. A reviewer cannot reliably find the worst frame of a loop, so
+`backdropContrast.test.ts` does it: it samples the card on a grid, composites every mote whose
+travel envelope can reach each point, and fails if the darkest point drops any text colour
+below 4.5:1. Checked at three card aspect ratios, because the card gets taller as the font
+scale rises.
+
+**The first version of that test was wrong and had to be replaced.** It stacked every mote in
+a spec onto one pixel, which sounds conservative and is not: rain is eight drops spread across
+the card that can never coincide, and pricing them as one pixel forces every drop to an alpha
+where rain is invisible. Modelling the geometry is what lets the backdrop be visible and
+provably legible at once.
+
+`THUNDERY_SHOWERS` is dimmer than a storm wants to be for this reason — it failed at 4.36:1
+and its wash and drops were lowered until it passed. That is the budget working.
+
+### Two things that only showed up on the emulator
+
+Both were in the **still** state, which is the state most workers will see.
+
+**A frozen flash is not lightning, it is a beige blob.** The storm's flash mote parked at full
+opacity behind the WBGT reading. Fixed with `RESTING_FADE` in `WeatherBackdrop` — `flash`
+rests at 0.15 and only the animation reaches full. The contrast test still prices it at its
+peak.
+
+**A cloud drawn as one rounded rectangle reads as a UI panel** that has drifted onto the card,
+and eight raindrops parked at the same height read as a dashed rule. Fixed in `shapes.ts`: a
+cloud is three overlapping circles sharing one motion, and `rain()` scatters its drops across
+both axes.
+
+### Colours are literal, and night is cooler rather than darker
+
+The registry does not use `styles/colors.ts`. That palette is semantic — `danger` means stop
+work — and reaching into it for illustration would tie a decorative shape to a safety colour,
+so darkening the danger red for contrast would silently restyle the rain.
+
+Night could not be dark. CrewSafe has no dark palette; both themes put black text on a white
+surface, so a dark wash would fail AA on the one screen a supervisor reads a temperature from.
+Night is expressed as cooler and dimmer in *hue*.
+
+### Reverting
+
+Delete the `<WeatherBackdrop …>` element from `WeatherScreen.tsx` and the `overflow: "hidden"`
+line added to `styles.hero`. The card returns to exactly what it was. To drop one condition
+only, delete its key from `BACKDROPS`.
+
+### Verified on the emulator (Pixel, `mock` auth mode)
+
+- All six conditions via the dev scenario switcher; night via "Observed after dark".
+- Storm, fair and fair-night captured; text fully legible against each.
+- **High contrast: no backdrop**, plain card with thick borders — confirmed on device.
+- **Extra large text (1.5x)**: the backdrop scales with the card and stays in proportion,
+  which is what the percentage geometry is for.
+- Reduce Motion off: motion runs. Reduce Motion on (the default): still backdrop, not blank.
+- 13 tests — 6 behavioural, 7 contrast × conditions × ratios (49 assertions).
+
+**One pre-existing defect noticed, not touched.** In high contrast the metrics card's meta row
+truncates "After dark" to "After". It is the same class as
+[Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first)
+— a line broken at a space and clipped — and it is unrelated to this ticket, so it is recorded
+here rather than fixed in it.
+
+---
+
+## SCRUM-209 Part 2 — Live weather from the ingestion API
+
+Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
+Part 1 (the rest-card swipe bug) is on `feat/scrum-209-rest-swipe-fix` and is not in this
+branch.
+
+The Conditions screen no longer runs on simulated data outside `mock` auth mode. Every number
+on it — WBGT, air temperature, humidity, wind, rainfall, station, observed/ingested times,
+freshness — now comes from the NEA ingestion the backend already had, and the WBGT band comes
+down beside it **already evaluated by the server**.
+
+### What was actually missing was the band, not the reading
+
+The reading was never the hard part. `GET /api/v1/sites/{siteId}/weather/latest` already
+existed, already `@PreAuthorize`-scoped to site membership, and its response already mapped
+almost one-to-one onto the app's `SiteConditions`.
+
+What no endpoint in the backend exposed — checked across all six controllers — was the **WBGT
+band**. And §12.2 forbids a client submitting or overriding one, with FR-15 making the backend
+engine authoritative for anything that decides what a worker must do. So the app could not
+simply switch the reading to live and keep computing the band locally; that would have been
+the client deciding a safety verdict.
+
+Hence the ticket carries both halves, and the backend half had to land first.
+
+**Backend (this branch):**
+
+- `weather/domain/WbgtBand.java` — new. §7.1's four bands, half-open (`32.0` is
+  `BAND_32_TO_BELOW_33`, not `BAND_31_TO_BELOW_32`), compared with `compareTo` so
+  `32.00` and `32.0` classify identically.
+- `WeatherController.LatestWeatherResponse` — gained a trailing `band` field populated by
+  `WbgtBand.classify(observation.getWbgt())`.
+- `WbgtBandTest` — 13 cases, every boundary plus null plus BigDecimal scale.
+
+**The wire names are not the Java constant names.** A Java identifier cannot start with a
+digit, so the constants are `BAND_31_TO_BELOW_32` while the JSON says `31_TO_BELOW_32` — via
+`@JsonProperty` on each constant. That direction was chosen deliberately: the app's
+`WbgtBand` type and its `wbgt.band.*` translation keys already use the digit-leading form, so
+prefixing the wire would have forced a mapping layer into every client, and a mapping layer
+is a thing that drifts.
+
+**A null WBGT yields a null band, not `BELOW_31`.** `BELOW_31` is the tempting default and
+the dangerous one: it makes "no reading" and "the coolest band" indistinguishable on screen,
+assuming the safest interpretation for the case where nothing at all is known.
+
+### Mobile changes
+
+| File | Change |
+|---|---|
+| `api/endpoints/safety.ts` | New `fetchSiteWeather(siteId, workerId)` — real call outside mock mode |
+| `store/reducers/weatherSlice.ts` | `policy: PolicyEvaluation \| null` → `band: WbgtBand \| null` |
+| `screens/weather/WeatherScreen.tsx` | Renders `band`; new no-reading empty state |
+| `localization/*.json` | `weather.noReadingTitle`, `weather.noReadingBody` × 7 locales |
+| `api/endpoints/safety.test.ts` | New — 7 tests over the mapping boundary |
+
+### Why a new function rather than switching `fetchSiteConditions`
+
+`fetchSiteConditions` has two callers and only one of them could go live.
+
+`weatherSlice` resolves its site id from the **real** `GET /api/v1/sites`, so it holds a site
+id the backend recognises. `safetySlice` gets its site id from `fetchMyShift`, which is still
+a mock — `GET /api/v1/shifts/me` does not exist — and returns the seeded demo UUID
+`11111111-…`, which `DemoDataSeeder` does **not** create (it generates random ids per site).
+Switching the shared function would have pointed the shift screen at a site id no deployment
+has, turning its conditions card into a 403.
+
+So `fetchSiteConditions` is untouched and still fully mocked, and the weather screen got its
+own function. The shift screen goes live when `/shifts/me` and `/conditions` do.
+
+### What the weather screen gave up, and why that is correct
+
+`weatherSlice` no longer holds a `PolicyEvaluation`. It held one to read a single field off
+it, and the rest — the mandatory and advisory actions — depends on a worker's own task
+intensity and acclimatisation. Site-wide, those actions apply to nobody in particular, so
+holding them on this screen was an invitation to render them. The live endpoint returns no
+policy at all, which made the removal forced rather than optional.
+
+Nothing was removed from the screen: it never rendered the actions. Its own header comment
+says so, and that reasoning is unchanged.
+
+### Text stripped from the wire shape
+
+The response carries two fields that must not become part of `SiteConditions`:
+
+```ts
+const { id: _id, band, ...observation } = wire;
+```
+
+`id` is the `weather_observation` row's primary key and nothing on the client needs it;
+`band` is a verdict *about* the reading, not part of it. A spread would have smuggled both
+into a typed domain object — `api/endpoints/safety.test.ts` asserts neither survives.
+
+### A 404 is an answer, not a failure
+
+The endpoint 404s when a site has no stored observation — true for a newly created site
+before the ingestion scheduler's first run. That is caught and returned as
+`{ observation: null, band: null }`; anything else, including a 403, still rejects.
+
+Which exposed a pre-existing gap: the screen rendered `conditions && derived ? … : null`, so a
+site with no reading produced a **blank page under a site picker** — indistinguishable from a
+broken app. Only reachable live, because the mock always has a reading. New empty state:
+
+> **No reading yet**
+> This site has no weather reading yet. It will appear once the next reading is ingested.
+
+Guarded on `status === "ready" && selectedSiteId !== null` so it does not stack on top of the
+existing no-memberships empty state, which is also conditions-less.
+
+### Band absent vs. band unknown
+
+```tsx
+{band ? <AppText variant="label">{t(`wbgt.band.${band}`)}</AppText> : null}
+```
+
+Unchanged in shape from the `policy.currentBand` version — it was already null-guarded. The
+guard now means something different, though: previously "no policy loaded", now "the reading
+exists but its WBGT could not be derived". Rendering the coolest band there would turn
+*unknown* into *safe*.
+
+### Reverting
+
+To put the weather screen back on simulated data: change `fetchSiteWeather` to return the
+`isMockApi()` branch unconditionally. Nothing else has to move — `mockConditions` is intact
+and is still the contract for the unbuilt `/conditions` endpoint.
+
+To drop the band from the API: remove the `band` field from `LatestWeatherResponse`, delete
+`WbgtBand.java` and its test, and revert `weatherSlice` to holding a `PolicyEvaluation`.
+
+### Verified
+
+- `WbgtBandTest` — 13 passed.
+- Full backend `mvnw verify` — **181 tests, 0 failures**, including `WeatherControllerTest`
+  asserting `$.band == "31_TO_BELOW_32"` against the real MockMvc contract (Testcontainers,
+  so it needs Docker running — it errors out entirely without it, which is not a test
+  failure and should not be read as one).
+- Mobile `npm test` — **68 passed**, 6 suites, of which 7 tests are new.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run check:locales` — 290 keys, all
+  seven locales in parity.
+
+Not yet exercised against a live deployment — the emulator runs `mock` auth mode, which
+takes the other branch by design.
 
 ---
 
