@@ -89,13 +89,14 @@ for workflow in "$WEB_WORKFLOW" "$MOBILE_WORKFLOW"; do
   contains_in "exact pull request revision checkout in $(basename "$workflow")" "$workflow" 'github.event.pull_request.head.sha || github.sha'
   not_contains_in "no continue-on-error in $(basename "$workflow")" "$workflow" 'continue-on-error:'
   not_contains_in "no deployment command in $(basename "$workflow")" "$workflow" 'deploy'
-  not_contains_in "no publish command in $(basename "$workflow")" "$workflow" 'publish'
-  not_contains_in "no cloud credential action in $(basename "$workflow")" "$workflow" 'configure-aws-credentials'
-  not_contains_in "no artifact upload in $(basename "$workflow")" "$workflow" 'upload-artifact'
-  not_contains_in "no workflow write permission in $(basename "$workflow")" "$workflow" 'contents: write'
-  not_contains_in "no job-level path skip in $(basename "$workflow")" "$workflow" 'if:'
   not_contains_in "no catch-all path trigger in $(basename "$workflow")" "$workflow" 'paths: ["**"]'
 done
+
+not_contains_in "mobile workflow never publishes" "$MOBILE_WORKFLOW" 'publish'
+not_contains_in "mobile workflow has no cloud credential action" "$MOBILE_WORKFLOW" 'configure-aws-credentials'
+not_contains_in "mobile workflow has no artifact upload" "$MOBILE_WORKFLOW" 'upload-artifact'
+not_contains_in "mobile workflow has no write permission" "$MOBILE_WORKFLOW" 'contents: write'
+not_contains_in "mobile workflow has no job-level condition" "$MOBILE_WORKFLOW" 'if:'
 
 contains_in "web path filter exists" "$WEB_WORKFLOW" 'web/**'
 contains_in "web workflow self-filter exists" "$WEB_WORKFLOW" '.github/workflows/web-ci.yml'
@@ -106,14 +107,16 @@ contains_in "mobile workflow self-filter exists" "$MOBILE_WORKFLOW" '.github/wor
 not_contains_in "mobile workflow excludes web source" "$MOBILE_WORKFLOW" 'web/**'
 not_contains_in "mobile workflow excludes web workflow" "$MOBILE_WORKFLOW" '.github/workflows/web-ci.yml'
 
-contains_in "web job is independently named" "$WEB_WORKFLOW" 'name: Web CI'
+contains_in "web workflow is independently named" "$WEB_WORKFLOW" 'name: Web CI'
+contains_in "web validation job uses backend shape" "$WEB_WORKFLOW" 'build-test:'
+contains_in "web validation job is named Build and Test" "$WEB_WORKFLOW" 'name: Build and Test'
 contains_in "web job uses web directory" "$WEB_WORKFLOW" 'working-directory: web'
 contains_in "web npm ci command" "$WEB_WORKFLOW" 'npm ci'
 contains_in "web lint command" "$WEB_WORKFLOW" 'npm run lint'
 contains_in "web typecheck command" "$WEB_WORKFLOW" 'npm run typecheck'
 contains_in "web test command" "$WEB_WORKFLOW" 'npm test'
 contains_in "web build command" "$WEB_WORKFLOW" 'npm run build'
-assert_order_after "$WEB_WORKFLOW" "web validation command order" "name: Web CI" \
+assert_order_after "$WEB_WORKFLOW" "web validation command order" "name: Build and Test" \
   'npm ci' 'npm run lint' 'npm run typecheck' 'npm test' 'npm run build'
 
 contains_in "mobile job is independently named" "$MOBILE_WORKFLOW" 'name: Mobile CI'

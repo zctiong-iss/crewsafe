@@ -21,6 +21,8 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.security.access.AccessDeniedException;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -190,15 +192,63 @@ class ActionDispatchServiceTest {
     void testGetDispatch_NotFound() {
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class, () -> service.getDispatch(dispatchId));
+        assertThrows(IllegalArgumentException.class, () -> service.getDispatch(dispatchId, principal));
     }
 
     @Test
     void testGetDispatch_Success() {
         when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
 
-        ActionDispatch result = service.getDispatch(dispatchId);
+        ActionDispatch result = service.getDispatch(dispatchId, principal);
         assertEquals(dispatchId, result.getId());
         assertEquals("REST_10_MIN", result.getActionCode());
+    }
+
+    @Test
+    void testGetDispatch_WorkerCanViewOwnDispatch() {
+        // Create a worker principal who owns the dispatch
+        CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(workerPrincipal.getId()).thenReturn(workerId);
+        // Note: getRole() stub not needed here because when IDs match, authorization check passes via short-circuit
+
+        when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
+
+        ActionDispatch result = service.getDispatch(dispatchId, workerPrincipal);
+        assertEquals(dispatchId, result.getId());
+    }
+
+    @Test
+    void testGetDispatch_WorkerCannotViewOtherWorkerDispatch() {
+        // Create a different worker principal who does NOT own the dispatch
+        UUID otherWorkerId = UUID.randomUUID();
+        CrewSafeUserPrincipal otherWorkerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(otherWorkerPrincipal.getId()).thenReturn(otherWorkerId);
+        when(otherWorkerPrincipal.getRole()).thenReturn(Role.WORKER);
+
+        when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.getDispatch(dispatchId, otherWorkerPrincipal));
+    }
+
+    @Test
+    void testGetDispatch_SupervisorCanViewAnyDispatch() {
+        when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
+
+        ActionDispatch result = service.getDispatch(dispatchId, principal);
+        assertEquals(dispatchId, result.getId());
+    }
+
+    @Test
+    void testGetDispatch_SafetyManagerCanViewAnyDispatch() {
+        // Create a safety manager principal
+        CrewSafeUserPrincipal safetyManagerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(safetyManagerPrincipal.getId()).thenReturn(UUID.randomUUID());
+        when(safetyManagerPrincipal.getRole()).thenReturn(Role.SAFETY_MANAGER);
+
+        when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
+
+        ActionDispatch result = service.getDispatch(dispatchId, safetyManagerPrincipal);
+        assertEquals(dispatchId, result.getId());
     }
 }

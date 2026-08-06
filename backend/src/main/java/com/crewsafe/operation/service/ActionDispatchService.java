@@ -135,8 +135,17 @@ public class ActionDispatchService {
         return actionDispatchRepository.findPendingByWorkerId(workerId);
     }
 
-    public ActionDispatch getDispatch(UUID dispatchId) {
-        return actionDispatchRepository.findById(dispatchId)
+    public ActionDispatch getDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+        ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
                 .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+
+        // Authorization: verify the worker owns this dispatch (or is supervisor/safety manager)
+        if (!dispatch.getWorker().getId().equals(principal.getId()) &&
+            !principal.getRole().name().equals("SUPERVISOR") &&
+            !principal.getRole().name().equals("SAFETY_MANAGER")) {
+            throw new AccessDeniedException("Worker can only view their own dispatches");
+        }
+
+        return dispatch;
     }
 }

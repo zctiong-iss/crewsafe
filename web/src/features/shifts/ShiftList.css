@@ -1,0 +1,105 @@
+/* Shifts list + card + pills. Grammar: status pills FILL, intensity pills OUTLINE. */
+.shift-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 720px;
+}
+
+/* Create link, rendered in the AppShell actions slot + empty state. */
+.shift-list__create {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.shift-list__create:hover { background: var(--action-hover); }
+
+.shift-card { padding: var(--space-4); }
+.shift-card.shift-card--planned { border-left: 8px solid var(--status-waiting); }
+.shift-card.shift-card--active  { border-left: 8px solid var(--status-ok); background: var(--status-ok-wash); }
+.shift-card.shift-card--closed  { border-left: 8px solid var(--status-none); }
+.shift-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.shift-card__range {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  margin: 0;
+}
+.shift-card__site {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+.shift-card__count {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: var(--space-1) 0 0;
+}
+.shift-card__crew th {
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+.shift-card__crew td {
+  padding: var(--space-1) var(--space-2);
+  vertical-align: middle;
+}
+.shift-card__crew {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
+}
+.shift-card__disclosure {
+  margin-top: var(--space-3);
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--action);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.shift-card__worker { font-weight: var(--weight-medium); color: var(--ink); }
+.shift-card__worker--missing { color: var(--band-high); }
+.shift-card__task { color: var(--ink-secondary); }
+.shift-card__accl { color: var(--ink-muted); }
+
+/* Pills ---------------------------------------------------------------- */
+.pill {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+/* Status: FILLED wash. */
+.pill--planned { background: var(--status-waiting-wash); color: var(--status-waiting); }
+.pill--active  { background: var(--status-ok-wash);      color: var(--status-ok); }
+.pill--closed  { background: var(--status-none-wash);    color: var(--status-none); }
+
+/* Intensity: OUTLINED, transparent fill. */
+.pill--intensity { background: transparent; border: 1.5px solid; }
+.pill--intensity-light    { color: var(--intensity-light);    border-color: var(--intensity-light); }
+.pill--intensity-moderate { color: var(--intensity-moderate); border-color: var(--intensity-moderate); }
+.pill--intensity-heavy    { color: var(--intensity-heavy);    border-color: var(--intensity-heavy); }

@@ -28,6 +28,7 @@ import SwipeToDismiss from "@/components/inbox/SwipeToDismiss";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   acknowledge,
+  canSwipeDismiss,
   dismissed,
   loadInbox,
   resetAcknowledgements,
@@ -185,12 +186,13 @@ export default function InboxScreen() {
         }
         renderItem={({ item }) => (
           /*
-           * Only an acknowledged card is swipeable. A pending one is still owed and the
-           * supervisor has not been told; a failed one carries the retry button, so
-           * dismissing it would remove the only way back. See `SwipeToDismiss`.
+           * The rule lives in `canSwipeDismiss`, not here, because it is the kind of
+           * condition that grows a clause per release and then quietly grows a wrong one —
+           * which is exactly what happened in SCRUM-207, when "acknowledged" was allowed to
+           * mean "safe to remove" and a running rest could be swiped away.
            */
           <SwipeToDismiss
-            enabled={Boolean(acknowledged[item.id]) && !inFlight.includes(item.id)}
+            enabled={canSwipeDismiss(acknowledged[item.id], inFlight.includes(item.id))}
             onDismiss={() => dispatch(dismissed(item.id))}
           >
           <DispatchCard

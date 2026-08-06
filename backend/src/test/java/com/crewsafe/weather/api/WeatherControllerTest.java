@@ -71,7 +71,10 @@ class WeatherControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.source").value("NEA"))
                 // Freshness is evaluated now, not frozen as LIVE when the old row was stored.
                 .andExpect(jsonPath("$.qualityStatus").value("STALE"))
-                .andExpect(jsonPath("$.stationId").value("S-test"));
+                .andExpect(jsonPath("$.stationId").value("S-test"))
+                // Evaluated server-side and shipped beside the reading (SCRUM-209): a client
+                // renders the band, it never derives one. 31.4 sits in the 31-to-below-32 band.
+                .andExpect(jsonPath("$.band").value("31_TO_BELOW_32"));
     }
 
     @Test

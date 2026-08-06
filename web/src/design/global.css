@@ -13,10 +13,12 @@
 }
 
 html {
+  font-size: 20px;
   -webkit-text-size-adjust: 100%;
 }
 
 body {
+
   min-height: 100dvh;
   background: var(--canvas);
   color: var(--ink);
@@ -59,7 +61,7 @@ h3 {
  * can find. :focus-visible keeps it off for mouse users without removing it for anyone else.
  */
 :focus-visible {
-  outline: 2px solid var(--action);
+  outline: 5px solid var(--action);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -87,6 +89,21 @@ h3 {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
 }
+
+.NavButton {
+  display: inline-block;
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+
 
 /* Screen-reader-only, for labels that must exist but not be seen. */
 .visually-hidden {

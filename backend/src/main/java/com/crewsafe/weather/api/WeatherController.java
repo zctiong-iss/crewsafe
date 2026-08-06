@@ -1,5 +1,6 @@
 package com.crewsafe.weather.api;
 
+import com.crewsafe.weather.domain.WbgtBand;
 import com.crewsafe.weather.domain.WeatherObservation;
 import com.crewsafe.weather.domain.WeatherQualityStatus;
 import com.crewsafe.weather.domain.WeatherSource;
@@ -49,7 +50,20 @@ public class WeatherController {
             Instant ingestedAt,
             WeatherSource source,
             WeatherQualityStatus qualityStatus,
-            String stationId) {
+            String stationId,
+            /*
+             * Evaluated server-side and returned with the reading (SCRUM-209).
+             *
+             * Clients render this; they never derive it. Section 12.2 forbids a client
+             * submitting or overriding a WBGT band, and FR-15 makes the backend engine
+             * authoritative for anything deciding what a worker must do. Shipping the band
+             * beside the number it comes from is what lets a client show both without
+             * computing either.
+             *
+             * Null when `wbgt` is null - see WbgtBand.classify for why that is not defaulted
+             * to the coolest band.
+             */
+            WbgtBand band) {
 
         static LatestWeatherResponse from(WeatherQueryService.LatestSiteWeather latest) {
             WeatherObservation observation = latest.observation();
@@ -65,7 +79,8 @@ public class WeatherController {
                     observation.getIngestedAt(),
                     observation.getSource(),
                     latest.qualityStatus(),
-                    observation.getStationId());
+                    observation.getStationId(),
+                    WbgtBand.classify(observation.getWbgt()));
         }
     }
 }
