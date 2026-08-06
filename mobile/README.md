@@ -1003,6 +1003,113 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-260 — The Heat conditions card stays legible during a stop-work
+
+Plan: [`docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md`](../docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md).
+
+During a lightning stop-work the Heat conditions card dimmed to 45% opacity, so the WBGT
+reading was hardest to read at the moment the screen mattered most. The dim is gone and the
+label is rewritten. **The override itself is not gone** — it moved entirely into words.
+
+### What changed, exactly
+
+| | Before | After |
+|---|---|---|
+| Card opacity during stop-work | `0.45` (skipped in high contrast) | **1** — no dim in any mode |
+| Label key | `wbgt.superseded` | `wbgt.stopWorkOverride` |
+| Label text | "Superseded by the lightning stop-work" | "Shelter first — heat rules are paused until the lightning clears." |
+| Tone | `danger` | `danger` — unchanged |
+
+Nothing else moved: same fields, freshness badge, layout, font, and the same `stopWorkActive`
+expiry logic feeding it.
+
+### Why the dim went, in the code's own words
+
+`WbgtCard` already skipped the dim in high contrast, because *"at 45% opacity black-on-white
+falls to roughly 3.5:1 — under AA — so the dim would defeat the exact mode a worker turned on
+to read the screen in sunlight."* That argument does not stop at high contrast: a phone at
+arm's length in Singapore daylight is the ordinary case, not the accessible one.
+
+`HeatGuidance` makes the second half independently: *"Dimming alone is ambiguous — a worker
+could read a faded list as 'loading' or as a rendering quirk and follow it anyway."*
+
+So the dim was never the mechanism. It was decoration on top of the mechanism, and it cost
+legibility on the one number the card exists to show.
+
+### Why not "Lightning Alert — seek shelter immediately"
+
+That was the suggested wording and it was declined, for two reasons.
+
+It **duplicates the banner directly above it**, which already says "STOP WORK / Lightning near
+this site. Seek proper shelter immediately." in much larger type. The card's single line would
+be spent repeating what the worker has just read.
+
+More seriously, it **says nothing about the heat plan**. FR-12a requires that a stop-work
+visibly override the heat plan until cleared, and with `features.heatGuidanceCard` off this
+label is the only place the app says so in words — recorded earlier in this README as
+load-bearing. Replacing it with a shelter instruction would have quietly dropped FR-12a.
+
+The chosen line does both jobs in one sentence: *shelter first* is the instruction, *heat rules
+are paused* is the override. It also drops "superseded", a register mismatch on a screen read
+by people across a wide range of literacy in seven languages.
+
+### The FR-12a guard
+
+`WbgtCard.test.tsx` is new and exists for one reason: **this is UI whose absence is invisible.**
+Delete the line and the card still renders, the reading is still correct, the screen still looks
+tidy — and the app has silently stopped meeting a safety requirement. Six tests assert the line
+appears when a stop-work is in force, does *not* appear otherwise, survives high contrast, and
+that the card renders identically with and without a stop-work — the last one being what fails
+if someone reintroduces a dim to "make it clearer".
+
+### Two translation defects this turned up, and the check that now catches them
+
+Both were mine, in the new string, and **the locale parity check passed on both**:
+
+- **`zh-Hans` contained traditional Han** — 難 and 電 beside correctly simplified 规定暂停执行.
+  A block test can never catch this: simplified and traditional share the Han block.
+- **`my` contained U+3037**, an ideographic symbol, inside Burmese text. It sits in *CJK Symbols
+  and Punctuation* (U+3000–303F), outside the `一-鿿` Han range the check was testing.
+
+`scripts/check-locale-parity.mjs` now widens the Han range to include CJK punctuation, and adds
+a `TRADITIONAL_ONLY` sample list checked only against `zh-Hans`. Both defects were re-introduced
+deliberately to confirm the check fails on them by name, then reverted. This is the second time
+a wrong-script string has shipped into a locale file, which is why the guard was widened rather
+than the string simply fixed.
+
+### Verified on device
+
+Worker in `cognito-password`, live NEA data:
+
+- **Stop work** — card at full opacity, 30.6 °C WBGT crisp, override line in red.
+- **Advisory** — no override line, card unchanged.
+- **Burmese at Extra large (1.5x)** — the override wraps to three lines, fully legible, nothing
+  clipped, card intact.
+
+**One acceptance criterion missed, deliberately not chased.** The plan said "no wrapping to
+three lines in `my` or `ta` at Extra large". Burmese wraps to exactly three. It is legible and
+unclipped, so the criterion was stricter than the goal it was protecting — and shortening a
+machine-drafted Burmese safety string without a native reviewer would trade a real risk for a
+cosmetic one. Recorded rather than silently passed.
+
+### Scope
+
+Workers only. Every non-WORKER role goes to `SupervisorTabs`, which has no *My shift*; the
+Weather screen's hero card has no lightning context and was never dimmed. A heat card was
+deliberately **not** added to the supervisor Weather screen — a supervisor reading conditions
+for a site they are not standing on should not be handed a personal shelter instruction.
+
+Both auth routes are covered by construction: this is a rendering change in a shared component
+and nothing here branches on auth mode.
+
+### Reverting
+
+Restore `opacity: superseded && !theme.highContrast ? 0.45 : 1` on the card's outer `View`, and
+rename `wbgt.stopWorkOverride` back to `wbgt.superseded` in all seven locales with the old copy.
+`WbgtCard.test.tsx` will fail on the first of those, which is the point.
+
+---
+
 ## SCRUM-209 Part 3 — Condition backdrops on the Weather hero card
 
 Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
