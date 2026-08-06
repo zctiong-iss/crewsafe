@@ -1,7 +1,9 @@
 # SCRUM-111 weather ingestion
 
 This runbook explains where CrewSafe obtains weather data, why there are five external
-requests, and how to exercise live or deterministic fixture ingestion locally.
+requests, and how to exercise live or deterministic fixture ingestion locally. Lightning
+ingestion (SCRUM-170) reuses this same scheduler/adapter/fixture pattern on its own cadence —
+see `SCRUM-170-lightning-ingestion.md`.
 
 ## What it is
 
