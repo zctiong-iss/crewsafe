@@ -4,6 +4,8 @@
  * Sits above the navigator rather than inside a screen so it survives the navigation that
  * usually triggers it — deleting a shift pops back to the list, and a toast owned by the
  * detail screen would unmount before it could be read.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useRef } from "react";
 import { Animated, Platform, Pressable, StyleSheet } from "react-native";

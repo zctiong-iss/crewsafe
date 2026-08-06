@@ -30,6 +30,8 @@
  * can reach each point, and fails if the darkest point drops any text colour below 4.5:1.
  * That is the "busiest frame" the plan asks for, computed rather than eyed — and it is why
  * `THUNDERY_SHOWERS` below is dimmer than a storm wants to be.
+ *
+ * @author Justin Chua
  */
 import type { WeatherCondition } from "@/types/domain";
 import type { BackdropSpec } from "./types";

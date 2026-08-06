@@ -1003,6 +1003,209 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-261 — Live lightning, and a source toggle
+
+Plan: [`docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md`](../docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md).
+
+The lightning banner runs on real NEA strike data outside `mock` auth mode. A dev-only radio
+switches it back to the fixture, and the two render identically.
+
+### The endpoint did not exist, despite the ingestion landing
+
+SCRUM-170 (#106) ingests strikes and derives per-site risk correctly — but published it only on
+`ConditionsSnapshot`, carried by the conditions **SSE stream**, which is annotated
+`hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN')`. The banner is on *My shift*, which is
+**WORKER-only**. So the one role that needs the state was the one role that got a 403, and no
+amount of mobile work could fix it.
+
+`GET /api/v1/sites/{siteId}/lightning` was added in this branch, site-scoped on membership
+alone. Polled rather than streamed: ingestion runs on a two-minute cadence and the shift screen
+already refreshes every sixty seconds, so a long-lived connection buys no freshness while
+costing battery on a phone that has to last an outdoor shift.
+
+### Null means "no data", and must never become CLEAR
+
+A 404 — nothing ingested for this site, usually because the scheduler is off — comes back as
+`null` and the screen says *"Lightning data unavailable for this site."*
+
+It is emphatically not `CLEAR`. Those two render as the same absence of a warning while meaning
+opposite things, and a crew told everything is fine because a scheduler was switched off is the
+exact failure this endpoint exists to prevent. Asserted on both sides: the backend returns 404
+rather than a body, and `safety.test.ts` asserts the client returns null rather than a state.
+
+### The toggle
+
+`Live` is the default outside mock mode, because live *is* the behaviour now. `Simulated` exists
+so a reviewer can exercise all three states on a clear day, which no live feed will oblige them
+with. Absent in `mock` auth mode — that mode has no network, so "live" would be a button that
+changed nothing — and compiled out of release by `__DEV__`.
+
+The scenario radios are **disabled** under Live rather than hidden. A simulated scenario has no
+meaning against a live feed, and a radio that still moves while changing nothing on screen is
+how someone concludes the live data is broken.
+
+`LightningBanner` itself is untouched. Live and Simulated differ only in where the data came
+from — verified by comparing screenshots of the same `CLEAR` state, which were identical but
+for the timestamp and countdown.
+
+### The bug the unit tests could not see
+
+The first version passed `shift.siteId` to `fetchLightningRisk` and got a **403 on device**.
+`fetchMyShift` is still mocked, and its fixture site id is one `DemoDataSeeder` never creates,
+so every site-scoped endpoint rejects it. SCRUM-209 had already fixed this for the heat reading;
+lightning walked into it again.
+
+The unit tests could not catch it because they pass a site id in directly. The fix is one shared
+`liveSiteId()` resolver used by both calls — rather than the same fix applied twice and
+forgotten a third time — plus two regression tests asserting lightning is asked about the real
+site and not asked at all when the worker has no membership.
+
+### Verified on device
+
+Signed in as `worker1` through `cognito-password`, with `LIGHTNING_INGESTION_ENABLED=true`
+against the real NEA feed:
+
+- **Live** — "No lightning risk / Assessed clear at 14:42 / Refreshes in 24 min", matching
+  `GET /lightning` exactly (`state: CLEAR`, `freshness: LIVE`, real `validUntil`).
+- **Simulated** — scenario radios re-enable; the SCRUM-260 heat override reappears under a
+  simulated stop-work.
+- **Live vs Simulated at `CLEAR`** — identical but for the timestamp and countdown.
+
+### On SCRUM-111
+
+`WeatherQueryService` now recomputes `qualityStatus` on every read and preserves `SIMULATED` for
+fixtures. Every mobile consumer — `WbgtCard`, `FreshnessBadge`, `FreshnessNotice`, the Weather
+hero — renders it straight from the response and derives nothing, so the change flows through
+with no code change. That is the finding, recorded so the next person does not re-investigate.
+
+The open question is cadence, not correctness: the weather poll is 5 minutes and freshness now
+moves on its own, so the badge can lag by up to one interval. Measuring the thresholds before
+shortening the poll is its own story — a shorter poll costs battery on an outdoor shift.
+
+---
+
+## SCRUM-260 — The Heat conditions card stays legible during a stop-work
+
+Plan: [`docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md`](../docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md).
+
+During a lightning stop-work the Heat conditions card dimmed to 45% opacity, so the WBGT
+reading was hardest to read at the moment the screen mattered most. The dim is gone and the
+label is rewritten. **The override itself is not gone** — it moved entirely into words.
+
+### What changed, exactly
+
+| | Before | After |
+|---|---|---|
+| Card opacity during stop-work | `0.45` (skipped in high contrast) | **1** — no dim in any mode |
+| Label key | `wbgt.superseded` | `wbgt.stopWorkOverride` |
+| Label text | "Superseded by the lightning stop-work" | "Heat rules paused." |
+| Tone | `danger` | `danger` — unchanged |
+
+Nothing else moved: same fields, freshness badge, layout, font, and the same `stopWorkActive`
+expiry logic feeding it.
+
+### Why the dim went, in the code's own words
+
+`WbgtCard` already skipped the dim in high contrast, because *"at 45% opacity black-on-white
+falls to roughly 3.5:1 — under AA — so the dim would defeat the exact mode a worker turned on
+to read the screen in sunlight."* That argument does not stop at high contrast: a phone at
+arm's length in Singapore daylight is the ordinary case, not the accessible one.
+
+`HeatGuidance` makes the second half independently: *"Dimming alone is ambiguous — a worker
+could read a faded list as 'loading' or as a rendering quirk and follow it anyway."*
+
+So the dim was never the mechanism. It was decoration on top of the mechanism, and it cost
+legibility on the one number the card exists to show.
+
+### Why not "Lightning Alert — seek shelter immediately"
+
+That was the suggested wording and it was declined, for two reasons.
+
+It **duplicates the banner directly above it**, which already says "STOP WORK / Lightning near
+this site. Seek proper shelter immediately." in much larger type. The card's single line would
+be spent repeating what the worker has just read.
+
+More seriously, it **says nothing about the heat plan**. FR-12a requires that a stop-work
+visibly override the heat plan until cleared, and with `features.heatGuidanceCard` off this
+label is the only place the app says so in words — recorded earlier in this README as
+load-bearing. Replacing it with a shelter instruction would have quietly dropped FR-12a.
+
+### One line at every text size, which decided the final wording
+
+The first draft wrapped to two lines at Default, which looks untidy on a card whose other rows
+("Kerb laying, east verge") are single lines. Measured on a 448 dp device — ~371 dp of text
+width, `label` at 14 × `s()` × `fontScale` — the one-line budget is about 55 characters at
+Small, 47 at Default, 39 at Large and **26 at Extra large**. The 26 was measured on device, not
+predicted; an intermediate 34-character draft held three of the four sizes and broke at Extra
+large with "paused." alone on line two.
+
+At 26 characters English cannot carry both *take shelter* and *the heat plan is suspended*, so
+one had to go — and it had to be the shelter instruction, because the banner immediately above
+already says "Seek proper shelter immediately" in far larger type while **nothing else anywhere
+states the override**. Dropping the duplicate leaves the screen saying everything it said
+before. Dropping the override would have lost FR-12a.
+
+That is the same test that rejected the originally suggested wording, applied the other way
+round: that one kept the duplicate and dropped the unique part.
+
+"Superseded" also goes, being a register mismatch on a screen read across a wide range of
+literacy in seven languages.
+
+Verified one line on device at all four English sizes, and in Burmese — the widest script, with
+a 1.35 line-height boost — at Extra large.
+
+### The FR-12a guard
+
+`WbgtCard.test.tsx` is new and exists for one reason: **this is UI whose absence is invisible.**
+Delete the line and the card still renders, the reading is still correct, the screen still looks
+tidy — and the app has silently stopped meeting a safety requirement. Six tests assert the line
+appears when a stop-work is in force, does *not* appear otherwise, survives high contrast, and
+that the card renders identically with and without a stop-work — the last one being what fails
+if someone reintroduces a dim to "make it clearer".
+
+### Two translation defects this turned up, and the check that now catches them
+
+Both were mine, in the new string, and **the locale parity check passed on both**:
+
+- **`zh-Hans` contained traditional Han** — 難 and 電 beside correctly simplified 规定暂停执行.
+  A block test can never catch this: simplified and traditional share the Han block.
+- **`my` contained U+3037**, an ideographic symbol, inside Burmese text. It sits in *CJK Symbols
+  and Punctuation* (U+3000–303F), outside the `一-鿿` Han range the check was testing.
+
+`scripts/check-locale-parity.mjs` now widens the Han range to include CJK punctuation, and adds
+a `TRADITIONAL_ONLY` sample list checked only against `zh-Hans`. Both defects were re-introduced
+deliberately to confirm the check fails on them by name, then reverted. This is the second time
+a wrong-script string has shipped into a locale file, which is why the guard was widened rather
+than the string simply fixed.
+
+### Verified on device
+
+Worker in `cognito-password`, live NEA data:
+
+- **Stop work** — card at full opacity, 30.6 °C WBGT crisp, override line in red.
+- **Advisory** — no override line, card unchanged.
+- **Every English text size** — Small, Default, Large and Extra large all render the override
+  on **one line**.
+- **Burmese at Extra large** — one line, the hardest case in the set.
+
+### Scope
+
+Workers only. Every non-WORKER role goes to `SupervisorTabs`, which has no *My shift*; the
+Weather screen's hero card has no lightning context and was never dimmed. A heat card was
+deliberately **not** added to the supervisor Weather screen — a supervisor reading conditions
+for a site they are not standing on should not be handed a personal shelter instruction.
+
+Both auth routes are covered by construction: this is a rendering change in a shared component
+and nothing here branches on auth mode.
+
+### Reverting
+
+Restore `opacity: superseded && !theme.highContrast ? 0.45 : 1` on the card's outer `View`, and
+rename `wbgt.stopWorkOverride` back to `wbgt.superseded` in all seven locales with the old copy.
+`WbgtCard.test.tsx` will fail on the first of those, which is the point.
+
+---
+
 ## SCRUM-209 Part 3 — Condition backdrops on the Weather hero card
 
 Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).

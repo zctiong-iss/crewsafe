@@ -17,6 +17,8 @@
  * this screen does not know and must not guess. They live on the shift screen, where the
  * assignment is. A supervisor reading conditions for a site is not looking at any one
  * worker's obligations.
+ *
+ * @author Justin Chua
  */
 import { useCallback, useMemo } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";

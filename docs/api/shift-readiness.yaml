@@ -16,6 +16,12 @@ info:
     (a worker must never be able to type an actual medical detail), not a style
     preference.
 
+    Readiness submissions are a safety record, not shift metadata: deleting a shift
+    (docs/api/shift.yaml's DELETE /shifts/{shiftId}) must never delete or cascade
+    into the readiness submissions recorded against it. Implementations must retain
+    ReadinessSubmission rows after their shift is deleted, the same way audit records
+    outlive the entities they describe.
+
 servers:
   - url: /
 
@@ -257,4 +263,6 @@ components:
         submittedAt:
           type: string
           format: date-time
-          description: Server-set. Each submission is immutable and append-only — never overwritten.
+          description: >
+            Server-set. Each submission is immutable and append-only — never overwritten,
+            and never deleted as a side effect of its shift being deleted.

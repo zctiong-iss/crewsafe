@@ -23,6 +23,8 @@
  * ── THE ENDPOINT IS OVERRIDABLE, IN DEVELOPMENT ONLY ────────────────────────────────────
  * See `idpEndpoint()` below. It is the one seam that lets this run against a local Cognito
  * emulator, and it is closed in a release bundle.
+ *
+ * @author Justin Chua
  */
 import axios from "axios";
 import { config } from "@/constants/config";

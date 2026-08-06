@@ -6,6 +6,8 @@
  * entry point. A runtime `Platform.OS === "web"` check cannot help with that: the import is
  * resolved when the bundle is built, so the web build fails before any of our code runs.
  * Platform-specific files are the only thing that keeps the dependency off the web graph.
+ *
+ * @author Justin Chua
  */
 import LottieView from "lottie-react-native";
 import type { FC } from "react";

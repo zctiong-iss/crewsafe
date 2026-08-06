@@ -7,6 +7,8 @@
  * chosen a language, we adopt the device's, which is the closest thing to a right guess.
  *
  * Renders nothing.
+ *
+ * @author Justin Chua
  */
 import { useEffect } from "react";
 import { getLocales } from "expo-localization";

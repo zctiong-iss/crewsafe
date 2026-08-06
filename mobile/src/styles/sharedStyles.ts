@@ -1,3 +1,8 @@
+/**
+ * Spacing and surface helpers shared across screens, so padding is agreed in one place.
+ *
+ * @author Justin Chua
+ */
 import { s, vs } from "react-native-size-matters";
 
 export const sharedPaddingHorizontal = s(16);

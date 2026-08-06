@@ -21,6 +21,8 @@
  * The deadline itself is wall-clock and persisted (see `dispatchInboxSlice`), so nothing here
  * has to survive a process death — on relaunch the deadline is simply read again and, if it
  * has already passed, fires on mount.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";

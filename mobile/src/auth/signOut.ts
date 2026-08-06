@@ -19,6 +19,8 @@
  * or a dismissed browser can never leave the app still signed in. Both remote steps are
  * best-effort for the same reason — a worker on a dead connection must still be able to
  * sign out of the device in their hand.
+ *
+ * @author Justin Chua
  */
 import axios from "axios";
 import * as WebBrowser from "expo-web-browser";

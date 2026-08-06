@@ -1,3 +1,8 @@
+/**
+ * An inline message with a tone and an optional request id to quote in a bug report.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";
 import { Ionicons } from "@expo/vector-icons";

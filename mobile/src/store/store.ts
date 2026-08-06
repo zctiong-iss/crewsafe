@@ -1,3 +1,9 @@
+/**
+ * The Redux store, and the redux-persist wiring around it. Tokens are deliberately not
+ * here — they live in SecureStore; see `api/tokenStore.ts`.
+ *
+ * @author Justin Chua
+ */
 import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import {
   persistStore,

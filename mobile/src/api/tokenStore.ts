@@ -11,6 +11,8 @@
  *
  * The consequence to remember: Redux holds *who you are*, SecureStore holds *proof of it*.
  * Rehydrating one without the other is what `restoreSession` in the auth slice is for.
+ *
+ * @author Justin Chua
  */
 import * as SecureStore from "expo-secure-store";
 import { IS_WEB } from "@/constants/constants";

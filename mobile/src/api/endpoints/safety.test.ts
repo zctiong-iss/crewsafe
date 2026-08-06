@@ -6,6 +6,8 @@
  * the wire shape before it becomes a domain object, and which failures are answers rather
  * than errors. A band that arrives wrong or a 404 treated as a network fault both end with a
  * worker reading something untrue about the heat they are standing in.
+ *
+ * @author Justin Chua
  */
 import { ApiError } from "../errors";
 
@@ -17,7 +19,8 @@ const mockIsMockApi = jest.fn();
 jest.mock("../client", () => ({ request: (...args: unknown[]) => mockRequest(...args) }));
 jest.mock("@/auth/authMode", () => ({ isMockApi: () => mockIsMockApi() }));
 
-import { fetchSiteWeather } from "./safety";
+import { fetchLightningRisk, fetchSiteWeather } from "./safety";
+import { setLightningSource } from "../mock/scenario";
 
 const SITE = "11111111-1111-4111-8111-111111111111";
 
@@ -118,5 +121,65 @@ describe("fetchSiteWeather, mock mode", () => {
     expect(mockRequest).not.toHaveBeenCalled();
     expect(result.observation).not.toBeNull();
     expect(result.band).not.toBeNull();
+  });
+});
+
+
+/**
+ * The lightning source branch (SCRUM-261).
+ *
+ * The 404 case is the one that matters. A client that turned "the server has never ingested
+ * lightning here" into `CLEAR` would show a crew the same absence of a warning that a genuine
+ * all-clear produces — while the scheduler was simply switched off.
+ */
+describe("fetchLightningRisk", () => {
+  beforeEach(() => {
+    (globalThis as { __DEV__?: boolean }).__DEV__ = true;
+    setLightningSource("live");
+  });
+
+  it("calls the site-scoped lightning endpoint when live", async () => {
+    mockRequest.mockResolvedValue({ siteId: SITE, state: "CLEAR" });
+
+    await fetchLightningRisk(SITE);
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      url: `/api/v1/sites/${SITE}/lightning`,
+      method: "GET",
+    });
+  });
+
+  it("returns null rather than CLEAR when the site has no lightning data", async () => {
+    mockRequest.mockRejectedValue(new ApiError("not-found", "none", 404, "req-3"));
+
+    // Null is rendered as "unavailable" by the screen. CLEAR would be a false all-clear.
+    await expect(fetchLightningRisk(SITE)).resolves.toBeNull();
+  });
+
+  it("still rejects on anything that is not a 404", async () => {
+    const forbidden = new ApiError("forbidden", "denied", 403, "req-4");
+    mockRequest.mockRejectedValue(forbidden);
+
+    await expect(fetchLightningRisk(SITE)).rejects.toBe(forbidden);
+  });
+
+  it("uses the fixture when the source is set to simulated", async () => {
+    setLightningSource("simulated");
+
+    const risk = await fetchLightningRisk(SITE);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(risk).not.toBeNull();
+  });
+
+  it("uses the fixture in mock auth mode whatever the source says", async () => {
+    // Mock mode has no network at all, so "live" cannot mean anything there.
+    mockIsMockApi.mockReturnValue(true);
+    setLightningSource("live");
+
+    const risk = await fetchLightningRisk(SITE);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+    expect(risk).not.toBeNull();
   });
 });

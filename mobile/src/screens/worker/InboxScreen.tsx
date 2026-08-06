@@ -10,6 +10,8 @@
  * A FlatList rather than a mapped ScrollView: this is server-driven data of unbounded
  * length, which is exactly the case virtualisation exists for. (The demo-user picker and
  * the scenario switchers are `.map`, correctly — three compile-time fixtures each.)
+ *
+ * @author Justin Chua
  */
 import { useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, View } from "react-native";

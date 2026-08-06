@@ -12,6 +12,8 @@
  *
  * Nothing here carries the count — that is the navigator's `tabBarBadge`, with the number
  * also stated in `tabBarAccessibilityLabel`. See `WorkerTabs`.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

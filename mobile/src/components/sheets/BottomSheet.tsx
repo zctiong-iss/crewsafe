@@ -22,6 +22,8 @@
  * and `onClose` instead, so a sheet is owned by the screen that shows it. That is more
  * ordinary React, it type-checks without module augmentation, and it removes the failure
  * mode where a missing side-effect import made `show()` silently do nothing.
+ *
+ * @author Justin Chua
  */
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 import type { FC, ReactNode } from "react";

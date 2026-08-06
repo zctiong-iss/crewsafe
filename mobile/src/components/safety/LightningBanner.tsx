@@ -35,6 +35,8 @@
  * to know whether the window has lapsed — it drives the heat plan's suspended state — and
  * two independent clocks can disagree for a tick, which would show an expired banner above
  * a still-suspended heat plan. One clock, passed down, cannot.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

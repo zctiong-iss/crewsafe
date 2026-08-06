@@ -12,7 +12,6 @@
     "optional": "Optional",
     "requestReference": "Reference: {{requestId}}"
   },
-
   "errors": {
     "unauthenticated": "Your session has ended. Sign in to continue.",
     "not-provisioned": "Your sign-in worked, but this account has not been set up for CrewSafe yet. Ask your site administrator to add you.",
@@ -25,7 +24,6 @@
     "configMissing": "The app is not configured. Missing: {{keys}}",
     "unknown": "Something went wrong. Try again."
   },
-
   "auth": {
     "signInTitle": "Sign in",
     "signInSubtitle": "Heat-stress safety for outdoor crews",
@@ -59,7 +57,6 @@
       "cancelled": "Sign-in was cancelled."
     }
   },
-
   "signUp": {
     "title": "Request an account",
     "intro": "CrewSafe accounts are created by your site administrator. Fill this in and we will show you exactly what to send them.",
@@ -94,14 +91,12 @@
       "siteRequired": "Choose your site."
     }
   },
-
   "roles": {
     "WORKER": "Worker",
     "SUPERVISOR": "Site Supervisor",
     "SAFETY_MANAGER": "Safety Manager",
     "ADMIN": "Administrator"
   },
-
   "tabs": {
     "shift": "My shift",
     "alerts": "Alerts",
@@ -112,7 +107,6 @@
     "profile": "Profile",
     "settings": "Settings"
   },
-
   "settings": {
     "title": "Settings",
     "language": "Language",
@@ -133,7 +127,6 @@
     "aboutVersion": "Version {{version}}",
     "aboutBody": "Heat-stress safety for outdoor crews in Singapore."
   },
-
   "profile": {
     "title": "Profile",
     "role": "Role",
@@ -152,7 +145,6 @@
     "photoUpdatedToast": "Photo updated",
     "photoRemovedToast": "Photo removed"
   },
-
   "shifts": {
     "site": "Site",
     "emptyTitle": "No shifts yet",
@@ -216,7 +208,6 @@
       "checkFields": "Some details above need attention. The fields with a red outline show what to fix."
     }
   },
-
   "weather": {
     "title": "Conditions",
     "site": "Site",
@@ -242,7 +233,6 @@
       "THUNDERY_SHOWERS": "Thundery showers"
     }
   },
-
   "inbox": {
     "emptyTitle": "Nothing to acknowledge",
     "emptyBody": "Approved actions from your supervisor will appear here.",
@@ -258,7 +248,6 @@
     "restRemaining": "{{time}} left",
     "swipeToClear": "Clear"
   },
-
   "lightning": {
     "stopWorkTitle": "STOP WORK",
     "stopWorkBody": "Lightning near this site. Seek proper shelter immediately.",
@@ -271,14 +260,14 @@
     "validUntil": "Valid until {{time}}",
     "refreshesInMinutes": "Refreshes in {{minutes}} min",
     "refreshesInSeconds": "Refreshes in {{seconds}} s",
-    "overrideNotice": "Heat plan suspended while stop-work is in effect."
+    "overrideNotice": "Heat plan suspended while stop-work is in effect.",
+    "unavailable": "Lightning data unavailable for this site."
   },
-
   "wbgt": {
     "title": "Heat conditions",
     "reading": "WBGT",
     "noReading": "No reading available",
-    "superseded": "Superseded by the lightning stop-work",
+    "stopWorkOverride": "Heat rules paused.",
     "band": {
       "BELOW_31": "Below 31°C",
       "31_TO_BELOW_32": "31 to 32°C",
@@ -286,7 +275,6 @@
       "33_AND_ABOVE": "33°C and above"
     }
   },
-
   "guidance": {
     "title": "What you must do",
     "advisoryTitle": "Also recommended",
@@ -295,7 +283,6 @@
     "policyVersion": "Policy {{version}}",
     "none": "No heat actions required right now."
   },
-
   "actions": {
     "HYDRATE_REGULARLY": "Drink water regularly",
     "HYDRATE_HOURLY": "Drink water at least once an hour",
@@ -312,7 +299,6 @@
     "RESUME_WORK": "Resume work",
     "ROTATE_TO_LIGHT_DUTY": "Rotate to light duty"
   },
-
   "shift": {
     "title": "Your shift",
     "task": "Task",
@@ -323,13 +309,11 @@
     "noShiftTitle": "No shift scheduled",
     "noShiftBody": "You have no current or upcoming shift. Check with your supervisor."
   },
-
   "intensity": {
     "LIGHT": "Light",
     "MODERATE": "Moderate",
     "HEAVY": "Heavy"
   },
-
   "freshness": {
     "LIVE": "Live",
     "DELAYED": "Delayed",
@@ -339,7 +323,6 @@
     "staleWarning": "This reading is too old to rely on. Do not treat it as current — follow your site's procedure or ask your supervisor for a confirmed reading.",
     "delayedWarning": "This reading arrived later than expected. Conditions may have changed since it was taken."
   },
-
   "dev": {
     "scenarioLabel": "Lightning scenario (development only)",
     "freshnessLabel": "Data freshness (development only)",
@@ -360,9 +343,13 @@
       "REST_15_MIN": "Take a continuous 15-minute rest in the shaded rest point by the site office.",
       "HYDRATE": "Drink 500ml of water now and refill your bottle before returning to the verge.",
       "ROTATE_TO_LIGHT_DUTY": "Swap to the tool store for the next hour. Your supervisor has arranged cover."
+    },
+    "lightningSourceLabel": "Lightning source (development only)",
+    "lightningSource": {
+      "live": "Live",
+      "simulated": "Simulated"
     }
   },
-
   "placeholder": {
     "comingSoon": "Coming soon",
     "screenPending": "This screen is next in the build order."

@@ -1,8 +1,6 @@
 {
-  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.superseded, freshness.staleWarning — MUST be reviewed by a native Burmese speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo.",
-
+  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.stopWorkOverride, freshness.staleWarning — MUST be reviewed by a native Burmese speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo.",
   "_encoding": "UNICODE ONLY. This file is Myanmar Unicode (U+1000–U+109F), not Zawgyi. Myanmar's national migration to Unicode completed in 2019 and Android 12+ ships Unicode Myanmar fonts. A device still running Zawgyi will render this as garbled text — that is a known, accepted limitation, and such a worker can switch language from the sign-in picker. Do NOT 'fix' garbled Burmese by transcoding this file to Zawgyi; see the README.",
-
   "common": {
     "appName": "CrewSafe",
     "cancel": "ပယ်ဖျက်ရန်",
@@ -16,7 +14,6 @@
     "optional": "ရွေးချယ်နိုင်သည်",
     "requestReference": "ကိုးကား: {{requestId}}"
   },
-
   "errors": {
     "unauthenticated": "သင့်စက်ရှင် ကုန်ဆုံးသွားပါပြီ။ ဆက်လက်ရန် ဝင်ရောက်ပါ။",
     "not-provisioned": "ဝင်ရောက်မှု အောင်မြင်သော်လည်း ဤအကောင့်ကို CrewSafe အတွက် မပြင်ဆင်ရသေးပါ။ သင့်ကို ထည့်သွင်းပေးရန် လုပ်ငန်းခွင် စီမံခန့်ခွဲသူအား ပြောပါ။",
@@ -29,7 +26,6 @@
     "configMissing": "အက်ပ်ကို ပြင်ဆင်သတ်မှတ်မထားပါ။ ပျောက်ဆုံးနေသည်: {{keys}}",
     "unknown": "အမှားတစ်ခု ဖြစ်ပွားခဲ့သည်။ ထပ်စမ်းကြည့်ပါ။"
   },
-
   "auth": {
     "signInTitle": "ဝင်ရောက်ရန်",
     "signInSubtitle": "ပြင်ပလုပ်သားများအတွက် အပူဒဏ် ဘေးကင်းရေး",
@@ -63,7 +59,6 @@
       "cancelled": "ဝင်ရောက်မှုကို ပယ်ဖျက်လိုက်သည်။"
     }
   },
-
   "signUp": {
     "title": "အကောင့် တောင်းဆိုရန်",
     "intro": "CrewSafe အကောင့်များကို လုပ်ငန်းခွင် စီမံခန့်ခွဲသူက ဖန်တီးပေးသည်။ ဤအချက်အလက်များ ဖြည့်ပါ၊ သူတို့ထံ ဘာပို့ရမည်ကို အတိအကျ ပြပါမည်။",
@@ -98,14 +93,12 @@
       "siteRequired": "သင့်လုပ်ငန်းခွင်ကို ရွေးပါ။"
     }
   },
-
   "roles": {
     "WORKER": "လုပ်သား",
     "SUPERVISOR": "လုပ်ငန်းခွင် ကြီးကြပ်ရေးမှူး",
     "SAFETY_MANAGER": "ဘေးကင်းရေး မန်နေဂျာ",
     "ADMIN": "စီမံခန့်ခွဲသူ"
   },
-
   "tabs": {
     "shift": "အလှည့်",
     "alerts": "သတိပေးချက်",
@@ -116,7 +109,6 @@
     "profile": "ပရိုဖိုင်",
     "settings": "ဆက်တင်များ"
   },
-
   "settings": {
     "title": "ဆက်တင်များ",
     "language": "ဘာသာစကား",
@@ -137,7 +129,6 @@
     "aboutVersion": "ဗားရှင်း {{version}}",
     "aboutBody": "စင်ကာပူရှိ ပြင်ပလုပ်သားများအတွက် အပူဒဏ် ဘေးကင်းရေး။"
   },
-
   "profile": {
     "title": "ကိုယ်ရေးအချက်အလက်",
     "role": "ရာထူး",
@@ -156,7 +147,6 @@
     "photoUpdatedToast": "ဓာတ်ပုံ ပြင်ဆင်ပြီး",
     "photoRemovedToast": "ဓာတ်ပုံ ဖယ်ရှားပြီး"
   },
-
   "shifts": {
     "site": "လုပ်ငန်းခွင်",
     "emptyTitle": "အလှည့် မရှိသေးပါ",
@@ -220,7 +210,6 @@
       "checkFields": "အထက်ပါ အချက်အလက်အချို့ကို ပြန်စစ်ရန် လိုသည်။ အနီရောင်ဘောင်ခတ်ထားသော နေရာများက ဘာပြင်ရမည်ကို ပြသည်။"
     }
   },
-
   "weather": {
     "title": "အခြေအနေများ",
     "site": "လုပ်ငန်းခွင်",
@@ -246,7 +235,6 @@
       "THUNDERY_SHOWERS": "မိုးကြိုးနှင့်အတူ မိုးရွာ"
     }
   },
-
   "inbox": {
     "emptyTitle": "အသိအမှတ်ပြုရန် မရှိပါ",
     "emptyBody": "သင့်ကြီးကြပ်ရေးမှူး အတည်ပြုသော လုပ်ဆောင်ချက်များ ဤနေရာတွင် ပေါ်လာမည်။",
@@ -262,7 +250,6 @@
     "restRemaining": "{{time}} ကျန်သည်",
     "swipeToClear": "ဖယ်ရှားရန်"
   },
-
   "lightning": {
     "stopWorkTitle": "အလုပ် ရပ်ပါ",
     "stopWorkBody": "ဤလုပ်ငန်းခွင်အနီးတွင် မိုးကြိုးရှိသည်။ ချက်ချင်း သင့်လျော်သော ခိုလှုံရာသို့ သွားပါ။",
@@ -275,14 +262,14 @@
     "validUntil": "{{time}} အထိ တရားဝင်",
     "refreshesInMinutes": "{{minutes}} မိနစ်အတွင်း ပြန်လည်ရယူမည်",
     "refreshesInSeconds": "{{seconds}} စက္ကန့်အတွင်း ပြန်လည်ရယူမည်",
-    "overrideNotice": "အလုပ်ရပ်ဆိုင်းမှု အာဏာတည်နေစဉ် အပူဆိုင်ရာ အစီအစဉ်ကို ဆိုင်းငံ့ထားသည်။"
+    "overrideNotice": "အလုပ်ရပ်ဆိုင်းမှု အာဏာတည်နေစဉ် အပူဆိုင်ရာ အစီအစဉ်ကို ဆိုင်းငံ့ထားသည်။",
+    "unavailable": "ဤလုပ်ငွန်းခွင်အတွက် မိုးကြိုး ဒေတာ မရှိပါ။"
   },
-
   "wbgt": {
     "title": "အပူအခြေအနေ",
     "reading": "WBGT",
     "noReading": "တိုင်းတာချက် မရရှိပါ",
-    "superseded": "မိုးကြိုးကြောင့် အလုပ်ရပ်ဆိုင်းရန် ညွှန်ကြားချက်က အစားထိုးလိုက်သည်",
+    "stopWorkOverride": "အပူစည်းမျဉ်း ရပ်ထားသည်။",
     "band": {
       "BELOW_31": "၃၁°C အောက်",
       "31_TO_BELOW_32": "၃၁ မှ ၃၂°C",
@@ -290,7 +277,6 @@
       "33_AND_ABOVE": "၃၃°C နှင့် အထက်"
     }
   },
-
   "guidance": {
     "title": "သင်လုပ်ရမည့်အရာများ",
     "advisoryTitle": "ထို့အပြင် အကြံပြုသည်",
@@ -299,7 +285,6 @@
     "policyVersion": "မူဝါဒ {{version}}",
     "none": "ယခုအချိန်တွင် အပူဆိုင်ရာ လုပ်ဆောင်ချက် မလိုအပ်ပါ။"
   },
-
   "actions": {
     "HYDRATE_REGULARLY": "ရေကို ပုံမှန် သောက်ပါ",
     "HYDRATE_HOURLY": "တစ်နာရီလျှင် အနည်းဆုံး တစ်ကြိမ် ရေသောက်ပါ",
@@ -316,7 +301,6 @@
     "RESUME_WORK": "အလုပ် ပြန်စပါ",
     "ROTATE_TO_LIGHT_DUTY": "အလုပ်ပေါ့သို့ ပြောင်းပါ"
   },
-
   "shift": {
     "title": "သင့်အလှည့်",
     "task": "လုပ်ငန်း",
@@ -327,13 +311,11 @@
     "noShiftTitle": "အလှည့် သတ်မှတ်မထားပါ",
     "noShiftBody": "သင့်တွင် လက်ရှိ သို့မဟုတ် လာမည့် အလှည့် မရှိပါ။ သင့်ကြီးကြပ်ရေးမှူးနှင့် စစ်ဆေးပါ။"
   },
-
   "intensity": {
     "LIGHT": "ပေါ့",
     "MODERATE": "အလယ်အလတ်",
     "HEAVY": "လေးလံ"
   },
-
   "freshness": {
     "LIVE": "တိုက်ရိုက်",
     "DELAYED": "နှောင့်နှေး",
@@ -343,7 +325,6 @@
     "staleWarning": "ဤတိုင်းတာချက်သည် အားကိုးရန် အလွန်ဟောင်းသည်။ လက်ရှိအဖြစ် မမှတ်ယူပါနှင့် — သင့်လုပ်ငန်းခွင် လုပ်ထုံးလုပ်နည်းကို လိုက်နာပါ သို့မဟုတ် အတည်ပြုပြီး တိုင်းတာချက်ကို ကြီးကြပ်ရေးမှူးထံ တောင်းပါ။",
     "delayedWarning": "ဤတိုင်းတာချက်သည် မျှော်လင့်ထားသည်ထက် နောက်ကျ ရောက်ရှိသည်။ ယူပြီးကတည်းက အခြေအနေများ ပြောင်းလဲသွားနိုင်သည်။"
   },
-
   "dev": {
     "scenarioLabel": "မိုးကြိုး အခြေအနေ (ဖွံ့ဖြိုးရေးအတွက်သာ)",
     "freshnessLabel": "ဒေတာ လတ်ဆတ်မှု (ဖွံ့ဖြိုးရေးအတွက်သာ)",
@@ -363,9 +344,13 @@
       "REST_15_MIN": "လုပ်ငန်းခွင်ရုံးအနီးရှိ အရိပ်ရသော နားနေရာတွင် အပြတ်မရှိ ၁၅ မိနစ် အနားယူပါ။",
       "HYDRATE": "ယခု ရေ ၅၀၀ မီလီလီတာ သောက်ပြီး လမ်းဘေးသို့ မပြန်မီ ရေဘူး ပြန်ဖြည့်ပါ။",
       "ROTATE_TO_LIGHT_DUTY": "နောက်တစ်နာရီအတွက် ကိရိယာသိုလှောင်ရုံသို့ ပြောင်းပါ။ သင့်ကြီးကြပ်ရေးမှူးက အစားထိုး စီစဉ်ပေးထားသည်။"
+    },
+    "lightningSourceLabel": "မိုးကြိုး ဒေတာ အရင်းအမြစ် (ဖြန့်ပြိုးတာပါ)",
+    "lightningSource": {
+      "live": "တိုက်ရိုက်",
+      "simulated": "ပုံတု"
     }
   },
-
   "placeholder": {
     "comingSoon": "မကြာမီ လာမည်",
     "screenPending": "ဤဖန်သားပြင်သည် တည်ဆောက်မှုအစီအစဉ်တွင် နောက်တစ်ခုဖြစ်သည်။"

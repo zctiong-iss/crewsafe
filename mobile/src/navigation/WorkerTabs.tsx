@@ -1,3 +1,9 @@
+/**
+ * What a WORKER sees. Also the home of the Alerts badge poll, which lives here rather
+ * than on the Inbox screen so the count stays current from any tab (SCRUM-208).
+ *
+ * @author Justin Chua
+ */
 import { useCallback } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";

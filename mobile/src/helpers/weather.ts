@@ -16,6 +16,8 @@
  * If a real `GET /sites/{id}/conditions` later returns NEA's own forecast text ("Thundery
  * Showers", "Partly Cloudy (Day)"), prefer it and delete this: a published forecast beats
  * an inference from four numbers. Until then this is honest about being an inference.
+ *
+ * @author Justin Chua
  */
 import type { SiteConditions, WeatherCondition } from "@/types/domain";
 
