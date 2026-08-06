@@ -23,6 +23,8 @@
  * controller). Each is documented at its call site in `api/endpoints/safety.ts`. The
  * simulated badge on the reading and the notice below it are not placeholders to remove
  * later — FR-12 requires that marker whenever data is not live.
+ *
+ * @author Justin Chua
  */
 import { useCallback } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
@@ -42,6 +44,7 @@ import HeatGuidance from "@/components/safety/HeatGuidance";
 import ShiftCard from "@/components/safety/ShiftCard";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { isMockApi } from "@/auth/authMode";
 import { loadWorkerSafety } from "@/store/reducers/safetySlice";
 import { useNow } from "@/hooks/useNow";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
@@ -49,14 +52,19 @@ import { hasElapsed } from "@/helpers/dateTime";
 import {
   getFreshnessScenario,
   getLightningScenario,
+  getLightningSource,
   setFreshnessScenario,
   setLightningScenario,
+  setLightningSource,
   type LightningScenario,
+  type LightningSource,
 } from "@/api/mock/scenario";
 import type { WeatherQualityStatus } from "@/types/domain";
 import { features } from "@/constants/features";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+
+const LIGHTNING_SOURCES: LightningSource[] = ["live", "simulated"];
 
 const SCENARIOS: { key: LightningScenario; labelKey: string }[] = [
   { key: "clear", labelKey: "dev.scenarioClear" },
@@ -106,6 +114,11 @@ export default function MyShiftScreen() {
     useCallback(() => load(false), [load]),
     REFRESH_INTERVALS.SHIFT_MS,
   );
+
+  const onChangeSource = (source: LightningSource) => {
+    setLightningSource(source);
+    load(true);
+  };
 
   const onChangeScenario = (scenario: LightningScenario) => {
     setLightningScenario(scenario);
@@ -163,6 +176,18 @@ export default function MyShiftScreen() {
         ) : null}
 
         {/* First child, always. This is the requirement, not a layout preference. */}
+        {/*
+          Null is not "clear" — it is "the server has no lightning data for this site", which
+          happens when the ingestion scheduler is off. Rendering nothing there would be the
+          same absence of a warning that a genuine all-clear produces, so it is said out loud.
+          Only when there is a shift: with no shift there is no site to have data about.
+        */}
+        {!lightning && shift ? (
+          <View style={styles.block}>
+            <MessageBanner message={t("lightning.unavailable")} tone="warning" />
+          </View>
+        ) : null}
+
         {lightning ? (
           <LightningBanner risk={lightning} locale={i18n.language} now={now} />
         ) : null}
@@ -209,6 +234,26 @@ export default function MyShiftScreen() {
               { borderTopColor: theme.colors.border, borderTopWidth: theme.metrics.borderWidth },
             ]}
           >
+            {/*
+              Absent in mock auth mode, where there is nothing to switch to: that mode never
+              touches the network, so "live" would be a button that changed nothing.
+            */}
+            {!isMockApi() ? (
+              <>
+                <AppText variant="caption" tone="secondary" style={styles.devLabel}>
+                  {t("dev.lightningSourceLabel")}
+                </AppText>
+                {LIGHTNING_SOURCES.map((option) => (
+                  <RadioWithTitle
+                    key={option}
+                    title={t(`dev.lightningSource.${option}`)}
+                    selected={option === getLightningSource()}
+                    onPress={() => onChangeSource(option)}
+                  />
+                ))}
+              </>
+            ) : null}
+
             <AppText variant="caption" tone="secondary" style={styles.devLabel}>
               {t("dev.scenarioLabel")}
             </AppText>
@@ -218,6 +263,12 @@ export default function MyShiftScreen() {
                 title={t(option.labelKey)}
                 selected={option.key === getLightningScenario()}
                 onPress={() => onChangeScenario(option.key)}
+                /*
+                  Disabled under Live, not hidden. A simulated scenario has no meaning against
+                  a live feed, and a radio that still moves while changing nothing on screen is
+                  how someone concludes the live data is broken.
+                */
+                disabled={!isMockApi() && getLightningSource() === "live"}
               />
             ))}
 

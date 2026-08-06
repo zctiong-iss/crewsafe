@@ -5,6 +5,8 @@
  * in Singapore time, because that is where they are standing — never the device's timezone,
  * which a travelling phone or a misconfigured emulator will get wrong, and never UTC, which
  * would put a shift on the wrong day.
+ *
+ * @author Justin Chua
  */
 const SITE_TIME_ZONE = "Asia/Singapore";
 

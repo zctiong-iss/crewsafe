@@ -9,6 +9,8 @@
  * field would be a privilege-escalation control with a friendly label.
  *
  * The photo is the one exception, and it never leaves the device. See `profileSlice`.
+ *
+ * @author Justin Chua
  */
 import { useState } from "react";
 import { ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";

@@ -19,6 +19,8 @@
  *
  * When the OS setting *is* on, the fill still updates, it simply jumps once a second instead
  * of gliding. Nothing is lost but the smoothness.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";

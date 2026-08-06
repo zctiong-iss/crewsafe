@@ -1,3 +1,8 @@
+/**
+ * A labelled text field with error and hint states.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 import { forwardRef } from "react";
 import { s, vs } from "react-native-size-matters";

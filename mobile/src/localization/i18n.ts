@@ -14,6 +14,8 @@
  *
  * Resources are imported statically rather than lazily so every string is inside the JS
  * bundle. A worker who loses signal mid-shift must not lose their language.
+ *
+ * @author Justin Chua
  */
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";

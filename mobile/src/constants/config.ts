@@ -6,6 +6,8 @@
  * environment object — so `process.env[name]` resolves to `undefined` at runtime no matter
  * what `name` holds. That failure is silent and looks exactly like a missing `.env`, which
  * is why the lookups below are spelled out one by one instead of being generated in a loop.
+ *
+ * @author Justin Chua
  */
 import { IS_WEB } from "./constants";
 

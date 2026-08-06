@@ -4,6 +4,8 @@
  * Context rather than a Redux selector in each component: the theme is derived, so a
  * selector would rebuild the object on every store change and defeat memoisation
  * everywhere. Here it is memoised once, at the root, on the two inputs that can change it.
+ *
+ * @author Justin Chua
  */
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useAppSelector } from "@/store/hooks";

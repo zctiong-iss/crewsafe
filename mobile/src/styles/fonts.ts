@@ -29,6 +29,8 @@
  * The mixed-content case is covered because the Noto families include basic Latin. "32.4 °C
  * WBGT" on a Tamil screen renders from Noto Sans Tamil rather than falling back per glyph to
  * a different face, which is what keeps the WBGT card looking like one typeface and not two.
+ *
+ * @author Justin Chua
  */
 import type { AppLanguage } from "@/localization/languagesList";
 

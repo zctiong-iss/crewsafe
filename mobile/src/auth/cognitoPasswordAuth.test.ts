@@ -4,6 +4,8 @@
  * This is one string, and it decides who signs the token the backend will trust. A
  * regression here is not a broken build — it is a release bundle authenticating against
  * something other than AWS, which nothing else in the app would notice.
+ *
+ * @author Justin Chua
  */
 const mockPost = jest.fn();
 jest.mock("axios", () => ({

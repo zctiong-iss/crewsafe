@@ -7,6 +7,8 @@
  * platforms a denial is sticky, so a prompt fired at the wrong moment can permanently cost
  * the feature. A denial here is explained rather than swallowed, because the recovery is in
  * device settings and nobody guesses that on their own.
+ *
+ * @author Justin Chua
  */
 import { useState } from "react";
 import { Alert, StyleSheet } from "react-native";

@@ -10,6 +10,8 @@
  * The safety comes from idempotency instead. Because the same key is replayed, a worker who
  * taps three times because nothing seemed to happen produces exactly one acknowledgement —
  * which is a better answer to double-tapping than a dialog.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

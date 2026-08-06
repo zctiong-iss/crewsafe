@@ -13,6 +13,8 @@
  *
  * The actions themselves stay on screen rather than being removed, so the worker can see
  * what resumes once the supervisor gives the all-clear.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

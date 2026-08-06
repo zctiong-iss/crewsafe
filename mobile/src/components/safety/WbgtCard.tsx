@@ -23,6 +23,8 @@
  * change to this file. Nothing here derives, rounds toward, or falls back to a number of
  * its own — §12.2 is explicit that no client may compute or override a WBGT band, and a
  * "sensible default" here would be exactly that with a friendlier name.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

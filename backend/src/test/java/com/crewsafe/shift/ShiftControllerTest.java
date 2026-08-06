@@ -603,6 +603,94 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    // --- SCRUM-254: prevent worker double-booking across overlapping shifts ---
+
+    @Test
+    void addingAWorkerToAnOverlappingShiftAtTheSameSiteIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        String overlappingShiftId = createShift(startsAt.plus(1, ChronoUnit.HOURS), endsAt.plus(1, ChronoUnit.HOURS));
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + overlappingShiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void addingAWorkerToAnOverlappingShiftAtAnotherSiteIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        memberships.save(new SiteMembership(workerA.getId(), siteB.getId()));
+        String shiftAtSiteB = objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteB.getId() + "/shifts", supervisorBToken,
+                                        shiftBody(startsAt, endsAt, List.of()))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("id").asText();
+
+        postJson("/api/v1/sites/" + siteB.getId() + "/shifts/" + shiftAtSiteB + "/assignments",
+                        supervisorBToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void assigningTheSameWorkerToTheSameShiftTwiceIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        addAssignment(shiftId, "LIGHT");
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "MODERATE", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void creatingAShiftWithTheSameWorkerTwiceInTheSameBatchIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt, List.of(
+                                assignmentBody(workerA.getId(), "Task 1", "LIGHT", null),
+                                assignmentBody(workerA.getId(), "Task 2", "LIGHT", null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void creatingAShiftThatOverlapsAnExistingAssignmentIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt.plus(1, ChronoUnit.HOURS), endsAt.plus(1, ChronoUnit.HOURS),
+                                List.of(assignmentBody(workerA.getId(), null, "LIGHT", null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void backToBackShiftsForTheSameWorkerAreNotAnOverlap() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        String secondShiftId = createShift(endsAt, endsAt.plus(8, ChronoUnit.HOURS));
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + secondShiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isCreated());
+    }
+
     @Test
     void workerIsForbiddenFromRemovingAnAssignment() throws Exception {
         Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);

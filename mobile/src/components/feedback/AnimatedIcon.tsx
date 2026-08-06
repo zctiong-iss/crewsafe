@@ -23,6 +23,8 @@
  *
  * All of it stops when `useReduceMotion` is true — except where `essential` says otherwise.
  * See that prop.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Platform } from "react-native";

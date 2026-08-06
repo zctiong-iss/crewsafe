@@ -9,6 +9,8 @@
  * Worker and supervisor get different tab sets. That is not cosmetic: `POST /shifts` is
  * role-gated to SUPERVISOR/SAFETY_MANAGER/ADMIN in `ShiftController`, so showing a worker
  * a "create shift" tab would be offering them a guaranteed 403.
+ *
+ * @author Justin Chua
  */
 
 export type AuthStackParamList = {

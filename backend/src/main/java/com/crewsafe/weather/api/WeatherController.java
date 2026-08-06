@@ -17,7 +17,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Site-scoped weather readings consumed by the live board. */
+/** Site-scoped weather readings consumed by the live board.
+ *
+ * @author Justin Chua
+ */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/weather")
 @RequiredArgsConstructor

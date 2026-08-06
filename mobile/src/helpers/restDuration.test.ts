@@ -5,6 +5,8 @@
  * over and when a card stops being shown. The cases below are the ones where being wrong is
  * silent — an anchored pattern that quietly matches a policy rule, or a malformed code that
  * starts a countdown to a number nobody chose.
+ *
+ * @author Justin Chua
  */
 import {
   DEFAULT_DISMISS_MS,

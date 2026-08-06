@@ -18,6 +18,8 @@
  * `react-native-reanimated`, which is *not* installed — a native dependency on a project that
  * has never produced an EAS build. The legacy component runs on RN `Animated`, the same
  * driver `AnimatedIcon` and the rest progress bar already use.
+ *
+ * @author Justin Chua
  */
 import { useRef } from "react";
 import { Animated, StyleSheet, View } from "react-native";

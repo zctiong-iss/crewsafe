@@ -1,3 +1,8 @@
+/**
+ * A labelled switch with an optional hint line.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, Switch, TouchableOpacity, View } from "react-native";
 import type { FC } from "react";
 import { s, vs } from "react-native-size-matters";
