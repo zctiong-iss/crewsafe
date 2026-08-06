@@ -196,9 +196,9 @@ Whichever you use, one rule catches everybody:
 ./local/seed-cognito-local.sh --reset-db
 ```
 
-It starts Postgres and `cognito-local`, creates a pool, two app clients and the demo users,
-and prints every value the next two steps need. `--reset-db` is required whenever you
-re-seed — see the warning below.
+It starts Postgres and `cognito-local`, creates a pool, two app clients and **all seven demo
+users**, and prints every value the next two steps need. `--reset-db` is required whenever
+you re-seed — see the warning below.
 
 **2. Backend.** Paste the `export` block it printed, then:
 
@@ -234,13 +234,38 @@ the emulator is not. On a physical phone use your LAN IP for both.
 
 **4. Run.** `npm run start:clear` (password) or `npm run web:pkce` (hosted UI).
 
-**5. Sign in** as `worker1` — a WORKER, so you get *My shift* with the Heat conditions card —
-or `manager1`, who has both sites and the supervisor tabs. Password `Test-Password-2026!`.
+**5. Sign in.** All seven demo accounts are seeded, with the same roles and site codes
+`AbstractIntegrationTest` uses. Every one takes the password `Test-Password-2026!`.
 
-> **`--reset-db` is not optional on a re-run.** Each seed mints a new pool, so every user
-> gets a new Cognito subject — and a subject is immutable. `DemoDataSeeder` refuses to remap
-> one and the backend will not start, with *"Application-user mapping conflicts with an
-> existing immutable Cognito subject"*. That is the guard working correctly.
+| Username | Role | Sites | Tabs |
+|---|---|---|---|
+| `worker1` `worker2` `worker3` | WORKER | Bishan | My shift · Alerts · Weather · Profile |
+| `supervisor1` | SUPERVISOR | Bishan | Shifts · Weather · Profile |
+| `supervisor2` | SUPERVISOR | NUS Campus | Shifts · Weather · Profile |
+| `manager1` | SAFETY_MANAGER | **both** | Shifts · Weather · Profile |
+| `admin1` | ADMIN | **none** | Shifts · Weather · Profile |
+
+Pick by what you need to look at:
+
+- **The Heat conditions card** is on *My shift*, which is WORKER-only — use `worker1`.
+- **Two sites in the picker** needs `manager1`; a supervisor sees only their own.
+- **The empty-membership state** is `admin1`, who holds every permission a supervisor does
+  but belongs to no site. That is the account that catches code assuming a membership exists.
+
+Only a WORKER gets *My shift* and *Alerts*. `/shifts/me` is scoped to the caller's own
+assignment and 403s for anyone else, and the dispatch inbox is WORKER-only, so those tabs
+would be dead ends rather than merely empty — see `SupervisorTabs.tsx`.
+
+> **Re-seeding invalidates a running stack — all three must move together.** Each seed mints
+> a new pool with new client ids and new Cognito subjects, and deletes the previous one. So
+> after any re-seed you must restart the backend with the new exports, update `mobile/.env`
+> with the new client id, and restart Metro with `start:clear`. Leaving any one behind
+> produces a misleading error: a deleted client id reads as *"the app is not configured"*.
+>
+> `--reset-db` is part of this, not optional. A Cognito subject is immutable, so
+> `DemoDataSeeder` refuses to remap `worker1` onto a new one and the backend will not start,
+> with *"Application-user mapping conflicts with an existing immutable Cognito subject"*.
+> That is the guard working correctly.
 
 **Hosted UI works locally too**, which is worth knowing because it is not obvious:
 cognito-local implements `/oauth2/authorize`, renders a real username and password form and
@@ -294,6 +319,7 @@ allowed CORS origin. A phone needs a development build.
 | *"The app is not configured. Missing: …"* naming a variable you have set | Metro is serving a pre-`.env` bundle. `npm run start:clear`. |
 | *"Your sign-in worked, but this account has not been set up"* | A 401 on `/api/v1/me` — the token was rejected **or absent**. Check the client id is in `APP_COGNITO_CLIENT_IDS` and that the backend's issuer matches the pool. |
 | Backend will not start, *"conflicts with an existing immutable Cognito subject"* | You re-seeded without `--reset-db`. |
+| Sign-in fails after a re-seed, or the client id "is missing" | A re-seed mints a **new pool**. The backend, `mobile/.env` and Metro must all be moved to it together — see the warning below. |
 | Weather shows *"No reading yet"* | Ingestion is off, or has not run. `WEATHER_INGESTION_ENABLED=true`. |
 | `redirect_mismatch` on hosted UI | Serving on a port other than 5173, or the callback is not registered on that client. |
 

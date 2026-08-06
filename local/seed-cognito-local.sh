@@ -141,10 +141,35 @@ WEB_CLIENT=$(cog CreateUserPoolClient \
   "{\"UserPoolId\":\"$POOL\",\"ClientName\":\"local-web\",\"CallbackURLs\":[\"http://localhost:5173/callback\"],\"LogoutURLs\":[\"http://localhost:5173/\"],\"AllowedOAuthFlows\":[\"code\"],\"AllowedOAuthScopes\":[\"openid\",\"email\",\"profile\"],\"AllowedOAuthFlowsUserPoolClient\":true,\"SupportedIdentityProviders\":[\"COGNITO\"]}" \
   | jsonpath "d['UserPoolClient']['ClientId']")
 
-# Only the users DemoDataSeeder needs for the worker and supervisor screens. Adding the rest
-# costs nothing but makes the mapping below longer than it needs to be to prove the path.
+# The whole demo roster, matching AbstractIntegrationTest's mapping exactly — same usernames,
+# roles and site codes. Seeding only a worker and a manager (the first version of this script)
+# meant SUPERVISOR and ADMIN could not be signed in as at all, so two of the four role-based
+# navigation paths were unreachable and nobody could tell whether they worked.
+#
+# `site_codes` values are the only two the seeder reconciles; anything else is rejected.
 declare -A SUBS
-for username in worker1 manager1; do
+declare -A ROLE=(
+  [supervisor1]=SUPERVISOR [supervisor2]=SUPERVISOR
+  [worker1]=WORKER [worker2]=WORKER [worker3]=WORKER
+  [manager1]=SAFETY_MANAGER [admin1]=ADMIN
+)
+declare -A SITES=(
+  [supervisor1]='["bishan"]' [supervisor2]='["campus"]'
+  [worker1]='["bishan"]' [worker2]='["bishan"]' [worker3]='["bishan"]'
+  [manager1]='["bishan","campus"]'
+  # An administrator holds every permission a supervisor does but belongs to no site — that
+  # is the case that catches code assuming a membership always exists.
+  [admin1]='[]'
+)
+declare -A LABEL=(
+  [supervisor1]='Aisyah (Supervisor)' [supervisor2]='Rajesh (Supervisor)'
+  [worker1]='Meng Hui (Worker)' [worker2]='Siti (Worker)' [worker3]='Kumar (Worker)'
+  [manager1]='Wei Ling (Safety Manager)' [admin1]='System Administrator'
+)
+
+USERNAMES=(supervisor1 supervisor2 worker1 worker2 worker3 manager1 admin1)
+
+for username in "${USERNAMES[@]}"; do
   CREATED=$(cog AdminCreateUser \
     "{\"UserPoolId\":\"$POOL\",\"Username\":\"$username\",\"MessageAction\":\"SUPPRESS\"}")
 
@@ -162,11 +187,16 @@ for username in worker1 manager1; do
     "{\"UserPoolId\":\"$POOL\",\"Username\":\"$username\",\"Password\":\"$PASSWORD\",\"Permanent\":true}" >/dev/null
 done
 
-DEMO_USERS=$(cat <<EOF
-[{"username":"worker1","cognitoSub":"${SUBS[worker1]}","displayName":"Meng Hui (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
- {"username":"manager1","cognitoSub":"${SUBS[manager1]}","displayName":"Wei Ling (Safety Manager)","role":"SAFETY_MANAGER","siteCodes":["bishan","campus"],"identityKind":"developer","desiredStatus":"preserve"}]
-EOF
-)
+# Built rather than written out, so the roster above is the single place a user is defined.
+DEMO_USERS="["
+for username in "${USERNAMES[@]}"; do
+  [[ "$DEMO_USERS" != "[" ]] && DEMO_USERS+=","
+  DEMO_USERS+="{\"username\":\"$username\",\"cognitoSub\":\"${SUBS[$username]}\""
+  DEMO_USERS+=",\"displayName\":\"${LABEL[$username]}\",\"role\":\"${ROLE[$username]}\""
+  DEMO_USERS+=",\"siteCodes\":${SITES[$username]}"
+  DEMO_USERS+=",\"identityKind\":\"developer\",\"desiredStatus\":\"preserve\"}"
+done
+DEMO_USERS+="]"
 
 cat <<EOF
 
@@ -208,7 +238,17 @@ EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN=http://localhost:$PORT
 EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID=$WEB_CLIENT
 
 ── 3. Sign in ──────────────────────────────────────────────────────────────────────────
-Username worker1 (or manager1, who has both sites), password $PASSWORD
+Every account below uses the password $PASSWORD
+
+  worker1, worker2, worker3   WORKER          My shift / Alerts / Weather / Profile
+  supervisor1                 SUPERVISOR      Shifts / Weather / Profile  (Bishan)
+  supervisor2                 SUPERVISOR      Shifts / Weather / Profile  (NUS Campus)
+  manager1                    SAFETY_MANAGER  Shifts / Weather / Profile  (both sites)
+  admin1                      ADMIN           Shifts / Weather / Profile  (no site)
+
+Only a WORKER sees My shift and Alerts: /shifts/me is scoped to the caller's own assignment
+and the dispatch inbox is WORKER-only, so those tabs would be dead ends for anyone else.
+admin1 belongs to no site and is the account that shows the empty-membership state.
 EOF
 
 if [[ "$PRINT_TOKEN" == true ]]; then
