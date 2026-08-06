@@ -56,7 +56,7 @@ describe("sign out", () => {
     );
 
     const user = userEvent.setup();
-    await screen.findByRole("heading", { name: "Live board" });
+    await screen.findByRole("heading", { name: "Live Board" });
 
     await user.click(screen.getByRole("button", { name: "Sign out" }));
 

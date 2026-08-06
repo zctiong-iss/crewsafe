@@ -1,6 +1,7 @@
 package com.crewsafe.shift.repository;
 
 import com.crewsafe.shift.domain.Shift;
+import com.crewsafe.shift.domain.ShiftStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -22,4 +23,10 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
     /** Scopes a shift lookup to its site, so a shift id from another site reads as 404. */
     Optional<Shift> findByIdAndSiteId(UUID id, UUID siteId);
+
+    /**
+     * Powers the conditions screen's active-shift lookup. {@code findFirst}, not a unique
+     * query, since nothing here enforces one ACTIVE shift per site.
+     */
+    Optional<Shift> findFirstBySiteIdAndStatusOrderByStartsAtDesc(UUID siteId, ShiftStatus status);
 }
