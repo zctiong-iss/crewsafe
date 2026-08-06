@@ -220,6 +220,19 @@ retyping anything:
 cd backend && source ../local/.cognito-local/backend-env.sh && ./mvnw spring-boot:run
 ```
 
+In **PowerShell** — where `&&` is a parse error in 5.1, `source` does not exist, and
+`./mvnw` runs the shell script rather than `mvnw.cmd` — the seed script writes a twin file
+for exactly this:
+
+```powershell
+. .\local\.cognito-localackend-env.ps1
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+The seed script itself is bash. Run it from Git Bash, or from PowerShell as
+`bash ./local/seed-cognito-local.sh --restart`.
+
 Wait for `NEA weather ingestion completed`. `WEATHER_INGESTION_ENABLED=true` is in that
 block and is the point of the exercise: without it the scheduler never runs,
 `weather_observation` stays empty, and every site 404s.
