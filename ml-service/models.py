@@ -1,6 +1,7 @@
-"""Pydantic models for Bedrock mitigation spike."""
+"""Pydantic models for Bedrock mitigation spike and forecast service."""
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Literal
+from datetime import datetime
 
 
 class MitigationSuggestion(BaseModel):
@@ -51,5 +52,65 @@ class MitigationRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "context": "Current WBGT: 35°C, 60% humidity, 12 workers on site. Last water break 30 min ago."
+            }
+        }
+
+
+class ForecastRequest(BaseModel):
+    """Request for WBGT forecast prediction."""
+    metric: str = Field(
+        ...,
+        pattern="^(wbgt|temperature|humidity)$",
+        description="Metric to forecast (wbgt, temperature, or humidity)"
+    )
+    horizon_minutes: int = Field(
+        default=30,
+        ge=30,
+        le=60,
+        description="Forecast horizon in minutes (30 or 60)"
+    )
+    current_value: float = Field(
+        ...,
+        ge=-10,
+        le=60,
+        description="Current value of the metric"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "metric": "wbgt",
+                "horizon_minutes": 30,
+                "current_value": 35.5
+            }
+        }
+
+
+class ForecastPrediction(BaseModel):
+    """Versioned forecast prediction conforming to committed contract."""
+    metric: str = Field(..., description="Metric being predicted")
+    predicted_value: float = Field(..., description="Predicted value at horizon")
+    horizon_minutes: int = Field(..., description="Time horizon for prediction")
+    model_version: str = Field(..., description="Version of the model used")
+    confidence_interval_lower: float = Field(
+        ...,
+        description="Lower bound of 95% confidence interval"
+    )
+    confidence_interval_upper: float = Field(
+        ...,
+        description="Upper bound of 95% confidence interval"
+    )
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Prediction timestamp")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "metric": "wbgt",
+                "predicted_value": 35.5,
+                "horizon_minutes": 30,
+                "model_version": "baseline-1.0.0",
+                "confidence_interval_lower": 34.2,
+                "confidence_interval_upper": 36.8,
+                "timestamp": "2026-02-08T12:00:00"
             }
         }

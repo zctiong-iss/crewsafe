@@ -175,6 +175,252 @@ exists to avoid ([ADR 0002](../docs/adr/0002-cookie-free-bearer-authentication.m
 because it is fenced to development and to synthetic accounts. The password lives in form
 state that dies with the screen — never Redux, never persisted, never logged.
 
+### Signing in: step by step
+
+There are two routes to a real token. **Route A needs no AWS account** and is what the
+screenshots in this README were taken with; Route B is the shared dev pool.
+
+Whichever you use, one rule catches everybody:
+
+> **Restart Metro with `npm run start:clear` after editing `.env`.** Metro inlines
+> `EXPO_PUBLIC_*` at bundle time by text substitution. A running Metro keeps serving the old
+> values, and the symptom is a config error naming a variable you can see is set.
+
+---
+
+#### Route A — against the local emulator (no AWS account)
+
+Two commands, from the repository root and then `mobile/`:
+
+```bash
+./local/seed-cognito-local.sh --restart
+cd mobile && npm run start:clear
+```
+
+`--restart` re-seeds the pool, writes `mobile/.env` for `cognito-password`, drops the
+database, relaunches the backend and waits for the first NEA ingestion before it returns.
+It is one step precisely because doing it by hand is three that must not be interleaved —
+see the warning below.
+
+Metro is deliberately **not** restarted for you: it is usually already running in a terminal
+you are watching, and killing it out from under you would be worse than telling you.
+
+<details>
+<summary>Doing it by hand, or for the hosted UI</summary>
+
+```bash
+./local/seed-cognito-local.sh --reset-db      # or: --env hosted-ui
+```
+
+It prints an `export` block for the backend and, when `--env` is not used, two blocks to
+copy into `mobile/.env`. Start the backend with either the printed lines or, without
+retyping anything:
+
+```bash
+cd backend && source ../local/.cognito-local/backend-env.sh && ./mvnw spring-boot:run
+```
+
+In **PowerShell** — where `&&` is a parse error in 5.1, `source` does not exist, and
+`./mvnw` runs the shell script rather than `mvnw.cmd` — the seed script writes a twin file
+for exactly this:
+
+```powershell
+. .\local\.cognito-localackend-env.ps1
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+The seed script itself is bash. Run it from Git Bash, or from PowerShell as
+`bash ./local/seed-cognito-local.sh --restart`.
+
+Wait for `NEA weather ingestion completed`. `WEATHER_INGESTION_ENABLED=true` is in that
+block and is the point of the exercise: without it the scheduler never runs,
+`weather_observation` stays empty, and every site 404s.
+
+The two `.env` blocks differ only in a few lines and **the wrong one fails much later**, at
+sign-in, with an unrelated-looking error. `--env password` and `--env hosted-ui` write the
+file for you and keep a `.env.bak`; prefer them.
+
+`10.0.2.2` for the emulator, `localhost` for the browser — the browser is on this machine,
+the emulator is not. On a physical phone use your LAN IP for both. Hosted UI runs under
+`npm run web:pkce`, not `start:clear`.
+
+</details>
+
+**Sign in.** All seven demo accounts are seeded, with the same roles and site codes
+`AbstractIntegrationTest` uses. Every one takes the password `Test-Password-2026!`.
+
+| Username | Role | Sites | Tabs |
+|---|---|---|---|
+| `worker1` `worker2` `worker3` | WORKER | Bishan | My shift · Alerts · Weather · Profile |
+| `supervisor1` | SUPERVISOR | Bishan | Shifts · Weather · Profile |
+| `supervisor2` | SUPERVISOR | NUS Campus | Shifts · Weather · Profile |
+| `manager1` | SAFETY_MANAGER | **both** | Shifts · Weather · Profile |
+| `admin1` | ADMIN | **none** | Shifts · Weather · Profile |
+
+Pick by what you need to look at:
+
+- **The Heat conditions card** is on *My shift*, which is WORKER-only — use `worker1`.
+- **Two sites in the picker** needs `manager1`; a supervisor sees only their own.
+- **The empty-membership state** is `admin1`, who holds every permission a supervisor does
+  but belongs to no site. That is the account that catches code assuming a membership exists.
+
+Only a WORKER gets *My shift* and *Alerts*. `/shifts/me` is scoped to the caller's own
+assignment and 403s for anyone else, and the dispatch inbox is WORKER-only, so those tabs
+would be dead ends rather than merely empty — see `SupervisorTabs.tsx`.
+
+> **Re-seeding invalidates a running stack — all three must move together.** Each seed mints
+> a new pool with new client ids and new Cognito subjects, and deletes the previous one. So
+> after any re-seed the backend, `mobile/.env` and Metro must all move to it. Leaving any one
+> behind produces a misleading error: a deleted client id reads as *"the app is not
+> configured"*, naming a variable you can see is set.
+>
+> `--restart` exists to make that one action rather than three. It still cannot restart
+> Metro, which is why `start:clear` is the second command above and not an afterthought.
+>
+> `--reset-db` is part of this, not optional. A Cognito subject is immutable, so
+> `DemoDataSeeder` refuses to remap `worker1` onto a new one and the backend will not start,
+> with *"Application-user mapping conflicts with an existing immutable Cognito subject"*.
+> That is the guard working correctly.
+
+**Hosted UI works locally too**, which is worth knowing because it is not obvious:
+cognito-local implements `/oauth2/authorize`, renders a real username and password form and
+honours PKCE. `signInWithPkce` already reads its domain from the environment, so this needs
+no code change at all — only a client with `http://localhost:5173/callback` registered,
+which the seed script creates.
+
+---
+
+#### Route B — against the shared dev pool (needs AWS)
+
+**1.** Get the non-secret ids (needs `gh` authenticated against the repo):
+
+```bash
+gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value \
+  | jq '.accounts.dev | {region, hosted_ui_url, web_client_id, cli_client_id}'
+```
+
+**2.** Get the synthetic users' passwords from AWS Secrets Manager — see the
+[root README](../README.md#cognito).
+
+**3.** Fill `mobile/.env`. Leave `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT` **empty**; it is what
+sends `cognito-password` to a local emulator instead of AWS.
+
+| Mode | Needs |
+|---|---|
+| `cognito-password` | `REGION`, `CLI_CLIENT_ID` |
+| `cognito-pkce` | `HOSTED_UI_DOMAIN`, `WEB_CLIENT_ID` |
+
+**4.** Start the backend with `./run.sh --account dev` from the repository root, which
+supplies every `APP_COGNITO_*` value from the same shared config.
+
+**5.** Sign in with a synthetic username and its Secrets Manager password.
+
+---
+
+#### Why hosted UI is web-only, in either route
+
+`signInWithPkce` throws `pkceUnavailableInExpoGo` before it opens a browser. Expo Go's
+redirect resolves to `exp://…`, which is not a registered callback on any client — the
+mobile client's is pinned to `crewsafe://callback`, a scheme only a native build can
+register. So the flow cannot complete in Expo Go on any amount of client-side effort.
+
+`npm run web:pkce` serves on 5173 because that is already a registered callback and an
+allowed CORS origin. A phone needs a development build.
+
+#### When something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| *"The app is not configured. Missing: …"* naming a variable you have set | Metro is serving a pre-`.env` bundle. `npm run start:clear`. |
+| *"Your sign-in worked, but this account has not been set up"* | A 401 on `/api/v1/me` — the token was rejected **or absent**. Check the client id is in `APP_COGNITO_CLIENT_IDS` and that the backend's issuer matches the pool. |
+| Backend will not start, *"conflicts with an existing immutable Cognito subject"* | You re-seeded without `--reset-db`. |
+| Sign-in fails after a re-seed, or the client id "is missing" | A re-seed mints a **new pool**. The backend, `mobile/.env` and Metro must all be moved to it together — see the warning below. |
+| Weather shows *"No reading yet"* | Ingestion is off, or has not run. `WEATHER_INGESTION_ENABLED=true`. |
+| `redirect_mismatch` on hosted UI | Serving on a port other than 5173, or the callback is not registered on that client. |
+
+### Verifying the live path without AWS
+
+`cognito-password` and `cognito-pkce` both need the shared dev pool, which means `gh`
+authenticated against the repo *and* the synthetic users' passwords from AWS Secrets Manager.
+Without an AWS account you cannot sign in at all — so every screen falls back to fixtures and
+nothing that reads live data can be checked.
+
+[`local/seed-cognito-local.sh`](../local/seed-cognito-local.sh) replaces the pool, **not the
+security**. It runs `jagregory/cognito-local` — the same digest-pinned image
+`AbstractIntegrationTest` uses — which is the real Cognito Identity Provider HTTP API,
+signing genuine RS256 tokens and serving a genuine JWKS. Tokens it mints go through the
+resource server, the issuer and client-id checks and every `@PreAuthorize` for real. Only the
+issuer is local.
+
+See **Route A** above for the steps. **The seam it relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
+`idpEndpoint()` in [`auth/cognitoPasswordAuth.ts`](src/auth/cognitoPasswordAuth.ts). It is
+gated on `__DEV__` rather than on the auth mode, deliberately: this is the value that decides
+*who signs the token the backend will trust*, so no configuration may redirect a release
+bundle's authentication, whatever mode it thinks it is in. `cognitoPasswordAuth.test.ts`
+asserts that.
+
+The alternative considered was a dev-only unauthenticated endpoint on the backend. It was
+rejected: a second way into a safety API is a much larger thing to get wrong than one string.
+
+#### A defect this turned up
+
+cognito-local omits `ExpiresIn` from its `InitiateAuth` response. AWS always sends it, so
+this had never been exercised — and the failure was silent and pointed somewhere else
+entirely:
+
+```
+undefined * 1000       -> NaN
+saveSession writes     -> "NaN"
+loadSession rejects it -> the session reads as corrupt, correctly
+the interceptor        -> sends NO Authorization header
+the server             -> 401
+the app                -> "this account has not been set up for CrewSafe yet"
+```
+
+A missing number in the login response surfaced to the worker as a **provisioning problem
+with their account**. `expiresInSeconds()` now defaults to an hour; the worst case is one
+early re-login, against a sign-in that silently authenticated nothing. Found only because the
+backend's `DEBUG` log said `Set SecurityContextHolder to anonymous SecurityContext` — the
+request had no token at all, rather than a rejected one.
+
+#### What is live, and what is still a fixture
+
+| Screen | Element | Outside mock mode |
+|---|---|---|
+| Weather | Everything — WBGT, band, metrics, station, freshness | **Live NEA** |
+| My shift | Heat conditions card | **Live NEA** |
+| My shift | Shift, task, intensity, acclimatisation | Fixture — `/shifts/me` does not exist |
+| My shift | Lightning banner | Fixture — `/lightning` does not exist |
+| My shift | Heat guidance actions | Absent — see below |
+
+**The shift screen is a hybrid while `/shifts/me` is missing.** Its heat card needs a site id,
+and the fixture shift's is `11111111-…`, which no deployment has — `DemoDataSeeder` generates
+site ids, so asking the live endpoint about it returns 403, not a reading. Outside mock mode
+`loadConditions` in [`safetySlice`](src/store/reducers/safetySlice.ts) therefore resolves the
+site from the real `GET /api/v1/sites`, as `weatherSlice` already does. So the card shows a
+live reading for the worker's **first accessible site**, not for the site the fixture names.
+
+Honest for verification and wrong for production — survivable only because the whole shift
+above it is a fixture too. When `/shifts/me` lands this collapses to one line: pass
+`shift.siteId` and delete the lookup.
+
+The policy is `null` there rather than the mock's. Pairing a real reading with a fixture
+obligation would be worse than having none — it would look authoritative and be invented.
+Nothing renders it today anyway: `features.heatGuidanceCard` is off.
+
+#### Verified on the emulator
+
+Signed in as `manager1`, then `worker1`, against live NEA data ingested that minute:
+
+- **Weather** — WBGT 29.2 °C, band "Below 31°C" from the server, station S128, observed 09:30
+  / received 09:42, a green **Live** badge, and no "Simulated data" notice. The SCRUM-209
+  Part 3 backdrop renders over it unchanged.
+- **My shift** — Heat conditions reads the same **29.2 °C WBGT** with a **Live** badge, while
+  the stop-work banner and task stay fixtures.
+
+Both readings match `GET /api/v1/sites/{siteId}/weather/latest` for Bishan.
+
 ---
 
 ## What was built
