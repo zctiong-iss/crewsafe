@@ -1,0 +1,185 @@
+@startuml terraform-architecture
+
+title CrewSafe SG — Runtime Architecture
+
+left to right direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 18
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 190
+skinparam maxMessageSize 160
+skinparam nodesep 45
+skinparam ranksep 65
+skinparam ArrowColor #455A64
+
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontColor #1B5E20
+  FontSize 18
+}
+skinparam cloud {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #0D47A1
+  FontSize 18
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #EF6C00
+  FontColor #E65100
+  FontSize 18
+}
+skinparam artifact {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+  FontSize 18
+}
+
+actor "Web / mobile / CLI\nclients" as clients
+cloud "NEA / data.gov.sg\nweather API" as weather
+
+package "AWS account · ap-southeast-1 · shared-dev" as aws {
+  package "Public edge" as edge {
+    cloud "Cognito User Pool\nweb · mobile · CLI clients\nOAuth tokens / JWKS" as cognito
+    cloud "CloudFront distribution\nviewer HTTPS" as cloudfront
+  }
+
+  package "VPC · two Availability Zones" as vpc {
+    rectangle "Internet Gateway" as igw
+    rectangle "NAT Gateway\nEIP · single egress AZ" as nat
+
+    package "Public subnets" as public {
+      rectangle "Public Application Load Balancer\nport 80 CloudFront origin" as alb
+    }
+
+    package "Private subnets" as private {
+      rectangle "ECS cluster + Fargate service\nCrewSafe backend tasks\nno public IP" as ecs
+      database "RDS PostgreSQL\nprivate subnet group\nTLS required" as rds
+    }
+  }
+
+  database "ECR repositories\ncrewsafe/backend + crewsafe/web\nimmutable tags · scan on push" as ecr
+  database "SSM Parameter Store\n/crewsafe/shared-dev/*\nconfiguration + DB URL" as ssm
+  database "Secrets Manager\nweather API key\nRDS-managed master credential" as secrets
+  artifact "CloudWatch Logs\nbackend: 14 days\nPostgreSQL: 7 days" as logs
+}
+
+clients --> cognito : sign in
+clients --> cloudfront : API requests
+cloudfront --> alb : origin HTTP : 80
+alb --> ecs : target group
+ecs --> rds : JDBC TLS : 5432
+ecs --> ecr
+ecs --> ssm
+ecs --> secrets
+ecs --> logs
+rds --> logs
+ecs --> weather
+private --> nat
+nat --> igw
+
+note right of alb
+  ALB security group:
+  ingress from CloudFront's
+  AWS-managed prefix list only.
+end note
+
+note right of ecs
+  Application security group:
+  ingress from ALB only.
+
+  ECS task execution role handles
+  image pull, log write, and
+  config/secret resolution.
+  ECS task role reads application
+  secrets only.
+end note
+
+note right of rds
+  Database security group:
+  app security group → TCP 5432.
+  No egress rule is declared.
+end note
+
+legend right
+  |= Color |= Meaning |
+  |<#E3F2FD>| Public edge / identity |
+  |<#E8F5E9>| Network and compute |
+  |<#FFF3E0>| Data and configuration |
+  |<#F3E5F5>| Operations |
+  --> | Runtime data or request flow |
+endlegend
+
+newpage
+
+title CrewSafe SG — Terraform Component Contracts
+
+left to right direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 18
+skinparam shadowing false
+skinparam linetype ortho
+skinparam wrapWidth 190
+skinparam maxMessageSize 160
+skinparam nodesep 50
+skinparam ranksep 70
+
+actor "GitHub Actions" as github_tf
+artifact "Versioned S3 state bucket\nSSE-S3 · public access blocked\nseparate key per component" as s3_tf
+
+rectangle "Terraform: network" as tf_network #ECEFF1
+rectangle "Terraform: compute" as tf_compute #ECEFF1
+rectangle "Terraform: database" as tf_database #ECEFF1
+rectangle "Terraform: secrets" as tf_secrets #ECEFF1
+rectangle "Terraform: cognito" as tf_cognito #ECEFF1
+rectangle "Terraform: ecr" as tf_ecr #ECEFF1
+
+tf_network ..> tf_compute
+tf_network ..> tf_database
+tf_cognito ..> tf_secrets
+tf_secrets ..> tf_compute
+tf_secrets ..> tf_database
+tf_database ..> tf_compute
+tf_ecr ..> tf_compute
+
+github_tf --> s3_tf
+tf_network ..> s3_tf
+tf_compute ..> s3_tf
+tf_database ..> s3_tf
+tf_secrets ..> s3_tf
+tf_cognito ..> s3_tf
+tf_ecr ..> s3_tf
+
+note right of s3_tf
+  State is account-isolated and keyed
+  per component. No DynamoDB lock table
+  is declared.
+end note
+
+note bottom of tf_compute
+  Remote-state inputs:
+  network = VPC, subnets, security groups
+  secrets = parameter prefix, IAM roles
+  database = DB address, URL parameter, credential ARN
+  ecr = repository ARN / URL
+end note
+
+note bottom of tf_secrets
+  Remote-state input:
+  cognito = issuer, JWKS, client IDs
+end note
+
+legend right
+  |= Style |= Meaning |
+  ..> | Terraform remote-state contract |
+  --> | CI control flow |
+endlegend
+
+@enduml

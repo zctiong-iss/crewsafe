@@ -66,7 +66,7 @@ describe("returning from Cognito", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Live board" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Sign in" })).not.toBeInTheDocument();
   });
 
