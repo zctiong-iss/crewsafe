@@ -254,6 +254,7 @@ export APP_COGNITO_DEMO_USERS_JSON='$DEMO_USERS'
 export DB_URL='jdbc:postgresql://localhost:5434/crewsafe'
 export WEATHER_DATA_MODE=live
 export WEATHER_INGESTION_ENABLED=true
+export LIGHTNING_INGESTION_ENABLED=true
 ENVEOF
 
 # A PowerShell twin, because on Windows the terminal in front of you is usually PowerShell
@@ -302,6 +303,7 @@ export APP_COGNITO_DEMO_USERS_JSON='$DEMO_USERS'
 export DB_URL='jdbc:postgresql://localhost:5434/crewsafe'
 export WEATHER_DATA_MODE=live
 export WEATHER_INGESTION_ENABLED=true
+export LIGHTNING_INGESTION_ENABLED=true
 cd backend && ./mvnw spring-boot:run
 
   or, without retyping any of it:
