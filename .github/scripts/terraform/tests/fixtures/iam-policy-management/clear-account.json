@@ -1,0 +1,7 @@
+{
+  "scenario": "clear-account",
+  "expected": "allow",
+  "bootstrap_roles_present": true,
+  "declared_policies": [],
+  "declared_attachments": []
+}

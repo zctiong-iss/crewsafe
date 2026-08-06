@@ -4,11 +4,22 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 registry='{"alice":{"account_id":"123456789012","region":"ap-southeast-1","plan_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole","apply_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"}}'
 CREWSAFE_AWS_ACCOUNTS_JSON="$registry" "$ROOT/.github/scripts/terraform/resolve-terraform-account.sh" alice >/dev/null
 if CREWSAFE_AWS_ACCOUNTS_JSON="$registry" "$ROOT/.github/scripts/terraform/resolve-terraform-account.sh" unknown >/dev/null 2>&1; then exit 1; fi
+
+policy_registry="$(jq '{alice: (.alice + {iam_policy_plan_role_arn:"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyPlanRole",iam_policy_apply_role_arn:"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole"})}' <<<"$registry")"
+policy_account_output="$(CREWSAFE_AWS_ACCOUNTS_JSON="$policy_registry" "$ROOT/.github/scripts/terraform/resolve-terraform-account.sh" alice)"
+jq -e '
+  .iam_policy_plan_role_arn == "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyPlanRole"
+  and .iam_policy_apply_role_arn == "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole"
+' <<<"$policy_account_output" >/dev/null
+
 for invalid in \
   "$(jq '.alice.region = "us-east-1"' <<<"$registry")" \
   "$(jq '.alice.plan_role_arn = "arn:aws:iam::999999999999:role/CrewSafeGitHubTerraformPlanRole"' <<<"$registry")" \
   "$(jq '.alice.plan_role_arn = "not-an-arn"' <<<"$registry")" \
-  "$(jq '.alice.apply_role_arn = .alice.plan_role_arn' <<<"$registry")"; do
+  "$(jq '.alice.apply_role_arn = .alice.plan_role_arn' <<<"$registry")" \
+  "$(jq '.alice.iam_policy_plan_role_arn = "arn:aws:iam::999999999999:role/CrewSafeGitHubTerraformIamPolicyPlanRole" | .alice.iam_policy_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole"' <<<"$policy_registry")" \
+  "$(jq '.alice.iam_policy_plan_role_arn = "not-an-arn"' <<<"$policy_registry")" \
+  "$(jq '.alice.iam_policy_apply_role_arn = .alice.iam_policy_plan_role_arn' <<<"$policy_registry")"; do
   if CREWSAFE_AWS_ACCOUNTS_JSON="$invalid" \
     "$ROOT/.github/scripts/terraform/resolve-terraform-account.sh" alice >/dev/null 2>&1; then
     echo "unsafe account or OIDC role registry entry was accepted" >&2
