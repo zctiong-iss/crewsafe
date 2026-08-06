@@ -1,0 +1,128 @@
+/**
+ * ConditionsPanel.css
+ * Styling for live site conditions, WBGT readings, stop-work alerts, and weather trends.
+ * Engineered for high-glare outdoor readability and color-blind accessibility (WCAG AAA).
+ */
+
+.conditions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+}
+
+/* ---- Stop-Work Lightning Alert Banner ----------------------------------- */
+/* Solid high-visibility alert banner (no multi-color gradients) */
+.stop-work-banner {
+  background-color: var(--band-high); /* Solid Vermilion Red / Crimson */
+  color: #ffffff;                      /* High-contrast pure white text */
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: 2px solid var(--band-extreme);
+  box-shadow: var(--shadow-raised);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stop-work-banner::before {
+  content: "🛑 ⚡ ";
+  font-size: 1.2rem;
+}
+
+/* ---- Degraded Feed Alert ------------------------------------------------ */
+.conditions-panel__degraded {
+  background-color: var(--band-moderate-wash);
+  color: var(--ink);
+  border: 1px solid var(--band-moderate);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+
+/* ---- Freshness Badges (Color-Blind Safe Dual Encoding) ------------------- */
+.conditions-panel__badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.conditions-panel__badge--live {
+  background-color: var(--band-low-wash);
+  color: var(--band-low);                  /* Cobalt / Sky Blue */
+  border: 1.5px solid var(--band-low);
+}
+.conditions-panel__badge--live::before {
+  content: "●";
+  font-size: 0.7rem;
+}
+
+.conditions-panel__badge--delayed {
+  background-color: var(--band-moderate-wash);
+  color: var(--band-moderate);             /* Gold Amber */
+  border: 1.5px solid var(--band-moderate);
+}
+.conditions-panel__badge--delayed::before {
+  content: "▲";
+  font-size: 0.7rem;
+}
+
+.conditions-panel__badge--stale {
+  background-color: var(--status-none-wash);
+  color: var(--status-none);               /* Slate Muted */
+  border: 1.5px solid var(--status-none);
+}
+
+/* ---- Value Grid Cards ---------------------------------------------------- */
+.conditions-panel__values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.conditions-panel__values > div {
+  background-color: var(--surface);       /* Pure White Card */
+  border: 1px solid var(--line-strong);   /* High-contrast border line */
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.conditions-panel__values dt {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+
+.conditions-panel__values dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+}
+
+/* ---- Active Shift Indicator ---------------------------------------------- */
+.conditions-panel__shift {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+  margin: 0;
+}

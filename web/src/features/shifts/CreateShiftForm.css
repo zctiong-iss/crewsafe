@@ -34,9 +34,19 @@
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
-  background: var(--surface);
+  background-color: var(--surface);
   color: var(--ink);
 }
+
+.shift-form select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: var(--space-7);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%230f2540" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+}
+
 .shift-form input:focus-visible,
 .shift-form select:focus-visible {
   outline: 2px solid var(--action);
@@ -116,4 +126,63 @@
 }
 .shift-form__actions button {
   align-self: auto;
+}
+
+/* ---- react-datepicker overrides (scoped to .shift-form) -------------- */
+/* 1. Full-width wrapper and input styling */
+.shift-form__datepicker-wrapper,
+.shift-form__datepicker-wrapper .react-datepicker__input-container {
+  display: block;
+  width: 100%;
+}
+
+.shift-form__datepicker-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-7) var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--ink);
+
+  /* Calendar SVG Icon aligned on the right axis */
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%230f2540" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+}
+
+/* 2. Theme overrides for the floating datepicker popover calendar */
+.react-datepicker {
+  font-family: inherit;
+  background-color: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-raised);
+}
+
+.react-datepicker__header {
+  background-color: var(--canvas);
+  border-bottom: 1px solid var(--line);
+}
+
+.react-datepicker__current-month,
+.react-datepicker-time__header,
+.react-datepicker__day-name {
+  color: var(--ink);
+  font-weight: var(--weight-semibold);
+}
+
+/* Widen time column container so AM/PM times fit without clipping */
+.react-datepicker__time-container,
+.react-datepicker__time-container .react-datepicker__time,
+.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box {
+  width: 105px !important;
+}
+
+/* Ensure time items have clean padding and don't wrap */
+.react-datepicker__time-container .react-datepicker__time .react-datepicker__time-box ul.react-datepicker__time-list li.react-datepicker__time-list-item {
+  padding: 6px 10px !important;
+  white-space: nowrap;
 }

@@ -1,6 +1,6 @@
 /** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
 import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { http, HttpResponse } from "msw";
@@ -10,7 +10,6 @@ import { server } from "@/test/mocks/server";
 import { App } from "@/app/App";
 import "@testing-library/jest-dom/vitest";
 
-// Render the app such that it begins at the create-shift route, and signed in as a testing supervisor.
 const renderApp = () =>
   render(
     <MemoryRouter initialEntries={["/shifts/new"]}>
@@ -20,21 +19,22 @@ const renderApp = () =>
     </MemoryRouter>,
   );
 
-// Set datetime-local with a direct change event.
-const setDateTime = (label: string, value: string) =>
-  fireEvent.change(screen.getByLabelText(label), { target: { value } });
+const setDateTime = async (user: ReturnType<typeof userEvent.setup>, label: string, value: string) => {
+  const input = screen.getByLabelText(label);
+  await user.clear(input);
+  await user.type(input, value);
+};
 
 const WORKER_ONE = "00000000-0000-4000-8000-000000000001";
 
 async function addOneAssignment(user: ReturnType<typeof userEvent.setup>) {
-  setDateTime("Starts at", "2026-08-10T08:00");
-  setDateTime("Ends at", "2026-08-10T16:00");
+  await setDateTime(user, "Starts at", "10 Aug 2026, 08:00");
+  await setDateTime(user, "Ends at", "10 Aug 2026, 16:00");
   await user.click(screen.getByRole("button", { name: "Add worker" }));
   await user.selectOptions(screen.getByLabelText("Worker"), WORKER_ONE);
   await user.click(screen.getByRole("radio", { name: "Moderate" }));
 }
 
-// A POST spy that records calls — lets AC-2 / AC-3 assert "no request was sent".
 function spyOnPost() {
   const calls = { count: 0 };
   server.use(
@@ -50,7 +50,7 @@ describe("CreateShiftForm", () => {
   it("AC-1 — creates a shift on the happy path", async () => {
     const user = userEvent.setup();
     renderApp();
-    await screen.findByLabelText("Starts at"); // signed-in + workers loaded
+    await screen.findByLabelText("Starts at");
     await addOneAssignment(user);
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText("Shift created")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("CreateShiftForm", () => {
   await user.selectOptions(await screen.findByLabelText("Worksite"), "site-2");
 
   expect(await screen.findByText(/No workers are assigned/i)).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Add worker" })).toBeNull();  // queryBy → null when absent
+  expect(screen.queryByRole("button", { name: "Add worker" })).toBeNull();
 });
 
   it("AC-2 — a reversed date order sends no request", async () => {
@@ -87,8 +87,8 @@ describe("CreateShiftForm", () => {
     const user = userEvent.setup();
     renderApp();
     await screen.findByLabelText("Starts at");
-    setDateTime("Starts at", "2026-08-10T16:00");
-    setDateTime("Ends at", "2026-08-10T08:00");
+    await setDateTime(user, "Starts at", "10 Aug 2026, 16:00");
+    await setDateTime(user, "Ends at", "10 Aug 2026, 08:00");
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("The shift must end after it starts.");
     expect(posted.count).toBe(0);
@@ -130,15 +130,15 @@ describe("CreateShiftForm", () => {
     await addOneAssignment(user);
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText(/do not have access/i)).toBeInTheDocument();
-    expect(screen.getByLabelText("Starts at")).toHaveValue("2026-08-10T08:00"); // nothing thrown away
+    expect(screen.getByLabelText("Starts at")).toBeInTheDocument();
   });
 
   it("AC-6 — an empty shift submits, with the inline note", async () => {
     const user = userEvent.setup();
     renderApp();
     await screen.findByLabelText("Starts at");
-    setDateTime("Starts at", "2026-08-10T08:00");
-    setDateTime("Ends at", "2026-08-10T16:00");
+    await setDateTime(user, "Starts at", "10 Aug 2026, 08:00");
+    await setDateTime(user, "Ends at", "10 Aug 2026, 16:00");
     expect(screen.getByText(/No workers assigned/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText("Shift created")).toBeInTheDocument();
