@@ -7,6 +7,8 @@
  * adds it and has to justify it in review. That matters most for the thing we need to keep
  * *out* of AsyncStorage entirely — the session, which lives in SecureStore instead
  * (`api/tokenStore.ts`).
+ *
+ * @author Justin Chua
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createMigrate, type PersistConfig } from "redux-persist";

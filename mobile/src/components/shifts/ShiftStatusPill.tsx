@@ -1,3 +1,8 @@
+/**
+ * A shift's status as a compact coloured pill.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";

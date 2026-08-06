@@ -13,6 +13,8 @@
  * Failures are held as i18n keys, never as messages. A message captured here would be
  * frozen in whatever language was active when it happened, and would not follow a language
  * change made on the very next screen.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { fetchCurrentUser } from "@/api/endpoints/identity";

@@ -10,6 +10,8 @@
  * and the registry stays a list of motes. Anything a helper produces could have been typed
  * out by hand, which is what keeps `registry.ts` swappable — nothing here has to be
  * understood to replace a backdrop.
+ *
+ * @author Justin Chua
  */
 import type { BackdropMote, MoteMotion } from "./types";
 

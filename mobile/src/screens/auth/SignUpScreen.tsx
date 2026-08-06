@@ -22,6 +22,8 @@
  * user with role WORKER and a site membership, audited under FR-04. Higher roles must stay
  * administrator-created regardless: this screen deliberately offers no role choice.
  * ────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * @author Justin Chua
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type TextInput } from "react-native";

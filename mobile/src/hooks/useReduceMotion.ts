@@ -24,6 +24,8 @@
  * The device setting is never overridable. Someone who set Reduce Motion at the OS level
  * has told their phone something about their body, and no in-app judgement about urgency
  * outranks that — which is exactly the line SC 2.2.2 draws.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useState } from "react";
 import { AccessibilityInfo } from "react-native";

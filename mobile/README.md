@@ -1003,6 +1003,87 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-261 — Live lightning, and a source toggle
+
+Plan: [`docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md`](../docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md).
+
+The lightning banner runs on real NEA strike data outside `mock` auth mode. A dev-only radio
+switches it back to the fixture, and the two render identically.
+
+### The endpoint did not exist, despite the ingestion landing
+
+SCRUM-170 (#106) ingests strikes and derives per-site risk correctly — but published it only on
+`ConditionsSnapshot`, carried by the conditions **SSE stream**, which is annotated
+`hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN')`. The banner is on *My shift*, which is
+**WORKER-only**. So the one role that needs the state was the one role that got a 403, and no
+amount of mobile work could fix it.
+
+`GET /api/v1/sites/{siteId}/lightning` was added in this branch, site-scoped on membership
+alone. Polled rather than streamed: ingestion runs on a two-minute cadence and the shift screen
+already refreshes every sixty seconds, so a long-lived connection buys no freshness while
+costing battery on a phone that has to last an outdoor shift.
+
+### Null means "no data", and must never become CLEAR
+
+A 404 — nothing ingested for this site, usually because the scheduler is off — comes back as
+`null` and the screen says *"Lightning data unavailable for this site."*
+
+It is emphatically not `CLEAR`. Those two render as the same absence of a warning while meaning
+opposite things, and a crew told everything is fine because a scheduler was switched off is the
+exact failure this endpoint exists to prevent. Asserted on both sides: the backend returns 404
+rather than a body, and `safety.test.ts` asserts the client returns null rather than a state.
+
+### The toggle
+
+`Live` is the default outside mock mode, because live *is* the behaviour now. `Simulated` exists
+so a reviewer can exercise all three states on a clear day, which no live feed will oblige them
+with. Absent in `mock` auth mode — that mode has no network, so "live" would be a button that
+changed nothing — and compiled out of release by `__DEV__`.
+
+The scenario radios are **disabled** under Live rather than hidden. A simulated scenario has no
+meaning against a live feed, and a radio that still moves while changing nothing on screen is
+how someone concludes the live data is broken.
+
+`LightningBanner` itself is untouched. Live and Simulated differ only in where the data came
+from — verified by comparing screenshots of the same `CLEAR` state, which were identical but
+for the timestamp and countdown.
+
+### The bug the unit tests could not see
+
+The first version passed `shift.siteId` to `fetchLightningRisk` and got a **403 on device**.
+`fetchMyShift` is still mocked, and its fixture site id is one `DemoDataSeeder` never creates,
+so every site-scoped endpoint rejects it. SCRUM-209 had already fixed this for the heat reading;
+lightning walked into it again.
+
+The unit tests could not catch it because they pass a site id in directly. The fix is one shared
+`liveSiteId()` resolver used by both calls — rather than the same fix applied twice and
+forgotten a third time — plus two regression tests asserting lightning is asked about the real
+site and not asked at all when the worker has no membership.
+
+### Verified on device
+
+Signed in as `worker1` through `cognito-password`, with `LIGHTNING_INGESTION_ENABLED=true`
+against the real NEA feed:
+
+- **Live** — "No lightning risk / Assessed clear at 14:42 / Refreshes in 24 min", matching
+  `GET /lightning` exactly (`state: CLEAR`, `freshness: LIVE`, real `validUntil`).
+- **Simulated** — scenario radios re-enable; the SCRUM-260 heat override reappears under a
+  simulated stop-work.
+- **Live vs Simulated at `CLEAR`** — identical but for the timestamp and countdown.
+
+### On SCRUM-111
+
+`WeatherQueryService` now recomputes `qualityStatus` on every read and preserves `SIMULATED` for
+fixtures. Every mobile consumer — `WbgtCard`, `FreshnessBadge`, `FreshnessNotice`, the Weather
+hero — renders it straight from the response and derives nothing, so the change flows through
+with no code change. That is the finding, recorded so the next person does not re-investigate.
+
+The open question is cadence, not correctness: the weather poll is 5 minutes and freshness now
+moves on its own, so the badge can lag by up to one interval. Measuring the thresholds before
+shortening the poll is its own story — a shorter poll costs battery on an outdoor shift.
+
+---
+
 ## SCRUM-260 — The Heat conditions card stays legible during a stop-work
 
 Plan: [`docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md`](../docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md).

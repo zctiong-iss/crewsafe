@@ -12,6 +12,8 @@
  * minus `latestReadiness` — readiness submission is SCRUM-162's other half and out of scope
  * here. When the endpoint lands, `endpoints/shifts.ts` switches over and this file goes.
  * ────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * @author Justin Chua
  */
 import type { MyShift } from "@/types/domain";
 import { DEMO_SITES } from "@/auth/demoUsers";

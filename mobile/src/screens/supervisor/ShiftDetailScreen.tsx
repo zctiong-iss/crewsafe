@@ -11,6 +11,8 @@
  * It is confirmed, unlike acknowledging an action. The distinction is not consistency for
  * its own sake: acknowledging is reversible in every way that matters and is done in gloves
  * on a hot site, whereas this destroys a shift and every assignment on it with no undo.
+ *
+ * @author Justin Chua
  */
 import { useCallback, useRef } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";

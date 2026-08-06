@@ -5,6 +5,8 @@
  * through an injected provider (`api/client.ts`). This module is the only place those two
  * halves meet, which is what keeps `client.ts` importable from the auth slice without a
  * cycle.
+ *
+ * @author Justin Chua
  */
 import { setTokenProvider, setUnauthenticatedHandler } from "@/api/client";
 import { isExpired, loadSession } from "@/api/tokenStore";

@@ -10,6 +10,8 @@
  *
  * Not persisted, for the same reason as safety: a reading has a validity window, and
  * rehydrating a stale one as though it were current is the failure §7.1 warns about.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { fetchSiteWeather } from "@/api/endpoints/safety";

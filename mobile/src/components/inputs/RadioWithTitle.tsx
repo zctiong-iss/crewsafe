@@ -1,3 +1,8 @@
+/**
+ * A single radio option with a title, an optional subtitle, and a disabled state.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import type { FC } from "react";
 import { s, vs } from "react-native-size-matters";

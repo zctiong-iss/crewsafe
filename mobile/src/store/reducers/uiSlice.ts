@@ -15,6 +15,8 @@
  * Failures that interrupt a deliberate, destructive flow use a native Alert instead — the
  * user is already in a modal interaction and a message that can scroll off-screen is not an
  * acceptable way to report that a delete did not happen.
+ *
+ * @author Justin Chua
  */
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 

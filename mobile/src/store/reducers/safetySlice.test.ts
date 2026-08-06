@@ -5,6 +5,8 @@
  * UUID no deployment has, so using it would produce a 403 instead of a reading — and a 403
  * on this path blanks the heat card on the worker's main screen. That substitution is the
  * whole point of these tests, and it is invisible in review because both ids are UUIDs.
+ *
+ * @author Justin Chua
  */
 const mockIsMockApi = jest.fn();
 const mockFetchMyShift = jest.fn();
@@ -96,6 +98,29 @@ describe("live mode", () => {
 
     // A real reading beside an invented obligation would look authoritative and be wrong.
     expect(payload.policy).toBeNull();
+  });
+
+  it("asks for lightning about the real site too, not the fixture's", async () => {
+    // Found on device, not here: the first version of SCRUM-261 passed shift.siteId to
+    // fetchLightningRisk and got a 403, because every live endpoint is site-scoped behind
+    // @siteAccess.canAccess and the fixture's site exists nowhere. The heat reading had
+    // already been fixed for this in SCRUM-209; lightning had to be fixed the same way.
+    mockFetchAccessibleSites.mockResolvedValue([{ id: REAL_SITE, name: "Bishan" }]);
+    mockFetchSiteWeather.mockResolvedValue({ observation: observation(REAL_SITE), band: "BELOW_31" });
+
+    await run();
+
+    expect(mockFetchLightningRisk).toHaveBeenCalledWith(REAL_SITE);
+    expect(mockFetchLightningRisk).not.toHaveBeenCalledWith(FIXTURE_SITE);
+  });
+
+  it("does not ask for lightning at all when the worker has no site", async () => {
+    mockFetchAccessibleSites.mockResolvedValue([]);
+
+    await run();
+
+    // No site means no site-scoped call to make. Asking anyway would be a guaranteed 403.
+    expect(mockFetchLightningRisk).not.toHaveBeenCalled();
   });
 
   it("treats no memberships as an empty card, not a failure", async () => {

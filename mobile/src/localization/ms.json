@@ -1,6 +1,5 @@
 {
   "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.stopWorkOverride, freshness.staleWarning — MUST be reviewed by a native Bahasa Melayu speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
-
   "common": {
     "appName": "CrewSafe",
     "cancel": "Batal",
@@ -14,7 +13,6 @@
     "optional": "Pilihan",
     "requestReference": "Rujukan: {{requestId}}"
   },
-
   "errors": {
     "unauthenticated": "Sesi anda telah tamat. Log masuk untuk meneruskan.",
     "not-provisioned": "Log masuk anda berjaya, tetapi akaun ini belum disediakan untuk CrewSafe. Minta pentadbir tapak anda menambah anda.",
@@ -27,7 +25,6 @@
     "configMissing": "Aplikasi belum dikonfigurasikan. Tiada: {{keys}}",
     "unknown": "Ada masalah berlaku. Cuba lagi."
   },
-
   "auth": {
     "signInTitle": "Log masuk",
     "signInSubtitle": "Keselamatan tekanan haba untuk kru luar",
@@ -61,7 +58,6 @@
       "cancelled": "Log masuk telah dibatalkan."
     }
   },
-
   "signUp": {
     "title": "Mohon akaun",
     "intro": "Akaun CrewSafe dibuka oleh pentadbir tapak anda. Isikan ini dan kami akan tunjukkan dengan tepat apa yang perlu dihantar kepada mereka.",
@@ -96,14 +92,12 @@
       "siteRequired": "Pilih tapak anda."
     }
   },
-
   "roles": {
     "WORKER": "Pekerja",
     "SUPERVISOR": "Penyelia Tapak",
     "SAFETY_MANAGER": "Pengurus Keselamatan",
     "ADMIN": "Pentadbir"
   },
-
   "tabs": {
     "shift": "Syif saya",
     "alerts": "Makluman",
@@ -114,7 +108,6 @@
     "profile": "Profil",
     "settings": "Tetapan"
   },
-
   "settings": {
     "title": "Tetapan",
     "language": "Bahasa",
@@ -135,7 +128,6 @@
     "aboutVersion": "Versi {{version}}",
     "aboutBody": "Keselamatan tekanan haba untuk kru luar di Singapura."
   },
-
   "profile": {
     "title": "Profil",
     "role": "Peranan",
@@ -154,7 +146,6 @@
     "photoUpdatedToast": "Gambar dikemas kini",
     "photoRemovedToast": "Gambar dibuang"
   },
-
   "shifts": {
     "site": "Tapak",
     "emptyTitle": "Tiada syif lagi",
@@ -218,7 +209,6 @@
       "checkFields": "Beberapa butiran di atas perlu diperhatikan. Medan bergaris merah menunjukkan apa yang perlu dibetulkan."
     }
   },
-
   "weather": {
     "title": "Keadaan",
     "site": "Tapak",
@@ -244,7 +234,6 @@
       "THUNDERY_SHOWERS": "Hujan berguruh"
     }
   },
-
   "inbox": {
     "emptyTitle": "Tiada apa untuk diakui",
     "emptyBody": "Tindakan yang diluluskan oleh penyelia anda akan muncul di sini.",
@@ -260,7 +249,6 @@
     "restRemaining": "Tinggal {{time}}",
     "swipeToClear": "Padam"
   },
-
   "lightning": {
     "stopWorkTitle": "BERHENTI KERJA",
     "stopWorkBody": "Kilat berhampiran tapak ini. Cari perlindungan yang sesuai dengan segera.",
@@ -273,9 +261,9 @@
     "validUntil": "Sah sehingga {{time}}",
     "refreshesInMinutes": "Dikemas kini dalam {{minutes}} min",
     "refreshesInSeconds": "Dikemas kini dalam {{seconds}} s",
-    "overrideNotice": "Pelan haba digantung selagi arahan berhenti kerja berkuat kuasa."
+    "overrideNotice": "Pelan haba digantung selagi arahan berhenti kerja berkuat kuasa.",
+    "unavailable": "Data kilat tiada untuk tapak ini."
   },
-
   "wbgt": {
     "title": "Keadaan haba",
     "reading": "WBGT",
@@ -288,7 +276,6 @@
       "33_AND_ABOVE": "33°C dan ke atas"
     }
   },
-
   "guidance": {
     "title": "Apa yang anda mesti buat",
     "advisoryTitle": "Turut disyorkan",
@@ -297,7 +284,6 @@
     "policyVersion": "Polisi {{version}}",
     "none": "Tiada tindakan haba diperlukan sekarang."
   },
-
   "actions": {
     "HYDRATE_REGULARLY": "Minum air dengan kerap",
     "HYDRATE_HOURLY": "Minum air sekurang-kurangnya sekali sejam",
@@ -314,7 +300,6 @@
     "RESUME_WORK": "Sambung kerja",
     "ROTATE_TO_LIGHT_DUTY": "Bertukar ke tugas ringan"
   },
-
   "shift": {
     "title": "Syif anda",
     "task": "Tugas",
@@ -325,13 +310,11 @@
     "noShiftTitle": "Tiada syif dijadualkan",
     "noShiftBody": "Anda tiada syif semasa atau akan datang. Semak dengan penyelia anda."
   },
-
   "intensity": {
     "LIGHT": "Ringan",
     "MODERATE": "Sederhana",
     "HEAVY": "Berat"
   },
-
   "freshness": {
     "LIVE": "Langsung",
     "DELAYED": "Lewat",
@@ -341,7 +324,6 @@
     "staleWarning": "Bacaan ini terlalu lama untuk dipercayai. Jangan anggap ia semasa — ikut prosedur tapak anda atau minta penyelia anda memberikan bacaan yang disahkan.",
     "delayedWarning": "Bacaan ini tiba lebih lewat daripada dijangka. Keadaan mungkin telah berubah sejak ia diambil."
   },
-
   "dev": {
     "scenarioLabel": "Senario kilat (pembangunan sahaja)",
     "freshnessLabel": "Kesegaran data (pembangunan sahaja)",
@@ -361,9 +343,13 @@
       "REST_15_MIN": "Ambil rehat 15 minit tanpa henti di tempat rehat teduh berhampiran pejabat tapak.",
       "HYDRATE": "Minum 500ml air sekarang dan isi semula botol anda sebelum kembali ke bahu jalan.",
       "ROTATE_TO_LIGHT_DUTY": "Bertukar ke stor alat untuk sejam berikutnya. Penyelia anda telah mengatur pengganti."
+    },
+    "lightningSourceLabel": "Sumber data kilat (pembangunan sahaja)",
+    "lightningSource": {
+      "live": "Langsung",
+      "simulated": "Simulasi"
     }
   },
-
   "placeholder": {
     "comingSoon": "Akan datang",
     "screenPending": "Skrin ini seterusnya dalam susunan pembinaan."

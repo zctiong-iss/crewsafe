@@ -20,6 +20,8 @@
  *   SIMULATED  info     — not real, but not a fault either; nothing has degraded
  *   LIVE       nothing  — silence is the correct output; a "data is fine" banner
  *                         every time would train people to ignore the space it occupies
+ *
+ * @author Justin Chua
  */
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";

@@ -10,6 +10,8 @@
  * That trade is acceptable in development and not in a shipped app, so it is enforced
  * rather than documented: `assertModeAllowed` throws outside `__DEV__`. `mock` is fenced
  * the same way for the more obvious reason that it authenticates nobody.
+ *
+ * @author Justin Chua
  */
 import { config, type AuthMode } from "@/constants/config";
 import { AuthError } from "./AuthError";

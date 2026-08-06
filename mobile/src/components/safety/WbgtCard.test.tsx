@@ -15,6 +15,8 @@
  * stop-work is in force, apart from this one line — so that is asserted too, in both
  * directions, because "make it clearer during a stop-work" is exactly the well-meaning change
  * that would put the dim back.
+ *
+ * @author Justin Chua
  */
 import { render } from "@testing-library/react-native";
 
