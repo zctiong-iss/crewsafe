@@ -13,6 +13,7 @@ import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.shift.repository.ReadinessSubmissionRepository;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
+import com.crewsafe.shift.service.ShiftService;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,6 +53,7 @@ class WorkerShiftControllerTest extends AbstractIntegrationTest {
     @Autowired private ReadinessSubmissionRepository readinessSubmissions;
     @Autowired private AuditEventRepository auditEvents;
     @Autowired private JdbcTemplate jdbcTemplate;
+    @Autowired private ShiftService shiftService;
 
     private Site site;
     private AppUser assignedWorker;
@@ -104,6 +106,23 @@ class WorkerShiftControllerTest extends AbstractIntegrationTest {
                     assertThat(event.getTargetId()).isEqualTo(secondId);
                     assertThat(event.getTargetType()).isEqualTo("READINESS_SUBMISSION");
                 });
+    }
+
+    @Test
+    void deletingShiftPreservesReadinessHistory() throws Exception {
+        Shift shift = createAssignedShift(Instant.now().minus(1, ChronoUnit.HOURS),
+                Instant.now().plus(7, ChronoUnit.HOURS));
+        JsonNode response = objectMapper.readTree(submit(shift.getId(), assignedWorkerToken,
+                        readinessBody(true, true, true, List.of("NONE")))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        UUID submissionId = UUID.fromString(response.get("id").asText());
+
+        assertThat(shiftService.deleteShift(site.getId(), assignedWorker.getId(), shift.getId()))
+                .isTrue();
+
+        assertThat(shifts.findById(shift.getId())).isEmpty();
+        assertThat(readinessSubmissions.findById(submissionId)).isPresent();
     }
 
     @Test

@@ -1,6 +1,7 @@
 CREATE TABLE readiness_submission (
     id UUID PRIMARY KEY,
-    shift_id UUID NOT NULL REFERENCES shift(id) ON DELETE CASCADE,
+    -- A bare UUID deliberately preserves this immutable record if its shift is deleted.
+    shift_id UUID NOT NULL,
     worker_id UUID NOT NULL REFERENCES app_user(id),
     fit_to_work BOOLEAN NOT NULL,
     adequate_sleep BOOLEAN NOT NULL,
