@@ -1,3 +1,8 @@
+/**
+ * A horizontal segmented picker for small, mutually exclusive choices.
+ *
+ * @author Justin Chua
+ */
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import { s, vs } from "react-native-size-matters";
 import AppText from "../texts/AppText";

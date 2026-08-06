@@ -5,6 +5,8 @@
  * username or password."). Showing them to a worker would break the rule that every
  * message in this app is translatable, so the mapping from Cognito's `__type` to something
  * a person can read happens once, in `cognitoPasswordAuth.ts`, and travels as a key.
+ *
+ * @author Justin Chua
  */
 export class AuthError extends Error {
   /** An i18n key, e.g. "auth.cognito.invalidCredentials". */

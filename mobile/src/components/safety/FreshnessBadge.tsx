@@ -4,6 +4,8 @@
  * Not decoration. A worker deciding whether to keep going in the heat is entitled to know
  * whether the number they are looking at was measured four minutes ago or is a demo
  * fixture, and §12.2 requires every weather response to carry the freshness that drives it.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

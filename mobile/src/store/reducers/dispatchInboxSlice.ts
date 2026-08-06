@@ -20,6 +20,8 @@
  * Both are the groundwork SCRUM-130 (offline queueing) builds on. That story is out of
  * scope here, but the ticket is explicit that the key must not be skipped now, because
  * retrofitting one onto already-queued items is not possible.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";
@@ -339,6 +341,45 @@ const dispatchInboxSlice = createSlice({
 
 export const { idempotencyKeyAssigned, dismissFailure, dismissed, resetAcknowledgements } =
   dispatchInboxSlice.actions;
+
+/* ------------------------------ Swipe rules ------------------------------ */
+
+/**
+ * Whether a card may be swiped off the list (SCRUM-209).
+ *
+ * ── WHY A REST IS THE EXCEPTION ─────────────────────────────────────────────────────────
+ * SCRUM-207 allowed the gesture on anything acknowledged, reasoning that the swipe only makes
+ * a dismissal *sooner*. That holds for the three-minute dwell, which is a confirmation
+ * lingering on screen and nothing more.
+ *
+ * It does not hold for a rest. The countdown is not a dwell — it *is* the rest, and the card
+ * disappearing is how the worker knows it is over. A gesture that removes it early removes
+ * the only thing tracking a safety obligation, and does it silently: no confirmation, nothing
+ * left on screen, and an acknowledgement already sent that says the rest was accepted.
+ *
+ * So a rest card is unswipeable until its deadline passes. Everything else that was already
+ * blocked stays blocked: a pending action is still owed, and a failed one carries the retry
+ * button, so dismissing either would make the list lie about what is outstanding.
+ *
+ * ── WHY AN EXPIRED REST IS SWIPEABLE AGAIN ──────────────────────────────────────────────
+ * A deadline can pass while the app is closed. The card removes itself on mount when that
+ * happens, but there is a window between mount and the timer firing, and a card that cannot
+ * be swiped *and* has not yet auto-dismissed would be stuck. Comparing against `now` rather
+ * than testing `hasRestTimer` alone is what keeps that window harmless.
+ */
+export function canSwipeDismiss(
+  record: AcknowledgementRecord | undefined,
+  inFlight: boolean,
+  now: number = Date.now(),
+): boolean {
+  // Not acknowledged, or the server has not confirmed yet.
+  if (!record || inFlight) return false;
+
+  const restRunning =
+    record.hasRestTimer && record.dismissAt !== null && record.dismissAt > now;
+
+  return !restRunning;
+}
 
 /* ------------------------------- Selectors ------------------------------- */
 

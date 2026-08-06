@@ -9,6 +9,8 @@
  *
  * Conflating them means a supervisor who opens another site's shift gets logged out
  * mid-shift, loses what they were doing, and learns nothing about why.
+ *
+ * @author Justin Chua
  */
 export type ApiErrorKind =
   /** No valid session. The only kind that should ever trigger a sign-out. */

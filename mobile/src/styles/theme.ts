@@ -7,6 +7,8 @@
  * turns two of them into everything a component needs. Storing the derived theme instead
  * would mean a rehydrated app could come back with a palette that no longer matches the
  * code that produced it.
+ *
+ * @author Justin Chua
  */
 import { palettes, type AppPalette } from "./colors";
 

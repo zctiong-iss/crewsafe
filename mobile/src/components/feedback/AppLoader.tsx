@@ -8,6 +8,8 @@
  * network or licensing dependency to run. To use a richer animation from lottiefiles.com,
  * drop the .json into `src/assets/animations/` and change the `require` in
  * `LottieSpinner.tsx` — nothing else needs to know.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

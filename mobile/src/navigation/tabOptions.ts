@@ -12,6 +12,8 @@
  *    fixed-width column with no room to wrap, so they clip rather than reflow. The setting
  *    is honoured where it matters — screen content — and damped in the chrome, which is
  *    the standard resolution for this conflict.
+ *
+ * @author Justin Chua
  */
 import { s, vs } from "react-native-size-matters";
 import type { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";

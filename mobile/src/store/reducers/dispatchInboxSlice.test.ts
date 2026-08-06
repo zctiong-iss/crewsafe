@@ -4,8 +4,11 @@
  * These decide the number on the Alerts badge, so a wrong answer here is a wrong count of
  * outstanding safety instructions. Each case below is a decision recorded in the plan rather
  * than an incidental behaviour, which is why they are asserted individually.
+ *
+ * @author Justin Chua
  */
 import reducer, {
+  canSwipeDismiss,
   dismissed,
   selectAllAcknowledged,
   selectUnacknowledgedCount,
@@ -178,5 +181,60 @@ describe("dismissed", () => {
     const once = reducer(stateWith({ pending: [A] }).dispatchInbox, dismissed("a"));
     const twice = reducer(once, dismissed("a"));
     expect(twice.dismissedIds).toEqual(["a"]);
+  });
+});
+
+describe("canSwipeDismiss", () => {
+  const NOW = Date.parse("2026-08-05T10:30:00.000Z");
+
+  function record(overrides: Partial<ReturnType<typeof acknowledgementOf>> = {}) {
+    return { ...acknowledgementOf(A), ...overrides };
+  }
+
+  it("blocks a card that was never acknowledged", () => {
+    // Still owed, and the supervisor has not been told.
+    expect(canSwipeDismiss(undefined, false, NOW)).toBe(false);
+  });
+
+  it("blocks a card whose acknowledgement is still in flight", () => {
+    expect(canSwipeDismiss(record(), true, NOW)).toBe(false);
+  });
+
+  it("allows an acknowledged card with no rest timer", () => {
+    // The three-minute dwell is a confirmation lingering on screen; removing it early costs
+    // nothing.
+    expect(canSwipeDismiss(record({ hasRestTimer: false, dismissAt: NOW + 60_000 }), false, NOW)).toBe(
+      true,
+    );
+  });
+
+  /*
+   * The SCRUM-207 regression, pinned.
+   *
+   * The countdown is not a dwell — it is the rest. Removing the card early removes the only
+   * thing tracking a safety obligation, silently, against an acknowledgement already sent.
+   */
+  it("blocks an acknowledged rest whose timer is still running", () => {
+    expect(canSwipeDismiss(record({ hasRestTimer: true, dismissAt: NOW + 60_000 }), false, NOW)).toBe(
+      false,
+    );
+  });
+
+  it("allows a rest whose deadline has passed", () => {
+    // A deadline can lapse while the app is closed. The card auto-dismisses on mount, but
+    // between mount and the timer firing it must not be stuck.
+    expect(canSwipeDismiss(record({ hasRestTimer: true, dismissAt: NOW - 1 }), false, NOW)).toBe(
+      true,
+    );
+  });
+
+  it("allows a rest at the exact instant its deadline passes", () => {
+    expect(canSwipeDismiss(record({ hasRestTimer: true, dismissAt: NOW }), false, NOW)).toBe(true);
+  });
+
+  it("allows a card flagged as a rest but carrying no deadline", () => {
+    // Inconsistent state rather than a running rest: with no deadline nothing would ever
+    // clear it, so leaving it unswipeable would strand it on the list forever.
+    expect(canSwipeDismiss(record({ hasRestTimer: true, dismissAt: null }), false, NOW)).toBe(true);
   });
 });

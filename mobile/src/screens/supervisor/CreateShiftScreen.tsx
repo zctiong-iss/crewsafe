@@ -29,6 +29,8 @@
  *     per worker, rather than a repeatable "add worker" list
  *   • a worker who does not belong to this site — the picker is populated from
  *     GET /sites/{id}/workers, so there is nothing else to choose
+ *
+ * @author Justin Chua
  */
 import { useCallback, useMemo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";

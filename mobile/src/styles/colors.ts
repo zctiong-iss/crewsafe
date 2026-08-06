@@ -11,6 +11,8 @@
  * black, because grey-on-white is the first thing to disappear under glare. Semantic
  * colours are darkened until they clear WCAG AA (4.5:1) against white, so a red that means
  * "danger" still reads as red and still reads as text.
+ *
+ * @author Justin Chua
  */
 export interface AppPalette {
   /** Screen background. */

@@ -68,7 +68,7 @@ class SiteConditionsStreamServiceTest {
         when(scheduler.scheduleAtFixedRate(task.capture(), any(Instant.class), any(Duration.class)))
                 .thenReturn(scheduledTask);
         when(snapshotService.getSnapshot(SITE_ID))
-                .thenReturn(new ConditionsSnapshot(SITE_ID, null, null, Instant.now()));
+                .thenReturn(new ConditionsSnapshot(SITE_ID, null, null, null, Instant.now()));
 
         try (MockedConstruction<SseEmitter> construction = mockConstruction(SseEmitter.class)) {
             SseEmitter emitter = service.subscribe(SITE_ID);
@@ -85,7 +85,7 @@ class SiteConditionsStreamServiceTest {
         when(scheduler.scheduleAtFixedRate(task.capture(), any(Instant.class), any(Duration.class)))
                 .thenReturn(scheduledTask);
         when(snapshotService.getSnapshot(SITE_ID))
-                .thenReturn(new ConditionsSnapshot(SITE_ID, null, null, Instant.now()));
+                .thenReturn(new ConditionsSnapshot(SITE_ID, null, null, null, Instant.now()));
 
         try (MockedConstruction<SseEmitter> construction = mockConstruction(SseEmitter.class,
                 (mock, context) -> doThrow(new IOException("client disconnected"))

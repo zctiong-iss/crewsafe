@@ -3,6 +3,9 @@ package com.crewsafe.conditions.service;
 import com.crewsafe.conditions.api.ActiveShiftPayload;
 import com.crewsafe.conditions.api.ConditionsPayload;
 import com.crewsafe.conditions.api.ConditionsSnapshot;
+import com.crewsafe.lightning.api.LightningRiskPayload;
+import com.crewsafe.lightning.domain.LightningRiskState;
+import com.crewsafe.lightning.risk.LightningRiskDerivationService;
 import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.repository.ShiftRepository;
@@ -27,6 +30,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -53,16 +58,22 @@ class ConditionsSnapshotServiceTest {
     @Mock
     private WeatherFreshnessClassifier freshnessClassifier;
 
+    @Mock
+    private LightningRiskDerivationService lightningRiskDerivationService;
+
     private ConditionsSnapshotService service;
 
     @BeforeEach
     void setUp() {
-        service = new ConditionsSnapshotService(
-                observations, shifts, freshnessClassifier, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new ConditionsSnapshotService(observations, shifts, freshnessClassifier,
+                lightningRiskDerivationService, Clock.fixed(NOW, ZoneOffset.UTC));
 
-        // Both sources default to "nothing found"; individual tests override only the one they exercise.
+        // All three sources default to "nothing found"; individual tests override only the
+        // one they exercise.
         when(observations.findFirstBySiteIdOrderByObservedAtDesc(SITE_ID)).thenReturn(Optional.empty());
         when(shifts.findFirstBySiteIdAndStatusOrderByStartsAtDesc(SITE_ID, ShiftStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+        when(lightningRiskDerivationService.deriveForSite(eq(SITE_ID), any(Instant.class)))
                 .thenReturn(Optional.empty());
     }
 
@@ -102,6 +113,22 @@ class ConditionsSnapshotServiceTest {
 
         assertThat(conditions.freshness()).isEqualTo(WeatherQualityStatus.SIMULATED);
         verifyNoInteractions(freshnessClassifier);
+    }
+
+    @Test
+    void lightningIsNullWhenIngestionHasNeverRun() {
+        ConditionsSnapshot snapshot = service.getSnapshot(SITE_ID);
+
+        assertThat(snapshot.lightning()).isNull();
+    }
+
+    @Test
+    void mapsTheDerivedLightningStateWhenPresent() {
+        LightningRiskPayload derived = new LightningRiskPayload(LightningRiskState.STOP_WORK,
+                new BigDecimal("6.40"), OBSERVED_AT, OBSERVED_AT.plusSeconds(1_800), WeatherQualityStatus.LIVE);
+        when(lightningRiskDerivationService.deriveForSite(SITE_ID, NOW)).thenReturn(Optional.of(derived));
+
+        assertThat(service.getSnapshot(SITE_ID).lightning()).isEqualTo(derived);
     }
 
     @Test

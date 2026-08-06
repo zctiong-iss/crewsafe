@@ -9,6 +9,8 @@
  * so the client could not reproduce that order even if it wanted to. Sorting here by start
  * time would look tidier and would be wrong: it would silently disagree with the web console
  * and with every other consumer of the same endpoint.
+ *
+ * @author Justin Chua
  */
 import { useCallback } from "react";
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";

@@ -12,6 +12,8 @@
  *     explicit that a client cannot set it.
  *   • Deleting a shift removes its assignments too.
  *   • A site the caller does not belong to is a 403, never a 404 — see `forceForbidden`.
+ *
+ * @author Justin Chua
  */
 import { ApiError } from "../errors";
 import { DEMO_SITES } from "@/auth/demoUsers";

@@ -10,6 +10,8 @@
  * The sentinel is deliberately not a well-formed JWT. If one of these ever reaches the
  * backend — a misconfigured build, a mode switched at the wrong moment — it must fail
  * signature validation loudly and immediately, not decode into something plausible.
+ *
+ * @author Justin Chua
  */
 import { AuthError } from "./AuthError";
 import { findDemoUser } from "./demoUsers";

@@ -5,6 +5,8 @@
  * worker can read the card in direct sun, and Reduce Motion is a WCAG 2.2 requirement the
  * plan deliberately declined to exempt this from. A regression in either is invisible in
  * review — nothing looks broken, the setting simply stops being honoured.
+ *
+ * @author Justin Chua
  */
 import { render } from "@testing-library/react-native";
 import { View } from "react-native";

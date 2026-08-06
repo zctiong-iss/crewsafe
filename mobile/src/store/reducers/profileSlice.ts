@@ -19,6 +19,8 @@
  * a photo stored device-wide would show the previous worker's face above the next worker's
  * name, which is worse than having no photo at all. Keying by user id means the map can
  * persist across sign-outs while only ever resolving for the person actually signed in.
+ *
+ * @author Justin Chua
  */
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 

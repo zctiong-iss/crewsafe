@@ -14,6 +14,8 @@
  *   I18nextProvider         LanguageSync, inside it, pushes the store's language into i18n.
  *   SafeAreaProvider        supplies the insets AppSafeView reads.
  *   NavigationContainer     innermost, so every screen it renders has all of the above.
+ *
+ * @author Justin Chua
  */
 import "react-native-gesture-handler";
 

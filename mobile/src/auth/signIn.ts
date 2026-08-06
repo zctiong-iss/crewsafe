@@ -4,6 +4,8 @@
  * Everything above this — the auth slice, the screen, the navigator — is mode-agnostic and
  * must stay that way. If a screen ever needs to know which mode is active in order to
  * decide what to *do* (as opposed to which fields to show), the seam has leaked.
+ *
+ * @author Justin Chua
  */
 import { assertModeAllowed, getAuthMode } from "./authMode";
 import { AuthError } from "./AuthError";

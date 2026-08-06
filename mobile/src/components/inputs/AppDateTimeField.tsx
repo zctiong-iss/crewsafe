@@ -8,6 +8,8 @@
  *
  * A shift needs a date *and* a time — a picker that only collects one is how you end up
  * with a shift that starts at midnight because nobody was asked.
+ *
+ * @author Justin Chua
  */
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";

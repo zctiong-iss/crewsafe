@@ -1,3 +1,8 @@
+/**
+ * Who the signed-in user is: `GET /api/v1/me`, and its mock-mode counterpart.
+ *
+ * @author Justin Chua
+ */
 import { request } from "../client";
 import { loadSession } from "../tokenStore";
 import { isMockApi } from "@/auth/authMode";

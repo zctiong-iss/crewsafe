@@ -9,6 +9,8 @@
  * so there is nowhere to wrap: the text breaks mid-word and leaves an orphaned character on
  * the second line. Converting to "Rotate to light duty" both shortens it — often onto one
  * line — and gives real word boundaries to wrap at when it does not.
+ *
+ * @author Justin Chua
  */
 export function humaniseActionCode(code: string): string {
   const words = code.replace(/[_-]+/g, " ").trim().toLowerCase();

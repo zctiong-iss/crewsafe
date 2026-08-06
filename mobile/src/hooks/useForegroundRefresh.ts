@@ -21,6 +21,8 @@
  *
  * Use `useAutoRefresh` for a screen's own data. Use this only when something visible from
  * elsewhere depends on the result, and say so at the call site.
+ *
+ * @author Justin Chua
  */
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";

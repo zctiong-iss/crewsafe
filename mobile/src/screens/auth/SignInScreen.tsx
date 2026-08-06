@@ -13,6 +13,8 @@
  * The mode selector at the bottom is compiled out of release bundles by the `__DEV__`
  * guard, and `assertModeAllowed` refuses the dev-only modes at the point of use as well —
  * a hidden control is not an access control.
+ *
+ * @author Justin Chua
  */
 import { useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, View, type TextInput } from "react-native";
