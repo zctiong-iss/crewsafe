@@ -8,6 +8,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { fakeUserManager } from "@/test/fakeUserManager";
 import { server } from "@/test/mocks/server";
 import { App } from "@/app/App";
+import type { ShiftCreateRequest } from "@/api/shifts";
 import "@testing-library/jest-dom/vitest";
 
 const renderApp = () =>
@@ -36,10 +37,11 @@ async function addOneAssignment(user: ReturnType<typeof userEvent.setup>) {
 }
 
 function spyOnPost() {
-  const calls = { count: 0 };
+  const calls: { count: number; bodies: ShiftCreateRequest[] } = { count: 0, bodies: [] };
   server.use(
-    http.post("*/api/v1/sites/:siteId/shifts", () => {
+    http.post("*/api/v1/sites/:siteId/shifts", async ({ request }) => {
       calls.count += 1;
+      calls.bodies.push((await request.json()) as ShiftCreateRequest);
       return HttpResponse.json({ id: "shift-1", status: "PLANNED" }, { status: 201 });
     }),
   );
@@ -54,6 +56,25 @@ describe("CreateShiftForm", () => {
     await addOneAssignment(user);
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText("Shift created")).toBeInTheDocument();
+  });
+
+  /**
+   * The picker hands back a Date built in the HOST's zone, and toISOString() converts using
+   * the HOST's offset — while the read path pins Asia/Singapore explicitly (formatShiftRange).
+   * Nothing else in the suite looks at the body, so an eight-hour drift would ship silently.
+   */
+  it("sends the typed wall-clock time as the right instant", async () => {
+    const posted = spyOnPost();
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByLabelText("Starts at");
+    await addOneAssignment(user);
+    await user.click(screen.getByRole("button", { name: "Create Shift" }));
+    await screen.findByText("Shift created");
+
+    const [body] = posted.bodies;
+    expect(body?.startsAt).toBe("2026-08-10T00:00:00.000Z"); // 08:00 SGT
+    expect(body?.endsAt).toBe("2026-08-10T08:00:00.000Z");   // 16:00 SGT
   });
 
   it ("Changing worksite in Shift Creation Page clears the crew rows", async () => {

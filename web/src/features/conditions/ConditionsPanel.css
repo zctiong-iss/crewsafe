@@ -11,11 +11,26 @@
   max-width: var(--content-max);
 }
 
+.conditions-panel__loading {
+  font-size: var(--text-base);
+  color: var(--ink-secondary);
+}
+.conditions-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.conditions-panel__timestamp {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: var(--weight-medium);
+}
+
 /* ---- Stop-Work Lightning Alert Banner ----------------------------------- */
-/* Solid high-visibility alert banner (no multi-color gradients) */
 .stop-work-banner {
-  background-color: var(--band-high); /* Solid Vermilion Red / Crimson */
-  color: #ffffff;                      /* High-contrast pure white text */
+  background-color: var(--band-high);
+  color: #ffffff;
   font-size: var(--text-base);
   font-weight: var(--weight-bold);
   padding: var(--space-3) var(--space-4);
@@ -47,8 +62,7 @@
 
 /* ---- Freshness Badges (Color-Blind Safe Dual Encoding) ------------------- */
 .conditions-panel__badge {
-  align-self: flex-start;
-  display: inline-flex;
+   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-3);
@@ -85,23 +99,33 @@
   border: 1.5px solid var(--status-none);
 }
 
+.conditions-panel__badge--simulated {
+  background-color: var(--action-quiet);
+  color: var(--action);
+  border: 1.5px solid var(--action);
+}
+
 /* ---- Value Grid Cards ---------------------------------------------------- */
 .conditions-panel__values {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
   margin: 0;
 }
 
 .conditions-panel__values > div {
   background-color: var(--surface);       /* Pure White Card */
-  border: 1px solid var(--line-strong);   /* High-contrast border line */
+  border: 1px solid var(--line);   
   border-radius: var(--radius);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4);
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
+}
+
+.conditions-panel__card--primary {
+  border-left: 4px solid var(--band-low);
 }
 
 .conditions-panel__values dt {
@@ -119,10 +143,64 @@
   color: var(--ink);
 }
 
+.conditions-panel__reading {
+  font-size: var(--text-xl);
+  color: var(--ink);
+}
+
+/* ---- Chart Section Card -------------------------------------------------- */
+.conditions-panel__chart-card {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.conditions-panel__chart-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+  margin: 0;
+}
+.conditions-chart__empty {
+  padding: var(--space-6) var(--space-4);
+  background-color: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--line-strong);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ink-secondary);
+}
+.conditions-chart__empty p {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.conditions-chart__empty-sub {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
 /* ---- Active Shift Indicator ---------------------------------------------- */
-.conditions-panel__shift {
+..conditions-panel__shift {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+}
+.conditions-panel__shift-indicator {
+  color: var(--status-ok);
+  font-size: 0.8rem;
 }

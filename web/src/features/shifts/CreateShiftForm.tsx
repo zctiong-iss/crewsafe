@@ -149,6 +149,8 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
           <label htmlFor="startsAt">Starts at</label>
           <DatePicker
             id="startsAt"
+            wrapperClassName="shift-form__datepicker-wrapper"
+            className="shift-form__datepicker-input"
             selected={startsAt}
             onChange={setStartsAt}
             showTimeSelect
@@ -161,6 +163,8 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
           <label htmlFor="endsAt">Ends at</label>
           <DatePicker
             id="endsAt"
+            wrapperClassName="shift-form__datepicker-wrapper"
+            className="shift-form__datepicker-input"
             selected={endsAt}
             onChange={setEndsAt}
             showTimeSelect
