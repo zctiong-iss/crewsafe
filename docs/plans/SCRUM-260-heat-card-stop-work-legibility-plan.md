@@ -75,7 +75,7 @@ in words. `mobile/README.md` records that explicitly and warns against removing 
 
 New text:
 
-> **Shelter first — heat rules are paused until the lightning clears.**
+> **Heat rules paused.**
 
 Key: `wbgt.stopWorkOverride`. The old `wbgt.superseded` is **removed**, not left orphaned.
 
@@ -86,9 +86,35 @@ Why this wording and not the shorter *"Lightning Alert — seek shelter immediat
 - It says nothing about the heat plan, so FR-12a would no longer be satisfied anywhere in the
   app while the guidance card is off.
 
-The chosen line does both jobs in one sentence: *shelter first* is the instruction, *heat
-rules are paused* is the override. It also avoids "superseded", a register mismatch on a
-screen aimed at a wide range of literacy across seven languages.
+### The line has to fit on one line, which decides the wording
+
+Measured on a 448 dp device: the card gives text about 371 dp, and `label` is 14 × `s()` ×
+`fontScale`. Calibrating against a real render (47 characters fitted at Default), the
+one-line budget is:
+
+| Text size | Scale | Budget | Measured |
+| --- | --- | --- | --- |
+| Small | 0.85 | ~55 chars | |
+| Default | 1.0 | ~47 chars | 47 — calibration point |
+| Large | 1.2 | ~39 chars | |
+| **Extra large** | **1.5** | **~26 chars** | 26 — measured, not estimated |
+
+Extra large is the binding constraint at **26 characters**, and it was measured rather than
+predicted: an earlier 34-character draft — *"Shelter first — heat rules paused."* — held one
+line at Small, Default and Large, and broke at Extra large leaving "paused." alone on a second
+line.
+
+At 26 characters English cannot say both *take shelter* and *the heat plan is suspended*. So
+one of them goes, and it must be the shelter instruction — because the banner immediately
+above already says "Seek proper shelter immediately" in far larger type, while **nothing else
+anywhere states the override**. Dropping the duplicate keeps the whole screen saying the same
+things it said before; dropping the override would lose FR-12a.
+
+That is the same test applied to the originally requested wording, in the other direction: it
+kept the duplicate and dropped the unique part.
+
+"Superseded" also goes, being a register mismatch on a screen read across a wide range of
+literacy in seven languages.
 
 Tone stays `danger`. It is not decoration — it is the only worded override.
 

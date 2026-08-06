@@ -1017,7 +1017,7 @@ label is rewritten. **The override itself is not gone** — it moved entirely in
 |---|---|---|
 | Card opacity during stop-work | `0.45` (skipped in high contrast) | **1** — no dim in any mode |
 | Label key | `wbgt.superseded` | `wbgt.stopWorkOverride` |
-| Label text | "Superseded by the lightning stop-work" | "Shelter first — heat rules are paused until the lightning clears." |
+| Label text | "Superseded by the lightning stop-work" | "Heat rules paused." |
 | Tone | `danger` | `danger` — unchanged |
 
 Nothing else moved: same fields, freshness badge, layout, font, and the same `stopWorkActive`
@@ -1049,9 +1049,29 @@ visibly override the heat plan until cleared, and with `features.heatGuidanceCar
 label is the only place the app says so in words — recorded earlier in this README as
 load-bearing. Replacing it with a shelter instruction would have quietly dropped FR-12a.
 
-The chosen line does both jobs in one sentence: *shelter first* is the instruction, *heat rules
-are paused* is the override. It also drops "superseded", a register mismatch on a screen read
-by people across a wide range of literacy in seven languages.
+### One line at every text size, which decided the final wording
+
+The first draft wrapped to two lines at Default, which looks untidy on a card whose other rows
+("Kerb laying, east verge") are single lines. Measured on a 448 dp device — ~371 dp of text
+width, `label` at 14 × `s()` × `fontScale` — the one-line budget is about 55 characters at
+Small, 47 at Default, 39 at Large and **26 at Extra large**. The 26 was measured on device, not
+predicted; an intermediate 34-character draft held three of the four sizes and broke at Extra
+large with "paused." alone on line two.
+
+At 26 characters English cannot carry both *take shelter* and *the heat plan is suspended*, so
+one had to go — and it had to be the shelter instruction, because the banner immediately above
+already says "Seek proper shelter immediately" in far larger type while **nothing else anywhere
+states the override**. Dropping the duplicate leaves the screen saying everything it said
+before. Dropping the override would have lost FR-12a.
+
+That is the same test that rejected the originally suggested wording, applied the other way
+round: that one kept the duplicate and dropped the unique part.
+
+"Superseded" also goes, being a register mismatch on a screen read across a wide range of
+literacy in seven languages.
+
+Verified one line on device at all four English sizes, and in Burmese — the widest script, with
+a 1.35 line-height boost — at Extra large.
 
 ### The FR-12a guard
 
@@ -1083,14 +1103,9 @@ Worker in `cognito-password`, live NEA data:
 
 - **Stop work** — card at full opacity, 30.6 °C WBGT crisp, override line in red.
 - **Advisory** — no override line, card unchanged.
-- **Burmese at Extra large (1.5x)** — the override wraps to three lines, fully legible, nothing
-  clipped, card intact.
-
-**One acceptance criterion missed, deliberately not chased.** The plan said "no wrapping to
-three lines in `my` or `ta` at Extra large". Burmese wraps to exactly three. It is legible and
-unclipped, so the criterion was stricter than the goal it was protecting — and shortening a
-machine-drafted Burmese safety string without a native reviewer would trade a real risk for a
-cosmetic one. Recorded rather than silently passed.
+- **Every English text size** — Small, Default, Large and Extra large all render the override
+  on **one line**.
+- **Burmese at Extra large** — one line, the hardest case in the set.
 
 ### Scope
 

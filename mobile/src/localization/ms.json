@@ -280,7 +280,7 @@
     "title": "Keadaan haba",
     "reading": "WBGT",
     "noReading": "Tiada bacaan tersedia",
-    "stopWorkOverride": "Berlindung dahulu — peraturan haba dijeda sehingga kilat reda.",
+    "stopWorkOverride": "Peraturan haba dijeda.",
     "band": {
       "BELOW_31": "Bawah 31°C",
       "31_TO_BELOW_32": "31 hingga 32°C",
