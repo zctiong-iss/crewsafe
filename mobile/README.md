@@ -757,6 +757,274 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-209 Part 3 — Condition backdrops on the Weather hero card
+
+Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
+
+The Conditions hero card now has a background that reflects the weather — a sun glow and a
+drifting cloud on a fair day, scattered rain under a cloud, stars at night. **Nothing else on
+the card changed**: same fields, same fonts, same layout, same copy.
+
+### A backdrop is data, not a component
+
+```
+types.ts       what a backdrop is: a wash + a list of motes
+registry.ts    what each condition looks like        ← the swap point
+shapes.ts      cloud() and rain() helpers, returning plain motes
+WeatherBackdrop.tsx   draws whatever the registry says, knows no condition by name
+```
+
+Replacing a backdrop is editing one entry in `registry.ts`. Deleting a key renders the plain
+card — never an empty frame, which is the same reasoning
+[`WeatherIcon`](src/components/weather/WeatherIcon.tsx) gives for refusing to ship a stub
+branch: a blank box reads as a broken asset, an absent one reads as a plain card.
+
+Keys are `FAIR`, `PARTLY_CLOUDY`, `CLOUDY`, `WINDY`, `RAIN`, `THUNDERY_SHOWERS`, plus
+`FAIR-night` and `PARTLY_CLOUDY-night` — the same `${condition}${night ? "-night" : ""}` string
+`WeatherIcon` already computes, and the same sparse night map (rain, wind, cloud and storms
+look the same after dark).
+
+### No new dependency and no assets
+
+The plan scoped this to "the mechanism and a coded default", with designed Lottie artwork
+explicitly out of scope — commissioning and licensing it is separate work with a different
+kind of decision in it. So the backdrops are built from `Animated` views, the same API
+`AnimatedIcon` already uses. When artwork does land, it replaces registry entries.
+
+### Reduce Motion is obeyed in full, with no `essential` carve-out
+
+`AnimatedIcon` has an `essential` escape hatch for motion that *carries* meaning — the
+stop-work pulse, where the tempo is the warning. This is the opposite case: the icon and the
+label already say "Rain", so the movement is atmosphere and nothing reads it. Taking the
+exemption here would weaken the argument protecting the one place it matters.
+
+Because SCRUM-199 defaults the preference **on**, the still state is the common case, not an
+edge one. Every spec is authored to look finished without motion.
+
+| Setting | Hero card |
+|---|---|
+| Motion allowed | animated backdrop |
+| Reduce Motion (in-app or OS) | still backdrop, same condition |
+| High contrast | **no backdrop at all** — plain surface |
+
+High contrast removes it entirely rather than dimming it. That mode exists so a worker can
+read the card in direct sun, and illustration behind a display-size WBGT reading defeats
+exactly that. Any wash that survived a contrast check against every text colour would be so
+scrimmed it is no longer a backdrop.
+
+Animation also stops when the Weather tab is not focused (`useIsFocused`) — the same battery
+argument that keeps the weather poll focus-gated.
+
+### The contrast budget is computed, not eyeballed
+
+The plan named legibility as the whole risk and asked for the **busiest** frame to be checked,
+not the calmest. A reviewer cannot reliably find the worst frame of a loop, so
+`backdropContrast.test.ts` does it: it samples the card on a grid, composites every mote whose
+travel envelope can reach each point, and fails if the darkest point drops any text colour
+below 4.5:1. Checked at three card aspect ratios, because the card gets taller as the font
+scale rises.
+
+**The first version of that test was wrong and had to be replaced.** It stacked every mote in
+a spec onto one pixel, which sounds conservative and is not: rain is eight drops spread across
+the card that can never coincide, and pricing them as one pixel forces every drop to an alpha
+where rain is invisible. Modelling the geometry is what lets the backdrop be visible and
+provably legible at once.
+
+`THUNDERY_SHOWERS` is dimmer than a storm wants to be for this reason — it failed at 4.36:1
+and its wash and drops were lowered until it passed. That is the budget working.
+
+### Two things that only showed up on the emulator
+
+Both were in the **still** state, which is the state most workers will see.
+
+**A frozen flash is not lightning, it is a beige blob.** The storm's flash mote parked at full
+opacity behind the WBGT reading. Fixed with `RESTING_FADE` in `WeatherBackdrop` — `flash`
+rests at 0.15 and only the animation reaches full. The contrast test still prices it at its
+peak.
+
+**A cloud drawn as one rounded rectangle reads as a UI panel** that has drifted onto the card,
+and eight raindrops parked at the same height read as a dashed rule. Fixed in `shapes.ts`: a
+cloud is three overlapping circles sharing one motion, and `rain()` scatters its drops across
+both axes.
+
+### Colours are literal, and night is cooler rather than darker
+
+The registry does not use `styles/colors.ts`. That palette is semantic — `danger` means stop
+work — and reaching into it for illustration would tie a decorative shape to a safety colour,
+so darkening the danger red for contrast would silently restyle the rain.
+
+Night could not be dark. CrewSafe has no dark palette; both themes put black text on a white
+surface, so a dark wash would fail AA on the one screen a supervisor reads a temperature from.
+Night is expressed as cooler and dimmer in *hue*.
+
+### Reverting
+
+Delete the `<WeatherBackdrop …>` element from `WeatherScreen.tsx` and the `overflow: "hidden"`
+line added to `styles.hero`. The card returns to exactly what it was. To drop one condition
+only, delete its key from `BACKDROPS`.
+
+### Verified on the emulator (Pixel, `mock` auth mode)
+
+- All six conditions via the dev scenario switcher; night via "Observed after dark".
+- Storm, fair and fair-night captured; text fully legible against each.
+- **High contrast: no backdrop**, plain card with thick borders — confirmed on device.
+- **Extra large text (1.5x)**: the backdrop scales with the card and stays in proportion,
+  which is what the percentage geometry is for.
+- Reduce Motion off: motion runs. Reduce Motion on (the default): still backdrop, not blank.
+- 13 tests — 6 behavioural, 7 contrast × conditions × ratios (49 assertions).
+
+**One pre-existing defect noticed, not touched.** In high contrast the metrics card's meta row
+truncates "After dark" to "After". It is the same class as
+[Problem 10](#problem-10--button-labels-silently-truncated-at-a-space-on-every-card-but-the-first)
+— a line broken at a space and clipped — and it is unrelated to this ticket, so it is recorded
+here rather than fixed in it.
+
+---
+
+## SCRUM-209 Part 2 — Live weather from the ingestion API
+
+Plan: [`docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md`](../docs/plans/SCRUM-209-rest-swipe-fix-and-live-weather-plan.md).
+Part 1 (the rest-card swipe bug) is on `feat/scrum-209-rest-swipe-fix` and is not in this
+branch.
+
+The Conditions screen no longer runs on simulated data outside `mock` auth mode. Every number
+on it — WBGT, air temperature, humidity, wind, rainfall, station, observed/ingested times,
+freshness — now comes from the NEA ingestion the backend already had, and the WBGT band comes
+down beside it **already evaluated by the server**.
+
+### What was actually missing was the band, not the reading
+
+The reading was never the hard part. `GET /api/v1/sites/{siteId}/weather/latest` already
+existed, already `@PreAuthorize`-scoped to site membership, and its response already mapped
+almost one-to-one onto the app's `SiteConditions`.
+
+What no endpoint in the backend exposed — checked across all six controllers — was the **WBGT
+band**. And §12.2 forbids a client submitting or overriding one, with FR-15 making the backend
+engine authoritative for anything that decides what a worker must do. So the app could not
+simply switch the reading to live and keep computing the band locally; that would have been
+the client deciding a safety verdict.
+
+Hence the ticket carries both halves, and the backend half had to land first.
+
+**Backend (this branch):**
+
+- `weather/domain/WbgtBand.java` — new. §7.1's four bands, half-open (`32.0` is
+  `BAND_32_TO_BELOW_33`, not `BAND_31_TO_BELOW_32`), compared with `compareTo` so
+  `32.00` and `32.0` classify identically.
+- `WeatherController.LatestWeatherResponse` — gained a trailing `band` field populated by
+  `WbgtBand.classify(observation.getWbgt())`.
+- `WbgtBandTest` — 13 cases, every boundary plus null plus BigDecimal scale.
+
+**The wire names are not the Java constant names.** A Java identifier cannot start with a
+digit, so the constants are `BAND_31_TO_BELOW_32` while the JSON says `31_TO_BELOW_32` — via
+`@JsonProperty` on each constant. That direction was chosen deliberately: the app's
+`WbgtBand` type and its `wbgt.band.*` translation keys already use the digit-leading form, so
+prefixing the wire would have forced a mapping layer into every client, and a mapping layer
+is a thing that drifts.
+
+**A null WBGT yields a null band, not `BELOW_31`.** `BELOW_31` is the tempting default and
+the dangerous one: it makes "no reading" and "the coolest band" indistinguishable on screen,
+assuming the safest interpretation for the case where nothing at all is known.
+
+### Mobile changes
+
+| File | Change |
+|---|---|
+| `api/endpoints/safety.ts` | New `fetchSiteWeather(siteId, workerId)` — real call outside mock mode |
+| `store/reducers/weatherSlice.ts` | `policy: PolicyEvaluation \| null` → `band: WbgtBand \| null` |
+| `screens/weather/WeatherScreen.tsx` | Renders `band`; new no-reading empty state |
+| `localization/*.json` | `weather.noReadingTitle`, `weather.noReadingBody` × 7 locales |
+| `api/endpoints/safety.test.ts` | New — 7 tests over the mapping boundary |
+
+### Why a new function rather than switching `fetchSiteConditions`
+
+`fetchSiteConditions` has two callers and only one of them could go live.
+
+`weatherSlice` resolves its site id from the **real** `GET /api/v1/sites`, so it holds a site
+id the backend recognises. `safetySlice` gets its site id from `fetchMyShift`, which is still
+a mock — `GET /api/v1/shifts/me` does not exist — and returns the seeded demo UUID
+`11111111-…`, which `DemoDataSeeder` does **not** create (it generates random ids per site).
+Switching the shared function would have pointed the shift screen at a site id no deployment
+has, turning its conditions card into a 403.
+
+So `fetchSiteConditions` is untouched and still fully mocked, and the weather screen got its
+own function. The shift screen goes live when `/shifts/me` and `/conditions` do.
+
+### What the weather screen gave up, and why that is correct
+
+`weatherSlice` no longer holds a `PolicyEvaluation`. It held one to read a single field off
+it, and the rest — the mandatory and advisory actions — depends on a worker's own task
+intensity and acclimatisation. Site-wide, those actions apply to nobody in particular, so
+holding them on this screen was an invitation to render them. The live endpoint returns no
+policy at all, which made the removal forced rather than optional.
+
+Nothing was removed from the screen: it never rendered the actions. Its own header comment
+says so, and that reasoning is unchanged.
+
+### Text stripped from the wire shape
+
+The response carries two fields that must not become part of `SiteConditions`:
+
+```ts
+const { id: _id, band, ...observation } = wire;
+```
+
+`id` is the `weather_observation` row's primary key and nothing on the client needs it;
+`band` is a verdict *about* the reading, not part of it. A spread would have smuggled both
+into a typed domain object — `api/endpoints/safety.test.ts` asserts neither survives.
+
+### A 404 is an answer, not a failure
+
+The endpoint 404s when a site has no stored observation — true for a newly created site
+before the ingestion scheduler's first run. That is caught and returned as
+`{ observation: null, band: null }`; anything else, including a 403, still rejects.
+
+Which exposed a pre-existing gap: the screen rendered `conditions && derived ? … : null`, so a
+site with no reading produced a **blank page under a site picker** — indistinguishable from a
+broken app. Only reachable live, because the mock always has a reading. New empty state:
+
+> **No reading yet**
+> This site has no weather reading yet. It will appear once the next reading is ingested.
+
+Guarded on `status === "ready" && selectedSiteId !== null` so it does not stack on top of the
+existing no-memberships empty state, which is also conditions-less.
+
+### Band absent vs. band unknown
+
+```tsx
+{band ? <AppText variant="label">{t(`wbgt.band.${band}`)}</AppText> : null}
+```
+
+Unchanged in shape from the `policy.currentBand` version — it was already null-guarded. The
+guard now means something different, though: previously "no policy loaded", now "the reading
+exists but its WBGT could not be derived". Rendering the coolest band there would turn
+*unknown* into *safe*.
+
+### Reverting
+
+To put the weather screen back on simulated data: change `fetchSiteWeather` to return the
+`isMockApi()` branch unconditionally. Nothing else has to move — `mockConditions` is intact
+and is still the contract for the unbuilt `/conditions` endpoint.
+
+To drop the band from the API: remove the `band` field from `LatestWeatherResponse`, delete
+`WbgtBand.java` and its test, and revert `weatherSlice` to holding a `PolicyEvaluation`.
+
+### Verified
+
+- `WbgtBandTest` — 13 passed.
+- Full backend `mvnw verify` — **181 tests, 0 failures**, including `WeatherControllerTest`
+  asserting `$.band == "31_TO_BELOW_32"` against the real MockMvc contract (Testcontainers,
+  so it needs Docker running — it errors out entirely without it, which is not a test
+  failure and should not be read as one).
+- Mobile `npm test` — **68 passed**, 6 suites, of which 7 tests are new.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run check:locales` — 290 keys, all
+  seven locales in parity.
+
+Not yet exercised against a live deployment — the emulator runs `mock` auth mode, which
+takes the other branch by design.
+
+---
+
 ## SCRUM-208 — Alerts rename and unacknowledged badge
 
 Plan: [`docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md`](../docs/plans/SCRUM-208-alerts-rename-and-badge-plan.md).

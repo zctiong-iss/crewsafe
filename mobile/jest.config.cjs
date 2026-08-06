@@ -26,7 +26,7 @@
 module.exports = {
   preset: "jest-expo",
 
-  setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.cjs"],
 
   // The RN/Expo graph is published as untranspiled source, so it must NOT be ignored by the
   // transform the way `node_modules` normally is.

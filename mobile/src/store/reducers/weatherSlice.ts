@@ -12,10 +12,10 @@
  * rehydrating a stale one as though it were current is the failure §7.1 warns about.
  */
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { fetchSiteConditions } from "@/api/endpoints/safety";
+import { fetchSiteWeather } from "@/api/endpoints/safety";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
-import type { PolicyEvaluation, Site, SiteConditions } from "@/types/domain";
+import type { Site, SiteConditions, WbgtBand } from "@/types/domain";
 
 export type WeatherStatus = "idle" | "loading" | "ready" | "error";
 
@@ -24,8 +24,15 @@ export interface WeatherState {
   sites: Site[];
   selectedSiteId: string | null;
   conditions: SiteConditions | null;
-  /** Band only is used on this screen — see the thunk. */
-  policy: PolicyEvaluation | null;
+  /**
+   * Evaluated by the backend and stored as-is.
+   *
+   * This used to be the whole `PolicyEvaluation`, of which the screen read one field. The
+   * rest of it — the mandatory and advisory actions — depends on a worker's own task
+   * intensity and belongs on the shift screen, so holding it here invited someone to render
+   * site-wide obligations that apply to nobody in particular.
+   */
+  band: WbgtBand | null;
   errorKey: string | null;
   requestId: string | null;
   refreshing: boolean;
@@ -36,7 +43,7 @@ const initialState: WeatherState = {
   sites: [],
   selectedSiteId: null,
   conditions: null,
-  policy: null,
+  band: null,
   errorKey: null,
   requestId: null,
   refreshing: false,
@@ -46,7 +53,7 @@ interface LoadedPayload {
   sites: Site[];
   selectedSiteId: string | null;
   conditions: SiteConditions | null;
-  policy: PolicyEvaluation | null;
+  band: WbgtBand | null;
 }
 
 export const loadWeather = createAsyncThunk<
@@ -62,24 +69,24 @@ export const loadWeather = createAsyncThunk<
     const target = siteId ?? sites[0]?.id ?? null;
 
     if (!target) {
-      return { sites, selectedSiteId: null, conditions: null, policy: null };
+      return { sites, selectedSiteId: null, conditions: null, band: null };
     }
 
     /*
-     * `MODERATE` is passed only because the mock evaluates policy locally and needs an
-     * intensity to do it. This screen renders the *band*, which is a property of the WBGT
-     * reading and does not depend on intensity — only the required actions do, and those
-     * belong on the shift screen where the worker's real assignment is known. The real
-     * endpoint derives intensity server-side from the caller's assignment anyway; a client
-     * that could name its own would be choosing its own heat-rest obligation.
+     * Live outside mock mode since SCRUM-209 — this is the one screen in the app whose
+     * numbers now come from the NEA ingestion rather than a fixture, because it is the one
+     * screen whose backing endpoint exists.
+     *
+     * The band arrives evaluated; the client does not compute it (§12.2, FR-15). `workerId`
+     * is passed for the mock's benefit alone — see `fetchSiteWeather`.
      */
-    const response = await fetchSiteConditions(target, "MODERATE", workerId);
+    const response = await fetchSiteWeather(target, workerId);
 
     return {
       sites,
       selectedSiteId: target,
       conditions: response.observation,
-      policy: response.policy,
+      band: response.band,
     };
   } catch (error) {
     if (isApiError(error)) {
@@ -140,7 +147,7 @@ const weatherSlice = createSlice({
         state.sites = action.payload.sites;
         state.selectedSiteId = action.payload.selectedSiteId;
         state.conditions = action.payload.conditions;
-        state.policy = action.payload.policy;
+        state.band = action.payload.band;
         state.errorKey = null;
         state.requestId = null;
       })

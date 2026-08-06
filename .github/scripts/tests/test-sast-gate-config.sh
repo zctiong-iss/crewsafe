@@ -114,6 +114,42 @@ check "sast job uses the official Sonar scan action, not the Maven plugin" \
 check "backend is compiled (Java bytecode analysis needs .class files)" \
   "$([[ "$sast" == *"compile"* ]] && echo true || echo false)"
 
+check "Java test bytecode is configured" \
+  "$(grep -q '^sonar\.java\.test\.binaries=backend/target/test-classes$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java dependency libraries are configured" \
+  "$(grep -q '^sonar\.java\.libraries=backend/target/dependency/\*\.jar$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java test dependency libraries are configured" \
+  "$(grep -q '^sonar\.java\.test\.libraries=backend/target/dependency/\*\.jar,backend/target/test-dependency/\*\.jar$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "SAST prepares backend dependency libraries before scanning" \
+  "$([[ "$sast" == *"maven-dependency-plugin:3.8.1:copy-dependencies"* ]] && \
+     [[ "$sast" == *"target/test-dependency"* ]] && echo true || echo false)"
+
+check "mobile LCOV import path is declared" \
+  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "SAST generates and prepares mobile coverage before scanning" \
+  "$([[ "$sast" == *"npm run test:coverage"* ]] && \
+     [[ "$sast" == *"mobile/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
+
+check "web dependencies are installed for TypeScript analysis" \
+  "$([[ "$sast" == *"Install web dependencies for analysis"* ]] && \
+     [[ "$sast" == *"working-directory: web"* ]] && echo true || echo false)"
+
+check "TypeScript project configurations are declared" \
+  "$(grep -q '^sonar\.typescript\.tsconfigPaths=web/tsconfig\.json,mobile/tsconfig\.json$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Java analysis version is declared" \
+  "$(grep -q '^sonar\.java\.source=21$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "Python analysis version is declared" \
+  "$(grep -q '^sonar\.python\.version=3\.9$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "PostgreSQL SQL is not treated as Oracle PL/SQL" \
+  "$(grep -q '^sonar\.plsql\.file\.suffixes=\.pls,\.plb,\.pck,\.pkb,\.pks$' "$SONAR_PROPS" && echo true || echo false)"
+
 # Kept as a lightweight style guard, not a correctness requirement: the scan
 # action's own properties reader handles Java-properties backslash
 # continuation correctly (unlike the removed hand-rolled bash loader), but
@@ -123,22 +159,47 @@ check "sonar-project.properties values are single-line (style)" \
   "$(without_comments "$SONAR_PROPS" | grep -qE "$continuation_re" && echo false || echo true)"
 
 # --- Quality Gate composition (research R2a) -------------------------------
-# backend/pom.xml has no JaCoCo plugin, so a coverage condition would report 0%
-# and block every merge for a reason unrelated to security. If coverage is ever
-# introduced deliberately, JaCoCo must land first and this assertion updated.
+# JaCoCo landed in backend/pom.xml (SCRUM-168) specifically so the Quality
+# Gate's coverage condition reads real numbers. Both halves must be present
+# together: a coverage path with no plugin produces a report Sonar can never
+# find; a plugin with no declared path produces a report Sonar never looks for.
 
-check "no coverage condition configured while JaCoCo is absent" \
-  "$(grep -qi 'jacoco' "$POM" && echo skip || (without_comments "$SONAR_PROPS" | grep -qi 'coverage' && echo false || echo true))"
+check "JaCoCo plugin is configured in backend/pom.xml" \
+  "$(grep -qi 'jacoco-maven-plugin' "$POM" && echo true || echo false)"
+
+check "sonar.coverage.jacoco.xmlReportPaths is declared" \
+  "$(grep -qE '^sonar\.coverage\.jacoco\.xmlReportPaths=.+' "$SONAR_PROPS" && echo true || echo false)"
 
 # --- frontend coverage (FR-004 / US3) ---------------------------------------
 # web/ and mobile/ landed real TypeScript/React source during this branch's
 # lifetime (SCRUM-161/172/186 for mobile) -- they are analysed now, not left as
-# a future TODO. ml-service/ remains .gitkeep-only and stays listed so it picks
-# up analysis automatically once it gains source, with no pipeline edit.
+# a future TODO. ml-service/ is also included because it contains the Python
+# FastAPI spike.
+
+sonar_sources="$(grep -E '^sonar\.sources=' "$SONAR_PROPS")"
 
 check "web/ and mobile/ are in sonar.sources, not just mentioned in prose" \
-  "$(grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'web/' && \
-     grep -E '^sonar\.sources=' "$SONAR_PROPS" | grep -q 'mobile/' && \
+  "$(printf '%s' "$sonar_sources" | grep -q 'web/' && \
+     printf '%s' "$sonar_sources" | grep -q 'mobile/' && \
+     echo true || echo false)"
+
+check "infrastructure and deployment paths are in sonar.sources" \
+  "$(printf '%s' "$sonar_sources" | grep -q 'infra/terraform' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/workflows' && \
+     printf '%s' "$sonar_sources" | grep -q 'backend/Dockerfile' && \
+     printf '%s' "$sonar_sources" | grep -q 'local/compose.yaml' && \
+     echo true || echo false)"
+
+check "deployment metadata paths are in sonar.sources" \
+  "$(printf '%s' "$sonar_sources" | grep -q '\.github/terraform' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/cognito' && \
+     printf '%s' "$sonar_sources" | grep -q '\.github/scripts' && \
+     echo true || echo false)"
+
+check "generated and Terraform state paths are excluded" \
+  "$(grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/\.terraform/\*\*' && \
+     grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/\*\.tfstate\*' && \
+     grep -E '^sonar\.exclusions=' "$SONAR_PROPS" | grep -q '\*\*/coverage/\*\*' && \
      echo true || echo false)"
 
 # --- secret gate must not be path-filtered (FR-001) ------------------------

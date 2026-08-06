@@ -222,6 +222,8 @@
     "site": "Site",
     "noSitesTitle": "No site assigned",
     "noSitesBody": "You are not assigned to a site yet. Ask your site administrator to add you.",
+    "noReadingTitle": "No reading yet",
+    "noReadingBody": "This site has no weather reading yet. It will appear once the next reading is ingested.",
     "feelsLike": "Wet-bulb globe temperature",
     "airTemp": "Air temperature",
     "humidity": "Humidity",

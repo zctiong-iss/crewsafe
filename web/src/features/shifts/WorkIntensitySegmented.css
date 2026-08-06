@@ -1,0 +1,56 @@
+/** @author Tang Chee Seng (with assistance from Claude) */
+
+/* Work-intensity picker. Outlined, per --intensity-* — see tokens.css. */
+.intensity {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.intensity__legend {
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-2);
+}
+.intensity__segments {
+  display: flex;
+  gap: var(--space-2);
+}
+.intensity__segment {
+  --hue: var(--ink-secondary);
+  flex: 1;
+}
+.intensity__segment--light { --hue: var(--intensity-light); }
+.intensity__segment--moderate { --hue: var(--intensity-moderate); }
+.intensity__segment--heavy { --hue: var(--intensity-heavy); }
+
+/* Hide the native control without removing it from the a11y tree. */
+.intensity__segment input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.intensity__segment span {
+  display: block;
+  text-align: center;
+  padding: var(--space-2) var(--space-3);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: border-colorvar(--duration) var(--ease), color var(--duration) var(--ease);
+}
+.intensity__segment input:checked + span {
+  border-color: var(--hue);
+  color: var(--hue);
+  background: var(--surface);      /* stays outlined — no solid fill */
+  box-shadow: inset 0 0 0 1px var(--hue);
+}
+.intensity__segment input:focus-visible + span {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
