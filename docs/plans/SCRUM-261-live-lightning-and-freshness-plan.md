@@ -60,7 +60,8 @@ banner today.
 both sides, adds a long-lived connection to a battery-constrained device on an outdoor shift,
 and gains nothing at a 2-minute ingestion cadence that a 60-second poll already tracks.
 
-This plan assumes **A**, and the backend story below is written for it.
+This plan assumes **A**. **Implemented in this branch** — `LightningController`, five endpoint
+tests, full backend verify green at 252 — because it blocks everything else and is small.
 
 ---
 

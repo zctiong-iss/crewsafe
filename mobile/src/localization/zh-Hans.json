@@ -12,7 +12,6 @@
     "optional": "选填",
     "requestReference": "参考编号：{{requestId}}"
   },
-
   "errors": {
     "unauthenticated": "您的登录已过期，请重新登录。",
     "not-provisioned": "登录成功，但此账号尚未在 CrewSafe 中开通。请联系工地管理员为您添加。",
@@ -25,7 +24,6 @@
     "configMissing": "应用尚未配置完成。缺少：{{keys}}",
     "unknown": "出现问题，请重试。"
   },
-
   "auth": {
     "signInTitle": "登录",
     "signInSubtitle": "户外作业人员热应激防护",
@@ -59,7 +57,6 @@
       "cancelled": "登录已取消。"
     }
   },
-
   "signUp": {
     "title": "申请账号",
     "intro": "CrewSafe 账号由工地管理员创建。填写以下信息后，我们会告诉您需要发送哪些内容给管理员。",
@@ -94,14 +91,12 @@
       "siteRequired": "请选择工地。"
     }
   },
-
   "roles": {
     "WORKER": "作业人员",
     "SUPERVISOR": "工地主管",
     "SAFETY_MANAGER": "安全经理",
     "ADMIN": "管理员"
   },
-
   "tabs": {
     "shift": "我的班次",
     "alerts": "提醒",
@@ -112,7 +107,6 @@
     "profile": "我的",
     "settings": "设置"
   },
-
   "settings": {
     "title": "设置",
     "language": "语言",
@@ -133,7 +127,6 @@
     "aboutVersion": "版本 {{version}}",
     "aboutBody": "为新加坡户外作业人员提供热应激防护。"
   },
-
   "profile": {
     "title": "我的",
     "role": "角色",
@@ -152,7 +145,6 @@
     "photoUpdatedToast": "照片已更新",
     "photoRemovedToast": "照片已移除"
   },
-
   "shifts": {
     "site": "工地",
     "emptyTitle": "暂无班次",
@@ -216,7 +208,6 @@
       "checkFields": "上方仍有内容需要修改，红色边框的输入框即为待修正项。"
     }
   },
-
   "weather": {
     "title": "环境状况",
     "site": "工地",
@@ -242,7 +233,6 @@
       "THUNDERY_SHOWERS": "雷阵雨"
     }
   },
-
   "inbox": {
     "emptyTitle": "暂无待确认事项",
     "emptyBody": "主管下达的已批准指令将显示在此处。",
@@ -258,7 +248,6 @@
     "restRemaining": "剩余 {{time}}",
     "swipeToClear": "清除"
   },
-
   "lightning": {
     "stopWorkTitle": "立即停工",
     "stopWorkBody": "工地附近有雷电。请立即前往安全的避雷场所。",
@@ -271,9 +260,9 @@
     "validUntil": "有效至 {{time}}",
     "refreshesInMinutes": "{{minutes}} 分钟后刷新",
     "refreshesInSeconds": "{{seconds}} 秒后刷新",
-    "overrideNotice": "停工期间，防暑方案暂停执行。"
+    "overrideNotice": "停工期间，防暑方案暂停执行。",
+    "unavailable": "本工地暂无雷电数据。"
   },
-
   "wbgt": {
     "title": "热风险状况",
     "reading": "WBGT",
@@ -286,7 +275,6 @@
       "33_AND_ABOVE": "33°C 及以上"
     }
   },
-
   "guidance": {
     "title": "必须执行的措施",
     "advisoryTitle": "建议执行",
@@ -295,7 +283,6 @@
     "policyVersion": "政策版本 {{version}}",
     "none": "目前无需采取防暑措施。"
   },
-
   "actions": {
     "HYDRATE_REGULARLY": "定时补充水分",
     "HYDRATE_HOURLY": "每小时至少饮水一次",
@@ -312,7 +299,6 @@
     "RESUME_WORK": "恢复作业",
     "ROTATE_TO_LIGHT_DUTY": "轮换至轻度工作"
   },
-
   "shift": {
     "title": "您的班次",
     "task": "作业任务",
@@ -323,13 +309,11 @@
     "noShiftTitle": "暂无排班",
     "noShiftBody": "您目前没有进行中或即将开始的班次。请与主管确认。"
   },
-
   "intensity": {
     "LIGHT": "轻度",
     "MODERATE": "中度",
     "HEAVY": "重度"
   },
-
   "freshness": {
     "LIVE": "实时",
     "DELAYED": "延迟",
@@ -339,7 +323,6 @@
     "staleWarning": "该读数过旧，不可作为依据。请勿视为当前状况，应按工地规程处理或向主管索取确认读数。",
     "delayedWarning": "该读数到达时间晚于预期，实际状况可能已发生变化。"
   },
-
   "dev": {
     "scenarioLabel": "雷电场景（仅开发环境）",
     "freshnessLabel": "数据时效（仅开发环境）",
@@ -359,9 +342,13 @@
       "REST_15_MIN": "请到工地办公室旁的遮阴休息点连续休息 15 分钟。",
       "HYDRATE": "立即饮用 500 毫升水，返回作业前请重新装满水瓶。",
       "ROTATE_TO_LIGHT_DUTY": "接下来一小时改到工具库工作。主管已安排人手接替。"
+    },
+    "lightningSourceLabel": "雷电数据来源（仅开发）",
+    "lightningSource": {
+      "live": "实时",
+      "simulated": "模拟"
     }
   },
-
   "placeholder": {
     "comingSoon": "即将推出",
     "screenPending": "此页面正在开发中。"

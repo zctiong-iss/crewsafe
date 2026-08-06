@@ -5,10 +5,10 @@
  * to the mock that currently answers it. Switching to the real backend is deleting a
  * branch, not rewriting a call site — the screens above never learn which one ran.
  *
- * The shift and lightning calls are mocked unconditionally — not just in `mock` auth mode —
- * because no deployment exposes those endpoints at all. `fetchSiteWeather` is no longer in
- * that group: since SCRUM-209 it branches on the auth mode like `identity.ts` and
- * `sites.ts` do, because the endpoint it needs is real.
+ * Only `fetchMyShift` is still mocked unconditionally: `GET /api/v1/shifts/me` exists on no
+ * deployment. `fetchSiteWeather` (SCRUM-209) and `fetchLightningRisk` (SCRUM-261) both branch
+ * on the auth mode like `identity.ts` and `sites.ts` do, because the endpoints they need are
+ * real.
  */
 import type {
   LightningRisk,
@@ -20,6 +20,7 @@ import type {
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";
 import { isApiError } from "../errors";
+import { getLightningSource } from "../mock/scenario";
 import { mockLightningRisk } from "../mock/lightning";
 import { mockConditions } from "../mock/conditions";
 import { mockMyShift } from "../mock/myShift";
@@ -45,16 +46,39 @@ export function fetchMyShift(): Promise<MyShift | null> {
 }
 
 /**
- * `GET /api/v1/sites/{siteId}/lightning` — SCRUM-170, blocking SCRUM-172.
+ * `GET /api/v1/sites/{siteId}/lightning` — real since SCRUM-261.
  *
- * Real implementation:
- *   return request<LightningRisk>({ url: `/api/v1/sites/${siteId}/lightning`, method: "GET" });
+ * ── NULL MEANS "NO DATA", AND MUST NEVER BECOME "CLEAR" ─────────────────────────────────
+ * A 404 is the server saying it has never ingested lightning for this site — the scheduler
+ * is off, or the site is new. That is returned as `null` and the screen says so.
  *
- * See `api/mock/lightning.ts` for the full response shape this commits to and why
- * `validUntil` has to come from the server.
+ * It is emphatically not `CLEAR`. Those two render as the same absence of a warning while
+ * meaning opposite things, and a crew told everything is fine because a scheduler was
+ * switched off is the failure this endpoint was added to prevent. The backend models the
+ * same distinction as an empty `Optional`; this preserves it rather than defaulting.
+ *
+ * ── WHICH SOURCE ────────────────────────────────────────────────────────────────────────
+ * `mock` auth mode has no network, so it is always the fixture. Outside it the default is
+ * live, and `getLightningSource()` lets a reviewer force the fixture to exercise all three
+ * states on a clear day. Anything other than mock mode plus an explicit `simulated` choice
+ * returns the server's answer and nothing else.
  */
-export function fetchLightningRisk(siteId: string): Promise<LightningRisk> {
-  return delay(mockLightningRisk(siteId));
+export async function fetchLightningRisk(siteId: string): Promise<LightningRisk | null> {
+  if (isMockApi() || getLightningSource() === "simulated") {
+    return delay(mockLightningRisk(siteId));
+  }
+
+  try {
+    return await request<LightningRisk>({
+      url: `/api/v1/sites/${siteId}/lightning`,
+      method: "GET",
+    });
+  } catch (error) {
+    if (isApiError(error) && error.kind === "not-found") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 export interface SiteConditionsResponse {

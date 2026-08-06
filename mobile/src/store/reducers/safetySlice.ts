@@ -81,18 +81,36 @@ interface LoadedPayload {
  * The policy is null here rather than the mock's. Pairing a real reading with a fixture
  * obligation would be worse than having none: it would look authoritative and be invented.
  */
+/**
+ * The site id to ask the live endpoints about.
+ *
+ * `fetchMyShift` is still mocked — `/shifts/me` exists nowhere — and the fixture's site id is
+ * `11111111-…`, which `DemoDataSeeder` never creates. Every live endpoint is site-scoped
+ * behind `@siteAccess.canAccess`, so asking about that id returns **403, not data**.
+ *
+ * SCRUM-209 hit this for the heat reading. SCRUM-261 hit it again for lightning, on device,
+ * after the unit tests passed — they pass a site id in directly and so cannot see it. Hence
+ * one resolver both calls share, rather than the same fix applied twice and forgotten a third
+ * time.
+ *
+ * Null means the worker has no memberships, which is a legitimate answer rather than a
+ * failure. Collapses to `shift.siteId` the day `/shifts/me` lands.
+ */
+async function liveSiteId(): Promise<string | null> {
+  // `siteIds` is a mock-only argument; the real endpoint filters by membership server-side.
+  const sites = await fetchAccessibleSites([]);
+  return sites[0]?.id ?? null;
+}
+
 async function loadConditions(
   shift: MyShift,
   workerId: string,
+  siteId: string | null,
 ): Promise<{ conditions: SiteConditions | null; policy: PolicyEvaluation | null }> {
   if (isMockApi()) {
     const response = await fetchSiteConditions(shift.siteId, shift.assignment.intensity, workerId);
     return { conditions: response.observation, policy: response.policy };
   }
-
-  // `siteIds` is a mock-only argument; the real endpoint filters by membership server-side.
-  const sites = await fetchAccessibleSites([]);
-  const siteId = sites[0]?.id;
 
   // No memberships is a legitimate answer, not a failure — see `fetchAccessibleSites`. The
   // card is simply absent, which is what it already does for a null reading.
@@ -124,11 +142,18 @@ export const loadWorkerSafety = createAsyncThunk<
       return { shift: null, lightning: null, conditions: null, policy: null };
     }
 
+    /*
+     * Resolved once, before either call, because both are site-scoped and both would 403 on
+     * the fixture shift's id. One lookup rather than two, and one place to delete when
+     * `/shifts/me` starts returning a real site.
+     */
+    const siteId = isMockApi() ? shift.siteId : await liveSiteId();
+
     // Independent of each other, so they overlap. On a site connection that is the
     // difference between one wait and two.
     const [lightning, conditions] = await Promise.all([
-      fetchLightningRisk(shift.siteId),
-      loadConditions(shift, workerId),
+      siteId ? fetchLightningRisk(siteId) : Promise.resolve(null),
+      loadConditions(shift, workerId, siteId),
     ]);
 
     return {

@@ -12,6 +12,30 @@
  */
 export type LightningScenario = "clear" | "advisory" | "stop-work";
 
+/**
+ * Where the lightning banner's state comes from (SCRUM-261).
+ *
+ * `live` is the default outside `mock` auth mode, because live *is* the product's behaviour
+ * now that SCRUM-170 ingests strikes and derives per-site risk. `simulated` exists so a
+ * reviewer can still exercise all three states on a clear day, which no live feed will
+ * oblige them with.
+ *
+ * It has no effect in `mock` auth mode: that mode never touches the network, so there is
+ * nothing to switch to. `fetchLightningRisk` checks `isMockApi()` first for that reason.
+ */
+export type LightningSource = "live" | "simulated";
+
+let activeSource: LightningSource = "live";
+
+export function getLightningSource(): LightningSource {
+  return activeSource;
+}
+
+export function setLightningSource(source: LightningSource): void {
+  if (!__DEV__) return;
+  activeSource = source;
+}
+
 let activeScenario: LightningScenario = "stop-work";
 
 export function getLightningScenario(): LightningScenario {
