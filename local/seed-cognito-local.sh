@@ -80,6 +80,14 @@ for command_name in docker curl python; do
   command -v "$command_name" >/dev/null || { echo "$command_name is required." >&2; exit 1; }
 done
 
+# The binary existing is not the same as the daemon running, and that is the usual state of
+# a machine that has just booted. Without this the first `docker run` fails with a raw
+# "failed to connect to the docker API at npipe://…" that says nothing about what to do.
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is installed but not running. Start Docker Desktop and try again." >&2
+  exit 1
+fi
+
 # Every run mints a NEW pool, so every run produces new Cognito subjects — and a subject is
 # immutable. `DemoDataSeeder.reconcileIdentity` throws "Application-user mapping conflicts
 # with an existing immutable Cognito subject" when it finds `worker1` already in the database
