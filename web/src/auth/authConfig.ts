@@ -22,8 +22,53 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+// Pulled out as consts (rather than inline in authConfig) so the dev-only metadata override
+// below can reference them.
+const authority = required(
+  "VITE_COGNITO_AUTHORITY",
+  import.meta.env.VITE_COGNITO_AUTHORITY,
+);
+const hostedUiDomain = required(
+  "VITE_COGNITO_HOSTED_UI_DOMAIN",
+  import.meta.env.VITE_COGNITO_HOSTED_UI_DOMAIN,
+);
+
+/*
+ * DEV-ONLY Cognito metadata override — for the local `cognito-local` emulator only.
+ *
+ * `cognito-local` is not a full OIDC provider, and two gaps break the discovery flow that
+ * oidc-client-ts uses unchanged against real AWS Cognito:
+ *
+ *   1. Its /.well-known/openid-configuration omits `authorization_endpoint` and
+ *      `token_endpoint`. Without `authorization_endpoint`, oidc-client-ts cannot even build
+ *      the sign-in redirect URL — signinRedirect() throws and the UI shows
+ *      "Could not reach the sign-in page."
+ *   2. The tokens it mints carry `iss = http://cognito-local/<pool>`, which does NOT match
+ *      the issuer its own discovery doc advertises (`http://localhost:9229/<pool>`). After
+ *      the callback, oidc-client-ts would reject the id_token on that mismatch.
+ *
+ * Supplying `metadata` explicitly makes oidc-client-ts skip discovery and fixes both: we name
+ * the endpoints ourselves, and set `issuer` to the value the token actually carries. Gated on
+ * `import.meta.env.DEV` AND the presence of VITE_COGNITO_LOCAL_ISSUER (set only in
+ * web/.env.local), so it is dead code in any production build — Vite tree-shakes it out, and
+ * real AWS Cognito continues to use normal discovery.
+ */
+const localIssuer = import.meta.env.VITE_COGNITO_LOCAL_ISSUER as string | undefined;
+const localMetadata: Partial<UserManagerSettings> =
+  import.meta.env.DEV && localIssuer
+    ? {
+        metadata: {
+          issuer: localIssuer,
+          authorization_endpoint: `${hostedUiDomain}/oauth2/authorize`,
+          token_endpoint: `${hostedUiDomain}/oauth2/token`,
+          jwks_uri: `${authority}/.well-known/jwks.json`,
+          end_session_endpoint: `${hostedUiDomain}/logout`,
+        },
+      }
+    : {};
+
 export const authConfig: UserManagerSettings = {
-  authority: required("VITE_COGNITO_AUTHORITY", import.meta.env.VITE_COGNITO_AUTHORITY),
+  authority,
   client_id: required("VITE_COGNITO_CLIENT_ID", import.meta.env.VITE_COGNITO_CLIENT_ID),
   redirect_uri: required("VITE_REDIRECT_URI", import.meta.env.VITE_REDIRECT_URI),
   post_logout_redirect_uri: import.meta.env.VITE_POST_LOGOUT_REDIRECT_URI,
@@ -58,16 +103,15 @@ export const authConfig: UserManagerSettings = {
   // site access, not the token. Fetching the userinfo endpoint as well would add a network
   // round trip for claims we deliberately do not trust.
   loadUserInfo: false,
+
+  // Dev-only override for cognito-local (an empty object in production — see the block
+  // above). Spread last so it adds `metadata` without touching any field set above.
+  ...localMetadata,
 };
 
 export const apiBaseUrl: string = required(
   "VITE_API_BASE_URL",
   import.meta.env.VITE_API_BASE_URL,
-);
-
-const hostedUiDomain = required(
-  "VITE_COGNITO_HOSTED_UI_DOMAIN",
-  import.meta.env.VITE_COGNITO_HOSTED_UI_DOMAIN,
 );
 
 /**
