@@ -175,6 +175,99 @@ exists to avoid ([ADR 0002](../docs/adr/0002-cookie-free-bearer-authentication.m
 because it is fenced to development and to synthetic accounts. The password lives in form
 state that dies with the screen — never Redux, never persisted, never logged.
 
+### Verifying the live path without AWS
+
+`cognito-password` and `cognito-pkce` both need the shared dev pool, which means `gh`
+authenticated against the repo *and* the synthetic users' passwords from AWS Secrets Manager.
+Without an AWS account you cannot sign in at all — so every screen falls back to fixtures and
+nothing that reads live data can be checked.
+
+[`local/seed-cognito-local.sh`](../local/seed-cognito-local.sh) replaces the pool, **not the
+security**. It runs `jagregory/cognito-local` — the same digest-pinned image
+`AbstractIntegrationTest` uses — which is the real Cognito Identity Provider HTTP API,
+signing genuine RS256 tokens and serving a genuine JWKS. Tokens it mints go through the
+resource server, the issuer and client-id checks and every `@PreAuthorize` for real. Only the
+issuer is local.
+
+```
+./local/seed-cognito-local.sh --reset-db     # prints the backend env and the mobile .env
+```
+
+Then paste the printed exports, start the backend, and set the four `.env` lines it gives
+you. Sign in as `worker1` or `manager1`.
+
+**`--reset-db` is not optional on a re-run.** Each run mints a new pool, so every user gets a
+new Cognito subject — and a subject is immutable. `DemoDataSeeder` refuses to remap one and
+the backend will not start, which is the guard working correctly.
+
+**The seam this relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
+`idpEndpoint()` in [`auth/cognitoPasswordAuth.ts`](src/auth/cognitoPasswordAuth.ts). It is
+gated on `__DEV__` rather than on the auth mode, deliberately: this is the value that decides
+*who signs the token the backend will trust*, so no configuration may redirect a release
+bundle's authentication, whatever mode it thinks it is in. `cognitoPasswordAuth.test.ts`
+asserts that.
+
+The alternative considered was a dev-only unauthenticated endpoint on the backend. It was
+rejected: a second way into a safety API is a much larger thing to get wrong than one string.
+
+#### A defect this turned up
+
+cognito-local omits `ExpiresIn` from its `InitiateAuth` response. AWS always sends it, so
+this had never been exercised — and the failure was silent and pointed somewhere else
+entirely:
+
+```
+undefined * 1000       -> NaN
+saveSession writes     -> "NaN"
+loadSession rejects it -> the session reads as corrupt, correctly
+the interceptor        -> sends NO Authorization header
+the server             -> 401
+the app                -> "this account has not been set up for CrewSafe yet"
+```
+
+A missing number in the login response surfaced to the worker as a **provisioning problem
+with their account**. `expiresInSeconds()` now defaults to an hour; the worst case is one
+early re-login, against a sign-in that silently authenticated nothing. Found only because the
+backend's `DEBUG` log said `Set SecurityContextHolder to anonymous SecurityContext` — the
+request had no token at all, rather than a rejected one.
+
+#### What is live, and what is still a fixture
+
+| Screen | Element | Outside mock mode |
+|---|---|---|
+| Weather | Everything — WBGT, band, metrics, station, freshness | **Live NEA** |
+| My shift | Heat conditions card | **Live NEA** |
+| My shift | Shift, task, intensity, acclimatisation | Fixture — `/shifts/me` does not exist |
+| My shift | Lightning banner | Fixture — `/lightning` does not exist |
+| My shift | Heat guidance actions | Absent — see below |
+
+**The shift screen is a hybrid while `/shifts/me` is missing.** Its heat card needs a site id,
+and the fixture shift's is `11111111-…`, which no deployment has — `DemoDataSeeder` generates
+site ids, so asking the live endpoint about it returns 403, not a reading. Outside mock mode
+`loadConditions` in [`safetySlice`](src/store/reducers/safetySlice.ts) therefore resolves the
+site from the real `GET /api/v1/sites`, as `weatherSlice` already does. So the card shows a
+live reading for the worker's **first accessible site**, not for the site the fixture names.
+
+Honest for verification and wrong for production — survivable only because the whole shift
+above it is a fixture too. When `/shifts/me` lands this collapses to one line: pass
+`shift.siteId` and delete the lookup.
+
+The policy is `null` there rather than the mock's. Pairing a real reading with a fixture
+obligation would be worse than having none — it would look authoritative and be invented.
+Nothing renders it today anyway: `features.heatGuidanceCard` is off.
+
+#### Verified on the emulator
+
+Signed in as `manager1`, then `worker1`, against live NEA data ingested that minute:
+
+- **Weather** — WBGT 29.2 °C, band "Below 31°C" from the server, station S128, observed 09:30
+  / received 09:42, a green **Live** badge, and no "Simulated data" notice. The SCRUM-209
+  Part 3 backdrop renders over it unchanged.
+- **My shift** — Heat conditions reads the same **29.2 °C WBGT** with a **Live** badge, while
+  the stop-work banner and task stay fixtures.
+
+Both readings match `GET /api/v1/sites/{siteId}/weather/latest` for Bishan.
+
 ---
 
 ## What was built

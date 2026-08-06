@@ -19,6 +19,10 @@
  * The password is a function argument and nothing more. It is never stored, never put in
  * Redux, and never logged — see `SignInScreen`, which keeps it in component state that dies
  * with the screen.
+ *
+ * ── THE ENDPOINT IS OVERRIDABLE, IN DEVELOPMENT ONLY ────────────────────────────────────
+ * See `idpEndpoint()` below. It is the one seam that lets this run against a local Cognito
+ * emulator, and it is closed in a release bundle.
  */
 import axios from "axios";
 import { config } from "@/constants/config";
@@ -28,7 +32,8 @@ import type { StoredSession } from "@/api/tokenStore";
 interface InitiateAuthSuccess {
   AuthenticationResult?: {
     AccessToken: string;
-    ExpiresIn: number;
+    /** Optional only because not every Cognito-compatible IdP sends it — see `expiresInSeconds`. */
+    ExpiresIn?: number;
     IdToken?: string;
     RefreshToken?: string;
     TokenType: string;
@@ -88,6 +93,62 @@ function messageKeyForCognitoError(type: string | undefined, message: string | u
   }
 }
 
+/**
+ * How long the token is good for, defaulting rather than trusting the field.
+ *
+ * AWS always sends `ExpiresIn`. An IdP that omits it is out of spec — but the failure that
+ * causes is silent and points at the wrong thing entirely, which is why this defaults
+ * instead of letting the arithmetic run:
+ *
+ *   undefined * 1000            -> NaN
+ *   saveSession writes          -> "NaN"
+ *   loadSession rejects it      -> the whole session reads as corrupt, correctly
+ *   the request interceptor     -> sends no Authorization header at all
+ *   the server                  -> 401
+ *   the app                     -> "this account has not been set up for CrewSafe yet"
+ *
+ * So a missing number in the login response surfaces to a worker as a provisioning problem
+ * with their account, and to whoever debugs it as an auth problem that is not one. An hour
+ * is the conservative reading: the worst case is one early re-login, against a sign-in that
+ * silently authenticates nothing.
+ *
+ * Found running against `jagregory/cognito-local`, which omits the field.
+ */
+function expiresInSeconds(value: number | undefined): number {
+  const ONE_HOUR = 3600;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : ONE_HOUR;
+}
+
+/**
+ * The Identity Provider base URL.
+ *
+ * AWS unless a developer has pointed it somewhere else, and it cannot be pointed anywhere
+ * else outside `__DEV__` — the check is on `__DEV__` rather than on the auth mode because
+ * this is the one value that decides *who signs the token the backend will trust*. A
+ * release bundle must reach AWS or fail, with no configuration able to change that.
+ *
+ * The intended non-AWS target is `jagregory/cognito-local`, which `AbstractIntegrationTest`
+ * already uses for exactly this reason: it is the real Cognito Identity Provider HTTP API,
+ * so it signs genuine RS256 tokens and serves a genuine JWKS. Pointed at it, this app takes
+ * the same code path it takes against AWS — the resource server, the issuer and client
+ * checks, and every `@PreAuthorize` still run for real. That is what makes it a
+ * verification tool rather than a bypass.
+ *
+ * On the Android emulator the host is `10.0.2.2`, not `localhost`, for the same reason the
+ * API base URL is.
+ */
+function idpEndpoint(region: string): string {
+  const override = config.cognito.idpEndpointOverride;
+
+  if (__DEV__ && override) {
+    // Trailing slash stripped, then re-added: cognito-local answers on the root path, and
+    // a doubled slash is a 404 that reads like a missing service.
+    return `${override.replace(/\/+$/, "")}/`;
+  }
+
+  return `https://cognito-idp.${region}.amazonaws.com/`;
+}
+
 export async function signInWithPassword(
   username: string,
   password: string,
@@ -101,7 +162,7 @@ export async function signInWithPassword(
   let response;
   try {
     response = await axios.post<InitiateAuthSuccess>(
-      `https://cognito-idp.${region}.amazonaws.com/`,
+      idpEndpoint(region),
       {
         AuthFlow: "USER_PASSWORD_AUTH",
         ClientId: cliClientId,
@@ -142,6 +203,6 @@ export async function signInWithPassword(
   return {
     accessToken: AuthenticationResult.AccessToken,
     refreshToken: AuthenticationResult.RefreshToken ?? null,
-    expiresAt: Date.now() + AuthenticationResult.ExpiresIn * 1000,
+    expiresAt: Date.now() + expiresInSeconds(AuthenticationResult.ExpiresIn) * 1000,
   };
 }
