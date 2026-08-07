@@ -250,4 +250,13 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow ec2:DescribeNetworkInterfaces so the provider can delete the orphaned legacy security group"
 
-printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 31
+jq -e '
+  any(.Statement[];
+    .Sid == "ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule"
+    and (.Effect == "Allow")
+    and ((.Action | arrays | index("ec2:GetSecurityGroupsForVpc")) != null)
+  )
+' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must allow ec2:GetSecurityGroupsForVpc so ELBv2 can create the public load balancer"
+
+printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 32
