@@ -46,7 +46,7 @@ assert_not_contains "$main_tf" "cross_region"
 assert_contains "$outputs_tf" 'output "securityhub_ecr_insight_arn"'
 assert_contains "$outputs_tf" 'aws_securityhub_insight.ecr_active_critical_high.arn'
 
-for sid in ManageSecurityHubAccount CreateSecurityHubServiceLinkedRole ManageSecurityHubInsight ManageInspectorEcrEnablement ManageEcrEnhancedScanning; do
+for sid in ManageSecurityHubAccount CreateSecurityHubServiceLinkedRole UpdateSecurityHubConfiguration ManageSecurityHubInsight ManageInspectorEcrEnablement ManageEcrEnhancedScanning; do
   jq -e --arg sid "$sid" '[.Statement[] | select(.Sid == $sid)] | length == 1' "$ROOT/$apply_policy" >/dev/null ||
     fail "$apply_policy missing exactly one $sid statement"
 done
@@ -54,6 +54,7 @@ jq -e '[.Statement[] | select(.Sid == "ManageEcrEnhancedScanning") | .Action | s
 jq -e '[.Statement[] | select(.Sid == "ManageInspectorEcrEnablement") | .Action | sort | . == ["inspector2:BatchGetAccountStatus","inspector2:Disable","inspector2:Enable"]]' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "ManageSecurityHubAccount") | .Action | sort | . == ["securityhub:DescribeHub","securityhub:DisableSecurityHub","securityhub:EnableSecurityHub"]]' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "CreateSecurityHubServiceLinkedRole" and ((.Action | sort) == ["iam:CreateServiceLinkedRole"]) and .Resource == "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/securityhub.amazonaws.com/AWSServiceRoleForSecurityHub" and .Condition.StringLike["iam:AWSServiceName"] == "securityhub.amazonaws.com")] | length == 1' "$ROOT/$apply_policy" >/dev/null
+jq -e '[.Statement[] | select(.Sid == "UpdateSecurityHubConfiguration" and ((.Action | sort) == ["securityhub:UpdateSecurityHubConfiguration"]) and .Resource == "arn:aws:securityhub:ap-southeast-1:<ACCOUNT_ID>:hub/default")] | length == 1' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "ManageSecurityHubInsight") | .Action | sort | . == ["securityhub:CreateInsight","securityhub:DeleteInsight","securityhub:GetInsight","securityhub:ListInsights","securityhub:UpdateInsight"]]' "$ROOT/$apply_policy" >/dev/null
 
 jq -e '[.Statement[] | select(.Sid == "ReadSecurityHubInspector") | .Action | sort | . == ["ecr:DescribeRegistry","inspector2:BatchGetAccountStatus","inspector2:ListCoverage","securityhub:DescribeHub","securityhub:GetInsight","securityhub:ListInsights"]]' "$ROOT/$plan_policy" >/dev/null
