@@ -1,0 +1,6 @@
+{
+  "scenario": "policy-version-limit",
+  "expected": "pause-and-recover",
+  "default_version_must_be_preserved": true,
+  "recovery": "remove-reviewed-non-default-version-then-generate-new-plan"
+}

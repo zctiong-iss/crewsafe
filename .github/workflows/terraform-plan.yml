@@ -4,7 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       target_account_alias: { description: "Registered AWS account alias", required: true, type: string }
-      terraform_component: { description: "Catalogued Terraform component", required: true, type: string }
+      terraform_component:
+        description: "Catalogued Terraform component"
+        required: true
+        type: choice
+        options:
+          - cognito-shared-dev
+          - compute-shared-dev
+          - database-shared-dev
+          - ecr-shared-dev
+          - iam-policy-management-shared-dev
+          - network-shared-dev
+          - secrets-shared-dev
+          - state-backend
       operation:
         description: "Reviewed operation"
         required: true
@@ -40,9 +52,19 @@ jobs:
           CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
           INPUT_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
         run: .github/scripts/terraform/resolve-terraform-account.sh "$INPUT_ACCOUNT_ALIAS"
+      - id: execution
+        env:
+          INPUT_COMPONENT: ${{ steps.component.outputs.terraform_component }}
+          INPUT_OPERATION: plan
+          EXECUTION_ROLE_FAMILY: ${{ steps.component.outputs.execution_role_family }}
+          NORMAL_PLAN_ROLE_ARN: ${{ steps.account.outputs.plan_role_arn }}
+          NORMAL_APPLY_ROLE_ARN: ${{ steps.account.outputs.apply_role_arn }}
+          IAM_POLICY_PLAN_ROLE_ARN: ${{ steps.account.outputs.iam_policy_plan_role_arn }}
+          IAM_POLICY_APPLY_ROLE_ARN: ${{ steps.account.outputs.iam_policy_apply_role_arn }}
+        run: .github/scripts/terraform/select-execution-role.sh "$INPUT_COMPONENT" "$INPUT_OPERATION" "$EXECUTION_ROLE_FAMILY" "$NORMAL_PLAN_ROLE_ARN" "$NORMAL_APPLY_ROLE_ARN" "$IAM_POLICY_PLAN_ROLE_ARN" "$IAM_POLICY_APPLY_ROLE_ARN"
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
-          role-to-assume: ${{ steps.account.outputs.plan_role_arn }}
+          role-to-assume: ${{ steps.execution.outputs.role_arn }}
           aws-region: ${{ steps.account.outputs.region }}
           role-session-name: CrewSafePlan-${{ github.run_id }}
           mask-aws-account-id: true
@@ -63,13 +85,38 @@ jobs:
           # shellcheck disable=SC2153
           . "$GITHUB_WORKSPACE/.github/scripts/terraform/plan-init.sh" \
             "$BACKEND_STRATEGY" "$BUCKET" "$REGION" "$STATE_KEY" "$ACCOUNT_ALIAS"
-      - name: Plan
+      - name: Validate IAM fresh-account boundary
+        if: inputs.terraform_component == 'iam-policy-management-shared-dev'
+        working-directory: ${{ steps.component.outputs.root }}
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ steps.account.outputs.account_id }}
+          NORMAL_PLAN_ROLE_ARN: ${{ steps.account.outputs.plan_role_arn }}
+          NORMAL_APPLY_ROLE_ARN: ${{ steps.account.outputs.apply_role_arn }}
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/terraform/preflight-iam-policy-account.sh" \
+            "$PWD" "$EXPECTED_ACCOUNT_ID" "$NORMAL_PLAN_ROLE_ARN" "$NORMAL_APPLY_ROLE_ARN"
+      - name: Plan standard component
+        if: inputs.terraform_component != 'iam-policy-management-shared-dev'
         working-directory: ${{ steps.component.outputs.root }}
         env:
           TF_VAR_expected_account_id: ${{ steps.account.outputs.account_id }}
           TF_VAR_account_alias: ${{ inputs.target_account_alias }}
           TF_VAR_aws_region: ${{ steps.account.outputs.region }}
           TF_VAR_github_oidc_main_subject: ${{ vars.CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT }}
+          INPUT_OPERATION: ${{ inputs.operation }}
+        run: |
+          args=(-input=false -lock-timeout=5m -out=plan.tfplan)
+          [[ "$INPUT_OPERATION" == destroy ]] && args+=(-destroy)
+          terraform plan "${args[@]}"
+      - name: Plan IAM policy management
+        if: inputs.terraform_component == 'iam-policy-management-shared-dev'
+        working-directory: ${{ steps.component.outputs.root }}
+        env:
+          TF_VAR_expected_account_id: ${{ steps.account.outputs.account_id }}
+          TF_VAR_account_alias: ${{ inputs.target_account_alias }}
+          TF_VAR_aws_region: ${{ steps.account.outputs.region }}
+          TF_VAR_terraform_plan_role_arn: ${{ steps.account.outputs.plan_role_arn }}
+          TF_VAR_terraform_apply_role_arn: ${{ steps.account.outputs.apply_role_arn }}
           INPUT_OPERATION: ${{ inputs.operation }}
         run: |
           args=(-input=false -lock-timeout=5m -out=plan.tfplan)

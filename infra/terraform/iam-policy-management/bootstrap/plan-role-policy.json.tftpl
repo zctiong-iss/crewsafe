@@ -1,0 +1,97 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InspectCrewSafeStateBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
+    },
+    {
+      "Sid": "ListCrewSafeStatePrefix",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
+    },
+    {
+      "Sid": "ReadCrewSafeBootstrapState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/bootstrap/terraform.tfstate"
+    },
+    {
+      "Sid": "ReadIamPolicyManagementState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/iam-policy-management/shared-dev.tfstate"
+    },
+    {
+      "Sid": "ManageIamPolicyManagementStateLock",
+      "Effect": "Allow",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/iam-policy-management/shared-dev.tfstate.tflock"
+    },
+    {
+      "Sid": "ReadDeclaredManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyTags",
+        "iam:ListPolicyVersions"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:policy/crewsafe/terraform/iam-policy-management/*"
+    },
+    {
+      "Sid": "ReadNormalTerraformRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformPlanRole",
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformApplyRole"
+      ]
+    },
+    {
+      "Sid": "DenyIdentityAndPolicyMutation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:CreatePolicy",
+        "iam:CreatePolicyVersion",
+        "iam:CreateRole",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

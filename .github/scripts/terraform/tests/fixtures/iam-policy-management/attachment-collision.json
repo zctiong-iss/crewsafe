@@ -1,0 +1,7 @@
+{
+  "scenario": "attachment-collision",
+  "expected": "fail-closed",
+  "object": "aws_iam_role_policy_attachment",
+  "action": "resolve-through-bootstrap",
+  "implicit_detach": false
+}

@@ -1,0 +1,187 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageContainerRuntime",
+      "Effect": "Allow",
+      "Action": [
+        "ecs:CreateCluster",
+        "ecs:CreateService",
+        "ecs:DeleteCluster",
+        "ecs:DeleteService",
+        "ecs:DeregisterTaskDefinition",
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTaskDefinition",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:ListTagsForResource",
+        "ecs:ListTaskDefinitions",
+        "ecs:RegisterTaskDefinition",
+        "ecs:TagResource",
+        "ecs:UntagResource",
+        "ecs:UpdateService"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageLoadBalancer",
+      "Effect": "Allow",
+      "Action": [
+        "elasticloadbalancing:AddTags",
+        "elasticloadbalancing:CreateListener",
+        "elasticloadbalancing:CreateLoadBalancer",
+        "elasticloadbalancing:CreateTargetGroup",
+        "elasticloadbalancing:DeleteListener",
+        "elasticloadbalancing:DeleteLoadBalancer",
+        "elasticloadbalancing:DeleteTargetGroup",
+        "elasticloadbalancing:DescribeListenerAttributes",
+        "elasticloadbalancing:DescribeListeners",
+        "elasticloadbalancing:DescribeLoadBalancerAttributes",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "elasticloadbalancing:DescribeTags",
+        "elasticloadbalancing:DescribeTargetGroupAttributes",
+        "elasticloadbalancing:DescribeTargetGroups",
+        "elasticloadbalancing:DescribeTargetHealth",
+        "elasticloadbalancing:ModifyListener",
+        "elasticloadbalancing:ModifyLoadBalancerAttributes",
+        "elasticloadbalancing:ModifyTargetGroup",
+        "elasticloadbalancing:ModifyTargetGroupAttributes",
+        "elasticloadbalancing:RemoveTags",
+        "elasticloadbalancing:SetSecurityGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageDistribution",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetCachePolicy",
+        "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:GetOriginRequestPolicy",
+        "cloudfront:ListCachePolicies",
+        "cloudfront:ListDistributions",
+        "cloudfront:ListOriginRequestPolicies",
+        "cloudfront:ListTagsForResource",
+        "cloudfront:TagResource",
+        "cloudfront:UntagResource",
+        "cloudfront:UpdateDistribution"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:CreateSecurityGroup",
+        "ec2:CreateTags",
+        "ec2:DeleteSecurityGroup",
+        "ec2:DeleteTags",
+        "ec2:DescribeAccountAttributes",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInternetGateways",
+        "ec2:DescribeManagedPrefixLists",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSecurityGroupRules",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcs",
+        "ec2:GetManagedPrefixListEntries",
+        "ec2:ModifySecurityGroupRules",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupIngress"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageApplicationLogGroup",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:DeleteLogGroup",
+        "logs:DeleteRetentionPolicy",
+        "logs:ListTagsForResource",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/backend",
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/backend:*"
+      ]
+    },
+    {
+      "Sid": "ListLogGroupsApply",
+      "Effect": "Allow",
+      "Action": [
+        "logs:DescribeLogGroups"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageTheTwoParametersThisComponentCreates",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:AddTagsToResource",
+        "ssm:DeleteParameter",
+        "ssm:DescribeParameters",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:ListTagsForResource",
+        "ssm:PutParameter",
+        "ssm:RemoveTagsFromResource"
+      ],
+      "Resource": [
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cors/allowed-origins",
+        "arn:aws:ssm:ap-southeast-1:<ACCOUNT_ID>:parameter/crewsafe/shared-dev/cognito/demo-users-json"
+      ]
+    },
+    {
+      "Sid": "PassOnlyTheTwoRolesTheSecretsComponentPublished",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-task-execution",
+        "arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-task"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "CreateEcsServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "ecs.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "CreateLoadBalancingServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/elasticloadbalancing.amazonaws.com/AWSServiceRoleForElasticLoadBalancing",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
+        }
+      }
+    }
+  ]
+}
