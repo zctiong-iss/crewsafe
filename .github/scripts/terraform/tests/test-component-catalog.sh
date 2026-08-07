@@ -36,6 +36,9 @@ jq -e '.components["database-shared-dev"].allow_destroy == false' "$catalog" >/d
 # lane at once, and the distribution's provider-issued name is not recoverable —
 # a rebuild hands out a different hostname, breaking every client that stored it.
 jq -e '.components["compute-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# SCRUM-274 extends this existing ECR component; it must not add a second
+# catalog entry, state key, root, or destroy exception.
+jq -e '.components["ecr-shared-dev"].root == "infra/terraform/ecr" and .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate" and .components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 # The backend CI pipeline pushes to this repository on every merge to main, so an
 # accidental destroy dispatch must stay refused too.
 jq -e '.components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null

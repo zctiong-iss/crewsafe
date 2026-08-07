@@ -13,6 +13,7 @@ locals {
 
   repository_arn     = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
   web_repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
+  inspector_product_arn = "arn:aws:securityhub:${var.aws_region}::product/aws/inspector"
 
   ecr_push_assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -247,4 +248,119 @@ resource "aws_iam_role_policy" "web_ecr_push" {
   name   = "${local.web_push_role_name}-push"
   role   = aws_iam_role.web_ecr_push.id
   policy = jsonencode(local.web_ecr_push_policy)
+}
+
+# ---------------------------------------------------------------------------
+# Security Hub / Inspector ECR findings
+#
+# This is deliberately an account-local control plane. Inspector publishes its
+# findings to Security Hub; Terraform does not import ASFF, store finding
+# payloads, create external tickets, or perform remediation.
+# ---------------------------------------------------------------------------
+
+resource "aws_securityhub_account" "mvp" {
+  enable_default_standards = false
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "Security Hub enablement is restricted to the approved AWS account."
+    }
+  }
+}
+
+resource "aws_inspector2_enabler" "ecr" {
+  account_ids   = [var.expected_account_id]
+  resource_types = ["ECR"]
+
+  depends_on = [aws_securityhub_account.mvp]
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "Inspector enablement is restricted to the approved AWS account."
+    }
+  }
+}
+
+resource "aws_ecr_registry_scanning_configuration" "enhanced" {
+  scan_type = "ENHANCED"
+
+  rule {
+    scan_frequency = "CONTINUOUS_SCAN"
+
+    repository_filter {
+      filter      = "crewsafe/backend"
+      filter_type = "WILDCARD"
+    }
+
+    repository_filter {
+      filter      = "crewsafe/web"
+      filter_type = "WILDCARD"
+    }
+  }
+
+  depends_on = [aws_inspector2_enabler.ecr]
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "Enhanced ECR scanning is restricted to the approved AWS account."
+    }
+  }
+}
+
+resource "aws_securityhub_insight" "ecr_active_critical_high" {
+  name               = "CrewSafe ECR Active Critical and High"
+  group_by_attribute = "ResourceId"
+
+  filters {
+    product_arn {
+      comparison = "EQUALS"
+      value      = local.inspector_product_arn
+    }
+
+    resource_type {
+      comparison = "EQUALS"
+      value      = "AwsEcrContainerImage"
+    }
+
+    record_state {
+      comparison = "EQUALS"
+      value      = "ACTIVE"
+    }
+
+    workflow_status {
+      comparison = "EQUALS"
+      value      = "NEW"
+    }
+
+    workflow_status {
+      comparison = "EQUALS"
+      value      = "NOTIFIED"
+    }
+
+    severity_label {
+      comparison = "EQUALS"
+      value      = "CRITICAL"
+    }
+
+    severity_label {
+      comparison = "EQUALS"
+      value      = "HIGH"
+    }
+  }
+
+  depends_on = [
+    aws_securityhub_account.mvp,
+    aws_inspector2_enabler.ecr,
+    aws_ecr_registry_scanning_configuration.enhanced,
+  ]
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "The Security Hub Insight is restricted to the approved AWS account."
+    }
+  }
 }
