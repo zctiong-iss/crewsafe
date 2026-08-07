@@ -42,4 +42,7 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
             + "(select s.id from Shift s where s.startsAt < :endsAt and s.endsAt > :startsAt)")
     List<ShiftAssignment> findOverlapping(@Param("workerId") UUID workerId, @Param("startsAt") Instant startsAt,
                                            @Param("endsAt") Instant endsAt);
+
+    /** The caller's own assignment on a shift — never anyone else's (SCRUM-266). */
+    Optional<ShiftAssignment> findByShiftIdAndWorkerId(UUID shiftId, UUID workerId);
 }

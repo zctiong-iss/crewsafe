@@ -236,4 +236,26 @@ public class ShiftService {
             throw new BadRequestException("Worker " + workerId + " already has an overlapping shift assignment");
         }
     }
+
+    /** A shift paired with only the caller's own assignment on it (SCRUM-266). */
+    public record MyShift(Shift shift, ShiftAssignment assignment) {
+    }
+
+    /**
+     * The caller's current or next shift, resolved from their own id (SCRUM-266).
+     *
+     * <p>Implements {@code docs/api/shift-readiness.yaml}: not site-scoped, and carrying only the
+     * caller's own task, intensity and acclimatisation — never the other assignments on the same
+     * shift. That is the whole reason this is a separate read rather than reusing the supervisor's
+     * shift view, which returns every assignment on the shift by design.
+     *
+     * <p>Empty when nothing is scheduled. That is an answer, not a failure: the screen has an
+     * empty state for it and the endpoint returns 200 with a null shift.
+     */
+    public Optional<MyShift> myCurrentOrNextShift(UUID workerId) {
+        return shifts.findCurrentOrUpcomingForWorker(workerId, clock.instant()).stream()
+                .findFirst()
+                .flatMap(shift -> assignments.findByShiftIdAndWorkerId(shift.getId(), workerId)
+                        .map(assignment -> new MyShift(shift, assignment)));
+    }
 }
