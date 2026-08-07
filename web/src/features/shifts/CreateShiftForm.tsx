@@ -1,6 +1,8 @@
 /** @author Tang Chee Seng (with assistance from Claude) */
 
 import { useEffect, useState, type FormEvent } from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { ApiError, messageFor } from "@/api/errors";
@@ -38,8 +40,8 @@ type Submit =
 
 export function CreateShiftForm({ sites }: { sites: Site[] }) {
   const [workersLoad, setWorkersLoad] = useState<WorkersLoad>({ status: "loading" });
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  const [startsAt, setStartsAt] = useState<Date | null>(null);
+  const [endsAt, setEndsAt] = useState<Date | null>(null);
   const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -68,8 +70,8 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
   const buildBody = (): ShiftCreateRequest => ({
-    startsAt: new Date(startsAt).toISOString(),
-    endsAt: new Date(endsAt).toISOString(),
+    startsAt: startsAt!.toISOString(),
+    endsAt: endsAt!.toISOString(),
     assignments: rows.map((row) => {
       const assignment: ShiftAssignmentCreate = {
         workerId: row.workerId,
@@ -86,15 +88,14 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
     const body = buildBody();
     const found = validateShift(body);
     setErrors(found);
-    if (Object.keys(found).length > 0) return; // AC-2 / AC-3: a bad draft sends NO request.
+    if (Object.keys(found).length > 0) return;
 
     setSubmit({ status: "submitting" });
     createShift(siteId, body)
-      .then((shift) => setSubmit({ status: "created", shift })) // AC-1
+      .then((shift) => setSubmit({ status: "created", shift }))
       .catch((error: unknown) => {
         const apiError =
           error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
-        // AC-4: stay signed in, keep everything typed (no state reset), show message + id.
         setSubmit({ status: "error", message: messageFor(apiError), requestId: apiError.requestId });
       });
   };
@@ -136,8 +137,8 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
             value={siteId}
             onChange={(e) => {
               setSiteId(e.target.value);
-              setRows([]);                    // clear crew — workers belong to the old site
-              setWorkersLoad({ status: "loading" });  // trigger visual reload
+              setRows([]);
+              setWorkersLoad({ status: "loading" });
             }}
           >
             {sites.map((s) => (
@@ -146,12 +147,32 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
           </select>
 
           <label htmlFor="startsAt">Starts at</label>
-          <input id="startsAt" type="datetime-local" required value={startsAt}
-            onChange={(e) => setStartsAt(e.target.value)} />
+          <DatePicker
+            id="startsAt"
+            wrapperClassName="shift-form__datepicker-wrapper"
+            className="shift-form__datepicker-input"
+            selected={startsAt}
+            onChange={setStartsAt}
+            showTimeSelect
+            timeFormat="HH:mm"
+            timeIntervals={15}
+            dateFormat="d MMM yyyy, HH:mm"
+            required
+          />
 
           <label htmlFor="endsAt">Ends at</label>
-          <input id="endsAt" type="datetime-local" required value={endsAt}
-            onChange={(e) => setEndsAt(e.target.value)} />
+          <DatePicker
+            id="endsAt"
+            wrapperClassName="shift-form__datepicker-wrapper"
+            className="shift-form__datepicker-input"
+            selected={endsAt}
+            onChange={setEndsAt}
+            showTimeSelect
+            timeFormat="HH:mm"
+            timeIntervals={15}
+            dateFormat="d MMM yyyy, HH:mm"
+            required
+          />
           {errors.endsAt && <p className="shift-form__error" role="alert">{errors.endsAt}</p>}
         </section>
 
@@ -200,7 +221,7 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
           )}
           {!noWorkers && (
             <button type="button" onClick={addRow}>Add worker</button>
-          )}        
+          )}
         </section>
 
         {!noWorkers && rows.length === 0 && (

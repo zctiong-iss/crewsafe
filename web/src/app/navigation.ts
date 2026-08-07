@@ -21,7 +21,7 @@ export interface NavItem {
  */
 export const NAVIGATION: readonly NavItem[] = [
   { to: "/", label: "Live Board", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
-  { to: "/shifts", label: "Shifts & Tasks", roles: ["SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
+  { to: "/shifts", label: "Shifts & Tasks", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
   { to: "/approvals", label: "Approvals", roles: ["SUPERVISOR", "SAFETY_MANAGER"] },
   { to: "/audit", label: "Audit Trail", roles: ["SAFETY_MANAGER", "ADMIN"] },
   { to: "/settings", label: "Settings", roles: ["ADMIN"] },
