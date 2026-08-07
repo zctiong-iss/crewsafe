@@ -1,0 +1,129 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InspectCrewSafeStateBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:GetBucketTagging"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
+    },
+    {
+      "Sid": "ListCrewSafeStatePrefix",
+      "Effect": "Allow",
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1"
+    },
+    {
+      "Sid": "ReadCrewSafeBootstrapState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/bootstrap/terraform.tfstate"
+    },
+    {
+      "Sid": "ManageIamPolicyManagementState",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/iam-policy-management/shared-dev.tfstate"
+    },
+    {
+      "Sid": "ManageIamPolicyManagementStateLock",
+      "Effect": "Allow",
+      "Action": [
+        "s3:DeleteObject",
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/iam-policy-management/shared-dev.tfstate.tflock"
+    },
+    {
+      "Sid": "RecordReviewedApply",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::crewsafe-terraform-state-<ACCOUNT_ID>-ap-southeast-1/crewsafe/applied-plans/iam-policy-management-shared-dev/*"
+    },
+    {
+      "Sid": "CreateDeclaredManagedPolicies",
+      "Effect": "Allow",
+      "Action": "iam:CreatePolicy",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PolicyPath": "/crewsafe/terraform/iam-policy-management/"
+        }
+      }
+    },
+    {
+      "Sid": "ManageDeclaredManagedPolicies",
+      "Effect": "Allow",
+      "Action": [
+        "iam:DeletePolicyVersion",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyTags",
+        "iam:ListPolicyVersions",
+        "iam:CreatePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:TagPolicy",
+        "iam:UntagPolicy"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:policy/crewsafe/terraform/iam-policy-management/*"
+    },
+    {
+      "Sid": "ReadNormalTerraformRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:ListAttachedRolePolicies"
+      ],
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformPlanRole",
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformApplyRole"
+      ]
+    },
+    {
+      "Sid": "AttachOnlyDeclaredPoliciesToNormalRoles",
+      "Effect": "Allow",
+      "Action": [
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::<ACCOUNT_ID>:policy/crewsafe/terraform/iam-policy-management/*",
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformPlanRole",
+        "arn:aws:iam::<ACCOUNT_ID>:role/CrewSafeGitHubTerraformApplyRole"
+      ]
+    },
+    {
+      "Sid": "DenyIdentityTrustAndInlinePolicyMutation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateOpenIDConnectProvider",
+        "iam:CreateRole",
+        "iam:DeleteOpenIDConnectProvider",
+        "iam:DeleteRole",
+        "iam:DeleteRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:PutRolePermissionsBoundary",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:AddClientIDToOpenIDConnectProvider",
+        "iam:RemoveClientIDFromOpenIDConnectProvider"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

@@ -57,7 +57,11 @@ The externally reviewed permission boundary is deliberately narrow:
   unrestricted `iam:*`, or normal-role self-escalation.
 
 The exact external role policy is an account-bootstrap artifact, not a Terraform resource
-in this repository. Review evidence must show the action/resource allowlist and denied
+in this repository. Copyable trust and customer-managed permission-policy templates are
+committed under
+`infra/terraform/iam-policy-management/bootstrap/`; the accompanying README defines
+placeholder substitution, exact policy names/paths, role attachment, and registry
+installation. Review evidence must show the action/resource allowlist and denied
 operations before the first apply.
 
 ## CI flow
