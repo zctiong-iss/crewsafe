@@ -11,8 +11,8 @@ locals {
   push_role_name     = "crewsafe-shared-dev-ecr-push"
   web_push_role_name = "crewsafe-shared-dev-ecr-web-push"
 
-  repository_arn     = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
-  web_repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
+  repository_arn        = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
+  web_repository_arn    = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
   inspector_product_arn = "arn:aws:securityhub:${var.aws_region}::product/aws/inspector"
 
   ecr_push_assume_role_policy = jsonencode({
@@ -270,7 +270,7 @@ resource "aws_securityhub_account" "mvp" {
 }
 
 resource "aws_inspector2_enabler" "ecr" {
-  account_ids   = [var.expected_account_id]
+  account_ids    = [var.expected_account_id]
   resource_types = ["ECR"]
 
   depends_on = [aws_securityhub_account.mvp]
