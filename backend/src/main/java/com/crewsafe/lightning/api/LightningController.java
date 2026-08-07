@@ -1,5 +1,6 @@
 package com.crewsafe.lightning.api;
 
+import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.lightning.risk.LightningRiskDerivationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -54,10 +55,11 @@ public class LightningController {
     @GetMapping
     @PreAuthorize("@siteAccess.canAccess(#siteId)")
     public ResponseEntity<LightningRiskResponse> getLightningRisk(@PathVariable UUID siteId) {
-        return riskDerivation.deriveForSite(siteId, clock.instant())
+        LightningRiskResponse response = riskDerivation.deriveForSite(siteId, clock.instant())
                 .map(payload -> LightningRiskResponse.from(siteId, payload))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("No lightning data ingested for site " + siteId));
+
+        return ResponseEntity.ok(response);
     }
 
     /**

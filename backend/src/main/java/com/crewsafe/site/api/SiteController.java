@@ -1,5 +1,6 @@
 package com.crewsafe.site.api;
 
+import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.domain.UserStatus;
@@ -90,10 +91,10 @@ public class SiteController {
     @GetMapping("/{siteId}")
     @PreAuthorize("@siteAccess.canAccess(#siteId)")
     public ResponseEntity<SiteResponse> getSite(@PathVariable UUID siteId) {
-        return sites.findById(siteId)
-                .map(SiteResponse::from)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Site site = sites.findById(siteId)
+                .orElseThrow(() -> new ResourceNotFoundException("No site " + siteId));
+
+        return ResponseEntity.ok(SiteResponse.from(site));
     }
 
     /**
@@ -105,9 +106,10 @@ public class SiteController {
     @GetMapping("/{siteId}/dashboard")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<SiteDashboardResponse> getDashboard(@PathVariable UUID siteId) {
-        return sites.findById(siteId)
-                .map(site -> ResponseEntity.ok(new SiteDashboardResponse(site.getId(), site.getName(), "OK")))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Site site = sites.findById(siteId)
+                .orElseThrow(() -> new ResourceNotFoundException("No site " + siteId));
+
+        return ResponseEntity.ok(new SiteDashboardResponse(site.getId(), site.getName(), "OK"));
     }
 
     /**
