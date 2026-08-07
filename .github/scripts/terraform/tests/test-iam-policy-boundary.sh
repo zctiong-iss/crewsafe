@@ -65,10 +65,10 @@ if grep -Eq 'role-to-assume:.*steps.account.outputs.(plan_role_arn|apply_role_ar
 fi
 
 registry='{"alice":{"account_id":"123456789012","region":"ap-southeast-1","plan_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole","apply_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole","iam_policy_plan_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyPlanRole","iam_policy_apply_role_arn":"arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole"}}'
-standard_role="$("$selector" cognito-shared-dev plan standard "$(jq -r '.alice.plan_role_arn' <<<"$registry")" "$(jq -r '.alice.apply_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_plan_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_apply_role_arn' <<<"$registry")")"
+standard_role="$(GITHUB_OUTPUT="" "$selector" cognito-shared-dev plan standard "$(jq -r '.alice.plan_role_arn' <<<"$registry")" "$(jq -r '.alice.apply_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_plan_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_apply_role_arn' <<<"$registry")")"
 [[ "$standard_role" == arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole ]] || fail "standard component selected a policy-management role"
 
-policy_role="$("$selector" iam-policy-management-shared-dev apply policy-management "$(jq -r '.alice.plan_role_arn' <<<"$registry")" "$(jq -r '.alice.apply_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_plan_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_apply_role_arn' <<<"$registry")")"
+policy_role="$(GITHUB_OUTPUT="" "$selector" iam-policy-management-shared-dev apply policy-management "$(jq -r '.alice.plan_role_arn' <<<"$registry")" "$(jq -r '.alice.apply_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_plan_role_arn' <<<"$registry")" "$(jq -r '.alice.iam_policy_apply_role_arn' <<<"$registry")")"
 [[ "$policy_role" == arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole ]] || fail "IAM component did not select dedicated apply role"
 
 echo "PASS: IAM customer-managed policy and attachment boundary tests passed."

@@ -8,14 +8,14 @@ normal_apply_role="arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRo
 policy_plan_role="arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyPlanRole"
 policy_apply_role="arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformIamPolicyApplyRole"
 
-[[ "$($selector cognito-shared-dev plan standard "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role")" == "$normal_plan_role" ]] ||
+[[ "$(GITHUB_OUTPUT="" "$selector" cognito-shared-dev plan standard "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role")" == "$normal_plan_role" ]] ||
   fail "standard component did not select the normal plan role"
-[[ "$($selector iam-policy-management-shared-dev apply policy-management "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role")" == "$policy_apply_role" ]] ||
+[[ "$(GITHUB_OUTPUT="" "$selector" iam-policy-management-shared-dev apply policy-management "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role")" == "$policy_apply_role" ]] ||
   fail "IAM policy-management component did not select its dedicated apply role"
-if "$selector" iam-policy-management-shared-dev plan standard "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role" >/dev/null 2>&1; then
+if GITHUB_OUTPUT="" "$selector" iam-policy-management-shared-dev plan standard "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role" >/dev/null 2>&1; then
   fail "IAM policy-management component accepted the standard execution-role family"
 fi
-if "$selector" cognito-shared-dev plan policy-management "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role" >/dev/null 2>&1; then
+if GITHUB_OUTPUT="" "$selector" cognito-shared-dev plan policy-management "$normal_plan_role" "$normal_apply_role" "$policy_plan_role" "$policy_apply_role" >/dev/null 2>&1; then
   fail "standard component accepted the policy-management execution-role family"
 fi
 
