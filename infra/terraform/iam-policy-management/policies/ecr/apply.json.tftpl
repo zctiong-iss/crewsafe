@@ -86,6 +86,19 @@
       "Resource": "*"
     },
     {
+      "Sid": "CreateSecurityHubServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/securityhub.amazonaws.com/AWSServiceRoleForSecurityHub",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "securityhub.amazonaws.com"
+        }
+      }
+    },
+    {
       "Sid": "ManageSecurityHubInsight",
       "Effect": "Allow",
       "Action": [
