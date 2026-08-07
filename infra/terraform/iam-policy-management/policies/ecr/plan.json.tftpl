@@ -22,6 +22,19 @@
         "iam:ListRoleTags"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "ReadSecurityHubInspector",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRegistry",
+        "inspector2:BatchGetAccountStatus",
+        "inspector2:ListCoverage",
+        "securityhub:DescribeHub",
+        "securityhub:GetInsight",
+        "securityhub:ListInsights"
+      ],
+      "Resource": "*"
     }
   ]
 }
