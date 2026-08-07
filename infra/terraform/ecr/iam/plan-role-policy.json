@@ -28,6 +28,7 @@
       "Effect": "Allow",
       "Action": [
         "ecr:DescribeRegistry",
+        "ecr:GetRegistryScanningConfiguration",
         "inspector2:BatchGetAccountStatus",
         "inspector2:ListCoverage",
         "securityhub:DescribeHub",

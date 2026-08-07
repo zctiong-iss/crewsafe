@@ -58,7 +58,7 @@ jq -e '[.Statement[] | select(.Sid == "UpdateSecurityHubConfiguration" and ((.Ac
 jq -e '[.Statement[] | select(.Sid == "CreateInspectorServiceLinkedRole" and ((.Action | sort) == ["iam:CreateServiceLinkedRole"]) and .Resource == "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2" and .Condition.StringLike["iam:AWSServiceName"] == "inspector2.amazonaws.com")] | length == 1' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "ManageSecurityHubInsight") | .Action | sort | . == ["securityhub:CreateInsight","securityhub:DeleteInsight","securityhub:GetInsight","securityhub:ListInsights","securityhub:UpdateInsight"]]' "$ROOT/$apply_policy" >/dev/null
 
-jq -e '[.Statement[] | select(.Sid == "ReadSecurityHubInspector") | .Action | sort | . == ["ecr:DescribeRegistry","inspector2:BatchGetAccountStatus","inspector2:ListCoverage","securityhub:DescribeHub","securityhub:GetInsight","securityhub:ListInsights"]]' "$ROOT/$plan_policy" >/dev/null
+jq -e '[.Statement[] | select(.Sid == "ReadSecurityHubInspector") | .Action | sort | . == ["ecr:DescribeRegistry","ecr:GetRegistryScanningConfiguration","inspector2:BatchGetAccountStatus","inspector2:ListCoverage","securityhub:DescribeHub","securityhub:GetInsight","securityhub:ListInsights"]]' "$ROOT/$plan_policy" >/dev/null
 
 # No raw ASFF or finding payload is stored or imported by the Terraform layer.
 assert_not_contains "$apply_policy" "BatchImportFindings"
