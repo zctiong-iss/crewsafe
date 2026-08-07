@@ -91,6 +91,7 @@
         "ec2:DescribeSecurityGroups",
         "ec2:DescribeSubnets",
         "ec2:DescribeVpcs",
+        "ec2:GetSecurityGroupsForVpc",
         "ec2:GetManagedPrefixListEntries",
         "ec2:ModifySecurityGroupRules",
         "ec2:RevokeSecurityGroupEgress",
