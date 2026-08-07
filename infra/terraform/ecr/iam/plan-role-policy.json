@@ -33,6 +33,7 @@
         "inspector2:ListCoverage",
         "securityhub:DescribeHub",
         "securityhub:GetInsight",
+        "securityhub:GetInsights",
         "securityhub:ListInsights"
       ],
       "Resource": "*"
