@@ -4,7 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       target_account_alias: { description: "Registered AWS account alias", required: true, type: string }
-      terraform_component: { description: "Catalogued Terraform component", required: true, type: string }
+      terraform_component:
+        description: "Catalogued Terraform component"
+        required: true
+        type: choice
+        options:
+          - cognito-shared-dev
+          - compute-shared-dev
+          - database-shared-dev
+          - ecr-shared-dev
+          - iam-policy-management-shared-dev
+          - network-shared-dev
+          - secrets-shared-dev
+          - state-backend
       operation:
         description: "Reviewed operation"
         required: true
