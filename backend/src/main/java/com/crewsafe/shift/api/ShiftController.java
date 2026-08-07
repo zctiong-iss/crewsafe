@@ -162,6 +162,17 @@ public class ShiftController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{shiftId}/cancel")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> cancelShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+
+        return shiftService.cancelShift(siteId, principal.getId(), shiftId)
+                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/{shiftId}/assignments")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
