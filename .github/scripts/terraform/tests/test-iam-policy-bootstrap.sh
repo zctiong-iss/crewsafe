@@ -88,7 +88,7 @@ for role_kind in plan apply; do
           and (index($apply_role) != null))
      and ($role_kind == "plan" or
           (any(.Statement[]; .Sid == "CreateDeclaredManagedPolicies"
-               and .Condition.StringEquals["iam:PolicyPath"] == "/crewsafe/terraform/iam-policy-management/")
+               and .Resource == $policy_arn)
            and
           ([.Statement[] | select(.Effect == "Allow") | .Action
             | if type == "array" then .[] else . end]

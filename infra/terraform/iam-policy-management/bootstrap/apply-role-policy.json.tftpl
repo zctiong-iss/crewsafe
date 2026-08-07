@@ -58,12 +58,7 @@
       "Sid": "CreateDeclaredManagedPolicies",
       "Effect": "Allow",
       "Action": "iam:CreatePolicy",
-      "Resource": "*",
-      "Condition": {
-        "StringEquals": {
-          "iam:PolicyPath": "/crewsafe/terraform/iam-policy-management/"
-        }
-      }
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:policy/crewsafe/terraform/iam-policy-management/*"
     },
     {
       "Sid": "ManageDeclaredManagedPolicies",
