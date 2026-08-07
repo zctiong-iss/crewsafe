@@ -50,7 +50,7 @@ for sid in ManageSecurityHubAccount CreateSecurityHubServiceLinkedRole UpdateSec
   jq -e --arg sid "$sid" '[.Statement[] | select(.Sid == $sid)] | length == 1' "$ROOT/$apply_policy" >/dev/null ||
     fail "$apply_policy missing exactly one $sid statement"
 done
-jq -e '[.Statement[] | select(.Sid == "ManageEcrEnhancedScanning") | .Action | sort | . == ["ecr:DescribeRegistry","ecr:PutRegistryScanningConfiguration"]]' "$ROOT/$apply_policy" >/dev/null
+jq -e '[.Statement[] | select(.Sid == "ManageEcrEnhancedScanning") | .Action | sort | . == ["ecr:DescribeRegistry","ecr:GetRegistryScanningConfiguration","ecr:PutRegistryScanningConfiguration"]]' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "ManageInspectorEcrEnablement") | .Action | sort | . == ["inspector2:BatchGetAccountStatus","inspector2:Disable","inspector2:Enable","inspector2:ListAccountPermissions"]]' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "ManageSecurityHubAccount") | .Action | sort | . == ["securityhub:DescribeHub","securityhub:DisableSecurityHub","securityhub:EnableSecurityHub"]]' "$ROOT/$apply_policy" >/dev/null
 jq -e '[.Statement[] | select(.Sid == "CreateSecurityHubServiceLinkedRole" and ((.Action | sort) == ["iam:CreateServiceLinkedRole"]) and .Resource == "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/securityhub.amazonaws.com/AWSServiceRoleForSecurityHub" and .Condition.StringLike["iam:AWSServiceName"] == "securityhub.amazonaws.com")] | length == 1' "$ROOT/$apply_policy" >/dev/null

@@ -147,6 +147,7 @@
       "Effect": "Allow",
       "Action": [
         "ecr:DescribeRegistry",
+        "ecr:GetRegistryScanningConfiguration",
         "ecr:PutRegistryScanningConfiguration"
       ],
       "Resource": "*"
