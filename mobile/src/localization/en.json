@@ -206,7 +206,15 @@
       "intensityRequired": "Choose a work intensity.",
       "acclimatisationRange": "Enter a whole number from 1 to 7, or leave it blank.",
       "checkFields": "Some details above need attention. The fields with a red outline show what to fix."
-    }
+    },
+    "editAssignment": "Edit details",
+    "editTitle": "Edit worker details",
+    "saving": "Saving…",
+    "acclimatisationLabel": "Acclimatisation day (1–7, optional)",
+    "notEditable": "This shift has ended and can no longer be edited.",
+    "editActiveTitle": "This shift is running",
+    "editActiveBody": "Changing intensity now changes the heat rules this worker is already working under. Continue?",
+    "editActiveConfirm": "Save anyway"
   },
   "weather": {
     "title": "Conditions",

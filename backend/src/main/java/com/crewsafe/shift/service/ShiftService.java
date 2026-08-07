@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
  * (SCRUM-160, extended by SCRUM-159/160-fix), implementing {@code docs/api/shift.yaml}.
  *
  * @author Abu Bakar
+ * @author Justin Chua
  */
 @Service
 @RequiredArgsConstructor

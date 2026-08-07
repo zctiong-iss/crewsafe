@@ -23,7 +23,8 @@ import {
 } from "@/api/endpoints/shifts";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
-import type { Shift, Site, SiteWorker } from "@/types/domain";
+import { updateAssignment as updateAssignmentRequest } from "@/api/endpoints/shifts";
+import type { Shift, Site, SiteWorker, Intensity } from "@/types/domain";
 
 export type ShiftsStatus = "idle" | "loading" | "ready" | "error";
 
@@ -46,6 +47,8 @@ export interface ShiftsState {
    * "did that work?".
    */
   deletingId: string | null;
+  /** Assignment id currently being saved, so only that card shows a spinner (SCRUM-266). */
+  savingAssignmentId: string | null;
   /** True while a create is in flight, so the form's submit button can disable itself. */
   creating: boolean;
 }
@@ -60,6 +63,7 @@ const initialState: ShiftsState = {
   requestId: null,
   refreshing: false,
   deletingId: null,
+  savingAssignmentId: null,
   creating: false,
 };
 
@@ -154,6 +158,47 @@ export const removeShift = createAsyncThunk<
  * server prevents it — `createShift` has no idempotency key and no uniqueness constraint on
  * (site, times).
  */
+/**
+ * `PATCH /sites/{siteId}/shifts/{shiftId}/assignments/{assignmentId}` (SCRUM-266).
+ *
+ * Returns the whole updated shift rather than the one assignment, because the server does —
+ * and replacing what we hold beats patching our own copy and hoping the two agree.
+ *
+ * Guarded like the others, for the reason the create thunk gives: the form resolves its
+ * validation asynchronously, so `savingAssignmentId` is set a render *after* the tap. Two taps
+ * inside that window would send two PATCHes. Here the second would succeed rather than 404,
+ * which is harmless — but it also means the guard costs nothing to have.
+ */
+export const editAssignment = createAsyncThunk<
+  Shift,
+  {
+    siteId: string;
+    shiftId: string;
+    assignmentId: string;
+    taskName?: string;
+    intensity: Intensity;
+    acclimatisationDay?: number;
+  },
+  { rejectValue: { errorKey: string } }
+>("shifts/editAssignment", async (
+  { siteId, shiftId, assignmentId, taskName, intensity, acclimatisationDay },
+  { rejectWithValue },
+) => {
+  try {
+    return await updateAssignmentRequest(siteId, shiftId, assignmentId, {
+      taskName,
+      intensity,
+      acclimatisationDay,
+    });
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: ({ assignmentId }, { getState }) =>
+    (getState() as { shifts: ShiftsState }).shifts.savingAssignmentId !== assignmentId,
+});
+
 export const createShift = createAsyncThunk<
   Shift,
   { siteId: string; startsAt: string; endsAt: string; assignments: ShiftAssignmentInput[] },
@@ -225,6 +270,21 @@ const shiftsSlice = createSlice({
         state.requestId = action.payload?.requestId ?? null;
       })
 
+      .addCase(editAssignment.pending, (state, action) => {
+        state.savingAssignmentId = action.meta.arg.assignmentId;
+        state.errorKey = null;
+      })
+      .addCase(editAssignment.fulfilled, (state, action) => {
+        state.savingAssignmentId = null;
+        // Replaced wholesale from the server's answer. Patching our own copy would leave two
+        // versions of the truth one refresh apart.
+        const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);
+        if (index !== -1) state.shifts[index] = action.payload;
+      })
+      .addCase(editAssignment.rejected, (state, action) => {
+        state.savingAssignmentId = null;
+        state.errorKey = action.payload?.errorKey ?? "errors.unknown";
+      })
       .addCase(createShift.pending, (state) => {
         state.creating = true;
       })

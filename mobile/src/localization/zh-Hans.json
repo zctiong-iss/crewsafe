@@ -206,7 +206,15 @@
       "intensityRequired": "请选择作业强度。",
       "acclimatisationRange": "请输入 1 至 7 之间的整数，或留空。",
       "checkFields": "上方仍有内容需要修改，红色边框的输入框即为待修正项。"
-    }
+    },
+    "editAssignment": "编辑详情",
+    "editTitle": "编辑工人详情",
+    "saving": "保存中…",
+    "acclimatisationLabel": "适应期天数（1–7，可选）",
+    "notEditable": "该班次已结束，无法再编辑。",
+    "editActiveTitle": "该班次正在进行",
+    "editActiveBody": "现在更改强度会改变该工人当前遵循的高温规定。是否继续？",
+    "editActiveConfirm": "仍然保存"
   },
   "weather": {
     "title": "环境状况",

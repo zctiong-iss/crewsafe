@@ -13,6 +13,7 @@ import java.util.UUID;
 
 /**
  * @author Abu Bakar
+ * @author Justin Chua
  */
 public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 

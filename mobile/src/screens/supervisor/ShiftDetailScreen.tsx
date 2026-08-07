@@ -14,7 +14,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -25,13 +25,15 @@ import AppSafeView from "@/components/views/AppSafeView";
 import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import ShiftStatusPill from "@/components/shifts/ShiftStatusPill";
+import EditAssignmentSheet from "@/components/shifts/EditAssignmentSheet";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { removeShift } from "@/store/reducers/shiftsSlice";
+import { editAssignment, removeShift } from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import type { ShiftAssignment } from "@/types/domain";
 import type { ShiftsStackParamList } from "@/navigation/types";
 
 export default function ShiftDetailScreen() {
@@ -47,6 +49,24 @@ export default function ShiftDetailScreen() {
   );
   const workers = useAppSelector((state) => state.shifts.workers);
   const deletingId = useAppSelector((state) => state.shifts.deletingId);
+  const savingAssignmentId = useAppSelector((state) => state.shifts.savingAssignmentId);
+
+  const [editing, setEditing] = useState<ShiftAssignment | null>(null);
+
+  /**
+   * Whether this shift may still be corrected (SCRUM-266).
+   *
+   * `CLOSED` and a past `endsAt` are both checked because they are not the same fact: nothing
+   * moves a shift to `CLOSED` on a timer, so status alone would leave yesterday's shifts
+   * looking editable. The server refuses either way — this only decides what to offer.
+   */
+  const editability = useMemo(() => {
+    if (!shift) return { editable: false, running: false };
+    const ended = shift.status === "CLOSED" || new Date(shift.endsAt).getTime() <= Date.now();
+    const running =
+      !ended && new Date(shift.startsAt).getTime() <= Date.now();
+    return { editable: !ended, running };
+  }, [shift]);
 
   /** True while the confirmation dialog is on screen. See `onDelete`. */
   const confirmOpen = useRef(false);
@@ -194,6 +214,16 @@ export default function ShiftDetailScreen() {
                 </AppText>
               </View>
 
+              {editability.editable ? (
+                <AppButton
+                  title={t("shifts.editAssignment")}
+                  variant="secondary"
+                  loading={savingAssignmentId === assignment.id}
+                  onPress={() => setEditing(assignment)}
+                  style={styles.editButton}
+                />
+              ) : null}
+
               {assignment.acclimatisationDay !== null ? (
                 <View
                   style={[
@@ -214,6 +244,14 @@ export default function ShiftDetailScreen() {
           ))
         )}
 
+        {/* Stated rather than left to be inferred from a missing button. A supervisor who
+            cannot find the edit control should be told the shift is over, not left hunting. */}
+        {!editability.editable ? (
+          <AppText variant="caption" tone="secondary" style={styles.block}>
+            {t("shifts.notEditable")}
+          </AppText>
+        ) : null}
+
         <AppButton
           title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}
           variant="danger"
@@ -222,6 +260,22 @@ export default function ShiftDetailScreen() {
           style={styles.block}
         />
       </ScrollView>
+
+      <EditAssignmentSheet
+        visible={editing !== null}
+        assignment={editing}
+        workerName={editing ? workerNameFor(editing.workerId) : ""}
+        shiftIsRunning={editability.running}
+        saving={savingAssignmentId !== null}
+        onCancel={() => setEditing(null)}
+        onSave={(values) => {
+          if (!editing) return;
+          void dispatch(
+            editAssignment({ siteId, shiftId, assignmentId: editing.id, ...values }),
+          );
+          setEditing(null);
+        }}
+      />
     </AppSafeView>
   );
 }
@@ -261,6 +315,9 @@ const styles = StyleSheet.create({
     marginTop: vs(10),
     padding: s(8),
     alignSelf: "flex-start",
+  },
+  editButton: {
+    marginTop: vs(10),
   },
   block: {
     marginTop: vs(12),

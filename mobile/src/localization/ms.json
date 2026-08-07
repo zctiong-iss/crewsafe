@@ -207,7 +207,15 @@
       "intensityRequired": "Pilih satu keamatan kerja.",
       "acclimatisationRange": "Masukkan nombor bulat dari 1 hingga 7, atau biarkan kosong.",
       "checkFields": "Beberapa butiran di atas perlu diperhatikan. Medan bergaris merah menunjukkan apa yang perlu dibetulkan."
-    }
+    },
+    "editAssignment": "Sunting butiran",
+    "editTitle": "Sunting butiran pekerja",
+    "saving": "Menyimpan…",
+    "acclimatisationLabel": "Hari penyesuaian (1–7, pilihan)",
+    "notEditable": "Syif ini telah tamat dan tidak boleh disunting lagi.",
+    "editActiveTitle": "Syif ini sedang berjalan",
+    "editActiveBody": "Menukar intensiti sekarang mengubah peraturan haba yang sedang dipatuhi pekerja ini. Teruskan?",
+    "editActiveConfirm": "Simpan juga"
   },
   "weather": {
     "title": "Keadaan",
