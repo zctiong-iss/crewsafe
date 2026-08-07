@@ -39,6 +39,7 @@ assert_contains ".github/workflows/terraform-apply.yml" "preflight-iam-policy-ac
 assert_contains ".github/workflows/terraform-plan.yml" "iam_policy_plan_role_arn"
 assert_contains ".github/workflows/terraform-apply.yml" "iam_policy_apply_role_arn"
 assert_contains ".github/scripts/terraform/preflight-iam-policy-account.sh" "terraform -chdir=\"\$tf_root\" state list"
+assert_contains ".github/scripts/terraform/preflight-iam-policy-account.sh" "No state file was found"
 assert_contains ".github/scripts/terraform/preflight-iam-policy-account.sh" "NoSuchEntity"
 assert_not_contains ".github/scripts/terraform/preflight-iam-policy-account.sh" "terraform import"
 assert_not_contains ".github/scripts/terraform/preflight-iam-policy-account.sh" "detach-role-policy"
