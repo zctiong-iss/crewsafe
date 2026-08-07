@@ -19,7 +19,12 @@ fail() {
   || fail "normal apply role ARN is not the approved target"
 
 state_error="$(mktemp)"
-if ! state_resources="$(terraform -chdir="$tf_root" state list 2>"$state_error")"; then
+if state_resources="$(terraform -chdir="$tf_root" state list 2>"$state_error")"; then
+  :
+elif grep -Fq 'No state file was found' "$state_error"; then
+  state_resources=""
+  echo "::notice::IAM policy-management preflight found no component state file; treating the fresh account as empty."
+else
   error_context="$(sed -n '1,3p' "$state_error" 2>/dev/null || true)"
   rm -f "$state_error"
   fail "unable to inspect reviewed remote state${error_context:+: $error_context}"
