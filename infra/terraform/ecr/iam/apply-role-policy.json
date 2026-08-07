@@ -137,7 +137,8 @@
       "Action": [
         "inspector2:BatchGetAccountStatus",
         "inspector2:Disable",
-        "inspector2:Enable"
+        "inspector2:Enable",
+        "inspector2:ListAccountPermissions"
       ],
       "Resource": "*"
     },
