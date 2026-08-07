@@ -7,8 +7,15 @@ local AWS profile, download remote state, or save a plan on a workstation.
 ## Before the first plan
 
 The account must already contain the GitHub OIDC provider, the normal Terraform roles,
-and the externally bootstrapped policy-management roles. Confirm the registry entry has
-all four exact role ARNs for the selected account:
+and the externally bootstrapped policy-management roles. The copyable bootstrap artifacts
+are in [`infra/terraform/iam-policy-management/bootstrap/`](../../infra/terraform/iam-policy-management/bootstrap/):
+render `trust-policy.json.tftpl`, `plan-role-policy.json.tftpl`, and
+`apply-role-policy.json.tftpl` with the selected account ID and exact
+`CREWSAFE_GITHUB_OIDC_MAIN_SUBJECT`, then follow the installation commands in its
+`README.md`. These are standalone customer-managed permission policies attached to the
+dedicated roles, not inline policies.
+
+Confirm the registry entry has all four exact role ARNs for the selected account:
 
 ```json
 {
@@ -29,15 +36,18 @@ The dedicated roles also need the existing least-privilege remote-state permissi
 `crewsafe/iam-policy-management/shared-dev.tfstate`: plan needs state reads and native
 lock-object management, while apply needs the corresponding state-object write access.
 Scope these S3 permissions to the selected account's CrewSafe state bucket and
-`crewsafe/*` prefix; do not grant a new account-wide backend role.
+`crewsafe/*` object prefix; the bucket-level `s3:ListBucket` grant is required by the
+existing `HeadBucket` backend inspection and does not grant object read or write access.
+Do not grant a new account-wide backend role.
 
 The expected first-account state is that all twelve policies and their twelve attachments
 are absent. Existing objects are not migrated or imported by this change.
 
 ## First provisioning
 
-1. Merge the reviewed change to `main` and dispatch **Terraform Plan** with account alias
-   `iam-policy-management-shared-dev` and operation `apply`.
+1. Merge the reviewed change to `main` and dispatch **Terraform Plan** with the registered
+   account alias (for example, `dev`), component `iam-policy-management-shared-dev`, and
+   operation `apply`.
 2. Confirm the run selects `CrewSafeGitHubTerraformIamPolicyPlanRole`, verifies the caller
    account, and reports twelve policies and twelve attachments under
    `/crewsafe/terraform/iam-policy-management/`.
