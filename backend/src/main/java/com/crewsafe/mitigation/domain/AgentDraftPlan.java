@@ -58,6 +58,7 @@ public class AgentDraftPlan {
 
     @Column(name = "approval_status")
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private ApprovalStatus approvalStatus = ApprovalStatus.PENDING;
 
     @Column(name = "created_at", nullable = false, updatable = false)

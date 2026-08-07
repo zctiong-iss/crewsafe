@@ -75,7 +75,7 @@ public class AgentDraftPlanController {
         } catch (IllegalArgumentException e) {
             log.warn("Invalid request for draft plan generation", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ErrorResponse(e.getMessage(), "invalid_request"));
+                    .body(new ErrorResponse("Invalid request parameters", "invalid_request"));
 
         } catch (Exception e) {
             log.error("Unexpected error generating draft plan", e);
