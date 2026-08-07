@@ -126,6 +126,7 @@
         "securityhub:CreateInsight",
         "securityhub:DeleteInsight",
         "securityhub:GetInsight",
+        "securityhub:GetInsights",
         "securityhub:ListInsights",
         "securityhub:UpdateInsight"
       ],
