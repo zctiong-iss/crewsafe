@@ -48,6 +48,9 @@ public final class AuditEventType {
     /** A worker was taken off a shift (SCRUM-159/160-fix). */
     public static final String SHIFT_ASSIGNMENT_REMOVED = "SHIFT_ASSIGNMENT_REMOVED";
 
+    /** A worker appended a pre-shift readiness answer (SCRUM-163). */
+    public static final String READINESS_SUBMITTED = "READINESS_SUBMITTED";
+
     /** A supervisor sent an approved safety action to a worker (SCRUM-185). */
     public static final String ACTION_DISPATCHED = "ACTION_DISPATCHED";
 
