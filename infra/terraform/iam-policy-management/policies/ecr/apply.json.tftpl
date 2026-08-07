@@ -107,6 +107,19 @@
       "Resource": "arn:aws:securityhub:ap-southeast-1:<ACCOUNT_ID>:hub/default"
     },
     {
+      "Sid": "CreateInspectorServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "inspector2.amazonaws.com"
+        }
+      }
+    },
+    {
       "Sid": "ManageSecurityHubInsight",
       "Effect": "Allow",
       "Action": [
