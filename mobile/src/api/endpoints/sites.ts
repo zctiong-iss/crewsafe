@@ -1,3 +1,8 @@
+/**
+ * The sites a user may reach. A real endpoint, filtered by membership server-side.
+ *
+ * @author Justin Chua
+ */
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";
 import { mockAccessibleSites } from "../mock/sites";

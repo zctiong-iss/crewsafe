@@ -42,6 +42,11 @@ app:
     api-key: ${NEA_API_KEY:}
     connect-timeout: ${NEA_CONNECT_TIMEOUT:5s}
     read-timeout: ${NEA_READ_TIMEOUT:10s}
+    # Retry only temporary transport, rate-limit, and server failures. Backoff is bounded so
+    # one scheduled poll cannot wait indefinitely when data.gov.sg is unavailable.
+    max-attempts: ${NEA_MAX_ATTEMPTS:3}
+    initial-backoff: ${NEA_INITIAL_BACKOFF:250ms}
+    max-backoff: ${NEA_MAX_BACKOFF:2s}
 
   weather:
     data:
@@ -60,6 +65,31 @@ app:
       interval: ${WEATHER_INGESTION_INTERVAL:15m}
       delayed-after: ${WEATHER_DELAYED_AFTER:20m}
       stale-after: ${WEATHER_STALE_AFTER:45m}
+
+  lightning:
+    # Shares WEATHER_DATA_MODE: "live" hits the confirmed GET /weather?api=lightning
+    # endpoint, "fixture" replays the bundled scenario. One toggle for whether this
+    # instance calls real government APIs at all, matching app.weather.data.mode.
+    fixture:
+      resource: ${LIGHTNING_FIXTURE_RESOURCE:classpath:lightning/fixtures/nea-demo-replay.json}
+      loop: ${LIGHTNING_FIXTURE_LOOP:false}
+    ingestion:
+      # Opt in per environment, same reasoning as app.weather.ingestion.enabled.
+      enabled: ${LIGHTNING_INGESTION_ENABLED:false}
+      initial-delay: ${LIGHTNING_INGESTION_INITIAL_DELAY:5s}
+      # NEA refreshes lightning roughly every two minutes; a stop-work decision can't wait
+      # on WBGT's fifteen-minute cadence.
+      interval: ${LIGHTNING_INGESTION_INTERVAL:2m}
+      delayed-after: ${LIGHTNING_DELAYED_AFTER:5m}
+      stale-after: ${LIGHTNING_STALE_AFTER:15m}
+    risk:
+      # Neither figure is specified by SCRUM-170, its Jira parent, or the project plan
+      # (which only says "hold until a supervisor-confirmed all-clear, typically 30
+      # minutes"). Defaults: the common "30-30 rule" radii and that 30-minute figure as an
+      # auto-expiring window. See LightningRiskProperties.
+      stop-work-radius-km: ${LIGHTNING_STOP_WORK_RADIUS_KM:10}
+      advisory-radius-km: ${LIGHTNING_ADVISORY_RADIUS_KM:20}
+      validity-window: ${LIGHTNING_VALIDITY_WINDOW:30m}
 
   conditions:
     stream:

@@ -8,6 +8,8 @@ import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
+import com.crewsafe.site.domain.Site;
+import com.crewsafe.site.repository.SiteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,7 +17,11 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -34,6 +40,11 @@ public class ShiftService {
     private final ShiftRepository shifts;
     private final ShiftAssignmentRepository assignments;
     private final AuditService audit;
+    /** Only for the audit trail's display zone — shift logic never reads the site row. */
+    private final SiteRepository sites;
+
+    private static final DateTimeFormatter LOCAL_DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.UK);
+    private static final DateTimeFormatter LOCAL_TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.UK);
 
     public record AssignmentInput(UUID workerId, String taskName, Intensity intensity,
                                    Integer acclimatisationDay) {
@@ -54,13 +65,15 @@ public class ShiftService {
         Shift shift = shifts.save(new Shift(siteId, startsAt, endsAt));
 
         for (AssignmentInput input : assignmentInputs) {
+            guardAgainstDoubleBooking(input.workerId(), startsAt, endsAt);
             assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
                     input.intensity(), input.acclimatisationDay()));
         }
 
         UUID shiftId = shift.getId();
-        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId,
-                "Created shift for site " + siteId));
+        // Resolved now, not inside the lambda: that runs after commit, outside this transaction.
+        String detail = "Created shift for site " + siteId + " (" + localRange(siteId, startsAt, endsAt) + ")";
+        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId, detail));
 
         return shift;
     }
@@ -78,8 +91,9 @@ public class ShiftService {
 
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             shift.correctTimes(startsAt, endsAt);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId,
-                    "Corrected shift times for site " + siteId));
+            String detail = "Corrected shift times for site " + siteId
+                    + " to " + localRange(siteId, startsAt, endsAt);
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId, detail));
             return shift;
         });
     }
@@ -141,6 +155,38 @@ public class ShiftService {
     }
 
     /**
+     * The shift's range on the wall clock of the site it runs at, plus the IANA zone it was
+     * read in (ADR-0013, amended).
+     *
+     * <p>Audit rows are evidence, and evidence has to stand on its own. {@code occurredAt} is
+     * a server-side {@code Instant} and needs no help, but a reader asking "what shift was
+     * this?" would otherwise have to join back to {@code shift.starts_at} — a column holding
+     * instants derived under two different frontend rules, with nothing in the schema marking
+     * which. Naming the wall clock and the zone here makes the row answer the question by
+     * itself, and keeps it true if CrewSafe ever runs a site outside Singapore. Hence the zone
+     * comes from {@link Site#getTimezone()} rather than a constant.
+     *
+     * <p>An unknown site falls back to UTC and says so, rather than quietly asserting SGT.
+     */
+    private String localRange(UUID siteId, Instant startsAt, Instant endsAt) {
+        ZoneId zone = sites.findById(siteId)
+                .map(Site::getTimezone)
+                .map(ZoneId::of)
+                .orElse(ZoneId.of("UTC"));
+
+        ZonedDateTime start = startsAt.atZone(zone);
+        ZonedDateTime end = endsAt.atZone(zone);
+
+        // An overnight shift needs both dates, or "22:00–06:00" reads as running backwards.
+        String range = start.toLocalDate().equals(end.toLocalDate())
+                ? LOCAL_DATE.format(start) + " " + LOCAL_TIME.format(start) + "–" + LOCAL_TIME.format(end)
+                : LOCAL_DATE.format(start) + " " + LOCAL_TIME.format(start) + " – "
+                        + LOCAL_DATE.format(end) + " " + LOCAL_TIME.format(end);
+
+        return range + " " + zone.getId();
+    }
+
+    /**
      * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would
      * commit the audit row immediately, independent of the caller's own transaction — if the
      * rest of that transaction then failed to persist, the audit event would survive a
@@ -178,9 +224,24 @@ public class ShiftService {
     @Transactional
     public Optional<Shift> addAssignment(UUID siteId, UUID shiftId, AssignmentInput input) {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            guardAgainstDoubleBooking(input.workerId(), shift.getStartsAt(), shift.getEndsAt());
             assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
                     input.intensity(), input.acclimatisationDay()));
             return shift;
         });
+    }
+
+    /**
+     * SCRUM-254: a worker cannot hold two assignments whose shifts' time ranges overlap —
+     * same site or not, same shift or not — this is a domain invariant, not a per-endpoint
+     * rule, so both {@link #createShift} and {@link #addAssignment} route through here
+     * rather than each re-implementing the check. Assigning the same worker to the same
+     * shift twice is caught by this too: the shift's own range trivially overlaps itself
+     * once the first assignment exists.
+     */
+    private void guardAgainstDoubleBooking(UUID workerId, Instant startsAt, Instant endsAt) {
+        if (!assignments.findOverlapping(workerId, startsAt, endsAt).isEmpty()) {
+            throw new BadRequestException("Worker " + workerId + " already has an overlapping shift assignment");
+        }
     }
 }

@@ -28,6 +28,8 @@
  * be deciding safety policy — quietly, and in a second place that drifts from the first.
  * Delete this file when the endpoint lands; delete nothing else.
  * ────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * @author Justin Chua
  */
 import type {
   Intensity,

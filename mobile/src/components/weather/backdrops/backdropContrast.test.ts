@@ -21,6 +21,8 @@
  * A failure here is not a styling nit. It means the WBGT reading on the Conditions screen —
  * the number a supervisor decides whether work continues from — is below AA against its own
  * background.
+ *
+ * @author Justin Chua
  */
 import { BACKDROPS } from "./registry";
 import { palettes } from "@/styles/colors";

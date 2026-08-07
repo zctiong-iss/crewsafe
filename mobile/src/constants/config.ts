@@ -6,6 +6,8 @@
  * environment object — so `process.env[name]` resolves to `undefined` at runtime no matter
  * what `name` holds. That failure is silent and looks exactly like a missing `.env`, which
  * is why the lookups below are spelled out one by one instead of being generated in a loop.
+ *
+ * @author Justin Chua
  */
 import { IS_WEB } from "./constants";
 
@@ -40,6 +42,20 @@ export const config = {
 
   cognito: {
     region: process.env.EXPO_PUBLIC_COGNITO_REGION ?? "ap-southeast-1",
+    /**
+     * Where the Cognito Identity Provider API actually lives, when it is not AWS.
+     *
+     * Empty in every normal configuration, and ignored outside `__DEV__` — see
+     * `idpEndpoint()` in `auth/cognitoPasswordAuth.ts`, which is the only reader.
+     *
+     * It exists so a developer with no AWS account can still exercise the *real* token
+     * path against the `jagregory/cognito-local` emulator that `AbstractIntegrationTest`
+     * already runs: a genuine RS256 token, genuine JWKS, and therefore a genuine trip
+     * through the resource server and every `@PreAuthorize`. The alternative was a
+     * dev-only unauthenticated endpoint on the backend, which is a second way into a
+     * safety API and a much larger thing to get wrong.
+     */
+    idpEndpointOverride: process.env.EXPO_PUBLIC_COGNITO_IDP_ENDPOINT ?? "",
     issuerUri: process.env.EXPO_PUBLIC_COGNITO_ISSUER_URI ?? "",
     hostedUiDomain: process.env.EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN ?? "",
     cliClientId: process.env.EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID ?? "",

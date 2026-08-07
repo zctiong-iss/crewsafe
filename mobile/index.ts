@@ -1,3 +1,8 @@
+/**
+ * Expo's entry point. Registers the root component and nothing else.
+ *
+ * @author Justin Chua
+ */
 import { registerRootComponent } from 'expo';
 
 import App from './App';

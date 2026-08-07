@@ -20,6 +20,7 @@ jq -e '
     and (.value | keys | sort) == [
       "allow_destroy",
       "backend_strategy",
+      "execution_role_family",
       "jira_key",
       "root",
       "state_key"
@@ -28,6 +29,7 @@ jq -e '
     and (.value.root | test("^infra/terraform/[a-z0-9][a-z0-9/_-]*$"))
     and (.value.root | contains("..") | not)
     and (.value.backend_strategy | IN("self-bootstrap", "remote"))
+    and (.value.execution_role_family | IN("standard", "policy-management"))
     and (.value.state_key | test("^crewsafe/[a-z0-9][a-z0-9/_.-]*\\.tfstate$"))
     and (.value.allow_destroy | type == "boolean")
   )
@@ -51,6 +53,7 @@ state_key="$(jq -r '.state_key' <<<"$entry")"
 backend_strategy="$(jq -r '.backend_strategy' <<<"$entry")"
 jira_key="$(jq -r '.jira_key' <<<"$entry")"
 allow_destroy="$(jq -r '.allow_destroy' <<<"$entry")"
+execution_role_family="$(jq -r '.execution_role_family' <<<"$entry")"
 
 [[ "$component_root" == infra/terraform/* && "$component_root" != *".."* ]] || exit 1
 resolved="$(cd "$root/$component_root" 2>/dev/null && pwd -P)" || {
@@ -91,10 +94,12 @@ emit backend_strategy "$backend_strategy"
 emit state_key "$state_key"
 emit jira_key "$jira_key"
 emit allow_destroy "$allow_destroy"
+emit execution_role_family "$execution_role_family"
 
 if [[ -z "${GITHUB_OUTPUT:-}" ]]; then
   jq -n --arg component "$component" --arg root "$component_root" \
     --arg backend_strategy "$backend_strategy" --arg state_key "$state_key" \
     --arg jira_key "$jira_key" --argjson allow_destroy "$allow_destroy" \
-    '{terraform_component:$component,root:$root,backend_strategy:$backend_strategy,state_key:$state_key,jira_key:$jira_key,allow_destroy:$allow_destroy}'
+    --arg execution_role_family "$execution_role_family" \
+    '{terraform_component:$component,root:$root,backend_strategy:$backend_strategy,state_key:$state_key,jira_key:$jira_key,allow_destroy:$allow_destroy,execution_role_family:$execution_role_family}'
 fi

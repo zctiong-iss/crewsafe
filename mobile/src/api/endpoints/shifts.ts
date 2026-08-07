@@ -14,6 +14,8 @@
  *
  * Every one of them answers 403 — never 404 — for a site the caller does not belong to.
  * Distinguishing "does not exist" from "not yours" would leak which sites exist.
+ *
+ * @author Justin Chua
  */
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";

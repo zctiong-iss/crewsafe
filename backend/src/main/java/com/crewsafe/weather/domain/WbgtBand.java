@@ -26,6 +26,8 @@ import java.math.BigDecimal;
  * <p>Boundaries are half-open — a reading of exactly 32.0 is {@code BAND_32_TO_BELOW_33}, not
  * {@code BAND_31_TO_BELOW_32}. That matters at the boundary and nowhere else, which is
  * precisely why it is stated rather than left to whoever reads the comparison next.
+ *
+ * @author Justin Chua
  */
 public enum WbgtBand {
 

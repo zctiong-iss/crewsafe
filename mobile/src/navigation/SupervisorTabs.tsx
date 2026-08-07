@@ -1,3 +1,10 @@
+/**
+ * What a SUPERVISOR, SAFETY_MANAGER or ADMIN sees. No My shift and no Alerts —
+ * `/shifts/me` is scoped to the caller's own assignment and the dispatch inbox is
+ * WORKER-only, so both would be dead ends rather than merely empty.
+ *
+ * @author Justin Chua
+ */
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";

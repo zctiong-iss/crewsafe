@@ -20,6 +20,8 @@
  * Both are the groundwork SCRUM-130 (offline queueing) builds on. That story is out of
  * scope here, but the ticket is explicit that the key must not be skipped now, because
  * retrofitting one onto already-queued items is not possible.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";

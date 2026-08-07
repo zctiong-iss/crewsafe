@@ -175,6 +175,252 @@ exists to avoid ([ADR 0002](../docs/adr/0002-cookie-free-bearer-authentication.m
 because it is fenced to development and to synthetic accounts. The password lives in form
 state that dies with the screen — never Redux, never persisted, never logged.
 
+### Signing in: step by step
+
+There are two routes to a real token. **Route A needs no AWS account** and is what the
+screenshots in this README were taken with; Route B is the shared dev pool.
+
+Whichever you use, one rule catches everybody:
+
+> **Restart Metro with `npm run start:clear` after editing `.env`.** Metro inlines
+> `EXPO_PUBLIC_*` at bundle time by text substitution. A running Metro keeps serving the old
+> values, and the symptom is a config error naming a variable you can see is set.
+
+---
+
+#### Route A — against the local emulator (no AWS account)
+
+Two commands, from the repository root and then `mobile/`:
+
+```bash
+./local/seed-cognito-local.sh --restart
+cd mobile && npm run start:clear
+```
+
+`--restart` re-seeds the pool, writes `mobile/.env` for `cognito-password`, drops the
+database, relaunches the backend and waits for the first NEA ingestion before it returns.
+It is one step precisely because doing it by hand is three that must not be interleaved —
+see the warning below.
+
+Metro is deliberately **not** restarted for you: it is usually already running in a terminal
+you are watching, and killing it out from under you would be worse than telling you.
+
+<details>
+<summary>Doing it by hand, or for the hosted UI</summary>
+
+```bash
+./local/seed-cognito-local.sh --reset-db      # or: --env hosted-ui
+```
+
+It prints an `export` block for the backend and, when `--env` is not used, two blocks to
+copy into `mobile/.env`. Start the backend with either the printed lines or, without
+retyping anything:
+
+```bash
+cd backend && source ../local/.cognito-local/backend-env.sh && ./mvnw spring-boot:run
+```
+
+In **PowerShell** — where `&&` is a parse error in 5.1, `source` does not exist, and
+`./mvnw` runs the shell script rather than `mvnw.cmd` — the seed script writes a twin file
+for exactly this:
+
+```powershell
+. .\local\.cognito-localackend-env.ps1
+cd backend
+.\mvnw.cmd spring-boot:run
+```
+
+The seed script itself is bash. Run it from Git Bash, or from PowerShell as
+`bash ./local/seed-cognito-local.sh --restart`.
+
+Wait for `NEA weather ingestion completed`. `WEATHER_INGESTION_ENABLED=true` is in that
+block and is the point of the exercise: without it the scheduler never runs,
+`weather_observation` stays empty, and every site 404s.
+
+The two `.env` blocks differ only in a few lines and **the wrong one fails much later**, at
+sign-in, with an unrelated-looking error. `--env password` and `--env hosted-ui` write the
+file for you and keep a `.env.bak`; prefer them.
+
+`10.0.2.2` for the emulator, `localhost` for the browser — the browser is on this machine,
+the emulator is not. On a physical phone use your LAN IP for both. Hosted UI runs under
+`npm run web:pkce`, not `start:clear`.
+
+</details>
+
+**Sign in.** All seven demo accounts are seeded, with the same roles and site codes
+`AbstractIntegrationTest` uses. Every one takes the password `Test-Password-2026!`.
+
+| Username | Role | Sites | Tabs |
+|---|---|---|---|
+| `worker1` `worker2` `worker3` | WORKER | Bishan | My shift · Alerts · Weather · Profile |
+| `supervisor1` | SUPERVISOR | Bishan | Shifts · Weather · Profile |
+| `supervisor2` | SUPERVISOR | NUS Campus | Shifts · Weather · Profile |
+| `manager1` | SAFETY_MANAGER | **both** | Shifts · Weather · Profile |
+| `admin1` | ADMIN | **none** | Shifts · Weather · Profile |
+
+Pick by what you need to look at:
+
+- **The Heat conditions card** is on *My shift*, which is WORKER-only — use `worker1`.
+- **Two sites in the picker** needs `manager1`; a supervisor sees only their own.
+- **The empty-membership state** is `admin1`, who holds every permission a supervisor does
+  but belongs to no site. That is the account that catches code assuming a membership exists.
+
+Only a WORKER gets *My shift* and *Alerts*. `/shifts/me` is scoped to the caller's own
+assignment and 403s for anyone else, and the dispatch inbox is WORKER-only, so those tabs
+would be dead ends rather than merely empty — see `SupervisorTabs.tsx`.
+
+> **Re-seeding invalidates a running stack — all three must move together.** Each seed mints
+> a new pool with new client ids and new Cognito subjects, and deletes the previous one. So
+> after any re-seed the backend, `mobile/.env` and Metro must all move to it. Leaving any one
+> behind produces a misleading error: a deleted client id reads as *"the app is not
+> configured"*, naming a variable you can see is set.
+>
+> `--restart` exists to make that one action rather than three. It still cannot restart
+> Metro, which is why `start:clear` is the second command above and not an afterthought.
+>
+> `--reset-db` is part of this, not optional. A Cognito subject is immutable, so
+> `DemoDataSeeder` refuses to remap `worker1` onto a new one and the backend will not start,
+> with *"Application-user mapping conflicts with an existing immutable Cognito subject"*.
+> That is the guard working correctly.
+
+**Hosted UI works locally too**, which is worth knowing because it is not obvious:
+cognito-local implements `/oauth2/authorize`, renders a real username and password form and
+honours PKCE. `signInWithPkce` already reads its domain from the environment, so this needs
+no code change at all — only a client with `http://localhost:5173/callback` registered,
+which the seed script creates.
+
+---
+
+#### Route B — against the shared dev pool (needs AWS)
+
+**1.** Get the non-secret ids (needs `gh` authenticated against the repo):
+
+```bash
+gh variable get CREWSAFE_SHARED_COGNITO_JSON --json value --jq .value \
+  | jq '.accounts.dev | {region, hosted_ui_url, web_client_id, cli_client_id}'
+```
+
+**2.** Get the synthetic users' passwords from AWS Secrets Manager — see the
+[root README](../README.md#cognito).
+
+**3.** Fill `mobile/.env`. Leave `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT` **empty**; it is what
+sends `cognito-password` to a local emulator instead of AWS.
+
+| Mode | Needs |
+|---|---|
+| `cognito-password` | `REGION`, `CLI_CLIENT_ID` |
+| `cognito-pkce` | `HOSTED_UI_DOMAIN`, `WEB_CLIENT_ID` |
+
+**4.** Start the backend with `./run.sh --account dev` from the repository root, which
+supplies every `APP_COGNITO_*` value from the same shared config.
+
+**5.** Sign in with a synthetic username and its Secrets Manager password.
+
+---
+
+#### Why hosted UI is web-only, in either route
+
+`signInWithPkce` throws `pkceUnavailableInExpoGo` before it opens a browser. Expo Go's
+redirect resolves to `exp://…`, which is not a registered callback on any client — the
+mobile client's is pinned to `crewsafe://callback`, a scheme only a native build can
+register. So the flow cannot complete in Expo Go on any amount of client-side effort.
+
+`npm run web:pkce` serves on 5173 because that is already a registered callback and an
+allowed CORS origin. A phone needs a development build.
+
+#### When something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| *"The app is not configured. Missing: …"* naming a variable you have set | Metro is serving a pre-`.env` bundle. `npm run start:clear`. |
+| *"Your sign-in worked, but this account has not been set up"* | A 401 on `/api/v1/me` — the token was rejected **or absent**. Check the client id is in `APP_COGNITO_CLIENT_IDS` and that the backend's issuer matches the pool. |
+| Backend will not start, *"conflicts with an existing immutable Cognito subject"* | You re-seeded without `--reset-db`. |
+| Sign-in fails after a re-seed, or the client id "is missing" | A re-seed mints a **new pool**. The backend, `mobile/.env` and Metro must all be moved to it together — see the warning below. |
+| Weather shows *"No reading yet"* | Ingestion is off, or has not run. `WEATHER_INGESTION_ENABLED=true`. |
+| `redirect_mismatch` on hosted UI | Serving on a port other than 5173, or the callback is not registered on that client. |
+
+### Verifying the live path without AWS
+
+`cognito-password` and `cognito-pkce` both need the shared dev pool, which means `gh`
+authenticated against the repo *and* the synthetic users' passwords from AWS Secrets Manager.
+Without an AWS account you cannot sign in at all — so every screen falls back to fixtures and
+nothing that reads live data can be checked.
+
+[`local/seed-cognito-local.sh`](../local/seed-cognito-local.sh) replaces the pool, **not the
+security**. It runs `jagregory/cognito-local` — the same digest-pinned image
+`AbstractIntegrationTest` uses — which is the real Cognito Identity Provider HTTP API,
+signing genuine RS256 tokens and serving a genuine JWKS. Tokens it mints go through the
+resource server, the issuer and client-id checks and every `@PreAuthorize` for real. Only the
+issuer is local.
+
+See **Route A** above for the steps. **The seam it relies on** is `EXPO_PUBLIC_COGNITO_IDP_ENDPOINT`, read only by
+`idpEndpoint()` in [`auth/cognitoPasswordAuth.ts`](src/auth/cognitoPasswordAuth.ts). It is
+gated on `__DEV__` rather than on the auth mode, deliberately: this is the value that decides
+*who signs the token the backend will trust*, so no configuration may redirect a release
+bundle's authentication, whatever mode it thinks it is in. `cognitoPasswordAuth.test.ts`
+asserts that.
+
+The alternative considered was a dev-only unauthenticated endpoint on the backend. It was
+rejected: a second way into a safety API is a much larger thing to get wrong than one string.
+
+#### A defect this turned up
+
+cognito-local omits `ExpiresIn` from its `InitiateAuth` response. AWS always sends it, so
+this had never been exercised — and the failure was silent and pointed somewhere else
+entirely:
+
+```
+undefined * 1000       -> NaN
+saveSession writes     -> "NaN"
+loadSession rejects it -> the session reads as corrupt, correctly
+the interceptor        -> sends NO Authorization header
+the server             -> 401
+the app                -> "this account has not been set up for CrewSafe yet"
+```
+
+A missing number in the login response surfaced to the worker as a **provisioning problem
+with their account**. `expiresInSeconds()` now defaults to an hour; the worst case is one
+early re-login, against a sign-in that silently authenticated nothing. Found only because the
+backend's `DEBUG` log said `Set SecurityContextHolder to anonymous SecurityContext` — the
+request had no token at all, rather than a rejected one.
+
+#### What is live, and what is still a fixture
+
+| Screen | Element | Outside mock mode |
+|---|---|---|
+| Weather | Everything — WBGT, band, metrics, station, freshness | **Live NEA** |
+| My shift | Heat conditions card | **Live NEA** |
+| My shift | Shift, task, intensity, acclimatisation | Fixture — `/shifts/me` does not exist |
+| My shift | Lightning banner | Fixture — `/lightning` does not exist |
+| My shift | Heat guidance actions | Absent — see below |
+
+**The shift screen is a hybrid while `/shifts/me` is missing.** Its heat card needs a site id,
+and the fixture shift's is `11111111-…`, which no deployment has — `DemoDataSeeder` generates
+site ids, so asking the live endpoint about it returns 403, not a reading. Outside mock mode
+`loadConditions` in [`safetySlice`](src/store/reducers/safetySlice.ts) therefore resolves the
+site from the real `GET /api/v1/sites`, as `weatherSlice` already does. So the card shows a
+live reading for the worker's **first accessible site**, not for the site the fixture names.
+
+Honest for verification and wrong for production — survivable only because the whole shift
+above it is a fixture too. When `/shifts/me` lands this collapses to one line: pass
+`shift.siteId` and delete the lookup.
+
+The policy is `null` there rather than the mock's. Pairing a real reading with a fixture
+obligation would be worse than having none — it would look authoritative and be invented.
+Nothing renders it today anyway: `features.heatGuidanceCard` is off.
+
+#### Verified on the emulator
+
+Signed in as `manager1`, then `worker1`, against live NEA data ingested that minute:
+
+- **Weather** — WBGT 29.2 °C, band "Below 31°C" from the server, station S128, observed 09:30
+  / received 09:42, a green **Live** badge, and no "Simulated data" notice. The SCRUM-209
+  Part 3 backdrop renders over it unchanged.
+- **My shift** — Heat conditions reads the same **29.2 °C WBGT** with a **Live** badge, while
+  the stop-work banner and task stay fixtures.
+
+Both readings match `GET /api/v1/sites/{siteId}/weather/latest` for Bishan.
+
 ---
 
 ## What was built
@@ -754,6 +1000,209 @@ per-user change exists to close.
 attributing it to anyone. Nothing in persisted state can name the person it belonged to,
 precisely because `auth` is not persisted. Guessing would be wrong on a shared phone, so one
 person re-sets one switch once.
+
+---
+
+## SCRUM-261 — Live lightning, and a source toggle
+
+Plan: [`docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md`](../docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md).
+
+The lightning banner runs on real NEA strike data outside `mock` auth mode. A dev-only radio
+switches it back to the fixture, and the two render identically.
+
+### The endpoint did not exist, despite the ingestion landing
+
+SCRUM-170 (#106) ingests strikes and derives per-site risk correctly — but published it only on
+`ConditionsSnapshot`, carried by the conditions **SSE stream**, which is annotated
+`hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN')`. The banner is on *My shift*, which is
+**WORKER-only**. So the one role that needs the state was the one role that got a 403, and no
+amount of mobile work could fix it.
+
+`GET /api/v1/sites/{siteId}/lightning` was added in this branch, site-scoped on membership
+alone. Polled rather than streamed: ingestion runs on a two-minute cadence and the shift screen
+already refreshes every sixty seconds, so a long-lived connection buys no freshness while
+costing battery on a phone that has to last an outdoor shift.
+
+### Null means "no data", and must never become CLEAR
+
+A 404 — nothing ingested for this site, usually because the scheduler is off — comes back as
+`null` and the screen says *"Lightning data unavailable for this site."*
+
+It is emphatically not `CLEAR`. Those two render as the same absence of a warning while meaning
+opposite things, and a crew told everything is fine because a scheduler was switched off is the
+exact failure this endpoint exists to prevent. Asserted on both sides: the backend returns 404
+rather than a body, and `safety.test.ts` asserts the client returns null rather than a state.
+
+### The toggle
+
+`Live` is the default outside mock mode, because live *is* the behaviour now. `Simulated` exists
+so a reviewer can exercise all three states on a clear day, which no live feed will oblige them
+with. Absent in `mock` auth mode — that mode has no network, so "live" would be a button that
+changed nothing — and compiled out of release by `__DEV__`.
+
+The scenario radios are **disabled** under Live rather than hidden. A simulated scenario has no
+meaning against a live feed, and a radio that still moves while changing nothing on screen is
+how someone concludes the live data is broken.
+
+`LightningBanner` itself is untouched. Live and Simulated differ only in where the data came
+from — verified by comparing screenshots of the same `CLEAR` state, which were identical but
+for the timestamp and countdown.
+
+### The bug the unit tests could not see
+
+The first version passed `shift.siteId` to `fetchLightningRisk` and got a **403 on device**.
+`fetchMyShift` is still mocked, and its fixture site id is one `DemoDataSeeder` never creates,
+so every site-scoped endpoint rejects it. SCRUM-209 had already fixed this for the heat reading;
+lightning walked into it again.
+
+The unit tests could not catch it because they pass a site id in directly. The fix is one shared
+`liveSiteId()` resolver used by both calls — rather than the same fix applied twice and
+forgotten a third time — plus two regression tests asserting lightning is asked about the real
+site and not asked at all when the worker has no membership.
+
+### Verified on device
+
+Signed in as `worker1` through `cognito-password`, with `LIGHTNING_INGESTION_ENABLED=true`
+against the real NEA feed:
+
+- **Live** — "No lightning risk / Assessed clear at 14:42 / Refreshes in 24 min", matching
+  `GET /lightning` exactly (`state: CLEAR`, `freshness: LIVE`, real `validUntil`).
+- **Simulated** — scenario radios re-enable; the SCRUM-260 heat override reappears under a
+  simulated stop-work.
+- **Live vs Simulated at `CLEAR`** — identical but for the timestamp and countdown.
+
+### On SCRUM-111
+
+`WeatherQueryService` now recomputes `qualityStatus` on every read and preserves `SIMULATED` for
+fixtures. Every mobile consumer — `WbgtCard`, `FreshnessBadge`, `FreshnessNotice`, the Weather
+hero — renders it straight from the response and derives nothing, so the change flows through
+with no code change. That is the finding, recorded so the next person does not re-investigate.
+
+The open question is cadence, not correctness: the weather poll is 5 minutes and freshness now
+moves on its own, so the badge can lag by up to one interval. Measuring the thresholds before
+shortening the poll is its own story — a shorter poll costs battery on an outdoor shift.
+
+---
+
+## SCRUM-260 — The Heat conditions card stays legible during a stop-work
+
+Plan: [`docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md`](../docs/plans/SCRUM-260-heat-card-stop-work-legibility-plan.md).
+
+During a lightning stop-work the Heat conditions card dimmed to 45% opacity, so the WBGT
+reading was hardest to read at the moment the screen mattered most. The dim is gone and the
+label is rewritten. **The override itself is not gone** — it moved entirely into words.
+
+### What changed, exactly
+
+| | Before | After |
+|---|---|---|
+| Card opacity during stop-work | `0.45` (skipped in high contrast) | **1** — no dim in any mode |
+| Label key | `wbgt.superseded` | `wbgt.stopWorkOverride` |
+| Label text | "Superseded by the lightning stop-work" | "Heat rules paused." |
+| Tone | `danger` | `danger` — unchanged |
+
+Nothing else moved: same fields, freshness badge, layout, font, and the same `stopWorkActive`
+expiry logic feeding it.
+
+### Why the dim went, in the code's own words
+
+`WbgtCard` already skipped the dim in high contrast, because *"at 45% opacity black-on-white
+falls to roughly 3.5:1 — under AA — so the dim would defeat the exact mode a worker turned on
+to read the screen in sunlight."* That argument does not stop at high contrast: a phone at
+arm's length in Singapore daylight is the ordinary case, not the accessible one.
+
+`HeatGuidance` makes the second half independently: *"Dimming alone is ambiguous — a worker
+could read a faded list as 'loading' or as a rendering quirk and follow it anyway."*
+
+So the dim was never the mechanism. It was decoration on top of the mechanism, and it cost
+legibility on the one number the card exists to show.
+
+### Why not "Lightning Alert — seek shelter immediately"
+
+That was the suggested wording and it was declined, for two reasons.
+
+It **duplicates the banner directly above it**, which already says "STOP WORK / Lightning near
+this site. Seek proper shelter immediately." in much larger type. The card's single line would
+be spent repeating what the worker has just read.
+
+More seriously, it **says nothing about the heat plan**. FR-12a requires that a stop-work
+visibly override the heat plan until cleared, and with `features.heatGuidanceCard` off this
+label is the only place the app says so in words — recorded earlier in this README as
+load-bearing. Replacing it with a shelter instruction would have quietly dropped FR-12a.
+
+### One line at every text size, which decided the final wording
+
+The first draft wrapped to two lines at Default, which looks untidy on a card whose other rows
+("Kerb laying, east verge") are single lines. Measured on a 448 dp device — ~371 dp of text
+width, `label` at 14 × `s()` × `fontScale` — the one-line budget is about 55 characters at
+Small, 47 at Default, 39 at Large and **26 at Extra large**. The 26 was measured on device, not
+predicted; an intermediate 34-character draft held three of the four sizes and broke at Extra
+large with "paused." alone on line two.
+
+At 26 characters English cannot carry both *take shelter* and *the heat plan is suspended*, so
+one had to go — and it had to be the shelter instruction, because the banner immediately above
+already says "Seek proper shelter immediately" in far larger type while **nothing else anywhere
+states the override**. Dropping the duplicate leaves the screen saying everything it said
+before. Dropping the override would have lost FR-12a.
+
+That is the same test that rejected the originally suggested wording, applied the other way
+round: that one kept the duplicate and dropped the unique part.
+
+"Superseded" also goes, being a register mismatch on a screen read across a wide range of
+literacy in seven languages.
+
+Verified one line on device at all four English sizes, and in Burmese — the widest script, with
+a 1.35 line-height boost — at Extra large.
+
+### The FR-12a guard
+
+`WbgtCard.test.tsx` is new and exists for one reason: **this is UI whose absence is invisible.**
+Delete the line and the card still renders, the reading is still correct, the screen still looks
+tidy — and the app has silently stopped meeting a safety requirement. Six tests assert the line
+appears when a stop-work is in force, does *not* appear otherwise, survives high contrast, and
+that the card renders identically with and without a stop-work — the last one being what fails
+if someone reintroduces a dim to "make it clearer".
+
+### Two translation defects this turned up, and the check that now catches them
+
+Both were mine, in the new string, and **the locale parity check passed on both**:
+
+- **`zh-Hans` contained traditional Han** — 難 and 電 beside correctly simplified 规定暂停执行.
+  A block test can never catch this: simplified and traditional share the Han block.
+- **`my` contained U+3037**, an ideographic symbol, inside Burmese text. It sits in *CJK Symbols
+  and Punctuation* (U+3000–303F), outside the `一-鿿` Han range the check was testing.
+
+`scripts/check-locale-parity.mjs` now widens the Han range to include CJK punctuation, and adds
+a `TRADITIONAL_ONLY` sample list checked only against `zh-Hans`. Both defects were re-introduced
+deliberately to confirm the check fails on them by name, then reverted. This is the second time
+a wrong-script string has shipped into a locale file, which is why the guard was widened rather
+than the string simply fixed.
+
+### Verified on device
+
+Worker in `cognito-password`, live NEA data:
+
+- **Stop work** — card at full opacity, 30.6 °C WBGT crisp, override line in red.
+- **Advisory** — no override line, card unchanged.
+- **Every English text size** — Small, Default, Large and Extra large all render the override
+  on **one line**.
+- **Burmese at Extra large** — one line, the hardest case in the set.
+
+### Scope
+
+Workers only. Every non-WORKER role goes to `SupervisorTabs`, which has no *My shift*; the
+Weather screen's hero card has no lightning context and was never dimmed. A heat card was
+deliberately **not** added to the supervisor Weather screen — a supervisor reading conditions
+for a site they are not standing on should not be handed a personal shelter instruction.
+
+Both auth routes are covered by construction: this is a rendering change in a shared component
+and nothing here branches on auth mode.
+
+### Reverting
+
+Restore `opacity: superseded && !theme.highContrast ? 0.45 : 1` on the card's outer `View`, and
+rename `wbgt.stopWorkOverride` back to `wbgt.superseded` in all seven locales with the old copy.
+`WbgtCard.test.tsx` will fail on the first of those, which is the point.
 
 ---
 

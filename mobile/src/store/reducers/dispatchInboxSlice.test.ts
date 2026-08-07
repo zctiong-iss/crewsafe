@@ -4,6 +4,8 @@
  * These decide the number on the Alerts badge, so a wrong answer here is a wrong count of
  * outstanding safety instructions. Each case below is a decision recorded in the plan rather
  * than an incidental behaviour, which is why they are asserted individually.
+ *
+ * @author Justin Chua
  */
 import reducer, {
   canSwipeDismiss,

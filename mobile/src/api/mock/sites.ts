@@ -4,6 +4,8 @@
  * Unlike the weather and lightning mocks, this endpoint is REAL — `SiteController`
  * implements it, filtered by membership. Only `mock` auth mode needs this, and only because
  * there is no backend to ask. The fixtures are the same two sites `DemoDataSeeder` creates.
+ *
+ * @author Justin Chua
  */
 import { DEMO_SITES } from "@/auth/demoUsers";
 import type { Site } from "@/types/domain";

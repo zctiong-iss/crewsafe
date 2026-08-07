@@ -20,6 +20,8 @@
  * The Expo Go case is detected from the redirect URI itself rather than by sniffing the
  * runtime: if `makeRedirectUri` hands back an `exp://` URL, this flow cannot succeed, and
  * saying so up front is far kinder than Cognito's bare `redirect_mismatch` page.
+ *
+ * @author Justin Chua
  */
 import { AuthRequest, exchangeCodeAsync, makeRedirectUri } from "expo-auth-session";
 import { config, pkceClientId } from "@/constants/config";

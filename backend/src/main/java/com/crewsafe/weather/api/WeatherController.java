@@ -17,7 +17,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Site-scoped weather readings consumed by the live board. */
+/** Site-scoped weather readings consumed by the live board.
+ *
+ * @author Justin Chua
+ */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/weather")
 @RequiredArgsConstructor
@@ -65,7 +68,8 @@ public class WeatherController {
              */
             WbgtBand band) {
 
-        static LatestWeatherResponse from(WeatherObservation observation) {
+        static LatestWeatherResponse from(WeatherQueryService.LatestSiteWeather latest) {
+            WeatherObservation observation = latest.observation();
             return new LatestWeatherResponse(
                     observation.getId(),
                     observation.getSiteId(),
@@ -77,7 +81,7 @@ public class WeatherController {
                     observation.getObservedAt(),
                     observation.getIngestedAt(),
                     observation.getSource(),
-                    observation.getQualityStatus(),
+                    latest.qualityStatus(),
                     observation.getStationId(),
                     WbgtBand.classify(observation.getWbgt()));
         }

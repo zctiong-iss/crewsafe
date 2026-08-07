@@ -3,11 +3,13 @@ package com.crewsafe.weather.nea;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 
 import static com.crewsafe.weather.nea.NeaApiException.Reason.HTTP;
@@ -15,9 +17,11 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.INVALID_RESPONSE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.ExpectedCount.times;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class DataGovSgNeaWeatherClientTest {
@@ -29,7 +33,7 @@ class DataGovSgNeaWeatherClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl("https://data.gov.sg.test");
         server = MockRestServiceServer.bindTo(builder).build();
-        client = new DataGovSgNeaWeatherClient(builder.build());
+        client = new DataGovSgNeaWeatherClient(builder.build(), retryProperties());
     }
 
     @Test
@@ -86,26 +90,7 @@ class DataGovSgNeaWeatherClientTest {
     void mapsStandardWeatherResponseAndJoinsReadingToStationMetadata() {
         server.expect(once(), requestTo("https://data.gov.sg.test/air-temperature"))
                 .andExpect(method(HttpMethod.GET))
-                .andRespond(withSuccess("""
-                        {
-                          "code": 0,
-                          "data": {
-                            "stations": [{
-                              "id": "S109",
-                              "deviceId": "S109",
-                              "name": "Ang Mo Kio Avenue 5",
-                              "location": {"latitude": 1.3793, "longitude": 103.85}
-                            }],
-                            "readings": [{
-                              "timestamp": "2026-07-30T08:29:00+08:00",
-                              "data": [{"stationId": "S109", "value": 28.8}]
-                            }],
-                            "readingType": "DBT 1M F",
-                            "readingUnit": "deg C"
-                          },
-                          "errorMsg": ""
-                        }
-                        """, MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess(standardTemperatureResponse(), MediaType.APPLICATION_JSON));
 
         NeaObservation result = client.fetch(NeaMetric.AIR_TEMPERATURE);
 
@@ -168,7 +153,7 @@ class DataGovSgNeaWeatherClientTest {
 
     @Test
     void exposesHttpFailuresWithoutLeakingTheResponseBody() {
-        server.expect(once(), requestTo("https://data.gov.sg.test/relative-humidity"))
+        server.expect(times(3), requestTo("https://data.gov.sg.test/relative-humidity"))
                 .andRespond(withServerError().body("upstream internals"));
 
         assertThatThrownBy(() -> client.fetch(NeaMetric.RELATIVE_HUMIDITY))
@@ -178,5 +163,59 @@ class DataGovSgNeaWeatherClientTest {
                             .hasMessageNotContaining("upstream internals");
                 });
         server.verify();
+    }
+
+    @Test
+    void retriesTemporaryServerFailureAndReturnsTheNextSuccessfulResponse() {
+        server.expect(once(), requestTo("https://data.gov.sg.test/air-temperature"))
+                .andRespond(withServerError());
+        server.expect(once(), requestTo("https://data.gov.sg.test/air-temperature"))
+                .andRespond(withSuccess(standardTemperatureResponse(), MediaType.APPLICATION_JSON));
+
+        NeaObservation result = client.fetch(NeaMetric.AIR_TEMPERATURE);
+
+        assertThat(result.readings()).singleElement()
+                .satisfies(reading -> assertThat(reading.value()).isEqualByComparingTo("28.8"));
+        server.verify();
+    }
+
+    @Test
+    void doesNotRetryAClientError() {
+        server.expect(once(), requestTo("https://data.gov.sg.test/rainfall"))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST));
+
+        assertThatThrownBy(() -> client.fetch(NeaMetric.RAINFALL))
+                .isInstanceOfSatisfying(NeaApiException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(HTTP));
+        server.verify();
+    }
+
+    private NeaApiProperties retryProperties() {
+        NeaApiProperties properties = new NeaApiProperties();
+        properties.setMaxAttempts(3);
+        properties.setInitialBackoff(Duration.ofMillis(1));
+        properties.setMaxBackoff(Duration.ofMillis(2));
+        return properties;
+    }
+
+    private String standardTemperatureResponse() {
+        return """
+                {
+                  "code": 0,
+                  "data": {
+                    "stations": [{
+                      "id": "S109",
+                      "name": "Ang Mo Kio Avenue 5",
+                      "location": {"latitude": 1.3793, "longitude": 103.85}
+                    }],
+                    "readings": [{
+                      "timestamp": "2026-07-30T08:29:00+08:00",
+                      "data": [{"stationId": "S109", "value": 28.8}]
+                    }],
+                    "readingUnit": "deg C"
+                  },
+                  "errorMsg": ""
+                }
+                """;
     }
 }

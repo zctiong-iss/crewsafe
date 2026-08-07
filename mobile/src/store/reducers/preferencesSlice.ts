@@ -20,6 +20,8 @@
  *
  * If the other three ever need per-user scope too, the shape below generalises — but that
  * is a separate decision with a real cost, not a tidy-up.
+ *
+ * @author Justin Chua
  */
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { clampFontScale, FONT_SCALE_DEFAULT } from "@/styles/theme";

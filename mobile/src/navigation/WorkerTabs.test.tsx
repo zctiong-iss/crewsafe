@@ -8,6 +8,8 @@
  * The four stacks are stubbed. This is a test about tab options, and rendering the real
  * screens would pull in navigation, polling and four screens' worth of unrelated failure
  * modes to assert on a number.
+ *
+ * @author Justin Chua
  */
 import { configureStore } from "@reduxjs/toolkit";
 import { NavigationContainer } from "@react-navigation/native";

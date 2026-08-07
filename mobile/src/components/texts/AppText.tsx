@@ -4,6 +4,8 @@
  * That is what makes the global font-size setting work: `fontScale` is applied once, in
  * this component, on top of `react-native-size-matters`' device scaling. A raw `<Text>`
  * would silently opt out of the accessibility setting, so there should be none in `src/`.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, Text, type TextProps, type TextStyle, type StyleProp } from "react-native";
 import type { FC, ReactNode } from "react";

@@ -10,6 +10,8 @@
  * map is deliberately allowed to miss: `GET /workers` returns ACTIVE workers only, so an
  * assignment referencing someone since offboarded resolves to nothing and the detail view
  * has to cope. See `workerNameFor`.
+ *
+ * @author Justin Chua
  */
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import {

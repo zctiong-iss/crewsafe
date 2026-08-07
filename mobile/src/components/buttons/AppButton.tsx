@@ -1,3 +1,9 @@
+/**
+ * The app's button. Owns its own label layout — see the note on `titleFill`, which
+ * exists because Android broke a two-word label at the space and clipped the second line.
+ *
+ * @author Justin Chua
+ */
 import {
   ActivityIndicator,
   StyleSheet,

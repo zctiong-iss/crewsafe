@@ -4,6 +4,8 @@
  * The only behaviour worth asserting is the one the plan argued about: the tick appears when
  * everything is acknowledged and not otherwise, and the bell stays underneath either way — so
  * the icon gains a mark rather than becoming a different thing.
+ *
+ * @author Justin Chua
  */
 import { configureStore } from "@reduxjs/toolkit";
 import { render } from "@testing-library/react-native";

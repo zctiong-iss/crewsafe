@@ -24,6 +24,8 @@
  * action catalogue as "a growing catalog of dispatchable actions", deliberately not an enum,
  * so the backend can add a code before this app understands it. An unrecognised code must
  * degrade to a normal card, never to a bar that counts down to a guess.
+ *
+ * @author Justin Chua
  */
 import type { ActionDispatch } from "@/types/domain";
 

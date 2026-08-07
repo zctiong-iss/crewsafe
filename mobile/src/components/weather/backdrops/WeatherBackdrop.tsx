@@ -18,6 +18,8 @@
  * the preference to on, so most workers see the still backdrop. That is why every spec is
  * authored to look finished without motion — the wash and every mote still render, fixed at
  * their base position. The still is the feature; the animation is the enhancement.
+ *
+ * @author Justin Chua
  */
 import { useEffect, useRef, useState, type FC } from "react";
 import { Animated, Easing, Platform, StyleSheet, View, type LayoutChangeEvent } from "react-native";

@@ -5,6 +5,8 @@
  * and the field value all come from one place. The error string arrives already translated
  * — the yup schemas are built inside the component with `t(...)`, so a language change
  * re-renders them (see `SignInScreen`). Nothing here holds an English default.
+ *
+ * @author Justin Chua
  */
 import { Controller, type Control, type FieldValues, type Path } from "react-hook-form";
 import { forwardRef } from "react";

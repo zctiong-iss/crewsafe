@@ -24,6 +24,8 @@
  * another language from the sign-in picker, which is reachable precisely so that a phone
  * left in an unreadable language is never a dead end. The decision is recorded in the README
  * because the failure looks like a bad translation rather than an encoding mismatch.
+ *
+ * @author Justin Chua
  */
 export const languagesArr = [
   { code: "en", label: "English" },
