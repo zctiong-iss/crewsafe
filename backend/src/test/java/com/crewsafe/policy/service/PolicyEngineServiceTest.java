@@ -68,8 +68,8 @@ class PolicyEngineServiceTest {
                 .wbgtThresholdFullLight(28.0)
                 .wbgtThresholdFullModerate(26.0)
                 .wbgtThresholdFullHeavy(24.0)
-                // Emergency
-                .wbgtEmergencyStop(30.0)
+                // Emergency (MOM Band 3: WBGT >= 33°C)
+                .wbgtEmergencyStop(33.0)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -201,11 +201,11 @@ class PolicyEngineServiceTest {
     class EmergencyStop {
 
         @Test
-        @DisplayName("WBGT >= 30°C → STOP_WORK (emergency)")
+        @DisplayName("WBGT >= 33°C → STOP_WORK (emergency, MOM Band 3)")
         void emergencyStopExactThreshold() {
             var decision = policyEngine.evaluate(
                     siteId,
-                    30.0,
+                    33.0,
                     HeatRestPolicy.WorkIntensity.LIGHT,
                     7
             );
@@ -216,7 +216,7 @@ class PolicyEngineServiceTest {
         }
 
         @Test
-        @DisplayName("WBGT > 30°C → STOP_WORK (emergency)")
+        @DisplayName("WBGT > 33°C → STOP_WORK (emergency, MOM Band 3)")
         void emergencyStopAboveThreshold() {
             var decision = policyEngine.evaluate(
                     siteId,
@@ -328,7 +328,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Decision.isEmergencyStop() returns true only for STOP_WORK")
         void isEmergencyStopProperty() {
             var emergency = policyEngine.evaluate(
-                    siteId, 31.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
             );
             assertThat(emergency.isEmergencyStop()).isTrue();
 

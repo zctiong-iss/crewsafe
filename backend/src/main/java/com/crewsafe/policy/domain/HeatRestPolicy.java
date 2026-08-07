@@ -106,7 +106,8 @@ public class HeatRestPolicy {
     /**
      * Emergency stop threshold (°C).
      * Above this, no work permitted regardless of acclimatisation.
-     * Default: 30°C per MOM.
+     * Default: 33°C per MOM official guidelines (Band 3: WBGT ≥ 33°C).
+     * Reference: MOM Heat Stress Management Standards
      */
     @NotNull
     @Min(20)

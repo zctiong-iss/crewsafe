@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS heat_rest_policy (
     wbgt_threshold_full_heavy DECIMAL(5, 2) NOT NULL DEFAULT 24.0,
 
     -- Emergency stop threshold (all workers regardless of acclimatisation)
-    wbgt_emergency_stop DECIMAL(5, 2) NOT NULL DEFAULT 30.0,
+    -- MOM Band 3: WBGT >= 33°C requires stop work per MOM guidelines
+    wbgt_emergency_stop DECIMAL(5, 2) NOT NULL DEFAULT 33.0,
 
     -- Audit fields
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -98,7 +99,7 @@ SELECT
     25.0, 23.0, 21.0,  -- unacclimatised
     26.0, 24.0, 22.0,  -- partial
     28.0, 26.0, 24.0,  -- full
-    30.0               -- emergency
+    33.0               -- emergency (MOM official)
 FROM site
 WHERE NOT EXISTS (SELECT 1 FROM heat_rest_policy hp WHERE hp.site_id = site.id);
 */
@@ -113,4 +114,5 @@ Reference: ADR-002 (heat safety strategy), ADR-013 (UTC storage, SG display time
 COMMENT ON COLUMN heat_rest_policy.wbgt_emergency_stop IS
 'Critical WBGT threshold (°C) above which all work must cease immediately.
 No exceptions regardless of acclimatisation level or work intensity.
-Default: 30°C per MOM guidelines. Configurable per site.';
+Default: 33°C per MOM official guidelines (Band 3: WBGT >= 33°C). Configurable per site.
+Reference: MOM Heat Stress Management Standards.';

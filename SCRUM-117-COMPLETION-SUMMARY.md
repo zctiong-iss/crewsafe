@@ -76,7 +76,7 @@ This module provides deterministic policy-based decisions for heat safety in fie
   3. Determine acclimatisation level from day
   4. Get threshold for (level, intensity)
   5. Evaluate WBGT vs thresholds:
-     - WBGT ≥ emergency threshold → STOP_WORK
+     - WBGT ≥ emergency threshold (MOM Band 3: 33°C) → STOP_WORK
      - WBGT ≥ policy threshold → SHORT_REST or EXTENDED_REST based on acclimatisation
      - WBGT < threshold → CONTINUE
 - **Logging:** INFO-level policy evaluation results
