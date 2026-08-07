@@ -40,6 +40,8 @@ run "rejects_mismatched_account" {
     expected_account_id = "999999999999"
   }
   expect_failures = [
+    aws_ecr_repository.backend,
+    aws_ecr_repository.web,
     aws_securityhub_account.mvp,
   ]
 }
