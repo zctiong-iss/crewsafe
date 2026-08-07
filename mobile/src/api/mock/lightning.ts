@@ -28,6 +28,8 @@
  * (data.gov.sg dataset d_08238953fe0f6dd13f10714ebfbcb9f9) against the site's lat/long,
  * which `Site.java` already stores for exactly this purpose.
  * ────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * @author Justin Chua
  */
 import type { LightningRisk } from "@/types/domain";
 import {

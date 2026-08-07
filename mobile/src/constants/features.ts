@@ -14,6 +14,8 @@
  *
  * A flag keeps the component compiled, typechecked and one boolean away from returning,
  * with the reason it was switched off written next to the switch.
+ *
+ * @author Justin Chua
  */
 
 export const features = {

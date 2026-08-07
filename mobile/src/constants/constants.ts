@@ -1,3 +1,8 @@
+/**
+ * Cross-cutting constants that are not configuration and not theme.
+ *
+ * @author Justin Chua
+ */
 import { Platform } from "react-native";
 
 export const IS_Android = Platform.OS === "android";

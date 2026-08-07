@@ -14,6 +14,8 @@
  * The ids are fixed rather than generated so that a persisted reference to one survives a
  * reload. They are not real database ids and mean nothing to the backend — in mock mode
  * nothing here is ever sent to it.
+ *
+ * @author Justin Chua
  */
 import type { CurrentUser, Role, Site } from "@/types/domain";
 

@@ -5,6 +5,8 @@
  * from another tab. The assertions below are the properties that make it usable for that:
  * it fires immediately, it keeps firing, it stops when the app is backgrounded, and a
  * changing callback identity does not restart it.
+ *
+ * @author Justin Chua
  */
 // `renderHook` is asynchronous in React Native Testing Library 14 — it returns a promise of
 // `{ result, rerender, unmount }`. Forgetting the await yields a promise whose `result` is

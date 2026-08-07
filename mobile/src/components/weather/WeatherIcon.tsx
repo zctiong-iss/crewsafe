@@ -19,6 +19,8 @@
  *
  * All-or-nothing is the right granularity — one animated vector beside five font glyphs
  * reads as a mistake rather than a choice.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";

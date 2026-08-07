@@ -9,6 +9,8 @@
  * The same reasoning as `WeatherIcon`'s swap note, one layer out: when designed Lottie
  * artwork is eventually commissioned, a spec is replaced by an asset reference in the same
  * registry, and nothing above it changes.
+ *
+ * @author Justin Chua
  */
 
 /**

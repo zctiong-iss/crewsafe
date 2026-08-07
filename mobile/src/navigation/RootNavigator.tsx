@@ -5,6 +5,8 @@
  * navigates imperatively, which leaves the sign-in screen on the back stack and lets an
  * Android back gesture return to it while signed in. Swapping the navigator instead means
  * the signed-out tree stops existing, so there is nothing to go back to.
+ *
+ * @author Justin Chua
  */
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";

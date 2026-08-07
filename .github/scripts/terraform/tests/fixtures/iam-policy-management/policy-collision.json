@@ -1,0 +1,7 @@
+{
+  "scenario": "policy-collision",
+  "expected": "fail-closed",
+  "object": "aws_iam_policy",
+  "action": "generate-new-reviewed-plan",
+  "implicit_import": false
+}

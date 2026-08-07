@@ -98,6 +98,9 @@ components:
         qualityStatus:
           type: string
           enum: [LIVE, DELAYED, STALE, SIMULATED]
+          description: >-
+            Freshness evaluated when this response is requested. Simulated fixture readings
+            remain SIMULATED; live readings age from LIVE to DELAYED to STALE.
         stationId:
           type: string
           nullable: true

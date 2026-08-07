@@ -14,6 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Every case here is a boundary or a null, because the middle of a band is not where this
  * gets decided wrongly. A band is the input to a worker's rest and hydration obligations, so an
  * off-by-one at 32.0 is the difference between an hourly ten-minute rest being owed and not.
+ *
+ * @author Justin Chua
  */
 class WbgtBandTest {
 

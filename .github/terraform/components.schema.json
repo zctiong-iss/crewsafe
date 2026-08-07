@@ -12,13 +12,14 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["jira_key", "root", "backend_strategy", "state_key", "allow_destroy"],
+        "required": ["jira_key", "root", "backend_strategy", "state_key", "allow_destroy", "execution_role_family"],
         "properties": {
           "jira_key": { "type": "string", "pattern": "^SCRUM-[0-9]+$" },
           "root": { "type": "string", "pattern": "^infra/terraform/[a-z0-9][a-z0-9/_-]*$" },
           "backend_strategy": { "enum": ["self-bootstrap", "remote"] },
           "state_key": { "type": "string", "pattern": "^crewsafe/[a-z0-9][a-z0-9/_.-]*\\.tfstate$" },
-          "allow_destroy": { "type": "boolean" }
+          "allow_destroy": { "type": "boolean" },
+          "execution_role_family": { "enum": ["standard", "policy-management"] }
         }
       }
     }

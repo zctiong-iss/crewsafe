@@ -26,11 +26,16 @@ entry="$(jq -cer --arg alias_name "$alias_name" '.[$alias_name] // empty' <<<"$r
 
 if ! jq -e '
   type == "object"
-  and (keys | sort) == ["account_id", "apply_role_arn", "plan_role_arn", "region"]
+  and ((keys | sort) == ["account_id", "apply_role_arn", "plan_role_arn", "region"]
+    or (keys | sort) == ["account_id", "apply_role_arn", "iam_policy_apply_role_arn", "iam_policy_plan_role_arn", "plan_role_arn", "region"])
   and (.account_id | type == "string" and test("^[0-9]{12}$"))
   and .region == "ap-southeast-1"
   and (.plan_role_arn | type == "string")
   and (.apply_role_arn | type == "string")
+  and ((has("iam_policy_plan_role_arn") and has("iam_policy_apply_role_arn")
+    and (.iam_policy_plan_role_arn | type == "string")
+    and (.iam_policy_apply_role_arn | type == "string"))
+    or ((has("iam_policy_plan_role_arn") | not) and (has("iam_policy_apply_role_arn") | not)))
 ' <<<"$entry" >/dev/null; then
   echo "::error::Registry entry has an invalid schema, account ID, or Region." >&2
   exit 1
@@ -40,6 +45,8 @@ account_id="$(jq -r '.account_id' <<<"$entry")"
 region="$(jq -r '.region' <<<"$entry")"
 plan_role_arn="$(jq -r '.plan_role_arn' <<<"$entry")"
 apply_role_arn="$(jq -r '.apply_role_arn' <<<"$entry")"
+iam_policy_plan_role_arn="$(jq -r '.iam_policy_plan_role_arn // empty' <<<"$entry")"
+iam_policy_apply_role_arn="$(jq -r '.iam_policy_apply_role_arn // empty' <<<"$entry")"
 
 plan_role_pattern="^arn:aws:iam::${account_id}:role/(.*/)?CrewSafeGitHubTerraformPlanRole$"
 apply_role_pattern="^arn:aws:iam::${account_id}:role/(.*/)?CrewSafeGitHubTerraformApplyRole$"
@@ -59,6 +66,30 @@ if [[ "$plan_role_arn" == "$apply_role_arn" ]]; then
   exit 1
 fi
 
+if [[ -n "$iam_policy_plan_role_arn" ]]; then
+  iam_policy_plan_role_pattern="^arn:aws:iam::${account_id}:role/CrewSafeGitHubTerraformIamPolicyPlanRole$"
+  iam_policy_apply_role_pattern="^arn:aws:iam::${account_id}:role/CrewSafeGitHubTerraformIamPolicyApplyRole$"
+
+  if [[ ! "$iam_policy_plan_role_arn" =~ $iam_policy_plan_role_pattern ]]; then
+    echo "::error::IAM policy-management plan role ARN does not match the selected account and required role name." >&2
+    exit 1
+  fi
+  if [[ ! "$iam_policy_apply_role_arn" =~ $iam_policy_apply_role_pattern ]]; then
+    echo "::error::IAM policy-management apply role ARN does not match the selected account and required role name." >&2
+    exit 1
+  fi
+  for role_arn in "$iam_policy_plan_role_arn" "$iam_policy_apply_role_arn"; do
+    if [[ "$role_arn" == "$plan_role_arn" || "$role_arn" == "$apply_role_arn" ]]; then
+      echo "::error::Policy-management roles must be separate from normal Terraform roles." >&2
+      exit 1
+    fi
+  done
+  [[ "$iam_policy_plan_role_arn" != "$iam_policy_apply_role_arn" ]] || {
+    echo "::error::Policy-management plan and apply must use different IAM roles." >&2
+    exit 1
+  }
+fi
+
 bucket="crewsafe-terraform-state-${account_id}-${region}"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
@@ -68,6 +99,10 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     printf 'region=%s\n' "$region"
     printf 'plan_role_arn=%s\n' "$plan_role_arn"
     printf 'apply_role_arn=%s\n' "$apply_role_arn"
+    if [[ -n "$iam_policy_plan_role_arn" ]]; then
+      printf 'iam_policy_plan_role_arn=%s\n' "$iam_policy_plan_role_arn"
+      printf 'iam_policy_apply_role_arn=%s\n' "$iam_policy_apply_role_arn"
+    fi
     printf 'bucket=%s\n' "$bucket"
   } >>"$GITHUB_OUTPUT"
 else
@@ -77,6 +112,8 @@ else
     --arg region "$region" \
     --arg plan_role_arn "$plan_role_arn" \
     --arg apply_role_arn "$apply_role_arn" \
+    --arg iam_policy_plan_role_arn "$iam_policy_plan_role_arn" \
+    --arg iam_policy_apply_role_arn "$iam_policy_apply_role_arn" \
     --arg bucket "$bucket" \
-    '{account_alias: $account_alias, account_id: $account_id, region: $region, plan_role_arn: $plan_role_arn, apply_role_arn: $apply_role_arn, bucket: $bucket}'
+    '{account_alias: $account_alias, account_id: $account_id, region: $region, plan_role_arn: $plan_role_arn, apply_role_arn: $apply_role_arn, iam_policy_plan_role_arn: (if $iam_policy_plan_role_arn == "" then null else $iam_policy_plan_role_arn end), iam_policy_apply_role_arn: (if $iam_policy_apply_role_arn == "" then null else $iam_policy_apply_role_arn end), bucket: $bucket}'
 fi

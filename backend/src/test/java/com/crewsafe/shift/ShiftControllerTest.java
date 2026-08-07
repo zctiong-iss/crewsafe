@@ -314,6 +314,78 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     }
 
     /**
+     * ADR-0013 (amended): an audit row must be readable without joining back to the shift,
+     * because {@code shift.starts_at} holds instants derived under two different rules — the
+     * form's zone handling changed mid-project and nothing in the schema distinguishes them.
+     * The row therefore carries the wall clock the shift actually runs on, and the zone it is
+     * read in, taken from the site rather than a constant so it stays true off-shore.
+     */
+    @Test
+    void shiftCreationAuditRecordsTheLocalWallClockAndZone() throws Exception {
+        Instant startsAt = Instant.parse("2026-08-10T00:00:00Z");   // 08:00 in Asia/Singapore
+        Instant endsAt = Instant.parse("2026-08-10T08:00:00Z");     // 16:00 in Asia/Singapore
+
+        String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt, List.of()))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID shiftId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED))
+                .filteredOn(e -> shiftId.equals(e.getTargetId()))
+                .singleElement()
+                .extracting(e -> e.getDetail())
+                .isEqualTo("Created shift for site " + siteA.getId()
+                        + " (10 Aug 2026 08:00–16:00 Asia/Singapore)");
+    }
+
+    /** A shift that runs past local midnight needs both dates, or the range reads backwards. */
+    @Test
+    void anOvernightShiftAuditNamesBothLocalDates() throws Exception {
+        Instant startsAt = Instant.parse("2026-08-10T14:00:00Z");   // 22:00 SGT, 10 Aug
+        Instant endsAt = Instant.parse("2026-08-10T22:00:00Z");     // 06:00 SGT, 11 Aug
+
+        String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt, List.of()))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID shiftId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED))
+                .filteredOn(e -> shiftId.equals(e.getTargetId()))
+                .singleElement()
+                .extracting(e -> e.getDetail())
+                .isEqualTo("Created shift for site " + siteA.getId()
+                        + " (10 Aug 2026 22:00 – 11 Aug 2026 06:00 Asia/Singapore)");
+    }
+
+    /** A correction row that omits the corrected times is the least useful row in the log. */
+    @Test
+    void shiftTimeCorrectionAuditRecordsTheNewLocalWallClock() throws Exception {
+        String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(Instant.parse("2026-08-10T00:00:00Z"),
+                                Instant.parse("2026-08-10T08:00:00Z"), List.of()))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        UUID shiftId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
+
+        patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorAToken,
+                        shiftBody(Instant.parse("2026-08-10T01:00:00Z"),    // 09:00 SGT
+                                Instant.parse("2026-08-10T09:00:00Z"), null))  // 17:00 SGT
+                .andExpect(status().isOk());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_UPDATED))
+                .filteredOn(e -> shiftId.equals(e.getTargetId()))
+                .singleElement()
+                .extracting(e -> e.getDetail())
+                .isEqualTo("Corrected shift times for site " + siteA.getId()
+                        + " to 10 Aug 2026 09:00–17:00 Asia/Singapore");
+    }
+
+    /**
      * The audit write is deferred to after-commit precisely so this holds: a shift create
      * that fails to persist (here, an assignment referencing a worker id with no matching
      * {@code app_user} row, violating the {@code shift_assignment} foreign key) must not
@@ -601,6 +673,94 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID()
                         + "/assignments/" + assignmentId, supervisorAToken)
                 .andExpect(status().isNotFound());
+    }
+
+    // --- SCRUM-254: prevent worker double-booking across overlapping shifts ---
+
+    @Test
+    void addingAWorkerToAnOverlappingShiftAtTheSameSiteIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        String overlappingShiftId = createShift(startsAt.plus(1, ChronoUnit.HOURS), endsAt.plus(1, ChronoUnit.HOURS));
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + overlappingShiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void addingAWorkerToAnOverlappingShiftAtAnotherSiteIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        memberships.save(new SiteMembership(workerA.getId(), siteB.getId()));
+        String shiftAtSiteB = objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteB.getId() + "/shifts", supervisorBToken,
+                                        shiftBody(startsAt, endsAt, List.of()))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("id").asText();
+
+        postJson("/api/v1/sites/" + siteB.getId() + "/shifts/" + shiftAtSiteB + "/assignments",
+                        supervisorBToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void assigningTheSameWorkerToTheSameShiftTwiceIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        addAssignment(shiftId, "LIGHT");
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "MODERATE", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void creatingAShiftWithTheSameWorkerTwiceInTheSameBatchIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt, List.of(
+                                assignmentBody(workerA.getId(), "Task 1", "LIGHT", null),
+                                assignmentBody(workerA.getId(), "Task 2", "LIGHT", null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void creatingAShiftThatOverlapsAnExistingAssignmentIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt.plus(1, ChronoUnit.HOURS), endsAt.plus(1, ChronoUnit.HOURS),
+                                List.of(assignmentBody(workerA.getId(), null, "LIGHT", null))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void backToBackShiftsForTheSameWorkerAreNotAnOverlap() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        addAssignment(createShift(startsAt, endsAt), "LIGHT");
+
+        String secondShiftId = createShift(endsAt, endsAt.plus(8, ChronoUnit.HOURS));
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + secondShiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isCreated());
     }
 
     @Test

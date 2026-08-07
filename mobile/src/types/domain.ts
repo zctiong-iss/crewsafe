@@ -1,6 +1,8 @@
 /**
  * Domain types mirrored from the backend. Each block names the Java record or OpenAPI
  * schema it must stay in step with, so a contract change has an obvious landing site.
+ *
+ * @author Justin Chua
  */
 
 /** Mirrors `identity/domain/Role.java`. Stored without Spring's `ROLE_` prefix. */
@@ -91,6 +93,13 @@ export interface LightningRisk {
   observedAt: string;
   /** The banner clears itself when this passes — the "expired" half of SCRUM-172. */
   validUntil: string;
+  /**
+   * How current the underlying NEA feed is, when the server said (SCRUM-261).
+   *
+   * Optional because the mock does not produce one: a simulated state has no feed behind it,
+   * and inventing a `LIVE` for it would be the one lie this whole toggle exists to avoid.
+   */
+  freshness?: WeatherQualityStatus;
 }
 
 /**

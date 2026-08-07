@@ -23,6 +23,8 @@
  * change to this file. Nothing here derives, rounds toward, or falls back to a number of
  * its own — §12.2 is explicit that no client may compute or override a WBGT band, and a
  * "sensible default" here would be exactly that with a friendlier name.
+ *
+ * @author Justin Chua
  */
 import { StyleSheet, View } from "react-native";
 import type { FC } from "react";
@@ -37,7 +39,12 @@ import type { SiteConditions } from "@/types/domain";
 
 interface WbgtCardProps {
   conditions: SiteConditions;
-  /** Dims the card while a stop-work is in force, so the heat plan reads as superseded. */
+  /**
+   * Whether a lightning stop-work is in force, which suspends the heat plan.
+   *
+   * Adds a line of text. It deliberately does **not** change how the card is drawn — see the
+   * note above the label.
+   */
   superseded?: boolean;
 }
 
@@ -53,17 +60,6 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
         {
           borderRadius: theme.metrics.radius,
           backgroundColor: theme.colors.surface,
-          /*
-           * Dimming rather than hiding: the reading is still true, it is just no longer
-           * what the worker should be acting on.
-           *
-           * Never in high contrast, though. At 45% opacity black-on-white falls to roughly
-           * 3.5:1 — under AA — so the dim would defeat the exact mode a worker turned on to
-           * read the screen in sunlight. There the superseded label below carries the
-           * meaning on its own, which is why that label exists in both modes rather than
-           * the dim being the only signal.
-           */
-          opacity: superseded && !theme.highContrast ? 0.45 : 1,
         },
       ]}
     >
@@ -75,16 +71,28 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
       </View>
 
       {/*
-        Stated, not implied. A dimmed card reads as "loading" as easily as "superseded", and
-        in high contrast there is no dim at all.
+        ── THIS LINE IS THE OVERRIDE. THE CARD IS NOT DIMMED (SCRUM-260) ────────────────────
+        FR-12a requires that a stop-work visibly override the heat plan, and with
+        `features.heatGuidanceCard` off this is the *only* place the app says so in words.
+        Removing or weakening it drops FR-12a, and nothing on screen would look broken
+        afterwards — which is why `WbgtCard.test.tsx` asserts it.
 
-        This label matters more than it did: with the heat plan card switched off (see
-        `features.heatGuidanceCard`) it is now the *only* place the app says in words that a
-        lightning stop-work overrides the heat guidance, which FR-12a requires.
+        The card used to dim to 45% opacity as well. That is gone. The dim was never the
+        mechanism: it was skipped in high contrast precisely because at 45% black-on-white
+        falls to about 3.5:1, under AA, and would defeat the mode a worker turned on to read
+        the screen in sunlight. The same argument applies to any phone held at arm's length
+        in Singapore daylight, which is the ordinary case rather than the accessible one. A
+        dimmed card also reads as "loading" as readily as "superseded" — `HeatGuidance` makes
+        that point independently — so the dim cost legibility on the reading a worker needs
+        while adding an ambiguous signal on top of an unambiguous sentence.
+
+        Wording carries both jobs at once: shelter first is the instruction, heat rules are
+        paused is the override. It deliberately does not repeat the banner directly above,
+        which already says to seek shelter in much larger type.
       */}
       {superseded ? (
-        <AppText variant="label" tone="danger" style={styles.superseded}>
-          {t("wbgt.superseded")}
+        <AppText variant="label" tone="danger" style={styles.stopWorkOverride}>
+          {t("wbgt.stopWorkOverride")}
         </AppText>
       ) : null}
 
@@ -122,7 +130,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     marginEnd: s(8),
   },
-  superseded: {
+  stopWorkOverride: {
     marginTop: vs(6),
   },
   readingRow: {

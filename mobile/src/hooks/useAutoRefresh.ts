@@ -23,6 +23,8 @@
  * The callback should request a normal (non-pull-to-refresh) load. The slices leave the UI
  * untouched when they already have data, so a background poll updates the numbers without
  * flashing a spinner over them.
+ *
+ * @author Justin Chua
  */
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";

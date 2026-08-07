@@ -1,6 +1,5 @@
 {
-  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.superseded, freshness.staleWarning — MUST be reviewed by a native Bengali speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
-
+  "_translationStatus": "MACHINE-DRAFTED, NOT NATIVE-REVIEWED. Generated for SCRUM-205. The safety-critical strings — lightning.*, actions.*, guidance.*, wbgt.stopWorkOverride, freshness.staleWarning — MUST be reviewed by a native Bengali speaker before this language is offered in production. A mistranslated stop-work instruction is an incident, not a typo. Keys beginning with an underscore are metadata and are skipped by the key-parity check.",
   "common": {
     "appName": "CrewSafe",
     "cancel": "বাতিল",
@@ -14,7 +13,6 @@
     "optional": "ঐচ্ছিক",
     "requestReference": "রেফারেন্স: {{requestId}}"
   },
-
   "errors": {
     "unauthenticated": "আপনার সেশন শেষ হয়ে গেছে। চালিয়ে যেতে সাইন ইন করুন।",
     "not-provisioned": "আপনার সাইন ইন সফল হয়েছে, কিন্তু এই অ্যাকাউন্টটি এখনও CrewSafe-এর জন্য সেট আপ করা হয়নি। আপনার সাইট প্রশাসককে আপনাকে যুক্ত করতে বলুন।",
@@ -27,7 +25,6 @@
     "configMissing": "অ্যাপটি কনফিগার করা হয়নি। অনুপস্থিত: {{keys}}",
     "unknown": "কিছু ভুল হয়েছে। আবার চেষ্টা করুন।"
   },
-
   "auth": {
     "signInTitle": "সাইন ইন",
     "signInSubtitle": "বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা",
@@ -61,7 +58,6 @@
       "cancelled": "সাইন ইন বাতিল করা হয়েছে।"
     }
   },
-
   "signUp": {
     "title": "অ্যাকাউন্টের অনুরোধ করুন",
     "intro": "CrewSafe অ্যাকাউন্ট আপনার সাইট প্রশাসক তৈরি করেন। এটি পূরণ করুন এবং আমরা দেখাব তাঁদের ঠিক কী পাঠাতে হবে।",
@@ -96,14 +92,12 @@
       "siteRequired": "আপনার সাইট বেছে নিন।"
     }
   },
-
   "roles": {
     "WORKER": "কর্মী",
     "SUPERVISOR": "সাইট সুপারভাইজার",
     "SAFETY_MANAGER": "নিরাপত্তা ব্যবস্থাপক",
     "ADMIN": "প্রশাসক"
   },
-
   "tabs": {
     "shift": "আমার শিফট",
     "alerts": "সতর্কতা",
@@ -114,7 +108,6 @@
     "profile": "প্রোফাইল",
     "settings": "সেটিংস"
   },
-
   "settings": {
     "title": "সেটিংস",
     "language": "ভাষা",
@@ -135,7 +128,6 @@
     "aboutVersion": "সংস্করণ {{version}}",
     "aboutBody": "সিঙ্গাপুরে বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা।"
   },
-
   "profile": {
     "title": "প্রোফাইল",
     "role": "ভূমিকা",
@@ -154,7 +146,6 @@
     "photoUpdatedToast": "ছবি হালনাগাদ হয়েছে",
     "photoRemovedToast": "ছবি সরানো হয়েছে"
   },
-
   "shifts": {
     "site": "সাইট",
     "emptyTitle": "এখনও কোনও শিফট নেই",
@@ -218,7 +209,6 @@
       "checkFields": "উপরের কিছু তথ্যে মনোযোগ প্রয়োজন। লাল দাগ দেওয়া ঘরগুলি দেখাচ্ছে কী ঠিক করতে হবে।"
     }
   },
-
   "weather": {
     "title": "অবস্থা",
     "site": "সাইট",
@@ -244,7 +234,6 @@
       "THUNDERY_SHOWERS": "বজ্রসহ বৃষ্টি"
     }
   },
-
   "inbox": {
     "emptyTitle": "স্বীকার করার কিছু নেই",
     "emptyBody": "আপনার সুপারভাইজারের অনুমোদিত পদক্ষেপ এখানে দেখা যাবে।",
@@ -260,7 +249,6 @@
     "restRemaining": "{{time}} বাকি",
     "swipeToClear": "সরান"
   },
-
   "lightning": {
     "stopWorkTitle": "কাজ বন্ধ করুন",
     "stopWorkBody": "এই সাইটের কাছে বজ্রপাত। এখনই যথাযথ আশ্রয়ে যান।",
@@ -273,14 +261,14 @@
     "validUntil": "{{time}} পর্যন্ত বৈধ",
     "refreshesInMinutes": "{{minutes}} মিনিটে হালনাগাদ হবে",
     "refreshesInSeconds": "{{seconds}} সেকেন্ডে হালনাগাদ হবে",
-    "overrideNotice": "কাজ বন্ধের নির্দেশ বলবৎ থাকা পর্যন্ত তাপ পরিকল্পনা স্থগিত।"
+    "overrideNotice": "কাজ বন্ধের নির্দেশ বলবৎ থাকা পর্যন্ত তাপ পরিকল্পনা স্থগিত।",
+    "unavailable": "এই সাইটের জন্য বজ্রপাতের ডেটা নেই।"
   },
-
   "wbgt": {
     "title": "তাপের অবস্থা",
     "reading": "WBGT",
     "noReading": "কোনও পরিমাপ পাওয়া যায়নি",
-    "superseded": "বজ্রপাতজনিত কাজ বন্ধের নির্দেশ দ্বারা প্রতিস্থাপিত",
+    "stopWorkOverride": "তাপের নিয়ম স্থগিত।",
     "band": {
       "BELOW_31": "৩১°C-এর নিচে",
       "31_TO_BELOW_32": "৩১ থেকে ৩২°C",
@@ -288,7 +276,6 @@
       "33_AND_ABOVE": "৩৩°C ও তার বেশি"
     }
   },
-
   "guidance": {
     "title": "আপনাকে যা করতে হবে",
     "advisoryTitle": "এছাড়াও সুপারিশ করা হচ্ছে",
@@ -297,7 +284,6 @@
     "policyVersion": "নীতি {{version}}",
     "none": "এই মুহূর্তে তাপ সংক্রান্ত কোনও পদক্ষেপ প্রয়োজন নেই।"
   },
-
   "actions": {
     "HYDRATE_REGULARLY": "নিয়মিত জল পান করুন",
     "HYDRATE_HOURLY": "ঘণ্টায় অন্তত একবার জল পান করুন",
@@ -314,7 +300,6 @@
     "RESUME_WORK": "কাজ আবার শুরু করুন",
     "ROTATE_TO_LIGHT_DUTY": "হালকা কাজে বদলি হন"
   },
-
   "shift": {
     "title": "আপনার শিফট",
     "task": "কাজ",
@@ -325,13 +310,11 @@
     "noShiftTitle": "কোনও শিফট নির্ধারিত নেই",
     "noShiftBody": "আপনার কোনও চলতি বা আসন্ন শিফট নেই। আপনার সুপারভাইজারের সঙ্গে যোগাযোগ করুন।"
   },
-
   "intensity": {
     "LIGHT": "হালকা",
     "MODERATE": "মাঝারি",
     "HEAVY": "ভারী"
   },
-
   "freshness": {
     "LIVE": "সরাসরি",
     "DELAYED": "বিলম্বিত",
@@ -341,7 +324,6 @@
     "staleWarning": "এই পরিমাপটি নির্ভর করার পক্ষে অনেক পুরোনো। একে চলতি হিসেবে ধরবেন না — আপনার সাইটের নিয়ম মানুন বা সুপারভাইজারের কাছে নিশ্চিত পরিমাপ চান।",
     "delayedWarning": "এই পরিমাপটি প্রত্যাশার চেয়ে দেরিতে এসেছে। এটি নেওয়ার পর থেকে অবস্থা বদলে থাকতে পারে।"
   },
-
   "dev": {
     "scenarioLabel": "বজ্রপাতের পরিস্থিতি (শুধু ডেভেলপমেন্ট)",
     "freshnessLabel": "তথ্যের সতেজতা (শুধু ডেভেলপমেন্ট)",
@@ -361,9 +343,13 @@
       "REST_15_MIN": "সাইট অফিসের পাশে ছায়াযুক্ত বিশ্রামস্থলে টানা ১৫ মিনিট বিশ্রাম নিন।",
       "HYDRATE": "এখনই ৫০০ মিলি জল পান করুন এবং রাস্তার ধারে ফেরার আগে আপনার বোতল ভরে নিন।",
       "ROTATE_TO_LIGHT_DUTY": "পরের এক ঘণ্টার জন্য টুল স্টোরে চলে যান। আপনার সুপারভাইজার বিকল্প ব্যবস্থা করেছেন।"
+    },
+    "lightningSourceLabel": "বজ্রপাত ডেটার উৎস (ডেভেলপমেন্ট)",
+    "lightningSource": {
+      "live": "লাইভ",
+      "simulated": "সিমুলেটেড"
     }
   },
-
   "placeholder": {
     "comingSoon": "শীঘ্রই আসছে",
     "screenPending": "নির্মাণের ক্রমে এই পর্দাটি পরবর্তী।"

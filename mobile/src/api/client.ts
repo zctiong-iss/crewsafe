@@ -5,6 +5,8 @@
  * a failure into a typed {@link ApiError} rather than a raw axios error, and keeping hold
  * of the X-Request-Id so a user in the field can quote it when something breaks. Mirrors
  * `web/src/api/client.ts`.
+ *
+ * @author Justin Chua
  */
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosInstance } from "axios";
 import { config } from "@/constants/config";

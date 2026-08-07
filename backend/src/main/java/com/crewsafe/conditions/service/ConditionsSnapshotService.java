@@ -3,6 +3,8 @@ package com.crewsafe.conditions.service;
 import com.crewsafe.conditions.api.ActiveShiftPayload;
 import com.crewsafe.conditions.api.ConditionsPayload;
 import com.crewsafe.conditions.api.ConditionsSnapshot;
+import com.crewsafe.lightning.api.LightningRiskPayload;
+import com.crewsafe.lightning.risk.LightningRiskDerivationService;
 import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.repository.ShiftRepository;
@@ -31,6 +33,7 @@ public class ConditionsSnapshotService {
     private final WeatherObservationRepository observations;
     private final ShiftRepository shifts;
     private final WeatherFreshnessClassifier freshnessClassifier;
+    private final LightningRiskDerivationService lightningRiskDerivationService;
     private final Clock clock;
 
     public ConditionsSnapshot getSnapshot(UUID siteId) {
@@ -40,12 +43,16 @@ public class ConditionsSnapshotService {
                 .map(observation -> toPayload(observation, asOf))
                 .orElse(null);
 
+        LightningRiskPayload lightning = lightningRiskDerivationService
+                .deriveForSite(siteId, asOf)
+                .orElse(null);
+
         ActiveShiftPayload activeShift = shifts.findFirstBySiteIdAndStatusOrderByStartsAtDesc(
                         siteId, ShiftStatus.ACTIVE)
                 .map(ConditionsSnapshotService::toPayload)
                 .orElse(null);
 
-        return new ConditionsSnapshot(siteId, conditions, activeShift, asOf);
+        return new ConditionsSnapshot(siteId, conditions, lightning, activeShift, asOf);
     }
 
     /**

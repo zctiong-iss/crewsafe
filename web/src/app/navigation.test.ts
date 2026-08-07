@@ -20,10 +20,10 @@ describe("navigation", () => {
     }
   });
 
-  it("shows a worker only the live board", () => {
-    expect(navigationFor("WORKER").map((item) => item.to)).toEqual(["/"]);
+   it("gives a worker access to live board and shifts", () => {
+    expect(navigationFor("WORKER").map((item) => item.to)).toEqual(["/", "/shifts"]);
   });
-
+  
   it("does not offer approvals to a worker or an administrator", () => {
     expect(navigationFor("WORKER").some((item) => item.to === "/approvals")).toBe(false);
     // Administration is about running the system, not signing off crew safety plans.

@@ -15,6 +15,8 @@
  *
  * All four are persisted (see `persistConfig`): a worker who set the app up for sunlight
  * must not have to do it again every morning.
+ *
+ * @author Justin Chua
  */
 import { useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";

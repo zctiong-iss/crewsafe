@@ -7,6 +7,8 @@
  * `npm run web:pkce`), and pulling `@lottiefiles/dotlottie-react` into the tree to animate
  * a dev-only spinner is not a trade worth making. The native app — the one a worker holds —
  * gets the animation.
+ *
+ * @author Justin Chua
  */
 import { ActivityIndicator } from "react-native";
 import type { FC } from "react";

@@ -86,6 +86,57 @@ real display bug on any non-SGT runtime.
   be dead complexity carrying a field that only ever holds one value. Deferred to a genuine
   cross-border need, not to SCRUM-134.
 
+## Amendment — 2026-08-07 (SCRUM-169)
+
+The decision above stands. Three facts it records have changed, and one new decision follows from
+them. Original text left intact; this section is the current state.
+
+**1. The test harness now pins `TZ`.** The Context notes "no `TZ` pin in the test harness" — no
+longer true. [`vite.config.ts`](../../web/vite.config.ts) sets `test.env.TZ = "Asia/Singapore"`, so
+a developer's machine and CI can no longer disagree. This makes the *suite* deterministic; it does
+not make the *app* host-independent. See point 3.
+
+**2. The input control changed; the property did not.** Consequence 2 above cites
+`<input type="datetime-local">`. That was replaced by `react-datepicker` (SCRUM-169 Task 2). The
+picker still yields a `Date` built in the host's zone, which `.toISOString()` then converts using
+the host's offset — so the "correct by coincidence" property is unchanged, only its mechanism.
+
+**3. The write path is still host-zoned, and now has a measured cost.** Typing `10 Aug 2026, 08:00`
+into the create form stores `00:00:00Z` on an SGT host and `08:00:00Z` on a UTC host — an
+eight-hour drift, verified by `CreateShiftForm.test.tsx` under `TZ=UTC`. Two consequences reach
+past display:
+
+- `ShiftService.guardAgainstDoubleBooking` compares instants, so a drifted shift changes which
+  bookings are detected as overlapping.
+- WBGT exposure is assessed against the shift's instants, so a drifted shift is scored against the
+  wrong part of the day. This is the safety-relevant one.
+
+No repair is possible for rows already written: nothing records the submitting browser's zone, so
+pre-cutover shifts cannot be identified, let alone corrected. Closing this properly means a
+zone-aware parse at the form boundary using the selected site's `timezone` (e.g. `date-fns-tz`
+`fromZonedTime`), not a hardcoded `+8` — which works only while every site is DST-free.
+
+**4. New decision — audit rows record the wall clock and its IANA zone.** `AuditEvent.detail`
+(500 chars, currently using ~40) will carry the shift's local wall-clock range and the zone it was
+read in, sourced from `Site.timezone` rather than a constant:
+
+```text
+Created shift for site <id> (10 Aug 2026 08:00–16:00 Asia/Singapore)
+```
+
+Rationale: `occurredAt` is a server-side `Instant` and is unaffected by any of the above, but an
+audit *report* is only useful joined back to `shift.startsAt` — and that column now holds values
+derived under two different rules with nothing in the schema to distinguish them. Embedding the
+wall clock and zone makes each row self-describing, independent of both the join and the
+derivation rule in force when it was written. It also means the audit trail stays correct on its
+own terms if CrewSafe ever runs a site outside Singapore, which is the trigger the original
+decision names for revisiting `SITE_ZONE`.
+
+Status: **implemented** (SCRUM-169). `ShiftService.localRange` resolves the zone from
+`SiteRepository`, applies it to `SHIFT_CREATED` and `SHIFT_UPDATED`, names both dates when a shift
+runs past local midnight, and falls back to UTC — labelled as UTC — for an unknown site rather than
+quietly asserting SGT.
+
 ## Related
 
 - [`formatShiftRange.ts`](../../web/src/features/shifts/formatShiftRange.ts) — where `SITE_ZONE`

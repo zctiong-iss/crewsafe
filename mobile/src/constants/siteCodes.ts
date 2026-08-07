@@ -16,6 +16,8 @@
  * membership or headcount detail, since anything more would leak organisational structure
  * to an unauthenticated caller. Until then, this file is the contract.
  * ────────────────────────────────────────────────────────────────────────────────────────
+ *
+ * @author Justin Chua
  */
 
 export interface SiteOption {

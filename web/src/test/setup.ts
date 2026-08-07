@@ -39,6 +39,16 @@ if (!window.localStorage) {
   });
 }
 
+if (typeof window !== "undefined" && !window.ResizeObserver) {
+  class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  window.ResizeObserver = ResizeObserver;
+  global.ResizeObserver = ResizeObserver;
+}
+
 beforeAll (() => server.listen({
   onUnhandledRequest: "error"
   })
