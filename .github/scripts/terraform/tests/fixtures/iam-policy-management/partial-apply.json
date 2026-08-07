@@ -1,0 +1,7 @@
+{
+  "scenario": "partial-apply",
+  "expected": "fresh-plan-convergence",
+  "state_repair": false,
+  "manual_recreate_bootstrap_roles": false,
+  "next_step": "generate-new-reviewed-plan"
+}

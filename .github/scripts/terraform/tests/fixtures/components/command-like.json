@@ -7,6 +7,7 @@
       "backend_strategy": "remote",
       "state_key": "crewsafe/test/unsafe.tfstate",
       "allow_destroy": false,
+      "execution_role_family": "standard",
       "command": "echo unsafe"
     }
   }

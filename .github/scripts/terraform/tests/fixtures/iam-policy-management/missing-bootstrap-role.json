@@ -1,0 +1,9 @@
+{
+  "scenario": "missing-bootstrap-role",
+  "expected": "fail-closed",
+  "required_roles": [
+    "CrewSafeGitHubTerraformPlanRole",
+    "CrewSafeGitHubTerraformApplyRole"
+  ],
+  "replacement_from_normal_role": false
+}
