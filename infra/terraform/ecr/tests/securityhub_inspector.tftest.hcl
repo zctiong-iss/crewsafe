@@ -75,13 +75,13 @@ run "securityhub_inspector_contract" {
   }
 
   assert {
-    condition     = aws_ecr_registry_scanning_configuration.enhanced.rule[0].scan_frequency == "CONTINUOUS_SCAN"
+    condition     = one(aws_ecr_registry_scanning_configuration.enhanced.rule).scan_frequency == "CONTINUOUS_SCAN"
     error_message = "ECR findings must remain continuously scanned."
   }
 
   assert {
     condition = toset([
-      for f in aws_ecr_registry_scanning_configuration.enhanced.rule[0].repository_filter :
+      for f in one(aws_ecr_registry_scanning_configuration.enhanced.rule).repository_filter :
       f.filter
     ]) == toset(["crewsafe/backend", "crewsafe/web"])
     error_message = "Continuous enhanced scanning must cover exactly the two CrewSafe repositories."
@@ -89,7 +89,7 @@ run "securityhub_inspector_contract" {
 
   assert {
     condition = alltrue([
-      for f in aws_ecr_registry_scanning_configuration.enhanced.rule[0].repository_filter :
+      for f in one(aws_ecr_registry_scanning_configuration.enhanced.rule).repository_filter :
       f.filter_type == "WILDCARD"
     ])
     error_message = "Repository filters must use the provider's WILDCARD filter type."
