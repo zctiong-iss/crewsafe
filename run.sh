@@ -6,12 +6,19 @@ CONTAINER_ENGINE="$(local/resolve-container-engine.sh)"
 ACCOUNT_ALIAS="dev"
 WITH_WEB=true
 RESET_DB=false
+WEATHER_MODE=""
 while (($#)); do
   case "$1" in
     --account) ACCOUNT_ALIAS="${2:-}"; shift 2 ;;
     --no-web) WITH_WEB=false; shift ;;
     --reset) RESET_DB=true; shift ;;
-    -h|--help) echo "Usage: ./run.sh [--account <alias>] [--no-web] [--reset]"; exit 0 ;;
+    --weather)
+      WEATHER_MODE="${2:-}"
+      [[ "$WEATHER_MODE" == "demo" || "$WEATHER_MODE" == "live" ]] || {
+        echo "--weather requires 'demo' or 'live'" >&2; exit 1;
+      }
+      shift 2 ;;
+    -h|--help) echo "Usage: ./run.sh [--account <alias>] [--no-web] [--reset] [--weather demo|live]"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -58,6 +65,20 @@ export VITE_API_BASE_URL=http://localhost:8080
 export SPRING_PROFILES_ACTIVE=local
 export CORS_ALLOWED_ORIGINS=http://localhost:5173
 export WEATHER_INGESTION_ENABLED=true
+
+if [[ "$WEATHER_MODE" == "demo" ]]; then
+  export WEATHER_DATA_MODE=fixture
+  export WEATHER_INGESTION_ENABLED=true
+  export WEATHER_FIXTURE_LOOP=true
+  export LIGHTNING_INGESTION_ENABLED=true
+  export LIGHTNING_FIXTURE_LOOP=true
+  printf 'Weather: fixture replay (demo mode)\n'
+elif [[ "$WEATHER_MODE" == "live" ]]; then
+  export WEATHER_DATA_MODE=live
+  export WEATHER_INGESTION_ENABLED=true
+  export LIGHTNING_INGESTION_ENABLED=true
+  printf 'Weather: live NEA ingestion\n'
+fi
 
 COMPOSE=local/compose.yaml
 COMPOSE_COMMAND=("$CONTAINER_ENGINE" compose -f "$COMPOSE")
