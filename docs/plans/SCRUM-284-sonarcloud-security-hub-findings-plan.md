@@ -5,7 +5,8 @@
 This change adds a CI-only, inactive-by-default importer after the existing Sonar
 SAST job completes. It permits only open Blocker/High Vulnerability records from the approved
 project, maps only allowlisted identifiers and timestamps into a redacted custom
-finding, and is restricted to the approved Singapore account and region. It does not
+finding with a deterministic SonarCloud issue deep link, and is restricted to the
+approved Singapore account and region. It does not
 change SCRUM-274 Inspector/ECR controls, create tickets, remediate findings, alter a
 release decision, or aggregate across accounts or regions.
 
@@ -18,6 +19,9 @@ release decision, or aggregate across accounts or regions.
   repository configuration cannot redirect the credential-bearing request.
 - The Sonar credential is a dedicated repository secret. Raw Sonar messages, paths,
   snippets, tokens, personal data, and service responses are neither logged nor stored.
+  Each finding's `SourceUrl` is constructed only from the hard-allowlisted SonarCloud
+  origin and validated project/issue identifiers; it never carries a token or an
+  arbitrary URL from the Sonar response.
 - The `securityhub-import` Terraform root owns a dedicated exact-main-subject role.
   The role has only the read/import actions needed to reconcile the custom product.
   Terraform is CI-only; no workstation Terraform, state, plan, profile, or apply is
@@ -30,6 +34,7 @@ release decision, or aggregate across accounts or regions.
 | Requirement | Evidence |
 | --- | --- |
 | Selected finding appears as one redacted custom record | Hermetic importer tests plus a controlled reviewed-CI observation recorded in the runbook. |
+| Security Hub finding links to the originating SonarCloud issue | Hermetic ASFF assertion verifies a deterministic `SourceUrl` using the approved origin and validated identifiers. |
 | Excluded, malformed, out-of-scope, or rejected input fails closed | Hermetic fixtures and negative tests; only safe outcome labels are emitted. |
 | Repeat import updates one stable record; controlled resolution archives it | Lifecycle mock tests, then separate controlled CI observation. |
 | Existing security controls remain unchanged | SAST gate guard, Terraform catalog/source guards, and SCRUM-274 source guard. |
