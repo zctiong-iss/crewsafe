@@ -1,0 +1,307 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Recommendation and approval endpoints
+  version: "1.0"
+  description: >
+    Contract for SCRUM-119 (US-09: supervisor approves, edits or rejects a plan). Every
+    operation is site-scoped: the caller must be a member of {siteId} (ADMIN excepted),
+    enforced the same way as the existing /api/v1/sites and /api/v1/sites/{siteId}/shifts
+    endpoints — see SiteAccessEvaluator.
+
+    A Recommendation is an AI-drafted plan for a shift (SCRUM-118, out of scope here —
+    this contract only covers reading a recommendation that already exists and deciding
+    on it). Its mitigations are the same structured shape Amazon Bedrock returns
+    (SCRUM-187): priority, action, rationale, estimatedImpact — no free text field the
+    model could put an unconstrained recommendation into. A recommendation is decided on
+    exactly once: deciding again returns 409, not a silent overwrite, since a decision is
+    a record of what happened, not something correctable via this endpoint.
+
+    Reading is open to a safety manager as well as a supervisor, so they can see what was
+    decided and, for an EDITED decision, how the final mitigations differ from the
+    original draft. Deciding is not — recording the decision is the supervisor's role,
+    per SCRUM-119.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    get:
+      operationId: listRecommendations
+      summary: List a shift's AI-drafted recommendations
+      responses:
+        "200":
+          description: Recommendations for this shift, each including its decision if one has been made.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recommendation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/{recommendationId}:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+      - $ref: "#/components/parameters/RecommendationId"
+    get:
+      operationId: getRecommendation
+      summary: Read one recommendation, including its decision if one has been made
+      responses:
+        "200":
+          description: The recommendation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site, or no recommendation with this id exists on that shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/{recommendationId}/decision:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+      - $ref: "#/components/parameters/RecommendationId"
+    post:
+      operationId: decideRecommendation
+      summary: Approve, edit or reject a recommendation
+      description: >
+        editedPlan is required (and must be non-empty) only when decision is EDITED —
+        the mitigations actually approved for dispatch, replacing the draft wholesale
+        rather than patching individual entries. reason is required only when decision
+        is REJECTED. Both the original draftPlan and, for EDITED, the final approved
+        plan are retained: this endpoint never overwrites a recommendation's own
+        mitigations, it only ever adds an approval alongside it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecommendationDecisionRequest"
+      responses:
+        "200":
+          description: The recommendation, now including the recorded decision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+        "400":
+          description: >
+            editedPlan missing or empty for an EDITED decision, or reason missing for a
+            REJECTED one.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Caller is not a member of {siteId}, or is authenticated but not a SUPERVISOR
+            or ADMIN — a safety manager may read this recommendation but not decide it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No shift with this id exists under this site, or no recommendation with this id exists on that shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: This recommendation already has a decision recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RecommendationId:
+      name: recommendationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller is authenticated but not a member of {siteId}.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # Mirrors ErrorResponse.java exactly — every endpoint in this API, including these
+    # ones, returns errors in this one shape.
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    RecommendationStatus:
+      type: string
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED]
+      description: >
+        Server-controlled. Set to APPROVED by a decision of either APPROVED or EDITED
+        (both mean a plan reaches dispatch, just with or without changes) and to
+        REJECTED by a decision of REJECTED. A client cannot set this directly.
+
+    ApprovalDecision:
+      type: string
+      enum: [APPROVED, REJECTED, EDITED]
+
+    MitigationSuggestion:
+      type: object
+      required: [priority, action, rationale, estimatedImpact]
+      description: >
+        The same structured shape Amazon Bedrock returns (SCRUM-187) — no free text field
+        the model (or a supervisor's edit) could put an unconstrained instruction into.
+      properties:
+        priority:
+          type: string
+          enum: [HIGH, MEDIUM, LOW]
+        action:
+          type: string
+          maxLength: 200
+        rationale:
+          type: string
+          maxLength: 500
+        estimatedImpact:
+          type: string
+          maxLength: 200
+
+    Approval:
+      type: object
+      required: [id, approverId, decision, decidedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        approverId:
+          type: string
+          format: uuid
+        decision:
+          $ref: "#/components/schemas/ApprovalDecision"
+        reason:
+          type: string
+          nullable: true
+          description: Required by the server when decision is REJECTED; optional otherwise.
+        editedMitigations:
+          type: array
+          nullable: true
+          description: Present only when decision is EDITED — the final, approved mitigations.
+          items:
+            $ref: "#/components/schemas/MitigationSuggestion"
+        decidedAt:
+          type: string
+          format: date-time
+
+    Recommendation:
+      type: object
+      required: [id, shiftId, status, createdAt, mitigations]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        policyVersion:
+          type: string
+          nullable: true
+          description: The policy rule version this recommendation cites (FR-16).
+        status:
+          $ref: "#/components/schemas/RecommendationStatus"
+        rationale:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        mitigations:
+          type: array
+          description: The original AI-drafted plan. Never overwritten by a decision.
+          items:
+            $ref: "#/components/schemas/MitigationSuggestion"
+        approval:
+          $ref: "#/components/schemas/Approval"
+          nullable: true
+          description: Null until a supervisor has decided on this recommendation.
+
+    RecommendationDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          $ref: "#/components/schemas/ApprovalDecision"
+        reason:
+          type: string
+          description: Required when decision is REJECTED.
+        editedPlan:
+          type: array
+          description: Required (and non-empty) when decision is EDITED.
+          items:
+            $ref: "#/components/schemas/MitigationSuggestion"
