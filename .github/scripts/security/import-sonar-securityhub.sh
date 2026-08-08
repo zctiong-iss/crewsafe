@@ -55,7 +55,7 @@ request_issues() {
     "${sonar_origin}/api/issues/search?${query}"
 }
 
-active_json="$(request_issues "componentKeys=${project_key}&branch=main&types=VULNERABILITY&statuses=OPEN&severities=BLOCKER,HIGH&p=1&ps=100")" \
+active_json="$(request_issues "componentKeys=${project_key}&branch=main&types=VULNERABILITY&statuses=OPEN&impactSeverities=BLOCKER,HIGH&p=1&ps=100")" \
   || fail SONAR_UNAVAILABLE
 lifecycle_json="$(request_issues "componentKeys=${project_key}&branch=main&issues=${controlled_key}&types=VULNERABILITY&statuses=RESOLVED&resolutions=FIXED&p=1&ps=1")" \
   || fail SONAR_UNAVAILABLE
