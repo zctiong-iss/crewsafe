@@ -1,13 +1,14 @@
 package com.crewsafe.mitigation.ai.bedrock;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 /**
  * Properties for Amazon Bedrock AI API configuration.
  * Binds to 'app.bedrock.*' properties from application.yml.
+ *
+ * Note: Registered via @ConfigurationPropertiesScan in the application.
+ * Do not add @Component - it causes double-registration and context startup failures.
  */
-@Component
 @ConfigurationProperties(prefix = "app.bedrock")
 public class BedrockProperties {
     private String region = "ap-southeast-1";
