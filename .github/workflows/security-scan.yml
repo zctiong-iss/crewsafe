@@ -307,3 +307,6 @@ jobs:
 
       - name: Sonar Security Hub importer self-tests
         run: .github/scripts/tests/test-sonar-securityhub-import.sh
+
+      - name: Sonar Quality Gate configurator self-tests
+        run: .github/scripts/tests/test-sonar-gate-configure.sh

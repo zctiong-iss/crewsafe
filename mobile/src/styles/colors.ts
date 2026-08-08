@@ -68,6 +68,27 @@ export interface AppPalette {
   /** Simulated / mocked data badges. Never used for a real reading. */
   simulated: string;
 
+  /**
+   * Work intensity, green → amber → red (SCRUM-266).
+   *
+   * Named separately rather than pointing callers at `success`/`warningFill`/`danger`, even
+   * though the values are the same. Those three mean "healthy", "degraded" and "stop work";
+   * an intensity is none of those — a HEAVY assignment is a normal, correct thing to plan, and
+   * a supervisor should not read a red chip as the app objecting to it. The names keep that
+   * distinction visible at the call site, and let the intensity ramp be retuned later without
+   * dragging the stop-work red along with it.
+   *
+   * Each is a *fill* carrying white text, and each is also used as text on `surface`. Both
+   * directions clear AA (4.5:1): measured against white they are 7.87:1, 5.43:1 and 5.79:1,
+   * and white on them is the same ratio the other way round.
+   *
+   * Colour is never the only signal. The label is always present beside the fill — a
+   * red-green colour-blind supervisor reads "Heavy", not the chip.
+   */
+  intensityLight: string;
+  intensityModerate: string;
+  intensityHeavy: string;
+
   disabled: string;
   overlay: string;
 }
@@ -99,6 +120,12 @@ const standard: AppPalette = {
   warningFill: "#9A5B00",
   success: "#1B5E20",
   simulated: "#5A4B8C",
+
+  intensityLight: "#1B5E20",
+  // The same darkened amber the advisory fill uses, and for the same reason: plain `warning`
+  // is 4.24:1 with white and would put the label under the AA floor.
+  intensityModerate: "#9A5B00",
+  intensityHeavy: "#C71A34",
 
   disabled: "#D3D3D3",
   overlay: "rgba(0, 0, 0, 0.45)",
@@ -136,6 +163,12 @@ const highContrast: AppPalette = {
   warningFill: "#7A4600",
   success: "#0B3D0B",
   simulated: "#3D2E75",
+
+  // Darkened with the rest of the palette. The ramp still reads green → amber → red, which is
+  // the point — high contrast makes the colours legible, it does not remove the meaning.
+  intensityLight: "#0B3D0B",
+  intensityModerate: "#7A4600",
+  intensityHeavy: "#B3001B",
 
   // #D3D3D3 on white is ~1.4:1 — invisible outdoors, and "disabled" would read as "missing".
   // #767676 is the lightest grey that still clears AA.
