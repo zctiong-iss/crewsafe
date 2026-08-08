@@ -1,5 +1,6 @@
 package com.crewsafe.shift.api;
 
+import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
@@ -39,6 +40,11 @@ import java.util.UUID;
  * additionally role-gated to SUPERVISOR/SAFETY_MANAGER/ADMIN, the same role group
  * {@code SiteController}'s dashboard uses; a worker may read their site's shifts but not
  * plan them.
+ *
+ * <p>Every "not found" throws {@link ResourceNotFoundException} rather than building a
+ * bare {@code ResponseEntity.notFound()} (SCRUM-263) — the latter bypasses {@code
+ * GlobalExceptionHandler} entirely and ships a 404 with no body, breaking the contract's
+ * promise that every error response carries an {@code ErrorResponse} JSON body.
  *
  * @author Abu Bakar
  */
@@ -126,10 +132,10 @@ public class ShiftController {
     @GetMapping("/{shiftId}")
     @PreAuthorize("@siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> getShift(@PathVariable UUID siteId, @PathVariable UUID shiftId) {
-        return shiftService.getShift(siteId, shiftId)
-                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Shift shift = shiftService.getShift(siteId, shiftId)
+                .orElseThrow(() -> noSuchShift(siteId, shiftId));
+
+        return ResponseEntity.ok(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
     }
 
     @PatchMapping("/{shiftId}")
@@ -138,10 +144,10 @@ public class ShiftController {
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ShiftUpdateRequest request) {
 
-        return shiftService.updateShift(siteId, principal.getId(), shiftId, request.startsAt(), request.endsAt())
-                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Shift shift = shiftService.updateShift(siteId, principal.getId(), shiftId, request.startsAt(), request.endsAt())
+                .orElseThrow(() -> noSuchShift(siteId, shiftId));
+
+        return ResponseEntity.ok(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
     }
 
     @DeleteMapping("/{shiftId}")
@@ -149,9 +155,22 @@ public class ShiftController {
     public ResponseEntity<Void> deleteShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
 
-        return shiftService.deleteShift(siteId, principal.getId(), shiftId)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        if (!shiftService.deleteShift(siteId, principal.getId(), shiftId)) {
+            throw noSuchShift(siteId, shiftId);
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{shiftId}/cancel")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> cancelShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+
+        return shiftService.cancelShift(siteId, principal.getId(), shiftId)
+                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{shiftId}/assignments")
@@ -159,10 +178,11 @@ public class ShiftController {
     public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @Valid @RequestBody ShiftAssignmentCreateRequest request) {
 
-        return shiftService.addAssignment(siteId, shiftId, request.toInput())
-                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
-                .map(body -> ResponseEntity.status(HttpStatus.CREATED).body(body))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Shift shift = shiftService.addAssignment(siteId, shiftId, request.toInput())
+                .orElseThrow(() -> noSuchShift(siteId, shiftId));
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
     }
 
     @PatchMapping("/{shiftId}/assignments/{assignmentId}")
@@ -172,11 +192,11 @@ public class ShiftController {
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ShiftAssignmentUpdateRequest request) {
 
-        return shiftService.updateAssignment(siteId, principal.getId(), shiftId, assignmentId,
+        Shift shift = shiftService.updateAssignment(siteId, principal.getId(), shiftId, assignmentId,
                         request.taskName(), request.intensity(), request.acclimatisationDay())
-                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> noSuchAssignment(siteId, shiftId, assignmentId));
+
+        return ResponseEntity.ok(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
     }
 
     @DeleteMapping("/{shiftId}/assignments/{assignmentId}")
@@ -184,8 +204,19 @@ public class ShiftController {
     public ResponseEntity<Void> removeShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @PathVariable UUID assignmentId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
 
-        return shiftService.removeAssignment(siteId, principal.getId(), shiftId, assignmentId)
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        if (!shiftService.removeAssignment(siteId, principal.getId(), shiftId, assignmentId)) {
+            throw noSuchAssignment(siteId, shiftId, assignmentId);
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
+    private static ResourceNotFoundException noSuchShift(UUID siteId, UUID shiftId) {
+        return new ResourceNotFoundException("No shift " + shiftId + " under site " + siteId);
+    }
+
+    private static ResourceNotFoundException noSuchAssignment(UUID siteId, UUID shiftId, UUID assignmentId) {
+        return new ResourceNotFoundException("No shift " + shiftId + " under site " + siteId
+                + ", or no assignment " + assignmentId + " on that shift");
     }
 }
