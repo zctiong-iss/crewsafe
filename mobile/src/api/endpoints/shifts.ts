@@ -20,6 +20,10 @@
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";
 import {
+  mockAddAssignment,
+  mockRemoveAssignment,
+  mockUpdateAssignment,
+  mockUpdateShift,
   mockCreateShift,
   mockDeleteShift,
   mockGetShift,
@@ -115,5 +119,100 @@ export function createShift(
     url: `/api/v1/sites/${siteId}/shifts`,
     method: "POST",
     data: { startsAt, endsAt, assignments },
+  });
+}
+
+/**
+ * `PATCH /api/v1/sites/{siteId}/shifts/{shiftId}` — corrects the window (SCRUM-266).
+ *
+ * `status` is absent for the same reason it is absent from create: it is server-controlled, and
+ * a client that could set it could declare its own shift already closed — which is precisely
+ * the state the server now refuses to edit.
+ *
+ * The server rejects an edit to a shift that has ended, with a 400 the caller surfaces rather
+ * than swallows. That rule is enforced there, not here, so no other client can skip it.
+ */
+export function updateShift(
+  siteId: string,
+  shiftId: string,
+  startsAt: string,
+  endsAt: string,
+): Promise<Shift> {
+  if (isMockApi()) return delay(() => mockUpdateShift(siteId, shiftId, startsAt, endsAt));
+  return request<Shift>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}`,
+    method: "PATCH",
+    data: { startsAt, endsAt },
+  });
+}
+
+/**
+ * `PATCH …/shifts/{shiftId}/assignments/{assignmentId}` — the correction this ticket exists for.
+ *
+ * Task, intensity and acclimatisation day. **Not `workerId`**: moving an assignment to a
+ * different person is a remove and an add, not a correction, and the audit trail should say so.
+ * The server agrees — `ShiftAssignment.correct` does not accept one.
+ *
+ * Returns the whole updated shift, so a caller can replace what it holds rather than patching
+ * its own copy and hoping the two agree.
+ */
+export function updateAssignment(
+  siteId: string,
+  shiftId: string,
+  assignmentId: string,
+  input: Omit<ShiftAssignmentInput, "workerId">,
+): Promise<Shift> {
+  if (isMockApi()) {
+    return delay(() =>
+      mockUpdateAssignment(
+        siteId,
+        shiftId,
+        assignmentId,
+        input.taskName,
+        input.intensity,
+        input.acclimatisationDay,
+      ),
+    );
+  }
+  return request<Shift>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/assignments/${assignmentId}`,
+    method: "PATCH",
+    data: input,
+  });
+}
+
+/** `POST …/shifts/{shiftId}/assignments` — staffs an existing shift. Returns the updated shift. */
+export function addAssignment(
+  siteId: string,
+  shiftId: string,
+  input: ShiftAssignmentInput,
+): Promise<Shift> {
+  if (isMockApi()) {
+    return delay(() =>
+      mockAddAssignment(siteId, shiftId, {
+        workerId: input.workerId,
+        taskName: input.taskName ?? null,
+        intensity: input.intensity,
+        acclimatisationDay: input.acclimatisationDay ?? null,
+      }),
+    );
+  }
+  return request<Shift>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/assignments`,
+    method: "POST",
+    data: input,
+  });
+}
+
+/** `DELETE …/shifts/{shiftId}/assignments/{assignmentId}` — takes one worker off, not the shift. */
+export function removeAssignment(
+  siteId: string,
+  shiftId: string,
+  assignmentId: string,
+): Promise<void> {
+  if (isMockApi()) return delay(() => mockRemoveAssignment(siteId, shiftId, assignmentId));
+  return request<void>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/assignments/${assignmentId}`,
+    method: "DELETE",
   });
 }
