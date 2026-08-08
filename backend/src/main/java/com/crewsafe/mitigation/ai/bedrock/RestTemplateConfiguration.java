@@ -21,8 +21,6 @@ public class RestTemplateConfiguration {
 
         return new RestTemplateBuilder()
                 .requestFactory(() -> new BufferingClientHttpRequestFactory(factory))
-                .setConnectTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
-                .setReadTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
                 .build();
     }
 }
