@@ -1,1 +1,1 @@
-{"id":"c1","metric":"new_security_issues","op":"GT","error":"0"}
+{"id":"c1","metric":"new_security_rating","op":"GT","error":"3"}

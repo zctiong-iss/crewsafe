@@ -1,1 +1,1 @@
-{"id":"42","name":"CrewSafe Security Gate","conditions":[{"id":"c1","metric":"new_security_issues","op":"GT","error":"2"},{"id":"c2","metric":"new_security_hotspots_reviewed","op":"LT","error":"100"},{"id":"c3","metric":"new_reliability_issues","op":"GT","error":"0"}]}
+{"id":"42","name":"CrewSafe Security Gate","conditions":[{"id":"c1","metric":"new_security_rating","op":"GT","error":"1"},{"id":"c2","metric":"new_security_hotspots_reviewed","op":"LT","error":"100"},{"id":"c3","metric":"new_reliability_rating","op":"GT","error":"3"}]}
