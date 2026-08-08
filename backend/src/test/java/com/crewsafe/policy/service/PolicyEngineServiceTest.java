@@ -93,9 +93,10 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Continue working
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.CONTINUE);
-            assertThat(decision.restRecommendation()).isEqualTo(RestRecommendation.NONE);
-            assertThat(decision.reasoning()).contains("below threshold");
+            assertThat(decision.required()).isEmpty();
+            assertThat(decision.advised()).isNotEmpty();
+            assertThat(decision.advised().get(0).action()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
+            assertThat(decision.advised().get(0).reasoning()).contains("below threshold");
         }
 
         @Test
@@ -110,9 +111,9 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Extended rest recommended
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.EXTENDED_REST);
-            assertThat(decision.restRecommendation()).isEqualTo(RestRecommendation.EXTENDED);
-            assertThat(decision.reasoning()).contains("exceeds threshold");
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.EXTENDED_REST.name());
+            assertThat(decision.required().get(0).reasoning()).contains("exceeds threshold");
         }
 
         @Test
@@ -127,12 +128,12 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Short rest recommended
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.SHORT_REST);
-            assertThat(decision.restRecommendation()).isEqualTo(RestRecommendation.SHORT);
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
 
         @Test
-        @DisplayName("WBGT at exact threshold → CONTINUE")
+        @DisplayName("WBGT at exact threshold → SHORT_REST")
         void wbgtAtExactThreshold() {
             // Given: WBGT exactly at threshold
             var decision = policyEngine.evaluate(
@@ -142,8 +143,9 @@ class PolicyEngineServiceTest {
                     1  // Unacclimatised
             );
 
-            // Then: Not exceeding, so continue
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.SHORT_REST);
+            // Then: At exact threshold triggers rest
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
     }
 
@@ -161,8 +163,9 @@ class PolicyEngineServiceTest {
                     1
             );
 
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.SHORT_REST);
-            assertThat(decision.reasoning()).contains("UNACCLIMATISED");
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
+            assertThat(decision.required().get(0).ruleReference()).isNotNull();
         }
 
         @Test
@@ -176,8 +179,8 @@ class PolicyEngineServiceTest {
                     4
             );
 
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.SHORT_REST);
-            assertThat(decision.reasoning()).contains("PARTIAL");
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
 
         @Test
@@ -191,8 +194,9 @@ class PolicyEngineServiceTest {
                     7
             );
 
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.CONTINUE);
-            assertThat(decision.reasoning()).contains("FULL");
+            assertThat(decision.required()).isEmpty();
+            assertThat(decision.advised()).isNotEmpty();
+            assertThat(decision.advised().get(0).action()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
         }
     }
 
@@ -210,9 +214,9 @@ class PolicyEngineServiceTest {
                     7
             );
 
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.STOP_WORK);
-            assertThat(decision.restRecommendation()).isEqualTo(RestRecommendation.EMERGENCY);
-            assertThat(decision.reasoning()).contains("emergency stop");
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
+            assertThat(decision.required().get(0).reasoning()).contains("emergency stop");
         }
 
         @Test
@@ -225,7 +229,8 @@ class PolicyEngineServiceTest {
                     1
             );
 
-            assertThat(decision.action()).isEqualTo(PolicyDecision.Action.STOP_WORK);
+            assertThat(decision.required()).isNotEmpty();
+            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
             assertThat(decision.isEmergencyStop()).isTrue();
         }
     }
@@ -311,7 +316,7 @@ class PolicyEngineServiceTest {
     class DecisionProperties {
 
         @Test
-        @DisplayName("Decision.requiresRest() returns true for action != CONTINUE")
+        @DisplayName("Decision.requiresRest() returns true when required actions exist")
         void requiresRestProperty() {
             var continueDecision = policyEngine.evaluate(
                     siteId, 20.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
@@ -336,6 +341,98 @@ class PolicyEngineServiceTest {
                     siteId, 24.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
             );
             assertThat(normal.isEmergencyStop()).isFalse();
+        }
+    }
+
+    @Nested
+    @DisplayName("PolicyDecision record structure")
+    class RecordStructure {
+
+        @Test
+        @DisplayName("Decision includes policyVersion, currentBand, forecastBand")
+        void decisionMetadata() {
+            var decision = policyEngine.evaluate(
+                    siteId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+            );
+
+            assertThat(decision.policyVersion()).isNotBlank();
+            assertThat(decision.currentBand()).isNotBlank();
+            assertThat(decision.forecastBand()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("PolicyAction includes ruleReference and appliesTo[]")
+        void policyActionStructure() {
+            var decision = policyEngine.evaluate(
+                    siteId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+            );
+
+            var action = decision.required().get(0);
+            assertThat(action.ruleReference()).isNotBlank();
+            assertThat(action.appliesTo()).isNotEmpty();
+            assertThat(action.reasoning()).isNotBlank();
+        }
+
+        @Test
+        @DisplayName("Band determination: LOW for safe conditions")
+        void bandDeterminationLow() {
+            var decision = policyEngine.evaluate(
+                    siteId, 20.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+            );
+
+            assertThat(decision.currentBand()).isEqualTo("LOW");
+        }
+
+        @Test
+        @DisplayName("Band determination: MODERATE for elevated WBGT")
+        void bandDeterminationModerate() {
+            var decision = policyEngine.evaluate(
+                    siteId, 26.0, HeatRestPolicy.WorkIntensity.MODERATE, 4
+            );
+
+            assertThat(decision.currentBand()).isIn("MODERATE", "HIGH");
+        }
+
+        @Test
+        @DisplayName("Band determination: CRITICAL for emergency stop")
+        void bandDeterminationCritical() {
+            var decision = policyEngine.evaluate(
+                    siteId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+            );
+
+            assertThat(decision.currentBand()).isEqualTo("CRITICAL");
+        }
+
+        @Test
+        @DisplayName("Rule references distinguish between policies")
+        void ruleReferences() {
+            // Emergency stop has specific rule
+            var emergency = policyEngine.evaluate(
+                    siteId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+            );
+            assertThat(emergency.required().get(0).ruleReference())
+                    .isEqualTo("EMERGENCY_STOP_RULE");
+
+            // Regular rest has different rule
+            var rest = policyEngine.evaluate(
+                    siteId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+            );
+            assertThat(rest.required().get(0).ruleReference())
+                    .isNotEqualTo("EMERGENCY_STOP_RULE");
+        }
+
+        @Test
+        @DisplayName("appliesTo[] contains worker and condition categories")
+        void appliesToCategories() {
+            var decision = policyEngine.evaluate(
+                    siteId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 1
+            );
+
+            var appliesTo = decision.required().get(0).appliesTo();
+            assertThat(appliesTo).isNotEmpty();
+            // Check for at least one condition descriptor
+            assertThat(appliesTo.stream().anyMatch(s -> s.contains("work") || s.contains("acclimatised")))
+                    .isTrue();
         }
     }
 }

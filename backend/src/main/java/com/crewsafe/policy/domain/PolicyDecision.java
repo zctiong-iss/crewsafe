@@ -1,18 +1,40 @@
 package com.crewsafe.policy.domain;
 
+import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Immutable result of policy evaluation.
  *
- * Contains the recommended action based on WBGT, intensity, and acclimatisation level.
+ * Contains the recommended actions based on WBGT, intensity, and acclimatisation level.
+ * Aligns with mobile app's PolicyEvaluation type for consistent API contract.
  * This is a value object (record) to enforce immutability.
  */
 public record PolicyDecision(
-    Action action,
-    RestRecommendation restRecommendation,
-    String reasoning
+    String policyVersion,
+    String currentBand,
+    String forecastBand,
+    List<PolicyAction> required,
+    List<PolicyAction> advised
 ) {
+    /**
+     * Represents a single recommended action with its rule source and applicability.
+     */
+    public record PolicyAction(
+        String action,
+        String ruleReference,
+        List<String> appliesTo,
+        String reasoning
+    ) {
+        public PolicyAction {
+            Objects.requireNonNull(action, "action must not be null");
+            Objects.requireNonNull(ruleReference, "ruleReference must not be null");
+            Objects.requireNonNull(appliesTo, "appliesTo must not be null");
+            Objects.requireNonNull(reasoning, "reasoning must not be null");
+        }
+    }
+
     /**
      * Enum of possible policy actions.
      */
@@ -43,31 +65,40 @@ public record PolicyDecision(
     }
 
     public PolicyDecision {
-        Objects.requireNonNull(action, "action must not be null");
-        Objects.requireNonNull(restRecommendation, "restRecommendation must not be null");
-        Objects.requireNonNull(reasoning, "reasoning must not be null");
+        Objects.requireNonNull(policyVersion, "policyVersion must not be null");
+        Objects.requireNonNull(currentBand, "currentBand must not be null");
+        Objects.requireNonNull(forecastBand, "forecastBand must not be null");
+        Objects.requireNonNull(required, "required must not be null");
+        Objects.requireNonNull(advised, "advised must not be null");
     }
 
     /**
-     * Check if action requires rest.
+     * Check if any action requires immediate response (not just advice).
+     * Used by legacy code that expects a boolean for rest requirement.
      */
     public boolean requiresRest() {
-        return action != Action.CONTINUE;
+        return !required.isEmpty();
     }
 
     /**
-     * Check if action is emergency stop.
+     * Check if any required action exists.
      */
-    public boolean isEmergencyStop() {
-        return action == Action.STOP_WORK;
+    public boolean hasRequiredAction() {
+        return !required.isEmpty();
     }
 
-    @Override
-    public String toString() {
-        return "PolicyDecision{" +
-                "action=" + action +
-                ", restRecommendation=" + restRecommendation +
-                ", reasoning='" + reasoning + '\'' +
-                '}';
+    /**
+     * Check if emergency stop is required.
+     */
+    public boolean isEmergencyStop() {
+        return required.stream()
+                .anyMatch(action -> PolicyDecision.Action.STOP_WORK.name().equals(action.action()));
+    }
+
+    /**
+     * Get the primary required action (first in list).
+     */
+    public PolicyAction getPrimaryRequiredAction() {
+        return required.isEmpty() ? null : required.get(0);
     }
 }
