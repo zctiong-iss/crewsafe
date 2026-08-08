@@ -63,13 +63,13 @@ services:
       # developer choose live collection or deterministic fixture replay without editing
       # application.yml or the Compose file.
       WEATHER_DATA_MODE: ${WEATHER_DATA_MODE:-live}
-      WEATHER_INGESTION_ENABLED: ${WEATHER_INGESTION_ENABLED:-false}
-      WEATHER_FIXTURE_LOOP: ${WEATHER_FIXTURE_LOOP:-false}
+      WEATHER_INGESTION_ENABLED: ${WEATHER_INGESTION_ENABLED:-true}
+      WEATHER_FIXTURE_LOOP: ${WEATHER_FIXTURE_LOOP:-true}
       NEA_API_KEY: ${NEA_API_KEY:-}
       # Lightning shares WEATHER_DATA_MODE above (one switch for "does this instance call
       # real government APIs at all") but has its own enabled flag and loop setting, since a
       # developer may want one feed running without the other.
-      LIGHTNING_INGESTION_ENABLED: ${LIGHTNING_INGESTION_ENABLED:-false}
+      LIGHTNING_INGESTION_ENABLED: ${LIGHTNING_INGESTION_ENABLED:-true}
       LIGHTNING_FIXTURE_LOOP: ${LIGHTNING_FIXTURE_LOOP:-false}
     volumes:
       - ../:/workspace

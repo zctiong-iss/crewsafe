@@ -100,4 +100,72 @@ it("lists shifts from every site the user belongs to", async () => {
 
     warn.mockRestore();
   });
+
+  // A crew shift at site-1 that the signed-in supervisor (u-1) is not assigned to.
+  const crewOfTwo = () =>
+    server.use(
+      http.get("*/api/v1/sites/:siteId/shifts", () =>
+        HttpResponse.json([
+          {
+            id: "shift-crew",
+            siteId: "site-1",
+            startsAt: "2026-08-10T00:00:00Z",
+            endsAt: "2026-08-10T08:00:00Z",
+            status: "PLANNED",
+            assignments: [
+              { id: "a-1", workerId: "00000000-0000-4000-8000-000000000001", intensity: "MODERATE", taskName: "Grass Cutting", acclimatisationDay: 2 },
+              { id: "a-2", workerId: "00000000-0000-4000-8000-000000000002", intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
+            ],
+          },
+          {
+            id: "shift-other",
+            siteId: "site-1",
+            startsAt: "2026-08-11T00:00:00Z",
+            endsAt: "2026-08-11T08:00:00Z",
+            status: "PLANNED",
+            assignments: [
+              { id: "a-3", workerId: "00000000-0000-4000-8000-000000000002", intensity: "LIGHT", taskName: "Signage", acclimatisationDay: 3 },
+            ],
+          },
+        ]),
+      ),
+    );
+
+  // The worker-scoped view narrows this list and this table; a supervisor's must stay whole.
+  it("keeps every shift on the board for a supervisor", async () => {
+    crewOfTwo();
+    renderApp();
+
+    expect(await screen.findByText(/10 Aug/)).toBeInTheDocument();
+    expect(screen.getByText(/11 Aug/)).toBeInTheDocument();
+  });
+
+  it("shows a supervisor the whole crew, not one row", async () => {
+    crewOfTwo();
+    const user = userEvent.setup();
+    renderApp();
+    const [firstCard] = await screen.findAllByRole("button", { name: "Show crew" });
+    await user.click(firstCard!);
+
+    expect(screen.getByText("Grass Cutting")).toBeInTheDocument();
+    expect(screen.getByText("Formwork")).toBeInTheDocument();
+  });
+
+  /**
+   * The side-by-side crew layout is pure CSS, keyed off .shift-card--open. jsdom resolves
+   * no media queries, so the class toggle is the contract worth pinning — if it survives,
+   * the stylesheet has something to hook.
+   */
+  it("toggles the modifier class the expanded layout keys off", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    const card = await screen.findByRole("article");
+    expect(card).not.toHaveClass("shift-card--open");
+
+    await user.click(screen.getByRole("button", { name: "Show crew" }));
+    expect(card).toHaveClass("shift-card--open");
+
+    await user.click(screen.getByRole("button", { name: "Hide crew" }));
+    expect(card).not.toHaveClass("shift-card--open");
+  });
 });
