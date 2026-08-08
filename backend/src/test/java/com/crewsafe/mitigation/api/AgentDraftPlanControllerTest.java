@@ -1,5 +1,9 @@
 package com.crewsafe.mitigation.api;
 
+import com.crewsafe.AbstractIntegrationTest;
+import com.crewsafe.identity.domain.AppUser;
+import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.mitigation.ai.bedrock.BedrockException;
 import com.crewsafe.mitigation.ai.bedrock.BedrockTimeoutException;
 import com.crewsafe.mitigation.domain.AgentDraftPlan;
@@ -10,10 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -28,26 +31,41 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Controller tests for AgentDraftPlanController
+ * Integration tests for AgentDraftPlanController.
+ * Tests API endpoints and authorization using full Spring context.
+ *
+ * @author Surya Kumaraguru
  */
-@WebMvcTest(AgentDraftPlanController.class)
+@AutoConfigureMockMvc
 @DisplayName("Agent Draft Plan Controller Tests")
-class AgentDraftPlanControllerTest {
+class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private AppUserRepository users;
+
     @MockBean
     private AgentDraftPlanService draftPlanService;
 
     private UUID siteId;
     private UUID supervisorId;
+    private String supervisorToken;
+
+    private AppUser user(Role role) {
+        String username = "agent-draft-" + role + "-" + UUID.randomUUID();
+        createCognitoUser(username);
+        return users.save(new AppUser(username, subFor(username), "Agent Draft Test " + role, role));
+    }
 
     @BeforeEach
     void setUp() {
-        supervisorId = UUID.randomUUID();
+        AppUser supervisor = user(Role.SUPERVISOR);
+        supervisorId = supervisor.getId();
+        supervisorToken = mintAccessToken(supervisor.getUsername());
         siteId = UUID.randomUUID();
     }
 
@@ -56,7 +74,6 @@ class AgentDraftPlanControllerTest {
     class GenerateDraftPlanTests {
         @Test
         @DisplayName("Successfully generate draft plan (201 Created)")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGenerateDraftPlanSuccess() throws Exception {
             // Arrange
             GenerateAgentDraftPlanRequest request = new GenerateAgentDraftPlanRequest(
@@ -79,7 +96,8 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(draft);
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")
+            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+                    .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
@@ -93,7 +111,6 @@ class AgentDraftPlanControllerTest {
 
         @Test
         @DisplayName("Return 504 on Bedrock timeout")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGenerateDraftPlanTimeout() throws Exception {
             // Arrange
             GenerateAgentDraftPlanRequest request = new GenerateAgentDraftPlanRequest(
@@ -105,7 +122,7 @@ class AgentDraftPlanControllerTest {
                     .thenThrow(new BedrockTimeoutException("Timeout", null));
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")
+            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isGatewayTimeout())
@@ -115,7 +132,6 @@ class AgentDraftPlanControllerTest {
 
         @Test
         @DisplayName("Return 503 on Bedrock error")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGenerateDraftPlanBedrockError() throws Exception {
             // Arrange
             GenerateAgentDraftPlanRequest request = new GenerateAgentDraftPlanRequest(
@@ -127,7 +143,7 @@ class AgentDraftPlanControllerTest {
                     .thenThrow(new BedrockException("API Error", null));
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")
+            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isServiceUnavailable())
@@ -137,13 +153,12 @@ class AgentDraftPlanControllerTest {
 
         @Test
         @DisplayName("Return 400 on invalid request (missing siteId)")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGenerateDraftPlanInvalidRequest() throws Exception {
             // Arrange
             String invalidRequest = "{\"planContext\": \"Test\"}"; // Missing siteId
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")
+            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(invalidRequest))
                     .andExpect(status().isBadRequest())
@@ -152,7 +167,6 @@ class AgentDraftPlanControllerTest {
 
         @Test
         @DisplayName("Reject request without SUPERVISOR role (403 Forbidden)")
-        @WithMockUser(roles = "WORKER")
         void testGenerateDraftPlanUnauthorized() throws Exception {
             // Arrange
             GenerateAgentDraftPlanRequest request = new GenerateAgentDraftPlanRequest(
@@ -161,7 +175,7 @@ class AgentDraftPlanControllerTest {
             );
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")
+            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden())
@@ -174,7 +188,6 @@ class AgentDraftPlanControllerTest {
     class GetDraftPlanTests {
         @Test
         @DisplayName("Successfully retrieve draft plan (200 OK)")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGetDraftPlanSuccess() throws Exception {
             // Arrange
             UUID planId = UUID.randomUUID();
@@ -197,7 +210,6 @@ class AgentDraftPlanControllerTest {
 
         @Test
         @DisplayName("Return 404 when draft plan not found")
-        @WithMockUser(roles = "SUPERVISOR")
         void testGetDraftPlanNotFound() throws Exception {
             // Arrange
             UUID planId = UUID.randomUUID();
@@ -205,8 +217,7 @@ class AgentDraftPlanControllerTest {
                     .thenThrow(new IllegalArgumentException("Draft plan not found"));
 
             // Act & Assert
-            mockMvc.perform(get("/api/supervisor/agent-plans/" + planId)
-)
+            mockMvc.perform(get("/api/supervisor/agent-plans/" + planId))
                     .andExpect(status().isNotFound())
                     .andExpect(jsonPath("$.errorCode").value("not_found"))
                     .andReturn();
@@ -236,8 +247,7 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(List.of(plan1, plan2));
 
             // Act & Assert
-            mockMvc.perform(get("/api/supervisor/agent-plans/site/" + siteId + "/pending")
-)
+            mockMvc.perform(get("/api/supervisor/agent-plans/site/" + siteId + "/pending"))
                     .andExpect(status().isOk())
                     .andReturn();
         }
@@ -250,13 +260,12 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(List.of());
 
             // Act & Assert
-            MvcResult result = mockMvc.perform(get("/api/supervisor/agent-plans/site/" + siteId + "/pending")
-)
+            MvcResult result = mockMvc.perform(get("/api/supervisor/agent-plans/site/" + siteId + "/pending"))
                     .andExpect(status().isOk())
                     .andReturn();
 
             String content = result.getResponse().getContentAsString();
-            assertTrue(content.contains("[]"));
+            assertEquals("[]", content.trim());
         }
     }
 
@@ -279,8 +288,7 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(approved);
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/approve")
-)
+            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/approve"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.approvalStatus").value("APPROVED"))
                     .andReturn();
@@ -297,8 +305,7 @@ class AgentDraftPlanControllerTest {
                     .thenThrow(new IllegalArgumentException("Supervisor cannot approve plan from another supervisor"));
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/approve")
-)
+            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/approve"))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.errorCode").value("invalid_operation"))
                     .andReturn();
@@ -324,8 +331,7 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(rejected);
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/reject")
-)
+            mockMvc.perform(post("/api/supervisor/agent-plans/" + planId + "/reject"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.approvalStatus").value("REJECTED"))
                     .andReturn();
@@ -351,8 +357,7 @@ class AgentDraftPlanControllerTest {
                     .thenReturn(List.of(plan));
 
             // Act & Assert
-            mockMvc.perform(get("/api/supervisor/agent-plans/mine")
-)
+            mockMvc.perform(get("/api/supervisor/agent-plans/mine"))
                     .andExpect(status().isOk())
                     .andReturn();
 
@@ -361,3 +366,4 @@ class AgentDraftPlanControllerTest {
     }
 
 }
+
