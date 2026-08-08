@@ -1,8 +1,14 @@
 package com.crewsafe.mitigation.ai.bedrock;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
-@ConfigurationProperties(prefix = "crewsafe.bedrock")
+/**
+ * Properties for Amazon Bedrock AI API configuration.
+ * Binds to 'app.bedrock.*' properties from application.yml.
+ */
+@Component
+@ConfigurationProperties(prefix = "app.bedrock")
 public class BedrockProperties {
     private String region = "ap-southeast-1";
     private String modelId = "anthropic.claude-3-5-sonnet-20241022-v2:0";
