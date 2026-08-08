@@ -1,0 +1,16 @@
+{
+  "resolved": {
+    "total": 1,
+    "issues": [{
+      "key": "SAFE-OPEN-1",
+      "project": "zctiong-iss_crewsafe",
+      "type": "VULNERABILITY",
+      "severity": "HIGH",
+      "status": "RESOLVED",
+      "resolution": "FIXED",
+      "rule": "safe-rule-1",
+      "creationDate": "2026-08-08T00:00:00Z",
+      "updateDate": "2026-08-08T00:02:00Z"
+    }]
+  }
+}

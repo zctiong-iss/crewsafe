@@ -49,6 +49,14 @@
       "allow_destroy": false,
       "execution_role_family": "standard"
     },
+    "securityhub-import-shared-dev": {
+      "jira_key": "SCRUM-284",
+      "root": "infra/terraform/securityhub-import",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/securityhub-import/shared-dev.tfstate",
+      "allow_destroy": false,
+      "execution_role_family": "standard"
+    },
     "secrets-shared-dev": {
       "jira_key": "SCRUM-174",
       "root": "infra/terraform/secrets",

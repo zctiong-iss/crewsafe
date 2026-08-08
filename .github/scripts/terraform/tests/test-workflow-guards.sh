@@ -48,3 +48,7 @@ assert_contains ".github/workflows/terraform-validate.yml" 'terraform-provider-l
 assert_contains ".github/workflows/terraform-validate.yml" 'terraform providers lock'
 assert_contains ".github/workflows/terraform-validate.yml" 'Do not execute Terraform locally.'
 assert_contains ".github/workflows/terraform-validate.yml" 'needs: lockfiles'
+assert_contains ".github/workflows/terraform-validate.yml" 'test-securityhub-inspector-source-guard.sh'
+assert_contains ".github/workflows/terraform-validate.yml" 'test-securityhub-inspector-runbook.sh'
+assert_not_contains ".github/workflows/terraform-validate.yml" 'terraform apply'
+assert_not_contains ".github/workflows/terraform-validate.yml" 'terraform destroy'
