@@ -1,0 +1,9 @@
+{
+  "scenario": "unexpected-target-role",
+  "expected": "fail-closed",
+  "target_role": "CrewSafeUnexpectedRole",
+  "allowed_target_roles": [
+    "CrewSafeGitHubTerraformPlanRole",
+    "CrewSafeGitHubTerraformApplyRole"
+  ]
+}

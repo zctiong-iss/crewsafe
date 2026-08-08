@@ -70,7 +70,7 @@ variable "initial_image_tag" {
   # definition creation, after which ignore_changes hands the deployed image to SCRUM-145.
   # It does need to still EXIST in the registry when the first apply runs — SCRUM-177 retains
   # the newest twenty images, so re-pin if twenty pushes land before that apply.
-  default = "af7727812ee82bb74afc172fa6e5d4b865752152"
+  default = "8f828a3e395670c8e24a8146e891e43b7f2dafe8"
   validation {
     condition     = can(regex("^[0-9a-f]{7,40}$", var.initial_image_tag))
     error_message = "initial_image_tag must be a commit SHA: 7 to 40 lowercase hexadecimal characters. 'latest' and branch names are rejected."

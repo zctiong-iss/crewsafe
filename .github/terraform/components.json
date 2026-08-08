@@ -6,49 +6,72 @@
       "root": "infra/terraform/cognito",
       "backend_strategy": "remote",
       "state_key": "crewsafe/cognito/shared-dev.tfstate",
-      "allow_destroy": true
+      "allow_destroy": true,
+      "execution_role_family": "standard"
     },
     "compute-shared-dev": {
       "jira_key": "SCRUM-176",
       "root": "infra/terraform/compute",
       "backend_strategy": "remote",
       "state_key": "crewsafe/compute/shared-dev.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     },
     "database-shared-dev": {
       "jira_key": "SCRUM-175",
       "root": "infra/terraform/database",
       "backend_strategy": "remote",
       "state_key": "crewsafe/database/shared-dev.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     },
     "ecr-shared-dev": {
       "jira_key": "SCRUM-192",
       "root": "infra/terraform/ecr",
       "backend_strategy": "remote",
       "state_key": "crewsafe/ecr/shared-dev.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
+    },
+    "iam-policy-management-shared-dev": {
+      "jira_key": "SCRUM-265",
+      "root": "infra/terraform/iam-policy-management",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/iam-policy-management/shared-dev.tfstate",
+      "allow_destroy": false,
+      "execution_role_family": "policy-management"
     },
     "network-shared-dev": {
       "jira_key": "SCRUM-173",
       "root": "infra/terraform/network",
       "backend_strategy": "remote",
       "state_key": "crewsafe/network/shared-dev.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
+    },
+    "securityhub-import-shared-dev": {
+      "jira_key": "SCRUM-284",
+      "root": "infra/terraform/securityhub-import",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/securityhub-import/shared-dev.tfstate",
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     },
     "secrets-shared-dev": {
       "jira_key": "SCRUM-174",
       "root": "infra/terraform/secrets",
       "backend_strategy": "remote",
       "state_key": "crewsafe/secrets/shared-dev.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     },
     "state-backend": {
       "jira_key": "SCRUM-155",
       "root": "infra/terraform/bootstrap/state",
       "backend_strategy": "self-bootstrap",
       "state_key": "crewsafe/bootstrap/terraform.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     }
   }
 }

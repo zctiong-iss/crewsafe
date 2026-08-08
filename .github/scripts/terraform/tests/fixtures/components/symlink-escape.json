@@ -6,7 +6,8 @@
       "root": "infra/terraform/synthetic-link",
       "backend_strategy": "remote",
       "state_key": "crewsafe/test/symlink.tfstate",
-      "allow_destroy": false
+      "allow_destroy": false,
+      "execution_role_family": "standard"
     }
   }
 }

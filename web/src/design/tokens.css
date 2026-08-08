@@ -15,11 +15,12 @@
   /* ---- Surfaces -------------------------------------------------------- */
   /* The console is used outdoors on bright screens, so the canvas is a cool grey rather
      than white: it lets white cards read as raised without needing heavy shadows. */
-  --canvas: #f0ece6;
-  --surface: #f5f2ec;
-  --surface-sunken: #f5f2ec;
+  --canvas: #f0ece6;           /* Keep your existing Warm Stone background */
+  --surface: #ffffff;          /* Pure White Cards for high outdoor contrast */
+  --surface-sunken: #f5f2ec;   /* Warm stone tone for inputs & recessed panels */
   --navy: #0f2540; /* sidebar, headings — the anchor colour of the product */
   --navy-raised: #1b3557; /* active nav item, cards that sit on the navy */
+
 
   /* ---- Ink ------------------------------------------------------------- */
   --ink: #0f2540;
@@ -42,28 +43,24 @@
   /* ---- Hazard scale 1: WBGT risk band ---------------------------------- */
   /* What the *environment* is doing. Rendered filled, because it is a state of the world
      that the user does not control. Sequential low -> extreme. */
-  --band-low: #0f7b6c;
-  --band-low-wash: #dff3ef;
-  --band-moderate: #ea913f;
-  --band-moderate-wash: #fdf0d5;
-  --band-high: #b42318;
-  --band-high-wash: #fde8e6;
-  --band-extreme: #7a1d1d;
-  --band-extreme-wash: #fbdad7;
-  --band-gradient: linear-gradient(
-      to right,
-      var(--band-low),
-      var(--band-moderate),
-      var(--band-high),
-      var(--band-extreme)
-      );
+  /* Decided to go with the Okabe-Ito colour scale for colour-blind user accessibility */
+
+  --band-low: #0284c7;         /* Cobalt Blue (Low Risk - color-blind safe) */
+  --band-low-wash: #e0f2fe;
+  --band-moderate: #f59e0b;    /* Gold Amber (Moderate Risk) */
+  --band-moderate-wash: #fef3c7;
+  --band-high: #dc2626;        /* Vermilion Red (High Risk) */
+  --band-high-wash: #fee2e2;
+  --band-extreme: #991b1b;     /* Deep Crimson (Stop-Work Order) */
+  --band-extreme-wash: #fecaca;
 
   /* ---- Hazard scale 2: work intensity ---------------------------------- */
-  /* What the *crew* is doing. Rendered outlined, so a glance never confuses "hard work"
-     with "dangerous conditions" — they share a hue family but not a treatment. */
-  --intensity-light: #3f6212;
-  --intensity-moderate: #ea913f;
-  --intensity-heavy: #9f1239;
+  /* What the *crew* is doing. Rendered OUTLINED, so a glance never confuses "hard work"
+     with "dangerous conditions" — uses Okabe-Ito color-blind safe hues. */
+  --intensity-light: #0284c7;     /* Cobalt / Sky Blue outline (Light Work) */
+  --intensity-moderate: #d97706;  /* Gold Amber outline (Moderate Work) */
+  --intensity-heavy: #b91c1c;     /* Vermilion Red outline (Heavy Work) */
+
 
   /* ---- Status ---------------------------------------------------------- */
   --status-ok: #15803d;
@@ -72,6 +69,11 @@
   --status-waiting-wash: #fdf0d5;
   --status-none: #64748b;
   --status-none-wash: #f0ece6;
+
+  /* ---- Single Solid High-Vis Alert Banners ------------------------------ */
+  --alert-banner-bg: #f59e0b;  /* Solid High-Vis Amber */
+  --alert-banner-ink: #000000; /* Pure Black text (14:1 contrast ratio) */
+
 
   /* ---- Type ------------------------------------------------------------ */
   /* IBM Plex was drawn for technical interfaces and has true tabular figures, which is

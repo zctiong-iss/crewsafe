@@ -31,3 +31,8 @@ output "web_push_role_arn" {
   description = "ARN of the dedicated future web GitHub Actions image-push role."
   value       = aws_iam_role.web_ecr_push.arn
 }
+
+output "securityhub_ecr_insight_arn" {
+  description = "ARN of the stable Security Hub Insight for active Critical and High Inspector ECR findings."
+  value       = aws_securityhub_insight.ecr_active_critical_high.arn
+}

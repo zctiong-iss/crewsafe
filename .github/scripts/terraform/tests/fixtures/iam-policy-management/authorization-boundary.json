@@ -1,0 +1,20 @@
+{
+  "scenario": "authorization-boundary",
+  "expected": "deny-normal-mutation",
+  "normal_plan_role": {
+    "allowed": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListAttachedRolePolicies"],
+    "denied": ["iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:AttachRolePolicy", "iam:PutRolePolicy"]
+  },
+  "normal_apply_role": {
+    "allowed": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListAttachedRolePolicies"],
+    "denied": ["iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:AttachRolePolicy", "iam:PutRolePolicy"]
+  },
+  "policy_management_plan_role": {
+    "allowed": ["iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListAttachedRolePolicies"],
+    "denied": ["iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:AttachRolePolicy", "iam:PutRolePolicy"]
+  },
+  "policy_management_apply_role": {
+    "allowed": ["iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:SetDefaultPolicyVersion", "iam:AttachRolePolicy"],
+    "denied": ["iam:CreateRole", "iam:PutRolePolicy", "iam:UpdateAssumeRolePolicy", "iam:CreateOpenIDConnectProvider"]
+  }
+}
