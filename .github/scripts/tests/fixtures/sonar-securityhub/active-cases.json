@@ -5,7 +5,8 @@
       "key": "SAFE-OPEN-1",
       "project": "zctiong-iss_crewsafe",
       "type": "VULNERABILITY",
-      "severity": "HIGH",
+      "severity": "CRITICAL",
+      "impacts": [{"softwareQuality": "SECURITY", "severity": "HIGH"}],
       "status": "OPEN",
       "rule": "safe-rule-1",
       "creationDate": "2026-08-08T00:00:00Z",
@@ -24,6 +25,20 @@
       "creationDate": "not-a-time",
       "updateDate": "not-a-time",
       "message": "do not map this text"
+    }]
+  },
+  "invalidImpact": {
+    "total": 1,
+    "issues": [{
+      "key": "SAFE-LOW-1",
+      "project": "zctiong-iss_crewsafe",
+      "type": "VULNERABILITY",
+      "severity": "BLOCKER",
+      "impacts": [{"softwareQuality": "SECURITY", "severity": "LOW"}],
+      "status": "OPEN",
+      "rule": "safe-rule-low",
+      "creationDate": "2026-08-08T00:00:00Z",
+      "updateDate": "2026-08-08T00:01:00Z"
     }]
   }
 }
