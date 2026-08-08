@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: WBGT CrewSafe SG API — Shift endpoints
-  version: "1.1"
+  version: "1.2"
   description: >
     Contract for SCRUM-159 (US-02: create a shift with workers, tasks and intensity).
     Every operation is site-scoped: the caller must be a member of {siteId}
@@ -18,6 +18,11 @@ info:
     a site's workers, so a create-shift form had no way to populate a worker picker.
     GET /sites/{siteId}/workers closes that — it lives here rather than a separate site
     contract because its only consumer today is this form.
+
+    Extended for SCRUM-255: DELETE erases a shift outright, with no way to keep "this
+    shift didn't happen" on record for audit/history. POST .../shifts/{shiftId}/cancel
+    adds that as a status transition (PLANNED or ACTIVE → CANCELLED) rather than a row
+    removal; DELETE's behaviour is unchanged.
 
 servers:
   - url: /
@@ -139,6 +144,38 @@ paths:
       responses:
         "204":
           description: The shift (and its assignments) no longer exist.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: cancelShift
+      summary: Cancel a shift that was called off rather than run
+      description: >
+        Retains the shift and its assignments as a record — distinguishable from an
+        active shift by status — rather than removing them the way DELETE does. Only a
+        PLANNED or ACTIVE shift can be cancelled; a CLOSED or already-CANCELLED shift
+        returns 400. Terminal: there is no un-cancel.
+      responses:
+        "200":
+          description: The cancelled shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -331,8 +368,12 @@ components:
 
     ShiftStatus:
       type: string
-      enum: [PLANNED, ACTIVE, CLOSED]
-      description: Server-controlled. A client cannot set this directly at creation — every shift is created as PLANNED.
+      enum: [PLANNED, ACTIVE, CLOSED, CANCELLED]
+      description: >
+        Server-controlled. A client cannot set this directly at creation — every shift
+        is created as PLANNED. The only transition a client can trigger is cancel (see
+        POST .../shifts/{shiftId}/cancel), from PLANNED or ACTIVE only; CANCELLED is
+        terminal — there is no un-cancel.
 
     Intensity:
       type: string

@@ -74,6 +74,84 @@
         "iam:UpdateRoleDescription"
       ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-ecr-web-push"
+    },
+    {
+      "Sid": "ManageSecurityHubAccount",
+      "Effect": "Allow",
+      "Action": [
+        "securityhub:DescribeHub",
+        "securityhub:DisableSecurityHub",
+        "securityhub:EnableSecurityHub"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "CreateSecurityHubServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/securityhub.amazonaws.com/AWSServiceRoleForSecurityHub",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "securityhub.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "UpdateSecurityHubConfiguration",
+      "Effect": "Allow",
+      "Action": [
+        "securityhub:UpdateSecurityHubConfiguration"
+      ],
+      "Resource": "arn:aws:securityhub:ap-southeast-1:<ACCOUNT_ID>:hub/default"
+    },
+    {
+      "Sid": "CreateInspectorServiceLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/aws-service-role/inspector2.amazonaws.com/AWSServiceRoleForAmazonInspector2",
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "inspector2.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "ManageSecurityHubInsight",
+      "Effect": "Allow",
+      "Action": [
+        "securityhub:CreateInsight",
+        "securityhub:DeleteInsight",
+        "securityhub:GetInsight",
+        "securityhub:GetInsights",
+        "securityhub:ListInsights",
+        "securityhub:UpdateInsight"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageInspectorEcrEnablement",
+      "Effect": "Allow",
+      "Action": [
+        "inspector2:BatchGetAccountStatus",
+        "inspector2:Disable",
+        "inspector2:Enable",
+        "inspector2:ListAccountPermissions"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "ManageEcrEnhancedScanning",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRegistry",
+        "ecr:GetRegistryScanningConfiguration",
+        "ecr:PutRegistryScanningConfiguration"
+      ],
+      "Resource": "*"
     }
   ]
 }

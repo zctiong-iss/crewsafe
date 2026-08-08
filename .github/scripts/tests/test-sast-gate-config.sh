@@ -50,6 +50,31 @@ sast_block() {
 
 sast="$(sast_block)"
 
+import_block() {
+  awk '/^  sonar-securityhub-import:/{f=1} /^  [a-z-]+:$/{if($0 !~ /^  sonar-securityhub-import:/) f=0} f' "$WORKFLOW"
+}
+
+import_job="$(import_block)"
+
+check "Sonar Security Hub import job exists" \
+  "$([[ -n "$import_job" ]] && echo true || echo false)"
+check "import job waits for SAST completion" \
+  "$([[ "$import_job" == *"needs: sast"* ]] && echo true || echo false)"
+check "import job runs when SAST concludes unsuccessfully" \
+  "$([[ "$import_job" == *"always() &&"* ]] && echo true || echo false)"
+check "import job is restricted to main push or manual dispatch" \
+  "$([[ "$import_job" == *"github.event_name == 'push'"* && "$import_job" == *"github.event_name == 'workflow_dispatch'"* && "$import_job" == *"github.ref == 'refs/heads/main'"* ]] && echo true || echo false)"
+check "import job validates its role configuration" \
+  "$([[ "$import_job" == *"CREWSAFE_SONAR_SECURITYHUB_IMPORT_ROLE_ARN is not configured"* ]] && echo true || echo false)"
+check "import job has read-only GitHub plus OIDC permissions" \
+  "$([[ "$import_job" == *"contents: read"* && "$import_job" == *"id-token: write"* && "$import_job" != *"contents: write"* ]] && echo true || echo false)"
+check "import job has visible inactive state" \
+  "$([[ "$import_job" == *"NOT-ACTIVATED"* ]] && echo true || echo false)"
+check "import job invokes the bounded importer" \
+  "$([[ "$import_job" == *".github/scripts/security/import-sonar-securityhub.sh"* ]] && echo true || echo false)"
+check "import job has a ten-minute upper bound" \
+  "$([[ "$import_job" == *"timeout-minutes: 10"* ]] && echo true || echo false)"
+
 # --- the gate must actually gate ------------------------------------------
 
 check "sonar.qualitygate.wait=true is set" \

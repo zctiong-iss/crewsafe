@@ -83,7 +83,8 @@ class WeatherControllerTest extends AbstractIntegrationTest {
     @Test
     void returnsNotFoundUntilIngestionHasStoredWeather() throws Exception {
         mockMvc.perform(authenticatedGet(visibleSite.getId()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
