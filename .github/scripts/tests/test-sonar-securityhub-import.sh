@@ -45,6 +45,19 @@ run_import() {
   "$SCRIPT" >"$output" 2>&1
 }
 
+run_import_dispatch() {
+  local response="$1" lifecycle_response="$2" import_response="$3" output="$4"
+  : >"$work/calls.log"
+  PATH="$mock_bin:$PATH" \
+  CONFIG_FILE="$config" GITHUB_ACTIONS=true GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main \
+  GITHUB_SHA=0123456789012345678901234567890123456789 GITHUB_RUN_ID=unit-test \
+  SONAR_SECURITYHUB_TOKEN=synthetic-test-token CREWSAFE_SECURITYHUB_ACCOUNT_ID=123456789012 \
+  AWS_REGION=ap-southeast-1 MOCK_CALL_LOG="$work/calls.log" MOCK_CURL_RESPONSE_FILE="$response" \
+  MOCK_CURL_LIFECYCLE_RESPONSE_FILE="$lifecycle_response" \
+  MOCK_AWS_FINDINGS_RESPONSE_FILE="$findings" MOCK_AWS_IMPORT_RESPONSE_FILE="$import_response" \
+  "$SCRIPT" >"$output" 2>&1
+}
+
 valid="$work/valid.json"
 jq '.valid' "$FIXTURES/active-cases.json" >"$valid"
 invalid="$work/invalid.json"
@@ -60,6 +73,9 @@ assert_contains "$summary" "crewsafe/sonarcloud/zctiong-iss_crewsafe/SAFE-OPEN-1
 assert_not_contains "$summary" "synthetic-test-token" "token is redacted"
 assert_not_contains "$summary" "message" "raw Sonar text is excluded"
 assert_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "custom finding is submitted"
+
+assert_exit 0 "manual workflow dispatch imports selected finding" run_import_dispatch "$valid" "$empty" "$import_ok" "$out"
+assert_contains "$(cat "$out")" "IMPORTED" "manual dispatch summary is text-labelled"
 
 jq '.sonarHostUrl = "https://hostile.invalid"' "$valid_config" >"$config"
 assert_exit 1 "hostile origin is denied before any network call" run_import "$valid" "$empty" "$import_ok" "$out"
