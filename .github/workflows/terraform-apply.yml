@@ -15,6 +15,7 @@ on:
           - ecr-shared-dev
           - iam-policy-management-shared-dev
           - network-shared-dev
+          - securityhub-import-shared-dev
           - secrets-shared-dev
           - state-backend
       operation:

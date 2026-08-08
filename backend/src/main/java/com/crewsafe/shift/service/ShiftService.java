@@ -7,6 +7,7 @@ import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
 import com.crewsafe.site.domain.Site;
@@ -149,6 +150,33 @@ public class ShiftService {
                     "Deleted shift for site " + siteId));
             return true;
         }).orElse(false);
+    }
+
+    /**
+     * Cancels a shift (SCRUM-255): the row and its assignments are kept, unlike {@link
+     * #deleteShift} which erases them, so the shift stays visible as "this didn't
+     * happen" for audit/history. Only {@link ShiftStatus#PLANNED} or {@link
+     * ShiftStatus#ACTIVE} may transition to {@link ShiftStatus#CANCELLED} — a shift
+     * that already finished ({@link ShiftStatus#CLOSED}) or was already cancelled
+     * cannot be cancelled again, and there is deliberately no un-cancel path.
+     *
+     * <p>Empty when no shift with this id exists under this site — the caller renders
+     * 404. Throws {@link BadRequestException} when the shift's current status is not
+     * one of the two that may become {@code CANCELLED}.
+     */
+    @Transactional
+    public Optional<Shift> cancelShift(UUID siteId, UUID actorId, UUID shiftId) {
+        return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            if (shift.getStatus() != ShiftStatus.PLANNED && shift.getStatus() != ShiftStatus.ACTIVE) {
+                throw new BadRequestException(
+                        "Shift " + shiftId + " cannot be cancelled from status " + shift.getStatus());
+            }
+
+            shift.cancel();
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, "SHIFT", shiftId,
+                    "Cancelled shift for site " + siteId));
+            return shift;
+        });
     }
 
     /**
