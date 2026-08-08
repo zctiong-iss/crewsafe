@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -96,7 +97,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
                     .thenReturn(draft);
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+            mockMvc.perform(post("/api/supervisor/agent-plans")
                     .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
@@ -122,7 +123,8 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
                     .thenThrow(new BedrockTimeoutException("Timeout", null));
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+            mockMvc.perform(post("/api/supervisor/agent-plans")
+                    .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isGatewayTimeout())
@@ -143,7 +145,8 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
                     .thenThrow(new BedrockException("API Error", null));
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+            mockMvc.perform(post("/api/supervisor/agent-plans")
+                    .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isServiceUnavailable())
@@ -158,7 +161,8 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
             String invalidRequest = "{\"planContext\": \"Test\"}"; // Missing siteId
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+            mockMvc.perform(post("/api/supervisor/agent-plans")
+                    .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(invalidRequest))
                     .andExpect(status().isBadRequest())
@@ -175,7 +179,8 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
             );
 
             // Act & Assert
-            mockMvc.perform(post("/api/supervisor/agent-plans")`r`n                    .header("Authorization", "Bearer " + supervisorToken))
+            mockMvc.perform(post("/api/supervisor/agent-plans")
+                    .header("Authorization", "Bearer " + supervisorToken)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isForbidden())
