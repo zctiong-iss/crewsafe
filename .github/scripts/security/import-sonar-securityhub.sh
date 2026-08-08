@@ -144,7 +144,7 @@ lookup_and_import() {
       AwsAccountId:$account,CreatedAt:$created,UpdatedAt:$updated,RecordState:$state,
       Title:("SonarCloud vulnerability " + $severity + " rule " + $rule),
       Description:("Redacted SonarCloud vulnerability for project " + $project + ", rule " + $rule + ", commit " + $commit),
-      FindingProviderFields:{Severity:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
+      FindingProviderFields:{Severity:{Label:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Original:$severity},Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
       ProductFields:{"crewsafe/sonarSeverity":$severity,"crewsafe/ruleKey":$rule},
       Resources:[{Type:"Other",Id:("crewsafe:sonarcloud:" + $project)}]}]
   ' >"$payload" || fail ASFF_BUILD_FAILED
