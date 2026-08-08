@@ -59,6 +59,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * The message is logged, not returned — same rule and same reason as
+     * {@link #handleBadRequest}.
+     */
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
+        log.debug("Conflict: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of("Conflict", "Request conflicts with the current state of the resource"));
+    }
+
+    /**
      * Handles {@link IllegalArgumentException} from business logic validation.
      * Prevents typo'd or invalid IDs from returning 500 — bad input returns 400,
      * matching the BadRequestException pattern.
