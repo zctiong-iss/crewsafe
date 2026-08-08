@@ -98,10 +98,10 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Continue working
-            assertThat(decision.required()).isEmpty();
-            assertThat(decision.advised()).isNotEmpty();
-            assertThat(decision.advised().get(0).action()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
-            assertThat(decision.advised().get(0).reasoning()).contains("below threshold");
+            assertThat(decision.mandatoryActions()).isEmpty();
+            assertThat(decision.advisoryActions()).isNotEmpty();
+            assertThat(decision.advisoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
+            assertThat(decision.advisoryActions().get(0).reasoning()).contains("below threshold");
         }
 
         @Test
@@ -116,9 +116,9 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Extended rest recommended
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.EXTENDED_REST.name());
-            assertThat(decision.required().get(0).reasoning()).contains("exceeds threshold");
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.EXTENDED_REST.name());
+            assertThat(decision.mandatoryActions().get(0).reasoning()).contains("exceeds threshold");
         }
 
         @Test
@@ -133,8 +133,8 @@ class PolicyEngineServiceTest {
             );
 
             // Then: Short rest recommended
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
 
         @Test
@@ -149,8 +149,8 @@ class PolicyEngineServiceTest {
             );
 
             // Then: At exact threshold triggers rest
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
     }
 
@@ -168,9 +168,9 @@ class PolicyEngineServiceTest {
                     1
             );
 
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
-            assertThat(decision.required().get(0).ruleReference()).isNotNull();
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
+            assertThat(decision.mandatoryActions().get(0).ruleReference()).isNotNull();
         }
 
         @Test
@@ -184,8 +184,8 @@ class PolicyEngineServiceTest {
                     4
             );
 
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.SHORT_REST.name());
         }
 
         @Test
@@ -199,9 +199,9 @@ class PolicyEngineServiceTest {
                     7
             );
 
-            assertThat(decision.required()).isEmpty();
-            assertThat(decision.advised()).isNotEmpty();
-            assertThat(decision.advised().get(0).action()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
+            assertThat(decision.mandatoryActions()).isEmpty();
+            assertThat(decision.advisoryActions()).isNotEmpty();
+            assertThat(decision.advisoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.CONTINUE.name());
         }
     }
 
@@ -219,9 +219,9 @@ class PolicyEngineServiceTest {
                     7
             );
 
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
-            assertThat(decision.required().get(0).reasoning()).contains("emergency stop");
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
+            assertThat(decision.mandatoryActions().get(0).reasoning()).contains("emergency stop");
         }
 
         @Test
@@ -234,8 +234,8 @@ class PolicyEngineServiceTest {
                     1
             );
 
-            assertThat(decision.required()).isNotEmpty();
-            assertThat(decision.required().get(0).action()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
+            assertThat(decision.mandatoryActions()).isNotEmpty();
+            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyDecision.Action.STOP_WORK.name());
             assertThat(decision.isEmergencyStop()).isTrue();
         }
     }
@@ -372,7 +372,7 @@ class PolicyEngineServiceTest {
                     siteId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
             );
 
-            var action = decision.required().get(0);
+            var action = decision.mandatoryActions().get(0);
             assertThat(action.ruleReference()).isNotBlank();
             assertThat(action.appliesTo()).isNotEmpty();
             assertThat(action.reasoning()).isNotBlank();
@@ -415,14 +415,14 @@ class PolicyEngineServiceTest {
             var emergency = policyEngine.evaluate(
                     siteId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
             );
-            assertThat(emergency.required().get(0).ruleReference())
+            assertThat(emergency.mandatoryActions().get(0).ruleReference())
                     .isEqualTo("EMERGENCY_STOP_RULE");
 
             // Regular rest has different rule
             var rest = policyEngine.evaluate(
                     siteId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
             );
-            assertThat(rest.required().get(0).ruleReference())
+            assertThat(rest.mandatoryActions().get(0).ruleReference())
                     .isNotEqualTo("EMERGENCY_STOP_RULE");
         }
 
@@ -433,7 +433,7 @@ class PolicyEngineServiceTest {
                     siteId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 1
             );
 
-            var appliesTo = decision.required().get(0).appliesTo();
+            var appliesTo = decision.mandatoryActions().get(0).appliesTo();
             assertThat(appliesTo).isNotEmpty();
             // Check for at least one condition descriptor
             assertThat(appliesTo.stream().anyMatch(s -> s.contains("work") || s.contains("acclimatised")))

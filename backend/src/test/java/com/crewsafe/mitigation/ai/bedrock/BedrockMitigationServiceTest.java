@@ -60,7 +60,7 @@ class BedrockMitigationServiceTest {
 
         assertThat(result.mitigations()).hasSize(1);
         assertThat(result.mitigations().get(0).priority()).isEqualTo("HIGH");
-        assertThat(result.mitigations().get(0).action()).isEqualTo("Reduce work hours");
+        assertThat(result.mitigations().get(0).code()).isEqualTo("Reduce work hours");
     }
 
     @Test
