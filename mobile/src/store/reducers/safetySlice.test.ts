@@ -78,21 +78,24 @@ describe("mock mode", () => {
 describe("live mode", () => {
   beforeEach(() => mockIsMockApi.mockReturnValue(false));
 
-  it("asks the live endpoint about a real site, not the fixture's", async () => {
-    mockFetchAccessibleSites.mockResolvedValue([{ id: REAL_SITE, name: "Bishan" }]);
+  it("asks about the site the worker's shift is on", async () => {
     mockFetchSiteWeather.mockResolvedValue({ observation: observation(REAL_SITE), band: "BELOW_31" });
+    mockFetchMyShift.mockResolvedValue({ ...shift(), siteId: REAL_SITE });
 
     const payload = await run();
 
-    // The fixture id would 403 — `siteAccess.canAccess` has never heard of it.
+    // Before SCRUM-266 this had to resolve the site from GET /api/v1/sites, because the shift
+    // was a fixture naming a site no deployment had. /shifts/me is real now, so the shift names
+    // the site the worker is actually standing on — a fact rather than a good guess.
     expect(mockFetchSiteWeather).toHaveBeenCalledWith(REAL_SITE, "w1");
-    expect(mockFetchSiteConditions).not.toHaveBeenCalled();
+    expect(mockFetchLightningRisk).toHaveBeenCalledWith(REAL_SITE);
+    expect(mockFetchAccessibleSites).not.toHaveBeenCalled();
     expect(payload.conditions?.siteId).toBe(REAL_SITE);
   });
 
   it("carries no policy rather than a fixture one", async () => {
-    mockFetchAccessibleSites.mockResolvedValue([{ id: REAL_SITE, name: "Bishan" }]);
     mockFetchSiteWeather.mockResolvedValue({ observation: observation(REAL_SITE), band: "BELOW_31" });
+    mockFetchMyShift.mockResolvedValue({ ...shift(), siteId: REAL_SITE });
 
     const payload = await run();
 
@@ -100,34 +103,14 @@ describe("live mode", () => {
     expect(payload.policy).toBeNull();
   });
 
-  it("asks for lightning about the real site too, not the fixture's", async () => {
-    // Found on device, not here: the first version of SCRUM-261 passed shift.siteId to
-    // fetchLightningRisk and got a 403, because every live endpoint is site-scoped behind
-    // @siteAccess.canAccess and the fixture's site exists nowhere. The heat reading had
-    // already been fixed for this in SCRUM-209; lightning had to be fixed the same way.
-    mockFetchAccessibleSites.mockResolvedValue([{ id: REAL_SITE, name: "Bishan" }]);
-    mockFetchSiteWeather.mockResolvedValue({ observation: observation(REAL_SITE), band: "BELOW_31" });
-
-    await run();
-
-    expect(mockFetchLightningRisk).toHaveBeenCalledWith(REAL_SITE);
-    expect(mockFetchLightningRisk).not.toHaveBeenCalledWith(FIXTURE_SITE);
-  });
-
-  it("does not ask for lightning at all when the worker has no site", async () => {
-    mockFetchAccessibleSites.mockResolvedValue([]);
-
-    await run();
-
-    // No site means no site-scoped call to make. Asking anyway would be a guaranteed 403.
-    expect(mockFetchLightningRisk).not.toHaveBeenCalled();
-  });
-
-  it("treats no memberships as an empty card, not a failure", async () => {
-    mockFetchAccessibleSites.mockResolvedValue([]);
+  it("asks for nothing at all when the worker has no shift", async () => {
+    mockFetchMyShift.mockResolvedValue(null);
 
     const payload = await run();
 
+    // No shift means no site, and every live endpoint here is site-scoped. Asking anyway would
+    // be a guaranteed 403.
+    expect(mockFetchLightningRisk).not.toHaveBeenCalled();
     expect(mockFetchSiteWeather).not.toHaveBeenCalled();
     expect(payload.conditions).toBeNull();
   });

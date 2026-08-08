@@ -15,6 +15,16 @@ response, or personal data.
 The importer accepts only the exact `https://sonarcloud.io` origin. A configuration that
 attempts any other origin is denied before a request is made.
 
+Each imported finding includes a deterministic SonarCloud `SourceUrl` built from that
+fixed origin plus the validated project and issue keys. The URL contains no credential,
+source path, code snippet, or raw response data; opening it still requires the reviewer
+to have access to the SonarCloud project.
+
+For records imported before `SourceUrl` was added, the first run that sees a missing or
+different URL performs a single metadata repair with a later provider `UpdatedAt` and
+retains Sonar's validated `updateDate` as namespaced product metadata. Once the exact
+URL is present, later equal/older source timestamps remain `UNCHANGED`.
+
 The active SonarCloud request uses the software-quality `impactSeverities` filter for
 `BLOCKER,HIGH`. Do not replace it with the legacy `severities` filter: SonarCloud's
 type-severity vocabulary does not include `HIGH`. When the response includes MQR

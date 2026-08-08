@@ -55,6 +55,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { createShift } from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
+import { intensityColor } from "@/helpers/intensityColor";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Intensity } from "@/types/domain";
 import type { ShiftsStackParamList } from "@/navigation/types";
@@ -350,6 +351,7 @@ export default function CreateShiftScreen() {
                       value={(value as Intensity | null) ?? null}
                       onChange={onChange}
                       errorMessage={fieldState.error?.message}
+                      selectedColorFor={(intensity) => intensityColor(theme.colors, intensity)}
                     />
                   )}
                 />
