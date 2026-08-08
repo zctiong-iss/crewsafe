@@ -32,9 +32,11 @@ attempts any other origin is denied before a request is made.
 
 ## Controlled verification
 
-After SAST succeeds on a reviewed `main` run, observe the selected custom finding in
-`ap-southeast-1`. Record only the project/rule identifiers, mapped severity, commit
-reference, timestamps, stable ID, one abstract resource, run link, and outcome.
+After SAST completes on a reviewed `main` run, observe the selected custom finding in
+`ap-southeast-1`. A failed Sonar Quality Gate does not skip the importer; record that
+dependency outcome separately from the importer result. Record only the project/rule
+identifiers, mapped severity, commit reference, timestamps, stable ID, one abstract
+resource, run link, and outcome.
 
 Repeat once with permitted metadata change: exactly one stable record must show the later
 timestamp. Resolve only the configured controlled issue and observe `ARCHIVED` for the

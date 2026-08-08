@@ -58,8 +58,10 @@ import_job="$(import_block)"
 
 check "Sonar Security Hub import job exists" \
   "$([[ -n "$import_job" ]] && echo true || echo false)"
-check "import job needs successful SAST" \
+check "import job waits for SAST completion" \
   "$([[ "$import_job" == *"needs: sast"* ]] && echo true || echo false)"
+check "import job runs when SAST concludes unsuccessfully" \
+  "$([[ "$import_job" == *"if: always() &&"* ]] && echo true || echo false)"
 check "import job is restricted to main push" \
   "$([[ "$import_job" == *"github.event_name == 'push'"* && "$import_job" == *"github.ref == 'refs/heads/main'"* ]] && echo true || echo false)"
 check "import job has read-only GitHub plus OIDC permissions" \

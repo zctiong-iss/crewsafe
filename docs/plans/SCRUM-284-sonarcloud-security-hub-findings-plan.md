@@ -3,7 +3,7 @@
 ## Scope
 
 This change adds a CI-only, inactive-by-default importer after the existing Sonar
-SAST job. It permits only open Blocker/High Vulnerability records from the approved
+SAST job completes. It permits only open Blocker/High Vulnerability records from the approved
 project, maps only allowlisted identifiers and timestamps into a redacted custom
 finding, and is restricted to the approved Singapore account and region. It does not
 change SCRUM-274 Inspector/ECR controls, create tickets, remediate findings, alter a
@@ -11,8 +11,9 @@ release decision, or aggregate across accounts or regions.
 
 ## Security and delivery controls
 
-- The importer job runs only after SAST on a `push` to `main`, with `contents: read`
-  and job-scoped OIDC. A false reviewed configuration writes `NOT-ACTIVATED` and makes
+- The importer job runs after SAST completes on a `push` to `main`, including when the
+  Sonar Quality Gate concludes unsuccessfully, with `contents: read` and job-scoped
+  OIDC. A false reviewed configuration writes `NOT-ACTIVATED` and makes
   no Sonar or AWS call. Sonar requests are hard-allowlisted to `https://sonarcloud.io`;
   repository configuration cannot redirect the credential-bearing request.
 - The Sonar credential is a dedicated repository secret. Raw Sonar messages, paths,
