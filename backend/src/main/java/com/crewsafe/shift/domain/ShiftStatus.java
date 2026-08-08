@@ -2,7 +2,7 @@ package com.crewsafe.shift.domain;
 
 /**
  * Mirrors the {@code shift_status_chk} CHECK constraint in {@code V3__domain_schema.sql}
- * (widened by {@code V8__shift_cancelled_status.sql}) and {@code ShiftStatus} in
+ * (widened by {@code V10__shift_cancelled_status.sql}) and {@code ShiftStatus} in
  * {@code docs/api/shift.yaml} exactly.
  *
  * Server-controlled only: a client cannot set this at creation, every shift is created
