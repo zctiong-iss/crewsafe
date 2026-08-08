@@ -229,6 +229,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
     class PendingPlansTests {
         @Test
         @DisplayName("Return list of pending draft plans")
+        @WithMockUser(roles = "SUPERVISOR")
         void testGetPendingPlans() throws Exception {
             // Arrange
             AgentDraftPlan plan1 = AgentDraftPlan.builder()
@@ -254,6 +255,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
 
         @Test
         @DisplayName("Return empty list if no pending plans")
+        @WithMockUser(roles = "SUPERVISOR")
         void testGetPendingPlansEmpty() throws Exception {
             // Arrange
             when(draftPlanService.getPendingDraftPlans(siteId, supervisorId))
@@ -274,6 +276,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
     class ApprovePlanTests {
         @Test
         @DisplayName("Successfully approve draft plan")
+        @WithMockUser(roles = "SUPERVISOR")
         void testApprovePlanSuccess() throws Exception {
             // Arrange
             UUID planId = UUID.randomUUID();
@@ -298,6 +301,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
 
         @Test
         @DisplayName("Return 400 if supervisor doesn't own plan")
+        @WithMockUser(roles = "SUPERVISOR")
         void testApprovePlanUnauthorized() throws Exception {
             // Arrange
             UUID planId = UUID.randomUUID();
@@ -317,6 +321,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
     class RejectPlanTests {
         @Test
         @DisplayName("Successfully reject draft plan")
+        @WithMockUser(roles = "SUPERVISOR")
         void testRejectPlanSuccess() throws Exception {
             // Arrange
             UUID planId = UUID.randomUUID();
@@ -345,6 +350,7 @@ class AgentDraftPlanControllerTest extends AbstractIntegrationTest {
     class MyPlansTests {
         @Test
         @DisplayName("Return all draft plans for supervisor")
+        @WithMockUser(roles = "SUPERVISOR")
         void testGetMyDraftPlans() throws Exception {
             // Arrange
             AgentDraftPlan plan = AgentDraftPlan.builder()
