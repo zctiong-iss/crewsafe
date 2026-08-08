@@ -12,6 +12,8 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 "$ROOT/.github/scripts/terraform/tests/test-backend-mode-propagation.sh"
 "$ROOT/.github/scripts/terraform/tests/test-compute-source-guard.sh"
 "$ROOT/.github/scripts/terraform/tests/test-iam-policy-bootstrap.sh"
+"$ROOT/.github/scripts/terraform/tests/test-securityhub-import-source-guard.sh"
+"$ROOT/.github/scripts/terraform/tests/test-securityhub-import-runbook.sh"
 
 [[ ! -e "$ROOT/.github/workflows/terraform-state-plan.yml" ]]
 [[ ! -e "$ROOT/.github/workflows/terraform-state-apply.yml" ]]

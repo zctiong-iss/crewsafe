@@ -1,0 +1,17 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageSonarSecurityHubImportRole",
+      "Effect": "Allow",
+      "Action": ["iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:GetRolePolicy", "iam:ListRolePolicies", "iam:ListRoleTags", "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:TagRole", "iam:UntagRole", "iam:UpdateAssumeRolePolicy", "iam:UpdateRoleDescription"],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:role/crewsafe-shared-dev-sonar-securityhub-import"
+    },
+    {
+      "Sid": "ReadSecurityHubImportTarget",
+      "Effect": "Allow",
+      "Action": ["securityhub:DescribeHub", "securityhub:GetFindings"],
+      "Resource": "arn:aws:securityhub:ap-southeast-1:<ACCOUNT_ID>:hub/default"
+    }
+  ]
+}

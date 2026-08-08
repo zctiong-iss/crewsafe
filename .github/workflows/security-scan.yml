@@ -232,6 +232,46 @@ jobs:
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=600
 
+  sonar-securityhub-import:
+    name: Sonar Security Hub Import
+    needs: sast
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Check reviewed activation
+        id: activation
+        run: |
+          enabled="$(jq -r '.enabled' .github/securityhub-import.json)"
+          if [[ "$enabled" == true ]]; then
+            printf 'enabled=true\n' >>"$GITHUB_OUTPUT"
+          else
+            printf 'enabled=false\n' >>"$GITHUB_OUTPUT"
+            printf 'NOT-ACTIVATED\n' >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Configure importer identity
+        if: steps.activation.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_SONAR_SECURITYHUB_IMPORT_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeSonarSecurityHub-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Import selected redacted findings
+        if: steps.activation.outputs.enabled == 'true'
+        env:
+          SONAR_SECURITYHUB_TOKEN: ${{ secrets.SONAR_SECURITYHUB_TOKEN }}
+          CREWSAFE_SECURITYHUB_ACCOUNT_ID: ${{ vars.CREWSAFE_SECURITYHUB_ACCOUNT_ID }}
+          AWS_REGION: ap-southeast-1
+        run: .github/scripts/security/import-sonar-securityhub.sh
+
   gate-tests:
     name: Gate Self-Tests
     runs-on: ubuntu-latest
@@ -251,3 +291,6 @@ jobs:
 
       - name: SAST gate configuration lint
         run: .github/scripts/tests/test-sast-gate-config.sh
+
+      - name: Sonar Security Hub importer self-tests
+        run: .github/scripts/tests/test-sonar-securityhub-import.sh
