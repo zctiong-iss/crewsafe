@@ -21,7 +21,9 @@ release decision, or aggregate across accounts or regions.
   snippets, tokens, personal data, and service responses are neither logged nor stored.
   Each finding's `SourceUrl` is constructed only from the hard-allowlisted SonarCloud
   origin and validated project/issue identifiers; it never carries a token or an
-  arbitrary URL from the Sonar response.
+  arbitrary URL from the Sonar response. If an older matching record lacks that exact
+  URL, the importer performs a one-time metadata repair with a later validated provider
+  timestamp and preserves the Sonar `updateDate` in namespaced product metadata.
 - The `securityhub-import` Terraform root owns a dedicated exact-main-subject role.
   The role has only the read/import actions needed to reconcile the custom product.
   Terraform is CI-only; no workstation Terraform, state, plan, profile, or apply is
@@ -35,6 +37,7 @@ release decision, or aggregate across accounts or regions.
 | --- | --- |
 | Selected finding appears as one redacted custom record | Hermetic importer tests plus a controlled reviewed-CI observation recorded in the runbook. |
 | Security Hub finding links to the originating SonarCloud issue | Hermetic ASFF assertion verifies a deterministic `SourceUrl` using the approved origin and validated identifiers. |
+| Existing records are safely backfilled once | Hermetic reconciliation tests require a later repair timestamp, preserved source timestamp, and no repeat import when the exact URL is already present. |
 | Excluded, malformed, out-of-scope, or rejected input fails closed | Hermetic fixtures and negative tests; only safe outcome labels are emitted. |
 | Repeat import updates one stable record; controlled resolution archives it | Lifecycle mock tests, then separate controlled CI observation. |
 | Existing security controls remain unchanged | SAST gate guard, Terraform catalog/source guards, and SCRUM-274 source guard. |

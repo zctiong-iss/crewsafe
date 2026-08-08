@@ -111,11 +111,12 @@ security_severity() {
 }
 
 lookup_and_import() {
-  local issue="$1" state="$2" action="$3" id issue_key source_url lookup match_count existing_updated source_updated source_created payload response severity
+  local issue="$1" state="$2" action="$3" id issue_key source_url lookup match_count existing_updated existing_source_url source_updated source_created effective_updated payload response severity
   severity="$(security_severity "$issue")"
   [[ "$severity" == BLOCKER || "$severity" == HIGH ]] || fail CANDIDATE_INVALID
   source_created="$(normalize_timestamp "$(jq -r '.creationDate' <<<"$issue")")" || fail CANDIDATE_INVALID
   source_updated="$(normalize_timestamp "$(jq -r '.updateDate' <<<"$issue")")" || fail CANDIDATE_INVALID
+  effective_updated="$source_updated"
   issue_key="$(jq -r '.key' <<<"$issue")"
   id="crewsafe/sonarcloud/${project_key}/${issue_key}"
   source_url="${sonar_origin}/project/issues?id=${project_key}&open=${issue_key}"
@@ -132,15 +133,21 @@ lookup_and_import() {
     existing_updated="$(jq -r --arg id "$id" --arg product "$product_arn" '.Findings[] | select(.Id == $id and .ProductArn == $product) | .UpdatedAt' <<<"$lookup")"
     [[ "$existing_updated" =~ $safe_timestamp ]] || fail EXISTING_TIMESTAMP_INVALID
     if [[ "$source_updated" == "$existing_updated" || "$source_updated" < "$existing_updated" ]]; then
-      result UNCHANGED
-      return 0
+      existing_source_url="$(jq -r --arg id "$id" --arg product "$product_arn" '.Findings[] | select(.Id == $id and .ProductArn == $product) | .SourceUrl // empty' <<<"$lookup")"
+      if [[ "$existing_source_url" == "$source_url" ]]; then
+        result UNCHANGED
+        return 0
+      fi
+      effective_updated="$(date -u '+%Y-%m-%dT%H:%M:%SZ')" || fail REPAIR_TIMESTAMP_UNAVAILABLE
+      [[ "$effective_updated" =~ $safe_timestamp ]] || fail REPAIR_TIMESTAMP_INVALID
+      [[ "$effective_updated" > "$existing_updated" ]] || fail REPAIR_TIMESTAMP_UNAVAILABLE
     fi
   fi
   payload="$tmp_dir/finding.json"
   jq -n --arg id "$id" --arg product "$product_arn" --arg account "$expected_account" \
     --arg project "$project_key" --arg issue_key "$issue_key" --arg source_url "$source_url" \
     --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$severity" \
-    --arg created "$source_created" --arg updated "$source_updated" \
+    --arg created "$source_created" --arg updated "$effective_updated" --arg source_updated "$source_updated" \
     --arg commit "$GITHUB_SHA" --arg state "$state" '
     [{SchemaVersion:"2018-10-08",Id:$id,ProductArn:$product,GeneratorId:"crewsafe/sonarcloud-securityhub-import",
       AwsAccountId:$account,CreatedAt:$created,UpdatedAt:$updated,RecordState:$state,
@@ -148,7 +155,7 @@ lookup_and_import() {
       Description:("Redacted SonarCloud vulnerability for project " + $project + ", rule " + $rule + ", commit " + $commit),
       SourceUrl:$source_url,
       FindingProviderFields:{Severity:{Label:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Original:$severity},Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
-      ProductFields:{"crewsafe/sonarSeverity":$severity,"crewsafe/ruleKey":$rule},
+      ProductFields:{"crewsafe/sonarSeverity":$severity,"crewsafe/ruleKey":$rule,"crewsafe/sourceUpdatedAt":$source_updated},
       Resources:[{Type:"Other",Id:("crewsafe:sonarcloud:" + $project)}]}]
   ' >"$payload" || fail ASFF_BUILD_FAILED
   [[ "$(wc -c <"$payload" | tr -d ' ')" -le 245760 ]] || fail ASFF_SIZE_LIMIT
