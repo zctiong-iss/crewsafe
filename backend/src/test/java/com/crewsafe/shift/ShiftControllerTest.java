@@ -41,7 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * SCRUM-159/160-fix with the two gaps found building SCRUM-161 against the original
  * contract: correct/delete a shift, correct/remove an assignment. Extended by SCRUM-263
  * to assert every 404 in this file carries the standard {@code ErrorResponse} body,
- * not just the status code.
+ * not just the status code, and by SCRUM-255 with a status transition: cancel a shift
+ * (kept as a record) as an alternative to delete (removed outright).
  *
  * <p>{@link #supervisorFromAnotherSiteCannotCreateAShift()} is the negative *write* test
  * SCRUM-156 formally moved here (see the SCRUM-156↔SCRUM-160 Jira link): SCRUM-156 only
@@ -152,6 +153,11 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
     private ResultActions deleteAuthenticated(String url, String token) throws Exception {
         return mockMvc.perform(delete(url).header("Authorization", "Bearer " + token));
+    }
+
+    private ResultActions cancelShift(String shiftId, String token) throws Exception {
+        return mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/cancel")
+                .header("Authorization", "Bearer " + token));
     }
 
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
@@ -561,6 +567,80 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, workerAToken)
                 .andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-255: cancel a shift ---
+
+    @Test
+    void supervisorCancelsAPlannedShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        cancelShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(shiftId))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId)
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CANCELLED))
+                .anyMatch(e -> UUID.fromString(shiftId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    @Test
+    void cancellingAShiftKeepsItsAssignmentsInPlace() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        addAssignment(shiftId, "LIGHT");
+
+        cancelShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignments.length()").value(1));
+    }
+
+    /** CANCELLED is terminal (SCRUM-255): there is no un-cancel, so a second cancel is rejected. */
+    @Test
+    void cancellingAnAlreadyCancelledShiftIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        cancelShift(shiftId, supervisorAToken).andExpect(status().isOk());
+
+        cancelShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void cancellingAnUnknownShiftIs404() throws Exception {
+        cancelShift(UUID.randomUUID().toString(), supervisorAToken)
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void workerIsForbiddenFromCancellingAShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        cancelShift(shiftId, workerAToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorFromAnotherSiteCannotCancelAShift() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        cancelShift(shiftId, supervisorBToken).andExpect(status().isForbidden());
     }
 
     // --- SCRUM-159/160-fix: correct an assignment ---
