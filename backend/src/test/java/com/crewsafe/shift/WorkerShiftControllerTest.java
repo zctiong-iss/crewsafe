@@ -166,7 +166,8 @@ class WorkerShiftControllerTest extends AbstractIntegrationTest {
     void missingShiftReturnsNotFoundWithoutLeakingAssignmentInformation() throws Exception {
         submit(UUID.randomUUID(), assignedWorkerToken,
                 readinessBody(true, true, true, List.of("NONE")))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.crewsafe.shift.api;
 
+import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.shift.domain.ReadinessSubmission;
 import com.crewsafe.shift.domain.Shift;
@@ -92,11 +93,12 @@ public class WorkerShiftController {
             @PathVariable UUID shiftId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ReadinessRequest request) {
-        return workerShiftService.submitReadiness(principal.getId(), shiftId,
+        ReadinessResponse response = workerShiftService.submitReadiness(principal.getId(), shiftId,
                         request.fitToWork(), request.adequateSleep(),
                         request.adequateHydration(), request.symptoms())
                 .map(ReadinessResponse::from)
-                .map(body -> ResponseEntity.status(HttpStatus.CREATED).body(body))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("No shift " + shiftId));
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

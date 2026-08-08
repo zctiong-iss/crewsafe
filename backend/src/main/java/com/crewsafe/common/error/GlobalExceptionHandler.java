@@ -44,6 +44,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * The message is logged, not returned, same reasoning as {@link #handleBadRequest}.
+     * A controller throws this in place of building a bare {@code notFound()} directly,
+     * so every documented 404 carries the same JSON {@link ErrorResponse} body as every
+     * other error (SCRUM-263) — reusing the "Not Found"/"No such resource" pair {@link
+     * #handleNotFound(NoResourceFoundException)} already uses for an unmapped URL, since
+     * both describe the same thing to the caller.
+     */
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException e) {
+        log.debug("Resource not found: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ErrorResponse.of("Not Found", "No such resource"));
+    }
+
+    /**
      * Handles {@link IllegalArgumentException} from business logic validation.
      * Prevents typo'd or invalid IDs from returning 500 — bad input returns 400,
      * matching the BadRequestException pattern.

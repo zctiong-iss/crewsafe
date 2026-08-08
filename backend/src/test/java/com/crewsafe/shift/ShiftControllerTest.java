@@ -39,7 +39,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * SCRUM-160: create/list/read a shift and add an assignment to one, plus the site
  * scoping and audit behaviour called for in the implementation plan. Extended by
  * SCRUM-159/160-fix with the two gaps found building SCRUM-161 against the original
- * contract: correct/delete a shift, correct/remove an assignment.
+ * contract: correct/delete a shift, correct/remove an assignment. Extended by SCRUM-263
+ * to assert every 404 in this file carries the standard {@code ErrorResponse} body,
+ * not just the status code.
  *
  * <p>{@link #supervisorFromAnotherSiteCannotCreateAShift()} is the negative *write* test
  * SCRUM-156 formally moved here (see the SCRUM-156↔SCRUM-160 Jira link): SCRUM-156 only
@@ -442,14 +444,16 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     void readingAnUnknownShiftIdIs404() throws Exception {
         mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID())
                         .header("Authorization", "Bearer " + supervisorAToken))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
     void addingAnAssignmentToAnUnknownShiftIs404() throws Exception {
         postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID() + "/assignments",
                         supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     // --- SCRUM-159/160-fix: correct a shift ---
@@ -493,7 +497,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID(), supervisorAToken,
                         shiftBody(startsAt, endsAt, null))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
@@ -543,7 +548,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     @Test
     void deletingAnUnknownShiftIs404() throws Exception {
         deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID(), supervisorAToken)
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
@@ -601,7 +607,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments/" + UUID.randomUUID(),
                         supervisorAToken, assignmentUpdateBody(null, "LIGHT", null))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
@@ -613,7 +620,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID() + "/assignments/" + assignmentId,
                         supervisorAToken, assignmentUpdateBody(null, "LIGHT", null))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
@@ -660,7 +668,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId
                         + "/assignments/" + UUID.randomUUID(), supervisorAToken)
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test
@@ -672,7 +681,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         deleteAuthenticated("/api/v1/sites/" + siteA.getId() + "/shifts/" + UUID.randomUUID()
                         + "/assignments/" + assignmentId, supervisorAToken)
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     // --- SCRUM-254: prevent worker double-booking across overlapping shifts ---

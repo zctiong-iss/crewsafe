@@ -4,13 +4,18 @@ import com.crewsafe.AbstractIntegrationTest;
 import com.crewsafe.common.web.RequestIdFilter;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.domain.SiteMembership;
 import com.crewsafe.identity.repository.AppUserRepository;
+import com.crewsafe.identity.repository.SiteMembershipRepository;
+import com.crewsafe.site.domain.Site;
+import com.crewsafe.site.repository.SiteRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,11 +38,18 @@ class ErrorContractTest extends AbstractIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private AppUserRepository users;
+    @Autowired private SiteRepository sites;
+    @Autowired private SiteMembershipRepository memberships;
 
     private AppUser user(Role role) {
         String username = "error-contract-" + UUID.randomUUID();
         createCognitoUser(username);
         return users.save(new AppUser(username, subFor(username), "Error Contract Test " + role, role));
+    }
+
+    private Site site() {
+        return sites.save(new Site("Error Contract " + UUID.randomUUID(),
+                new BigDecimal("1.300000"), new BigDecimal("103.800000")));
     }
 
     /** Written by the security chain, before any controller is reached. */
@@ -124,6 +136,28 @@ class ErrorContractTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getHeader(RequestIdFilter.HEADER);
 
         assertThat(issued).isNotEqualTo(forged);
+    }
+
+    /**
+     * SCRUM-263: every documented 404 must carry the same {@link ErrorResponse} body as
+     * every other error, not an empty one. Hits a real domain endpoint (rather than
+     * testing {@link GlobalExceptionHandler} in isolation) so this fails if any
+     * controller ever regresses back to building {@code ResponseEntity.notFound()}
+     * directly, which bypasses the handler entirely.
+     */
+    @Test
+    void aDomainNotFoundHasTheStandardShape() throws Exception {
+        AppUser worker = user(Role.WORKER);
+        Site site = site();
+        memberships.save(new SiteMembership(worker.getId(), site.getId()));
+        String token = mintAccessToken(worker.getUsername());
+
+        mockMvc.perform(get("/api/v1/sites/" + site.getId() + "/shifts/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"))
+                .andExpect(jsonPath("$.message").value("No such resource"))
+                .andExpect(jsonPath("$.requestId").isNotEmpty());
     }
 
     /** No error body may carry a stack trace, exception name or SQL fragment. */
