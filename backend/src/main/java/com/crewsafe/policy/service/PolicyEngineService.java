@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
+import java.math.BigDecimal;
 
 /**
  * Policy evaluation engine for heat-rest decisions.
@@ -60,7 +61,7 @@ public class PolicyEngineService {
         AcclimatisationLevel level = AcclimatisationLevel.fromDay(acclimatisationDay);
 
         // Get threshold for this level + intensity
-        Double threshold = policy.getThreshold(level, workIntensity);
+        BigDecimal threshold = policy.getThreshold(level, workIntensity);
 
         // Make decision based on WBGT vs thresholds
         PolicyDecision decision = makeDecision(currentWbgt, threshold, level, workIntensity, policy);
@@ -89,7 +90,7 @@ public class PolicyEngineService {
      */
     private PolicyDecision makeDecision(
             Double wbgt,
-            Double threshold,
+            BigDecimal threshold,
             AcclimatisationLevel level,
             HeatRestPolicy.WorkIntensity intensity,
             HeatRestPolicy policy

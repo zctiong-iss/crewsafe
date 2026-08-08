@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -43,21 +44,21 @@ public class HeatRestPolicy {
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdUnacclimatisedLight;
+    private BigDecimal wbgtThresholdUnacclimatisedLight;
 
     /**
      * WBGT threshold for unacclimatised workers, moderate intensity work (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdUnacclimatisedModerate;
+    private BigDecimal wbgtThresholdUnacclimatisedModerate;
 
     /**
      * WBGT threshold for unacclimatised workers, heavy intensity work (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdUnacclimatisedHeavy;
+    private BigDecimal wbgtThresholdUnacclimatisedHeavy;
 
     /**
      * WBGT threshold for partially acclimatised workers, light intensity (°C).
@@ -65,21 +66,21 @@ public class HeatRestPolicy {
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdPartialLight;
+    private BigDecimal wbgtThresholdPartialLight;
 
     /**
      * WBGT threshold for partially acclimatised workers, moderate intensity (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdPartialModerate;
+    private BigDecimal wbgtThresholdPartialModerate;
 
     /**
      * WBGT threshold for partially acclimatised workers, heavy intensity (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdPartialHeavy;
+    private BigDecimal wbgtThresholdPartialHeavy;
 
     /**
      * WBGT threshold for fully acclimatised workers, light intensity (°C).
@@ -87,21 +88,21 @@ public class HeatRestPolicy {
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdFullLight;
+    private BigDecimal wbgtThresholdFullLight;
 
     /**
      * WBGT threshold for fully acclimatised workers, moderate intensity (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdFullModerate;
+    private BigDecimal wbgtThresholdFullModerate;
 
     /**
      * WBGT threshold for fully acclimatised workers, heavy intensity (°C).
      */
     @NotNull
     @Min(15)
-    private Double wbgtThresholdFullHeavy;
+    private BigDecimal wbgtThresholdFullHeavy;
 
     /**
      * Emergency stop threshold (°C).
@@ -111,7 +112,7 @@ public class HeatRestPolicy {
      */
     @NotNull
     @Min(20)
-    private Double wbgtEmergencyStop;
+    private BigDecimal wbgtEmergencyStop;
 
     @NotNull
     private Instant createdAt;
@@ -129,7 +130,7 @@ public class HeatRestPolicy {
      * @return WBGT threshold in °C
      * @throws IllegalArgumentException if intensity is unknown
      */
-    public Double getThreshold(AcclimatisationLevel level, WorkIntensity intensity) {
+    public BigDecimal getThreshold(AcclimatisationLevel level, WorkIntensity intensity) {
         return switch (level) {
             case UNACCLIMATISED -> switch (intensity) {
                 case LIGHT -> wbgtThresholdUnacclimatisedLight;

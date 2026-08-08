@@ -92,4 +92,18 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
     }
+
+    /** SCRUM-263: a controller throws this instead of building a bare notFound(). */
+    @Test
+    void testHandleResourceNotFound() {
+        ResourceNotFoundException ex = new ResourceNotFoundException("No shift abc-123 under site xyz-456");
+
+        ResponseEntity<ErrorResponse> response = handler.handleResourceNotFound(ex);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        ErrorResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Not Found", body.error());
+        assertEquals("No such resource", body.message());
+    }
 }
