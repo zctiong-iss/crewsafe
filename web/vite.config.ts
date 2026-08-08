@@ -24,5 +24,15 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: false,
+    // Pin the host clock so a developer's machine and CI agree.
+    //
+    // This makes the suite deterministic; it does NOT make the app correct. The read path
+    // pins Asia/Singapore itself (formatShiftRange), but the write path still converts a
+    // picked Date with `toISOString()` using whatever zone the *browser* is in — so a
+    // supervisor whose laptop is not on SGT files a shift at the wrong instant. Without
+    // this line that gap shows up as a CI-only failure; with it, the gap is invisible
+    // until someone closes it at the form boundary (needs the site's own `timezone`
+    // field and a zone-aware parse, e.g. date-fns-tz `fromZonedTime`).
+    env: { TZ: "Asia/Singapore" },
   },
 });

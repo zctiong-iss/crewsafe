@@ -9,6 +9,8 @@ import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
+import com.crewsafe.site.domain.Site;
+import com.crewsafe.site.repository.SiteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +19,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +43,14 @@ public class ShiftService {
     private final ShiftRepository shifts;
     private final ShiftAssignmentRepository assignments;
     private final AuditService audit;
+    /** Reads "now" for {@link #assertEditable}, so the ended-shift rule is testable. */
     private final Clock clock;
+
+    /** Only for the audit trail's display zone — shift logic never reads the site row. */
+    private final SiteRepository sites;
+
+    private static final DateTimeFormatter LOCAL_DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.UK);
+    private static final DateTimeFormatter LOCAL_TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.UK);
 
     public record AssignmentInput(UUID workerId, String taskName, Intensity intensity,
                                    Integer acclimatisationDay) {
@@ -64,8 +77,9 @@ public class ShiftService {
         }
 
         UUID shiftId = shift.getId();
-        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId,
-                "Created shift for site " + siteId));
+        // Resolved now, not inside the lambda: that runs after commit, outside this transaction.
+        String detail = "Created shift for site " + siteId + " (" + localRange(siteId, startsAt, endsAt) + ")";
+        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId, detail));
 
         return shift;
     }
@@ -112,8 +126,9 @@ public class ShiftService {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             assertEditable(shift);
             shift.correctTimes(startsAt, endsAt);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId,
-                    "Corrected shift times for site " + siteId));
+            String detail = "Corrected shift times for site " + siteId
+                    + " to " + localRange(siteId, startsAt, endsAt);
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId, detail));
             return shift;
         });
     }
@@ -179,6 +194,38 @@ public class ShiftService {
     }
 
     /**
+     * The shift's range on the wall clock of the site it runs at, plus the IANA zone it was
+     * read in (ADR-0013, amended).
+     *
+     * <p>Audit rows are evidence, and evidence has to stand on its own. {@code occurredAt} is
+     * a server-side {@code Instant} and needs no help, but a reader asking "what shift was
+     * this?" would otherwise have to join back to {@code shift.starts_at} — a column holding
+     * instants derived under two different frontend rules, with nothing in the schema marking
+     * which. Naming the wall clock and the zone here makes the row answer the question by
+     * itself, and keeps it true if CrewSafe ever runs a site outside Singapore. Hence the zone
+     * comes from {@link Site#getTimezone()} rather than a constant.
+     *
+     * <p>An unknown site falls back to UTC and says so, rather than quietly asserting SGT.
+     */
+    private String localRange(UUID siteId, Instant startsAt, Instant endsAt) {
+        ZoneId zone = sites.findById(siteId)
+                .map(Site::getTimezone)
+                .map(ZoneId::of)
+                .orElse(ZoneId.of("UTC"));
+
+        ZonedDateTime start = startsAt.atZone(zone);
+        ZonedDateTime end = endsAt.atZone(zone);
+
+        // An overnight shift needs both dates, or "22:00–06:00" reads as running backwards.
+        String range = start.toLocalDate().equals(end.toLocalDate())
+                ? LOCAL_DATE.format(start) + " " + LOCAL_TIME.format(start) + "–" + LOCAL_TIME.format(end)
+                : LOCAL_DATE.format(start) + " " + LOCAL_TIME.format(start) + " – "
+                        + LOCAL_DATE.format(end) + " " + LOCAL_TIME.format(end);
+
+        return range + " " + zone.getId();
+    }
+
+    /**
      * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would
      * commit the audit row immediately, independent of the caller's own transaction — if the
      * rest of that transaction then failed to persist, the audit event would survive a
@@ -238,25 +285,10 @@ public class ShiftService {
         }
     }
 
-    /** A shift paired with only the caller's own assignment on it (SCRUM-266). */
-    public record MyShift(Shift shift, ShiftAssignment assignment) {
-    }
-
-    /**
-     * The caller's current or next shift, resolved from their own id (SCRUM-266).
-     *
-     * <p>Implements {@code docs/api/shift-readiness.yaml}: not site-scoped, and carrying only the
-     * caller's own task, intensity and acclimatisation — never the other assignments on the same
-     * shift. That is the whole reason this is a separate read rather than reusing the supervisor's
-     * shift view, which returns every assignment on the shift by design.
-     *
-     * <p>Empty when nothing is scheduled. That is an answer, not a failure: the screen has an
-     * empty state for it and the endpoint returns 200 with a null shift.
+    /*
+     * The worker's own-shift read used to live here (SCRUM-266). It moved to
+     * `WorkerShiftService` in the merge with main, which had built the same endpoint
+     * independently and built more of it — readiness submissions as well. Two beans mapping
+     * `GET /api/v1/shifts/me` would have failed the context on startup, so this side went.
      */
-    public Optional<MyShift> myCurrentOrNextShift(UUID workerId) {
-        return shifts.findCurrentOrUpcomingForWorker(workerId, clock.instant()).stream()
-                .findFirst()
-                .flatMap(shift -> assignments.findByShiftIdAndWorkerId(shift.getId(), workerId)
-                        .map(assignment -> new MyShift(shift, assignment)));
-    }
 }

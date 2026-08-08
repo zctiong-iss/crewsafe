@@ -57,6 +57,7 @@ export VITE_POST_LOGOUT_REDIRECT_URI=http://localhost:5173/
 export VITE_API_BASE_URL=http://localhost:8080
 export SPRING_PROFILES_ACTIVE=local
 export CORS_ALLOWED_ORIGINS=http://localhost:5173
+export WEATHER_INGESTION_ENABLED=true
 
 COMPOSE=local/compose.yaml
 COMPOSE_COMMAND=("$CONTAINER_ENGINE" compose -f "$COMPOSE")

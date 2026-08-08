@@ -6,14 +6,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * @author Abu Bakar
- * @author Justin Chua
  */
 public interface ShiftRepository extends JpaRepository<Shift, UUID> {
 
@@ -34,23 +33,27 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
      */
     Optional<Shift> findFirstBySiteIdAndStatusOrderByStartsAtDesc(UUID siteId, ShiftStatus status);
 
-    /**
-     * The caller's current shift, or failing that their soonest upcoming one (SCRUM-266).
-     *
-     * <p>Ordering by {@code startsAt} over shifts that have not yet ended gives exactly the
-     * precedence {@code docs/api/shift-readiness.yaml} asks for: a shift whose window contains
-     * now started before any shift that is merely upcoming, so it sorts first without needing a
-     * separate "is it running" clause.
-     *
-     * <p>A list rather than an {@code Optional} because a worker can legitimately be on two
-     * shifts that have not ended — the caller takes the first and the ordering decides which.
-     */
     @Query("""
-            select s from Shift s
-            where s.endsAt > :now
-              and s.id in (select a.shiftId from ShiftAssignment a where a.workerId = :workerId)
-            order by s.startsAt asc
+            SELECT shift FROM Shift shift
+            WHERE shift.startsAt <= :now AND shift.endsAt > :now
+              AND EXISTS (
+                  SELECT assignment.id FROM ShiftAssignment assignment
+                  WHERE assignment.shiftId = shift.id AND assignment.workerId = :workerId
+              )
+            ORDER BY shift.startsAt DESC, shift.id ASC
             """)
-    List<Shift> findCurrentOrUpcomingForWorker(@Param("workerId") UUID workerId,
-                                                @Param("now") Instant now);
+    List<Shift> findCurrentForWorker(@Param("workerId") UUID workerId,
+            @Param("now") Instant now, org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+            SELECT shift FROM Shift shift
+            WHERE shift.startsAt > :now
+              AND EXISTS (
+                  SELECT assignment.id FROM ShiftAssignment assignment
+                  WHERE assignment.shiftId = shift.id AND assignment.workerId = :workerId
+              )
+            ORDER BY shift.startsAt ASC, shift.id ASC
+            """)
+    List<Shift> findUpcomingForWorker(@Param("workerId") UUID workerId,
+            @Param("now") Instant now, org.springframework.data.domain.Pageable pageable);
 }

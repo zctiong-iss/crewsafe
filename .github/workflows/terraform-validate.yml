@@ -104,8 +104,11 @@ jobs:
       - run: |
           .github/scripts/terraform/tests/test-account-and-oidc-guards.sh
           .github/scripts/terraform/tests/test-ecr-web-source-guard.sh
+          .github/scripts/terraform/tests/test-securityhub-inspector-source-guard.sh
+          .github/scripts/terraform/tests/test-securityhub-inspector-runbook.sh
           .github/scripts/terraform/tests/test-plan-metadata.sh
           .github/scripts/terraform/tests/test-workflow-guards.sh
+          .github/scripts/terraform/tests/test-iam-policy-boundary.sh
           .github/scripts/terraform/tests/test-ci-guards.sh
           .github/scripts/terraform/tests/test-bootstrap-plan-portability.sh
 

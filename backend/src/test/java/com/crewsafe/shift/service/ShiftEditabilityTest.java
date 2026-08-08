@@ -6,6 +6,7 @@ import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
+import com.crewsafe.site.repository.SiteRepository;
 import com.crewsafe.common.audit.AuditService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,8 +56,10 @@ class ShiftEditabilityTest {
     void setUp() {
         shifts = mock(ShiftRepository.class);
         assignments = mock(ShiftAssignmentRepository.class);
+        // `SiteRepository` is only read to resolve a display zone for the audit trail, which
+        // this test never asserts on — a bare mock is the honest stand-in.
         service = new ShiftService(shifts, assignments, mock(AuditService.class),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                Clock.fixed(NOW, ZoneOffset.UTC), mock(SiteRepository.class));
 
         // The service defers its audit write to afterCommit, which needs a synchronization to
         // register against. Nothing here is transactional, so one is opened by hand — the

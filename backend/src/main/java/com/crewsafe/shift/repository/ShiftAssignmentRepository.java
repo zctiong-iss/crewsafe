@@ -25,6 +25,9 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
      * reads as 404 rather than silently updating/removing the wrong shift's row. */
     Optional<ShiftAssignment> findByIdAndShiftId(UUID id, UUID shiftId);
 
+    /** Finds the caller's own assignment without exposing another worker's details. */
+    Optional<ShiftAssignment> findByShiftIdAndWorkerId(UUID shiftId, UUID workerId);
+
     /** Used to clear a shift's assignments before the shift itself is deleted — the
      * shift_assignment.shift_id foreign key has no ON DELETE CASCADE. */
     void deleteByShiftId(UUID shiftId);
@@ -43,7 +46,4 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
             + "(select s.id from Shift s where s.startsAt < :endsAt and s.endsAt > :startsAt)")
     List<ShiftAssignment> findOverlapping(@Param("workerId") UUID workerId, @Param("startsAt") Instant startsAt,
                                            @Param("endsAt") Instant endsAt);
-
-    /** The caller's own assignment on a shift — never anyone else's (SCRUM-266). */
-    Optional<ShiftAssignment> findByShiftIdAndWorkerId(UUID shiftId, UUID workerId);
 }

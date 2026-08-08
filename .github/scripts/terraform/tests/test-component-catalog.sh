@@ -8,7 +8,9 @@ resolver="$ROOT/.github/scripts/terraform/resolve-component.sh"
 assert_file ".github/terraform/components.json"
 assert_file ".github/terraform/components.schema.json"
 assert_file ".github/scripts/terraform/resolve-component.sh"
-jq -e '.schema_version == 1 and (.components | keys | sort == ["cognito-shared-dev","compute-shared-dev","database-shared-dev","ecr-shared-dev","network-shared-dev","secrets-shared-dev","state-backend"])' "$catalog" >/dev/null
+jq -e '.schema_version == 1 and (.components | keys | sort == ["cognito-shared-dev","compute-shared-dev","database-shared-dev","ecr-shared-dev","iam-policy-management-shared-dev","network-shared-dev","secrets-shared-dev","state-backend"])' "$catalog" >/dev/null
+jq -e '.components["iam-policy-management-shared-dev"].execution_role_family == "policy-management"' "$catalog" >/dev/null
+jq -e '.components["iam-policy-management-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 jq -e '.components["cognito-shared-dev"].state_key == "crewsafe/cognito/shared-dev.tfstate"' "$catalog" >/dev/null
 jq -e '.components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate"' "$catalog" >/dev/null
 jq -e '.components["network-shared-dev"].state_key == "crewsafe/network/shared-dev.tfstate"' "$catalog" >/dev/null
@@ -34,11 +36,15 @@ jq -e '.components["database-shared-dev"].allow_destroy == false' "$catalog" >/d
 # lane at once, and the distribution's provider-issued name is not recoverable —
 # a rebuild hands out a different hostname, breaking every client that stored it.
 jq -e '.components["compute-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# SCRUM-274 extends this existing ECR component; it must not add a second
+# catalog entry, state key, root, or destroy exception.
+jq -e '.components["ecr-shared-dev"].root == "infra/terraform/ecr" and .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate" and .components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 # The backend CI pipeline pushes to this repository on every merge to main, so an
 # accidental destroy dispatch must stay refused too.
 jq -e '.components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 jq empty "$schema"
 "$resolver" state-backend >/dev/null
+"$resolver" iam-policy-management-shared-dev >/dev/null
 if [[ -f "$ROOT/infra/terraform/cognito/.terraform.lock.hcl" ]]; then
   "$resolver" cognito-shared-dev >/dev/null
 elif "$resolver" cognito-shared-dev >/dev/null 2>&1; then
