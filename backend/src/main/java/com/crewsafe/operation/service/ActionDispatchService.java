@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -38,14 +39,24 @@ public class ActionDispatchService {
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
 
-    @Transactional
+    /**
+     * {@code REQUIRES_NEW} rather than the default propagation: SCRUM-193 calls this from
+     * within another transaction's {@code afterCommit} callback, where Spring's transaction
+     * synchronization is still technically bound to the thread even though the physical commit
+     * has already happened. Default propagation would silently "join" that tail end instead of
+     * opening a genuinely new transaction, so the write here would run without ever being
+     * durably committed. {@link AuditService#record} already forces {@code REQUIRES_NEW} for
+     * exactly this reason. Harmless for this method's other caller (the controller, which has
+     * no ambient transaction to begin with).
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
                                          @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         Approval approval = approvalRepository.findById(approvalId)
                 .orElseThrow(() -> new IllegalArgumentException("Approval not found: " + approvalId));
 
-        if (!approval.getDecision().equals(Approval.ApprovalDecision.APPROVED)) {
-            throw new IllegalArgumentException("Can only dispatch actions from approved decisions");
+        if (approval.getDecision() == Approval.ApprovalDecision.REJECTED) {
+            throw new IllegalArgumentException("Cannot dispatch actions from a rejected decision");
         }
 
         AppUser worker = appUserRepository.findById(workerId)

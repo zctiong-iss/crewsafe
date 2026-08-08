@@ -11,6 +11,7 @@ expected_account="${CREWSAFE_SECURITYHUB_ACCOUNT_ID:-}"
 
 safe_identifier='^[A-Za-z0-9_.:-]{1,160}$'
 safe_timestamp='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$'
+sonar_timestamp='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|\+00:00|\+0000)$'
 
 result() { printf 'SONAR_SECURITYHUB_RESULT=%s\n' "$1"; }
 fail() { result "FAILED reason=$1"; exit 1; }
@@ -55,6 +56,17 @@ request_issues() {
     "${sonar_origin}/api/issues/search?${query}"
 }
 
+normalize_timestamp() {
+  local timestamp="$1"
+  [[ "$timestamp" =~ $sonar_timestamp ]] || return 1
+  case "$timestamp" in
+    *Z) printf '%s\n' "$timestamp" ;;
+    *+0000) printf '%sZ\n' "${timestamp%+0000}" ;;
+    *+00:00) printf '%sZ\n' "${timestamp%+00:00}" ;;
+    *) return 1 ;;
+  esac
+}
+
 active_json="$(request_issues "componentKeys=${project_key}&branch=main&types=VULNERABILITY&statuses=OPEN&impactSeverities=BLOCKER,HIGH&p=1&ps=100")" \
   || fail SONAR_UNAVAILABLE
 lifecycle_json="$(request_issues "componentKeys=${project_key}&branch=main&issues=${controlled_key}&types=VULNERABILITY&statuses=RESOLVED&resolutions=FIXED&p=1&ps=1")" \
@@ -69,18 +81,41 @@ active_total="$(jq -r '.total' <<<"$active_json")"
 validate_issue() {
   local issue="$1" desired_status="$2" desired_resolution="${3:-}"
   jq -e --arg project "$project_key" --arg status "$desired_status" --arg resolution "$desired_resolution" '
+    def eligible_security_impact:
+      if (.impacts? == null) then
+        (.severity == "BLOCKER" or .severity == "HIGH")
+      elif (.impacts | type) == "array" then
+        any(.impacts[]?; .softwareQuality == "SECURITY" and
+          (.severity == "BLOCKER" or .severity == "HIGH"))
+      else false end;
     (.key | type == "string" and test("^[A-Za-z0-9_.:-]{1,160}$")) and
     ((.project // $project) == $project) and .type == "VULNERABILITY" and
-    (.severity == "BLOCKER" or .severity == "HIGH") and .status == $status and
+    eligible_security_impact and .status == $status and
     ($resolution == "" or .resolution == $resolution) and
     (.rule | type == "string" and test("^[A-Za-z0-9_.:-]{1,160}$")) and
-    (.creationDate | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$")) and
-    (.updateDate | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$"))
+    (.creationDate | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|\\+00:00|\\+0000)$")) and
+    (.updateDate | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?(Z|\\+00:00|\\+0000)$"))
   ' <<<"$issue" >/dev/null
 }
 
+security_severity() {
+  jq -r '
+    if (.impacts? == null) then .severity
+    elif (.impacts | type) == "array" then
+      ([.impacts[]? | select(.softwareQuality == "SECURITY") | .severity] |
+        if index("BLOCKER") != null then "BLOCKER"
+        elif index("HIGH") != null then "HIGH"
+        else "" end)
+    else "" end
+  ' <<<"$1"
+}
+
 lookup_and_import() {
-  local issue="$1" state="$2" action="$3" id lookup match_count existing_updated source_updated payload response
+  local issue="$1" state="$2" action="$3" id lookup match_count existing_updated source_updated source_created payload response severity
+  severity="$(security_severity "$issue")"
+  [[ "$severity" == BLOCKER || "$severity" == HIGH ]] || fail CANDIDATE_INVALID
+  source_created="$(normalize_timestamp "$(jq -r '.creationDate' <<<"$issue")")" || fail CANDIDATE_INVALID
+  source_updated="$(normalize_timestamp "$(jq -r '.updateDate' <<<"$issue")")" || fail CANDIDATE_INVALID
   id="crewsafe/sonarcloud/${project_key}/$(jq -r '.key' <<<"$issue")"
   lookup="$(aws securityhub get-findings --region "$region" --filters "ProductArn=[{Value=${product_arn},Comparison=EQUALS}],Id=[{Value=${id},Comparison=EQUALS}]" --output json 2>/dev/null)" \
     || fail SECURITYHUB_LOOKUP_FAILED
@@ -94,7 +129,6 @@ lookup_and_import() {
   if [[ "$match_count" == 1 ]]; then
     existing_updated="$(jq -r --arg id "$id" --arg product "$product_arn" '.Findings[] | select(.Id == $id and .ProductArn == $product) | .UpdatedAt' <<<"$lookup")"
     [[ "$existing_updated" =~ $safe_timestamp ]] || fail EXISTING_TIMESTAMP_INVALID
-    source_updated="$(jq -r '.updateDate' <<<"$issue")"
     if [[ "$source_updated" == "$existing_updated" || "$source_updated" < "$existing_updated" ]]; then
       result UNCHANGED
       return 0
@@ -103,14 +137,14 @@ lookup_and_import() {
   payload="$tmp_dir/finding.json"
   jq -n --arg id "$id" --arg product "$product_arn" --arg account "$expected_account" \
     --arg project "$project_key" --arg issue_key "$(jq -r '.key' <<<"$issue")" \
-    --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$(jq -r '.severity' <<<"$issue")" \
-    --arg created "$(jq -r '.creationDate' <<<"$issue")" --arg updated "$(jq -r '.updateDate' <<<"$issue")" \
+    --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$severity" \
+    --arg created "$source_created" --arg updated "$source_updated" \
     --arg commit "$GITHUB_SHA" --arg state "$state" '
     [{SchemaVersion:"2018-10-08",Id:$id,ProductArn:$product,GeneratorId:"crewsafe/sonarcloud-securityhub-import",
       AwsAccountId:$account,CreatedAt:$created,UpdatedAt:$updated,RecordState:$state,
       Title:("SonarCloud vulnerability " + $severity + " rule " + $rule),
       Description:("Redacted SonarCloud vulnerability for project " + $project + ", rule " + $rule + ", commit " + $commit),
-      FindingProviderFields:{Severity:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
+      FindingProviderFields:{Severity:{Label:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Original:$severity},Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
       ProductFields:{"crewsafe/sonarSeverity":$severity,"crewsafe/ruleKey":$rule},
       Resources:[{Type:"Other",Id:("crewsafe:sonarcloud:" + $project)}]}]
   ' >"$payload" || fail ASFF_BUILD_FAILED

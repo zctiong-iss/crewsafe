@@ -64,6 +64,17 @@ public final class AuditEventType {
     /** A worker completed a dispatched safety action (SCRUM-185). */
     public static final String ACTION_COMPLETED = "ACTION_COMPLETED";
 
+    /** A supervisor approved an AI-drafted recommendation as-is (SCRUM-119). */
+    public static final String RECOMMENDATION_APPROVED = "RECOMMENDATION_APPROVED";
+
+    /** A supervisor rejected an AI-drafted recommendation (SCRUM-119). */
+    public static final String RECOMMENDATION_REJECTED = "RECOMMENDATION_REJECTED";
+
+    /** A supervisor approved an AI-drafted recommendation with changes (SCRUM-119). The
+     * original draft is retained on the recommendation; the edited version is retained on
+     * the resulting approval. */
+    public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
+
     private AuditEventType() {
     }
 }
