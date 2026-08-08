@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Import a deliberately narrow, redacted SonarCloud vulnerability subset as
 # Security Hub custom findings. This script is invoked only by Security Scan's
-# main-push job; its CI and Terraform guards enforce that boundary separately.
+# main-only job (push or manually dispatched); its CI and Terraform guards
+# enforce that boundary separately.
 set -euo pipefail
 
 config_file="${CONFIG_FILE:-.github/securityhub-import.json}"
@@ -23,7 +24,8 @@ if [[ "$enabled" == false ]]; then
   exit 0
 fi
 
-[[ "${GITHUB_ACTIONS:-}" == true && "${GITHUB_EVENT_NAME:-}" == push && \
+[[ "${GITHUB_ACTIONS:-}" == true && \
+  ( "${GITHUB_EVENT_NAME:-}" == push || "${GITHUB_EVENT_NAME:-}" == workflow_dispatch ) && \
   "${GITHUB_REF:-}" == refs/heads/main ]] || fail CI_SCOPE_DENIED
 [[ "$region" == ap-southeast-1 ]] || fail REGION_DENIED
 [[ "$expected_account" =~ ^[0-9]{12}$ ]] || fail ACCOUNT_CONFIG_INVALID
@@ -53,7 +55,7 @@ request_issues() {
     "${sonar_origin}/api/issues/search?${query}"
 }
 
-active_json="$(request_issues "componentKeys=${project_key}&branch=main&types=VULNERABILITY&statuses=OPEN&severities=BLOCKER,HIGH&p=1&ps=100")" \
+active_json="$(request_issues "componentKeys=${project_key}&branch=main&types=VULNERABILITY&statuses=OPEN&impactSeverities=BLOCKER,HIGH&p=1&ps=100")" \
   || fail SONAR_UNAVAILABLE
 lifecycle_json="$(request_issues "componentKeys=${project_key}&branch=main&issues=${controlled_key}&types=VULNERABILITY&statuses=RESOLVED&resolutions=FIXED&p=1&ps=1")" \
   || fail SONAR_UNAVAILABLE

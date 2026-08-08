@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "sonarProjectKey": "zctiong-iss_crewsafe",
   "controlledIssueKey": "SCRUM-284-CONTROLLED-ISSUE"
 }

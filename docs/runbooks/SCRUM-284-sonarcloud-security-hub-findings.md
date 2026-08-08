@@ -15,6 +15,10 @@ response, or personal data.
 The importer accepts only the exact `https://sonarcloud.io` origin. A configuration that
 attempts any other origin is denied before a request is made.
 
+The active SonarCloud request uses the software-quality `impactSeverities` filter for
+`BLOCKER,HIGH`. Do not replace it with the legacy `severities` filter: SonarCloud's
+type-severity vocabulary does not include `HIGH`.
+
 ## Staged activation
 
 1. Merge the plumbing change with `.github/securityhub-import.json` set to false.
