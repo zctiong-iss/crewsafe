@@ -62,6 +62,8 @@ valid="$work/valid.json"
 jq '.valid' "$FIXTURES/active-cases.json" >"$valid"
 invalid="$work/invalid.json"
 jq '.invalid' "$FIXTURES/active-cases.json" >"$invalid"
+invalid_impact="$work/invalid-impact.json"
+jq '.invalidImpact' "$FIXTURES/active-cases.json" >"$invalid_impact"
 resolved="$work/resolved.json"
 jq '.resolved' "$FIXTURES/lifecycle-cases.json" >"$resolved"
 
@@ -76,6 +78,8 @@ calls="$(cat "$work/calls.log")"
 assert_contains "$calls" "securityhub batch-import-findings" "custom finding is submitted"
 assert_contains "$calls" "impactSeverities=BLOCKER,HIGH" "active query uses software-quality severity filter"
 assert_not_contains "$calls" "&severities=BLOCKER,HIGH" "active query does not use legacy type severity filter"
+assert_contains "$calls" '"providerSeverity":"HIGH"' "MQR security impact maps to ASFF severity"
+assert_contains "$calls" '"sonarSeverity":"HIGH"' "MQR security impact is retained as provider metadata"
 
 assert_exit 0 "manual workflow dispatch imports selected finding" run_import_dispatch "$valid" "$empty" "$import_ok" "$out"
 assert_contains "$(cat "$out")" "IMPORTED" "manual dispatch summary is text-labelled"
@@ -98,6 +102,9 @@ assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-finding
 
 assert_exit 1 "invalid candidate fails closed" run_import "$invalid" "$empty" "$import_ok" "$out"
 assert_not_contains "$(cat "$out")" "source.java" "unsafe source text is not echoed"
+
+assert_exit 1 "ineligible MQR security impact fails closed" run_import "$invalid_impact" "$empty" "$import_ok" "$out"
+assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "ineligible MQR impact is never imported"
 
 assert_exit 1 "partial batch is not success" run_import "$valid" "$empty" "$import_partial" "$out"
 assert_contains "$(cat "$out")" "FAILED_PARTIAL" "partial failure is labelled"

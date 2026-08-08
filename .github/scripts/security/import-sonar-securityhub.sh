@@ -69,9 +69,16 @@ active_total="$(jq -r '.total' <<<"$active_json")"
 validate_issue() {
   local issue="$1" desired_status="$2" desired_resolution="${3:-}"
   jq -e --arg project "$project_key" --arg status "$desired_status" --arg resolution "$desired_resolution" '
+    def eligible_security_impact:
+      if (.impacts? == null) then
+        (.severity == "BLOCKER" or .severity == "HIGH")
+      elif (.impacts | type) == "array" then
+        any(.impacts[]?; .softwareQuality == "SECURITY" and
+          (.severity == "BLOCKER" or .severity == "HIGH"))
+      else false end;
     (.key | type == "string" and test("^[A-Za-z0-9_.:-]{1,160}$")) and
     ((.project // $project) == $project) and .type == "VULNERABILITY" and
-    (.severity == "BLOCKER" or .severity == "HIGH") and .status == $status and
+    eligible_security_impact and .status == $status and
     ($resolution == "" or .resolution == $resolution) and
     (.rule | type == "string" and test("^[A-Za-z0-9_.:-]{1,160}$")) and
     (.creationDate | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,9})?Z$")) and
@@ -79,8 +86,22 @@ validate_issue() {
   ' <<<"$issue" >/dev/null
 }
 
+security_severity() {
+  jq -r '
+    if (.impacts? == null) then .severity
+    elif (.impacts | type) == "array" then
+      ([.impacts[]? | select(.softwareQuality == "SECURITY") | .severity] |
+        if index("BLOCKER") != null then "BLOCKER"
+        elif index("HIGH") != null then "HIGH"
+        else "" end)
+    else "" end
+  ' <<<"$1"
+}
+
 lookup_and_import() {
-  local issue="$1" state="$2" action="$3" id lookup match_count existing_updated source_updated payload response
+  local issue="$1" state="$2" action="$3" id lookup match_count existing_updated source_updated payload response severity
+  severity="$(security_severity "$issue")"
+  [[ "$severity" == BLOCKER || "$severity" == HIGH ]] || fail CANDIDATE_INVALID
   id="crewsafe/sonarcloud/${project_key}/$(jq -r '.key' <<<"$issue")"
   lookup="$(aws securityhub get-findings --region "$region" --filters "ProductArn=[{Value=${product_arn},Comparison=EQUALS}],Id=[{Value=${id},Comparison=EQUALS}]" --output json 2>/dev/null)" \
     || fail SECURITYHUB_LOOKUP_FAILED
@@ -103,7 +124,7 @@ lookup_and_import() {
   payload="$tmp_dir/finding.json"
   jq -n --arg id "$id" --arg product "$product_arn" --arg account "$expected_account" \
     --arg project "$project_key" --arg issue_key "$(jq -r '.key' <<<"$issue")" \
-    --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$(jq -r '.severity' <<<"$issue")" \
+    --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$severity" \
     --arg created "$(jq -r '.creationDate' <<<"$issue")" --arg updated "$(jq -r '.updateDate' <<<"$issue")" \
     --arg commit "$GITHUB_SHA" --arg state "$state" '
     [{SchemaVersion:"2018-10-08",Id:$id,ProductArn:$product,GeneratorId:"crewsafe/sonarcloud-securityhub-import",

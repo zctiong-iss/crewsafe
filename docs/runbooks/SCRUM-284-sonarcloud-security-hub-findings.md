@@ -17,7 +17,9 @@ attempts any other origin is denied before a request is made.
 
 The active SonarCloud request uses the software-quality `impactSeverities` filter for
 `BLOCKER,HIGH`. Do not replace it with the legacy `severities` filter: SonarCloud's
-type-severity vocabulary does not include `HIGH`.
+type-severity vocabulary does not include `HIGH`. When the response includes MQR
+`impacts`, eligibility and the mapped provider severity come only from its
+`softwareQuality=SECURITY` impact; a legacy top-level severity is not authoritative.
 
 ## Staged activation
 
