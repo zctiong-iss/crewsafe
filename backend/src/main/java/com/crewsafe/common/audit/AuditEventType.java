@@ -40,6 +40,10 @@ public final class AuditEventType {
     /** A shift and all of its assignments were removed (SCRUM-159/160-fix). */
     public static final String SHIFT_DELETED = "SHIFT_DELETED";
 
+    /** A shift was cancelled rather than deleted -- the row and its assignments are kept
+     * as a record (SCRUM-255). */
+    public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
+
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
      * through this event's originating endpoint. */

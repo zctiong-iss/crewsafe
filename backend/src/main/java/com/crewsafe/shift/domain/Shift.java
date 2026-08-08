@@ -67,6 +67,17 @@ public class Shift {
         this.endsAt = endsAt;
     }
 
+    /**
+     * Marks the shift cancelled (SCRUM-255) without touching its assignments — a
+     * cancelled shift is retained as a record, distinguishable from an active one,
+     * rather than removed the way {@code DELETE} removes it. Which statuses may reach
+     * this method is a transition rule, not an invariant of this object, so it's
+     * enforced by the caller — see {@link com.crewsafe.shift.service.ShiftService#cancelShift}.
+     */
+    public void cancel() {
+        this.status = ShiftStatus.CANCELLED;
+    }
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
