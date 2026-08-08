@@ -30,6 +30,7 @@ import AppButton from "@/components/buttons/AppButton";
 import AppTextInput from "@/components/inputs/AppTextInput";
 import SegmentedControl from "@/components/inputs/SegmentedControl";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
+import { intensityColor } from "@/helpers/intensityColor";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Intensity, ShiftAssignment } from "@/types/domain";
 
@@ -146,6 +147,7 @@ const EditAssignmentSheet: FC<EditAssignmentSheetProps> = ({
             options={INTENSITIES.map((value) => ({ value, label: t(`intensity.${value}`) }))}
             value={intensity}
             onChange={setIntensity}
+            selectedColorFor={(value) => intensityColor(theme.colors, value)}
           />
 
           <AppTextInput

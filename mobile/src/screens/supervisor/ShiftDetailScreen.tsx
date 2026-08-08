@@ -39,6 +39,7 @@ import {
 } from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { formatDateTime } from "@/helpers/dateTime";
+import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { ShiftAssignment } from "@/types/domain";
@@ -289,10 +290,44 @@ export default function ShiftDetailScreen() {
                 <AppText variant="caption" tone="secondary" style={styles.detailLabel}>
                   {t("shifts.intensity")}
                 </AppText>
-                <AppText variant="label" style={styles.detailValue}>
+                {/* Coloured on the same green → amber → red ramp as the picker that set it, so
+                    the card and the sheet agree at a glance. The word is still there: colour
+                    is never the only thing carrying the meaning. */}
+                <AppText
+                  variant="label"
+                  style={[
+                    styles.detailValue,
+                    { color: intensityColor(theme.colors, assignment.intensity) },
+                  ]}
+                >
                   {t(`intensity.${assignment.intensity}`)}
                 </AppText>
               </View>
+
+              {/*
+                Above the buttons, not below them.
+
+                It is a property of the assignment, like the two rows over it — reading it after
+                the controls meant the card said what you could do to the worker before it had
+                finished saying who they were. Centred because it is the only element on its own
+                line; left-aligned it looked like a fourth, unlabelled detail row.
+              */}
+              {assignment.acclimatisationDay !== null ? (
+                <View
+                  style={[
+                    styles.acclimatisation,
+                    {
+                      borderColor: theme.colors.warning,
+                      borderWidth: theme.metrics.borderWidth,
+                      borderRadius: theme.metrics.radius / 2,
+                    },
+                  ]}
+                >
+                  <AppText variant="caption" tone="warning">
+                    {t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}
+                  </AppText>
+                </View>
+              ) : null}
 
               {editability.editable ? (
                 <>
@@ -311,23 +346,6 @@ export default function ShiftDetailScreen() {
                     style={styles.editButton}
                   />
                 </>
-              ) : null}
-
-              {assignment.acclimatisationDay !== null ? (
-                <View
-                  style={[
-                    styles.acclimatisation,
-                    {
-                      borderColor: theme.colors.warning,
-                      borderWidth: theme.metrics.borderWidth,
-                      borderRadius: theme.metrics.radius / 2,
-                    },
-                  ]}
-                >
-                  <AppText variant="caption" tone="warning">
-                    {t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}
-                  </AppText>
-                </View>
               ) : null}
             </View>
           ))
@@ -448,8 +466,11 @@ const styles = StyleSheet.create({
   },
   acclimatisation: {
     marginTop: vs(10),
+    marginBottom: vs(4),
     padding: s(8),
-    alignSelf: "flex-start",
+    // Centred, and sized to its text rather than stretched: a full-width amber box would read
+    // as a banner about the whole card instead of a note about one worker.
+    alignSelf: "center",
   },
   editButton: {
     marginTop: vs(10),

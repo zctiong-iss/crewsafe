@@ -30,6 +30,7 @@ import AppTextInput from "@/components/inputs/AppTextInput";
 import SegmentedControl from "@/components/inputs/SegmentedControl";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
+import { intensityColor } from "@/helpers/intensityColor";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Intensity, SiteWorker } from "@/types/domain";
 
@@ -154,6 +155,7 @@ const AddWorkerSheet: FC<AddWorkerSheetProps> = ({
                 options={INTENSITIES.map((value) => ({ value, label: t(`intensity.${value}`) }))}
                 value={intensity}
                 onChange={setIntensity}
+                selectedColorFor={(value) => intensityColor(theme.colors, value)}
               />
 
               <AppTextInput

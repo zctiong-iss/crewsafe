@@ -1076,6 +1076,56 @@ something to see.
 `FlatList` rows are memoised against it, and without the set an expand would not repaint the
 row it happened in.
 
+**Altered text — the toggle's label is now a chevron.** `ExpandChevron` rotates 0° → 180° on a
+220ms curve with a slight overshoot. To revert, drop the component and render the words again:
+
+```tsx
+// Before the chevron:
+<AppText variant="caption" style={styles.crewToggleAction}>
+  {expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")}
+</AppText>
+```
+
+`shifts.showCrew` and `shifts.hideCrew` are **still used** — they became the touchable's
+`accessibilityLabel`. A chevron announces nothing on its own, so removing them would have left
+the control unlabelled to a screen reader. Reduce Motion snaps to the destination angle rather
+than freezing at the old one: the chevron is state, and a supervisor with Reduce Motion on
+still has to see which cards are open.
+
+Not `AnimatedIcon`. Every motion that component offers loops forever and means "this is
+ongoing"; this is a single state transition that ends when the section opens.
+
+### Intensity has a colour, and the colour is never the whole message
+
+Light, Moderate and Heavy run green → amber → red, in the picker's selected segment and in
+every place the value is displayed back.
+
+| Intensity | Standard | High contrast |
+|---|---|---|
+| Light | `#1B5E20` | `#0B3D0B` |
+| Moderate | `#9A5B00` | `#7A4600` |
+| Heavy | `#C71A34` | `#B3001B` |
+
+Named `intensityLight/Moderate/Heavy` in the palette rather than pointing callers at
+`success`/`warningFill`/`danger`, though the values match today. Those three mean "healthy",
+"degraded" and "stop work"; **a HEAVY assignment is a normal thing to plan**, and a supervisor
+must not read a red chip as the app objecting to it.
+
+Moderate uses the darkened amber, not `warning`. Plain `#B26A00` is 4.24:1 against white and
+would put the selected "Moderate" label under the AA floor —
+[`intensityColor.test.ts`](src/helpers/intensityColor.test.ts) checks all six values in both
+directions, and that the three never collapse to one colour.
+
+The label is always beside the fill. A red-green colour-blind supervisor reads "Heavy", not the
+chip.
+
+### The acclimatisation pill moved above the buttons
+
+It is a property of the assignment, like the two rows above it. Below the controls, the card
+said what you could do to a worker before it had finished saying who they were. Centred and
+sized to its text — full width it read as a banner about the whole card rather than a note
+about one person.
+
 ### Where each mutation's answer comes from
 
 Three of the four take the server's copy of the shift and replace what the store holds.

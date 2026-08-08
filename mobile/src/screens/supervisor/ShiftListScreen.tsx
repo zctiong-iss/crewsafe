@@ -28,6 +28,7 @@ import AppSwitch from "@/components/inputs/AppSwitch";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import ShiftStatusPill from "@/components/shifts/ShiftStatusPill";
+import ExpandChevron from "@/components/feedback/ExpandChevron";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadShifts, siteSelected } from "@/store/reducers/shiftsSlice";
@@ -35,6 +36,7 @@ import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { isMockApi } from "@/auth/authMode";
 import { getForceForbidden, setForceForbidden } from "@/api/mock/shifts";
 import { formatDateTime } from "@/helpers/dateTime";
+import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { ShiftsStackParamList } from "@/navigation/types";
@@ -260,15 +262,24 @@ export default function ShiftListScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityState={{ expanded: expandedShiftIds.has(item.id) }}
+                /* The words moved into the chevron, and a chevron announces nothing. Without
+                   this the control would read as an unlabelled button to a screen reader. */
+                accessibilityLabel={
+                  expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")
+                }
                 onPress={() => toggleCrew(item.id)}
                 style={styles.crewToggle}
               >
                 <AppText variant="caption" tone="secondary">
                   {t("shifts.assignmentCount", { count: item.assignments.length })}
                 </AppText>
-                <AppText variant="caption" style={styles.crewToggleAction}>
-                  {expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")}
-                </AppText>
+                <ExpandChevron
+                  expanded={expandedShiftIds.has(item.id)}
+                  // Scaled with the text setting: an icon that stays 18px while the line beside
+                  // it grows to 1.5× stops looking like part of the same control.
+                  size={s(18) * theme.fontScale}
+                  color={theme.colors.textPrimary}
+                />
               </TouchableOpacity>
             )}
 
@@ -282,7 +293,14 @@ export default function ShiftListScreen() {
                     <AppText variant="caption" tone="secondary">
                       {assignment.taskName ?? t("shifts.noTask")}
                       {" · "}
-                      {t(`intensity.${assignment.intensity}`)}
+                      {/* Nested so only the intensity takes the ramp colour — the task and the
+                          acclimatisation day around it stay secondary text. */}
+                      <AppText
+                        variant="caption"
+                        style={{ color: intensityColor(theme.colors, assignment.intensity) }}
+                      >
+                        {t(`intensity.${assignment.intensity}`)}
+                      </AppText>
                       {assignment.acclimatisationDay !== null
                         ? ` · ${t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}`
                         : ""}
@@ -335,9 +353,6 @@ const styles = StyleSheet.create({
     // A comfortable target: this sits inside another touchable, so it has to be
     // unambiguously its own thing to hit.
     paddingVertical: vs(6),
-  },
-  crewToggleAction: {
-    textDecorationLine: "underline",
   },
   crewRow: {
     marginTop: vs(8),
