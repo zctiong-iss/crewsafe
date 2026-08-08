@@ -1,5 +1,22 @@
-# Normal local development uses the deployed shared Cognito environment.
-# `run.sh --account <alias>` or `run-docker.sh --account <alias>` supplies every
-# required app.cognito property from the validated, non-sensitive GitHub
-# repository variable. No localhost identity endpoint or AWS profile is
-# permitted here.
+# Local development configuration for SCRUM-117 testing
+# Cognito values below are test/placeholder values for local development only
+# Production values come from GitHub secrets via run-docker.sh
+
+app:
+  cognito:
+    issuerUri: http://localhost:8080
+    jwkSetUri: http://localhost:8080/.well-known/jwks.json
+    clientIds: local-dev
+    demoUsersJson: '{"local": {"password": "Test@12345"}}'
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true

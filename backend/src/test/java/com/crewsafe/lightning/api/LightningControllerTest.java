@@ -102,7 +102,8 @@ class LightningControllerTest extends AbstractIntegrationTest {
         // meanings on a stop-work surface; flattening one into the other is how a crew gets
         // told it is safe by a scheduler that was never switched on.
         mockMvc.perform(authenticatedGet(visibleSite.getId()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
     }
 
     @Test

@@ -40,6 +40,10 @@ public final class AuditEventType {
     /** A shift and all of its assignments were removed (SCRUM-159/160-fix). */
     public static final String SHIFT_DELETED = "SHIFT_DELETED";
 
+    /** A shift was cancelled rather than deleted -- the row and its assignments are kept
+     * as a record (SCRUM-255). */
+    public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
+
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
      * through this event's originating endpoint. */
@@ -59,6 +63,17 @@ public final class AuditEventType {
 
     /** A worker completed a dispatched safety action (SCRUM-185). */
     public static final String ACTION_COMPLETED = "ACTION_COMPLETED";
+
+    /** A supervisor approved an AI-drafted recommendation as-is (SCRUM-119). */
+    public static final String RECOMMENDATION_APPROVED = "RECOMMENDATION_APPROVED";
+
+    /** A supervisor rejected an AI-drafted recommendation (SCRUM-119). */
+    public static final String RECOMMENDATION_REJECTED = "RECOMMENDATION_REJECTED";
+
+    /** A supervisor approved an AI-drafted recommendation with changes (SCRUM-119). The
+     * original draft is retained on the recommendation; the edited version is retained on
+     * the resulting approval. */
+    public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
 
     private AuditEventType() {
     }

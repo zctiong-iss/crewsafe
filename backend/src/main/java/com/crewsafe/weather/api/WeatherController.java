@@ -1,5 +1,6 @@
 package com.crewsafe.weather.api;
 
+import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.weather.domain.WbgtBand;
 import com.crewsafe.weather.domain.WeatherObservation;
 import com.crewsafe.weather.domain.WeatherQualityStatus;
@@ -35,10 +36,11 @@ public class WeatherController {
     @GetMapping("/latest")
     @PreAuthorize("@siteAccess.canAccess(#siteId)")
     public ResponseEntity<LatestWeatherResponse> getLatestWeather(@PathVariable UUID siteId) {
-        return weatherQueries.findLatestForSite(siteId)
+        LatestWeatherResponse response = weatherQueries.findLatestForSite(siteId)
                 .map(LatestWeatherResponse::from)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+                .orElseThrow(() -> new ResourceNotFoundException("No weather stored for site " + siteId));
+
+        return ResponseEntity.ok(response);
     }
 
     public record LatestWeatherResponse(

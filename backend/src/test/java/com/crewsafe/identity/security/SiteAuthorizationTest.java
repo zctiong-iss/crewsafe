@@ -244,4 +244,26 @@ class SiteAuthorizationTest extends AbstractIntegrationTest {
                         .header("Authorization", "Bearer " + workerAToken))
                 .andExpect(status().isForbidden());
     }
+
+    /**
+     * ADMIN bypasses membership entirely (see {@link SiteAccessEvaluator}), so this is the
+     * one caller that actually reaches the 404 branch in {@code SiteController} rather than
+     * being turned away by {@code @PreAuthorize} first. SCRUM-263: asserts the body carries
+     * the standard {@code ErrorResponse} shape, not an empty one.
+     */
+    @Test
+    void anAdminRequestingAnUnknownSiteGets404WithAnErrorBody() throws Exception {
+        mockMvc.perform(get("/api/v1/sites/" + UUID.randomUUID())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    void anAdminRequestingAnUnknownSitesDashboardGets404WithAnErrorBody() throws Exception {
+        mockMvc.perform(get("/api/v1/sites/" + UUID.randomUUID() + "/dashboard")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
 }
