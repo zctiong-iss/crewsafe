@@ -5,10 +5,10 @@
  * to the mock that currently answers it. Switching to the real backend is deleting a
  * branch, not rewriting a call site — the screens above never learn which one ran.
  *
- * Only `fetchMyShift` is still mocked unconditionally: `GET /api/v1/shifts/me` exists on no
- * deployment. `fetchSiteWeather` (SCRUM-209) and `fetchLightningRisk` (SCRUM-261) both branch
- * on the auth mode like `identity.ts` and `sites.ts` do, because the endpoints they need are
- * real.
+ * Every call here now branches on the auth mode rather than being mocked unconditionally:
+ * `fetchSiteWeather` (SCRUM-209), `fetchLightningRisk` (SCRUM-261) and `fetchMyShift`
+ * (SCRUM-266). The only thing still fixture-only is the policy evaluation inside
+ * `fetchSiteConditions`, because no endpoint evaluates one yet.
  *
  * @author Justin Chua
  */
@@ -34,17 +34,31 @@ function delay<T>(value: T): Promise<T> {
   return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_LATENCY_MS));
 }
 
+/** The wire shape of `GET /api/v1/shifts/me` — the shift is nullable, not the response. */
+interface MyShiftWire {
+  shift: MyShift | null;
+}
+
 /**
- * `GET /api/v1/shifts/me` — SCRUM-162, contract in `docs/api/shift-readiness.yaml`.
+ * `GET /api/v1/shifts/me` — real since SCRUM-266, contract in `docs/api/shift-readiness.yaml`.
  *
- * Real implementation:
- *   return request<MyShiftResponse>({ url: "/api/v1/shifts/me", method: "GET" });
+ * Token-scoped: there is no `workerId` anywhere in the request, so there is no field for one
+ * worker to ask about another. The response carries only the caller's own task, intensity and
+ * acclimatisation — never the other assignments on the same shift.
  *
- * Returns null when the worker has no current or upcoming shift — a legitimate answer, not
- * an error, and the screen has an empty state for it.
+ * Until this endpoint existed the screen ran on a fixture, which meant a supervisor's
+ * correction was invisible to the worker it was about. That was the whole reason SCRUM-266
+ * needed a backend story before its mobile half could mean anything.
+ *
+ * Null when the worker has no current or upcoming shift — a legitimate answer rather than an
+ * error, and the screen has an empty state for it. The server says so with a 200 and a null
+ * `shift` rather than a 404, so there is nothing to catch here.
  */
-export function fetchMyShift(): Promise<MyShift | null> {
-  return delay(mockMyShift());
+export async function fetchMyShift(): Promise<MyShift | null> {
+  if (isMockApi()) return delay(mockMyShift());
+
+  const wire = await request<MyShiftWire>({ url: "/api/v1/shifts/me", method: "GET" });
+  return wire.shift;
 }
 
 /**
