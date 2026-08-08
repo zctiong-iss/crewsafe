@@ -34,6 +34,9 @@ assert_contains "$importer" '--connect-timeout 2'
 assert_contains "$importer" '--max-time 3'
 assert_contains "$importer" "SourceUrl:\$source_url"
 assert_contains "$importer" "source_url=\"\${sonar_origin}/project/issues?id=\${project_key}&open=\${issue_key}\""
+assert_contains "$importer" "date -u '+%Y-%m-%dT%H:%M:%SZ'"
+assert_contains "$importer" 'REPAIR_TIMESTAMP_UNAVAILABLE'
+assert_contains "$importer" 'crewsafe/sourceUpdatedAt'
 
 iam_main="infra/terraform/iam-policy-management/main.tf"
 assert_contains "$iam_main" '"securityhub-import"'
