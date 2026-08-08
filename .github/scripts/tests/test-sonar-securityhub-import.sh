@@ -81,6 +81,13 @@ assert_not_contains "$calls" "&severities=BLOCKER,HIGH" "active query does not u
 assert_contains "$calls" '"providerSeverity":"HIGH"' "MQR security impact maps to ASFF severity"
 assert_contains "$calls" '"sonarSeverity":"HIGH"' "MQR security impact is retained as provider metadata"
 
+offset_timestamp="$work/offset-timestamp.json"
+jq '.valid | .issues[0].creationDate = "2026-08-08T00:00:00+0000" | .issues[0].updateDate = "2026-08-08T00:01:00+00:00"' "$FIXTURES/active-cases.json" >"$offset_timestamp"
+assert_exit 0 "Sonar zero-offset timestamps are accepted" run_import "$offset_timestamp" "$empty" "$import_ok" "$out"
+offset_calls="$(cat "$work/calls.log")"
+assert_contains "$offset_calls" '"createdAt":"2026-08-08T00:00:00Z"' "zero-offset creation time is canonicalized"
+assert_contains "$offset_calls" '"updatedAt":"2026-08-08T00:01:00Z"' "zero-offset update time is canonicalized"
+
 assert_exit 0 "manual workflow dispatch imports selected finding" run_import_dispatch "$valid" "$empty" "$import_ok" "$out"
 assert_contains "$(cat "$out")" "IMPORTED" "manual dispatch summary is text-labelled"
 
@@ -99,6 +106,11 @@ suffix_timestamp="$work/suffix-timestamp.json"
 jq '.valid | .issues[0].updateDate = "2026-08-08T00:01:00Z-suffix"' "$FIXTURES/active-cases.json" >"$suffix_timestamp"
 assert_exit 1 "timestamp suffix is rejected before import" run_import "$suffix_timestamp" "$empty" "$import_ok" "$out"
 assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "suffix timestamp is never imported"
+
+non_utc_timestamp="$work/non-utc-timestamp.json"
+jq '.valid | .issues[0].updateDate = "2026-08-08T01:01:00+0100"' "$FIXTURES/active-cases.json" >"$non_utc_timestamp"
+assert_exit 1 "non-UTC timestamp offset is rejected before import" run_import "$non_utc_timestamp" "$empty" "$import_ok" "$out"
+assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "non-UTC timestamp is never imported"
 
 assert_exit 1 "invalid candidate fails closed" run_import "$invalid" "$empty" "$import_ok" "$out"
 assert_not_contains "$(cat "$out")" "source.java" "unsafe source text is not echoed"

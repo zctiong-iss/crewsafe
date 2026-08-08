@@ -20,6 +20,8 @@ The active SonarCloud request uses the software-quality `impactSeverities` filte
 type-severity vocabulary does not include `HIGH`. When the response includes MQR
 `impacts`, eligibility and the mapped provider severity come only from its
 `softwareQuality=SECURITY` impact; a legacy top-level severity is not authoritative.
+Sonar timestamps may use `+0000` or `+00:00`; the importer accepts only those zero-UTC
+forms (or `Z`) and canonicalizes them to `Z` before comparison and import.
 
 ## Staged activation
 
