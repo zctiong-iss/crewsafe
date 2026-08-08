@@ -12,7 +12,7 @@ assert_file "infra/terraform/iam-policy-management/.terraform.lock.hcl"
 assert_file ".github/scripts/terraform/select-execution-role.sh"
 assert_file ".github/scripts/terraform/preflight-iam-policy-account.sh"
 assert_file ".github/scripts/terraform/tests/fixtures/iam-policy-management/authorization-boundary.json"
-[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 12 ]] || fail "IAM policy-management root must contain exactly twelve policy templates"
+[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 14 ]] || fail "IAM policy-management root must contain exactly fourteen policy templates"
 
 jq -e '
   .components["iam-policy-management-shared-dev"].root == "infra/terraform/iam-policy-management"
