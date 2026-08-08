@@ -205,7 +205,8 @@
       "taskTooLong": "Keep the task under {{max}} characters.",
       "intensityRequired": "Choose a work intensity.",
       "acclimatisationRange": "Enter a whole number from 1 to 7, or leave it blank.",
-      "checkFields": "Some details above need attention. The fields with a red outline show what to fix."
+      "checkFields": "Some details above need attention. The fields with a red outline show what to fix.",
+      "workerRequired": "Choose a worker to add."
     },
     "editAssignment": "Edit details",
     "editTitle": "Edit worker details",
@@ -216,7 +217,23 @@
     "editActiveBody": "Changing intensity now changes the heat rules this worker is already working under. Continue?",
     "editActiveConfirm": "Save anyway",
     "showCrew": "Show crew",
-    "hideCrew": "Hide crew"
+    "hideCrew": "Hide crew",
+    "editWindow": "Edit shift times",
+    "editWindowTitle": "Edit shift times",
+    "editWindowHint": "This moves the whole crew, not one worker.",
+    "editWindowActiveTitle": "This shift is running",
+    "editWindowActiveBody": "Moving the times changes when {{crew}} worker(s) are expected on site. Continue?",
+    "editWindowFailedTitle": "Times not changed",
+    "addWorker": "Add a worker",
+    "addWorkerTitle": "Add a worker",
+    "addWorkerConfirm": "Add to shift",
+    "addWorkerNoneLeft": "Everyone at this site is already on this shift.",
+    "addWorkerFailedTitle": "Worker not added",
+    "removeWorker": "Take off shift",
+    "removeWorkerTitle": "Take off shift",
+    "removeWorkerBody": "Remove {{name}} from this shift? Their task and acclimatisation day are discarded.",
+    "removeWorkerConfirm": "Remove",
+    "removeWorkerFailedTitle": "Worker not removed"
   },
   "weather": {
     "title": "Conditions",

@@ -23,7 +23,7 @@
 import { useEffect, useState, type FC } from "react";
 import { Alert, Modal, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import { s, vs } from "react-native-size-matters";
+import { vs } from "react-native-size-matters";
 
 import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";

@@ -26,9 +26,17 @@ import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import ShiftStatusPill from "@/components/shifts/ShiftStatusPill";
 import EditAssignmentSheet from "@/components/shifts/EditAssignmentSheet";
+import EditShiftWindowSheet from "@/components/shifts/EditShiftWindowSheet";
+import AddWorkerSheet from "@/components/shifts/AddWorkerSheet";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { editAssignment, removeShift } from "@/store/reducers/shiftsSlice";
+import {
+  addWorkerToShift,
+  editAssignment,
+  editShiftWindow,
+  removeShift,
+  removeWorkerFromShift,
+} from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
@@ -50,8 +58,12 @@ export default function ShiftDetailScreen() {
   const workers = useAppSelector((state) => state.shifts.workers);
   const deletingId = useAppSelector((state) => state.shifts.deletingId);
   const savingAssignmentId = useAppSelector((state) => state.shifts.savingAssignmentId);
+  const savingWindow = useAppSelector((state) => state.shifts.savingWindow);
+  const staffingId = useAppSelector((state) => state.shifts.staffingId);
 
   const [editing, setEditing] = useState<ShiftAssignment | null>(null);
+  const [editingWindow, setEditingWindow] = useState(false);
+  const [addingWorker, setAddingWorker] = useState(false);
 
   /**
    * Whether this shift may still be corrected (SCRUM-266).
@@ -82,6 +94,64 @@ export default function ShiftDetailScreen() {
       workers.find((worker) => worker.id === workerId)?.displayName ??
       t("shifts.unknownWorker"),
     [workers, t],
+  );
+
+  /**
+   * Workers at this site who are not already on this shift (SCRUM-266).
+   *
+   * `workers` is the site roster, `shift.assignments` is who is already on. Offering someone
+   * twice would produce a server rejection phrased in terms of overlapping shifts, about a
+   * person visibly listed on the screen behind the sheet.
+   */
+  const candidates = useMemo(() => {
+    if (!shift) return [];
+    const taken = new Set(shift.assignments.map((assignment) => assignment.workerId));
+    return workers.filter((worker) => !taken.has(worker.id));
+  }, [shift, workers]);
+
+  /**
+   * Reports a failed crew or window change (SCRUM-266).
+   *
+   * An Alert rather than a banner, for the reason the delete flow gives: the supervisor has
+   * just committed a deliberate change and the answer to "did that work?" must not be a
+   * message that can sit below the fold on a shift with a large crew.
+   */
+  const reportFailure = useCallback(
+    (titleKey: string, errorKey: string | undefined) => {
+      Alert.alert(t(titleKey), t(errorKey ?? "errors.unknown"), [{ text: t("common.close") }]);
+    },
+    [t],
+  );
+
+  const onRemoveWorker = useCallback(
+    (assignment: ShiftAssignment) => {
+      /*
+       * Confirmed, unlike an assignment edit. Taking a worker off a shift is not a correction
+       * that can be corrected back in the same place — once removed they are gone from this
+       * screen, and putting them back means going through the add flow and re-entering the
+       * task and acclimatisation day that were just discarded.
+       */
+      Alert.alert(
+        t("shifts.removeWorkerTitle"),
+        t("shifts.removeWorkerBody", { name: workerNameFor(assignment.workerId) }),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("shifts.removeWorkerConfirm"),
+            style: "destructive",
+            onPress: async () => {
+              const result = await dispatch(
+                removeWorkerFromShift({ siteId, shiftId, assignmentId: assignment.id }),
+              );
+              if (removeWorkerFromShift.rejected.match(result)) {
+                reportFailure("shifts.removeWorkerFailedTitle", result.payload?.errorKey);
+              }
+            },
+          },
+        ],
+      );
+    },
+    [dispatch, reportFailure, shiftId, siteId, t, workerNameFor],
   );
 
   const onDelete = useCallback(() => {
@@ -173,6 +243,16 @@ export default function ShiftDetailScreen() {
               end: formatDateTime(shift.endsAt, i18n.language),
             })}
           </AppText>
+
+          {editability.editable ? (
+            <AppButton
+              title={t("shifts.editWindow")}
+              variant="secondary"
+              loading={savingWindow}
+              onPress={() => setEditingWindow(true)}
+              style={styles.editButton}
+            />
+          ) : null}
         </View>
 
         <AppText variant="subtitle" style={styles.sectionTitle}>
@@ -215,13 +295,22 @@ export default function ShiftDetailScreen() {
               </View>
 
               {editability.editable ? (
-                <AppButton
-                  title={t("shifts.editAssignment")}
-                  variant="secondary"
-                  loading={savingAssignmentId === assignment.id}
-                  onPress={() => setEditing(assignment)}
-                  style={styles.editButton}
-                />
+                <>
+                  <AppButton
+                    title={t("shifts.editAssignment")}
+                    variant="secondary"
+                    loading={savingAssignmentId === assignment.id}
+                    onPress={() => setEditing(assignment)}
+                    style={styles.editButton}
+                  />
+                  <AppButton
+                    title={t("shifts.removeWorker")}
+                    variant="secondary"
+                    loading={staffingId === assignment.id}
+                    onPress={() => onRemoveWorker(assignment)}
+                    style={styles.editButton}
+                  />
+                </>
               ) : null}
 
               {assignment.acclimatisationDay !== null ? (
@@ -243,6 +332,17 @@ export default function ShiftDetailScreen() {
             </View>
           ))
         )}
+
+        {/* Offered even on an unstaffed shift — that is exactly the case the contract has in
+            mind when it allows a shift to be created empty and staffed later. */}
+        {editability.editable ? (
+          <AppButton
+            title={t("shifts.addWorker")}
+            variant="secondary"
+            loading={staffingId === "add"}
+            onPress={() => setAddingWorker(true)}
+          />
+        ) : null}
 
         {/* Stated rather than left to be inferred from a missing button. A supervisor who
             cannot find the edit control should be told the shift is over, not left hunting. */}
@@ -274,6 +374,41 @@ export default function ShiftDetailScreen() {
             editAssignment({ siteId, shiftId, assignmentId: editing.id, ...values }),
           );
           setEditing(null);
+        }}
+      />
+
+      <EditShiftWindowSheet
+        visible={editingWindow}
+        startsAt={shift.startsAt}
+        endsAt={shift.endsAt}
+        shiftIsRunning={editability.running}
+        crewSize={shift.assignments.length}
+        saving={savingWindow}
+        onCancel={() => setEditingWindow(false)}
+        onSave={(values) => {
+          setEditingWindow(false);
+          void (async () => {
+            const result = await dispatch(editShiftWindow({ siteId, shiftId, ...values }));
+            if (editShiftWindow.rejected.match(result)) {
+              reportFailure("shifts.editWindowFailedTitle", result.payload?.errorKey);
+            }
+          })();
+        }}
+      />
+
+      <AddWorkerSheet
+        visible={addingWorker}
+        candidates={candidates}
+        saving={staffingId === "add"}
+        onCancel={() => setAddingWorker(false)}
+        onAdd={(assignment) => {
+          setAddingWorker(false);
+          void (async () => {
+            const result = await dispatch(addWorkerToShift({ siteId, shiftId, assignment }));
+            if (addWorkerToShift.rejected.match(result)) {
+              reportFailure("shifts.addWorkerFailedTitle", result.payload?.errorKey);
+            }
+          })();
         }}
       />
     </AppSafeView>

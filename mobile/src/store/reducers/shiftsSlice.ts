@@ -23,7 +23,12 @@ import {
 } from "@/api/endpoints/shifts";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
-import { updateAssignment as updateAssignmentRequest } from "@/api/endpoints/shifts";
+import {
+  addAssignment as addAssignmentRequest,
+  removeAssignment as removeAssignmentRequest,
+  updateAssignment as updateAssignmentRequest,
+  updateShift as updateShiftRequest,
+} from "@/api/endpoints/shifts";
 import type { Shift, Site, SiteWorker, Intensity } from "@/types/domain";
 
 export type ShiftsStatus = "idle" | "loading" | "ready" | "error";
@@ -49,6 +54,18 @@ export interface ShiftsState {
   deletingId: string | null;
   /** Assignment id currently being saved, so only that card shows a spinner (SCRUM-266). */
   savingAssignmentId: string | null;
+  /** True while the shift's own window is being corrected (SCRUM-266). */
+  savingWindow: boolean;
+  /**
+   * Assignment id currently being taken off the shift, or `"add"` while one is being put on
+   * (SCRUM-266).
+   *
+   * One field for both because they are the same button in the supervisor's hands — the crew
+   * is being changed — and because neither should run while the other is in flight: adding a
+   * worker while a removal is still resolving would race two answers for the same shift, and
+   * whichever landed second would win regardless of which was asked for first.
+   */
+  staffingId: string | null;
   /** True while a create is in flight, so the form's submit button can disable itself. */
   creating: boolean;
 }
@@ -64,6 +81,8 @@ const initialState: ShiftsState = {
   refreshing: false,
   deletingId: null,
   savingAssignmentId: null,
+  savingWindow: false,
+  staffingId: null,
   creating: false,
 };
 
@@ -199,6 +218,77 @@ export const editAssignment = createAsyncThunk<
     (getState() as { shifts: ShiftsState }).shifts.savingAssignmentId !== assignmentId,
 });
 
+/**
+ * `PATCH /sites/{siteId}/shifts/{shiftId}` — corrects the window (SCRUM-266).
+ *
+ * The server refuses this once the shift has ended, and that 400 is surfaced rather than
+ * swallowed: a supervisor who has just typed new times needs to be told they were not taken.
+ */
+export const editShiftWindow = createAsyncThunk<
+  Shift,
+  { siteId: string; shiftId: string; startsAt: string; endsAt: string },
+  { rejectValue: { errorKey: string } }
+>("shifts/editWindow", async ({ siteId, shiftId, startsAt, endsAt }, { rejectWithValue }) => {
+  try {
+    return await updateShiftRequest(siteId, shiftId, startsAt, endsAt);
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) => !(getState() as { shifts: ShiftsState }).shifts.savingWindow,
+});
+
+/**
+ * `POST …/shifts/{shiftId}/assignments` — puts a worker on a shift already planned (SCRUM-266).
+ *
+ * Guarded, and here the guard earns its keep: the server rejects a double-booked worker with a
+ * 400, but two taps of the same row send both requests before either answer arrives, and the
+ * second would be refused for a booking the first had only just created. The supervisor would
+ * be told the worker is already on an overlapping shift — true, and entirely their own doing a
+ * fraction of a second earlier, which reads as a bug.
+ */
+export const addWorkerToShift = createAsyncThunk<
+  Shift,
+  { siteId: string; shiftId: string; assignment: ShiftAssignmentInput },
+  { rejectValue: { errorKey: string } }
+>("shifts/addWorker", async ({ siteId, shiftId, assignment }, { rejectWithValue }) => {
+  try {
+    return await addAssignmentRequest(siteId, shiftId, assignment);
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) =>
+    (getState() as { shifts: ShiftsState }).shifts.staffingId === null,
+});
+
+/**
+ * `DELETE …/shifts/{shiftId}/assignments/{assignmentId}` — takes one worker off (SCRUM-266).
+ *
+ * The server answers 204 with no body, so unlike every other mutation here there is nothing to
+ * replace our copy with. The assignment is dropped locally instead: "this row is gone" is the
+ * one outcome that cannot be misread, and re-fetching the shift to learn it would cost a round
+ * trip to be told the same thing.
+ */
+export const removeWorkerFromShift = createAsyncThunk<
+  { shiftId: string; assignmentId: string },
+  { siteId: string; shiftId: string; assignmentId: string },
+  { rejectValue: { errorKey: string } }
+>("shifts/removeWorker", async ({ siteId, shiftId, assignmentId }, { rejectWithValue }) => {
+  try {
+    await removeAssignmentRequest(siteId, shiftId, assignmentId);
+    return { shiftId, assignmentId };
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) =>
+    (getState() as { shifts: ShiftsState }).shifts.staffingId === null,
+});
+
 export const createShift = createAsyncThunk<
   Shift,
   { siteId: string; startsAt: string; endsAt: string; assignments: ShiftAssignmentInput[] },
@@ -285,6 +375,49 @@ const shiftsSlice = createSlice({
         state.savingAssignmentId = null;
         state.errorKey = action.payload?.errorKey ?? "errors.unknown";
       })
+      .addCase(editShiftWindow.pending, (state) => {
+        state.savingWindow = true;
+        state.errorKey = null;
+      })
+      .addCase(editShiftWindow.fulfilled, (state, action) => {
+        state.savingWindow = false;
+        const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);
+        if (index !== -1) state.shifts[index] = action.payload;
+      })
+      // Reported by the caller, which has the form the times were typed into. The slice only
+      // releases the button.
+      .addCase(editShiftWindow.rejected, (state) => {
+        state.savingWindow = false;
+      })
+
+      .addCase(addWorkerToShift.pending, (state) => {
+        state.staffingId = "add";
+      })
+      .addCase(addWorkerToShift.fulfilled, (state, action) => {
+        state.staffingId = null;
+        const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);
+        if (index !== -1) state.shifts[index] = action.payload;
+      })
+      .addCase(addWorkerToShift.rejected, (state) => {
+        state.staffingId = null;
+      })
+
+      .addCase(removeWorkerFromShift.pending, (state, action) => {
+        state.staffingId = action.meta.arg.assignmentId;
+      })
+      .addCase(removeWorkerFromShift.fulfilled, (state, action) => {
+        state.staffingId = null;
+        const shift = state.shifts.find((item) => item.id === action.payload.shiftId);
+        if (shift) {
+          shift.assignments = shift.assignments.filter(
+            (assignment) => assignment.id !== action.payload.assignmentId,
+          );
+        }
+      })
+      .addCase(removeWorkerFromShift.rejected, (state) => {
+        state.staffingId = null;
+      })
+
       .addCase(createShift.pending, (state) => {
         state.creating = true;
       })

@@ -206,7 +206,8 @@
       "taskTooLong": "Pastikan tugas kurang daripada {{max}} aksara.",
       "intensityRequired": "Pilih satu keamatan kerja.",
       "acclimatisationRange": "Masukkan nombor bulat dari 1 hingga 7, atau biarkan kosong.",
-      "checkFields": "Beberapa butiran di atas perlu diperhatikan. Medan bergaris merah menunjukkan apa yang perlu dibetulkan."
+      "checkFields": "Beberapa butiran di atas perlu diperhatikan. Medan bergaris merah menunjukkan apa yang perlu dibetulkan.",
+      "workerRequired": "Pilih pekerja untuk ditambah."
     },
     "editAssignment": "Sunting butiran",
     "editTitle": "Sunting butiran pekerja",
@@ -217,7 +218,23 @@
     "editActiveBody": "Menukar intensiti sekarang mengubah peraturan haba yang sedang dipatuhi pekerja ini. Teruskan?",
     "editActiveConfirm": "Simpan juga",
     "showCrew": "Tunjuk kru",
-    "hideCrew": "Sembunyi kru"
+    "hideCrew": "Sembunyi kru",
+    "editWindow": "Ubah masa syif",
+    "editWindowTitle": "Ubah masa syif",
+    "editWindowHint": "Ini mengubah seluruh kru, bukan seorang pekerja.",
+    "editWindowActiveTitle": "Syif ini sedang berjalan",
+    "editWindowActiveBody": "Mengubah masa akan mengubah bila {{crew}} pekerja dijangka di tapak. Teruskan?",
+    "editWindowFailedTitle": "Masa tidak diubah",
+    "addWorker": "Tambah pekerja",
+    "addWorkerTitle": "Tambah pekerja",
+    "addWorkerConfirm": "Tambah ke syif",
+    "addWorkerNoneLeft": "Semua pekerja di tapak ini sudah berada dalam syif ini.",
+    "addWorkerFailedTitle": "Pekerja tidak ditambah",
+    "removeWorker": "Keluarkan dari syif",
+    "removeWorkerTitle": "Keluarkan dari syif",
+    "removeWorkerBody": "Keluarkan {{name}} daripada syif ini? Tugas dan hari penyesuaian mereka akan dibuang.",
+    "removeWorkerConfirm": "Keluarkan",
+    "removeWorkerFailedTitle": "Pekerja tidak dikeluarkan"
   },
   "weather": {
     "title": "Keadaan",
