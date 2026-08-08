@@ -103,7 +103,7 @@ public class PolicyEngineService {
         List<PolicyDecision.PolicyAction> advised = new ArrayList<>();
 
         // Emergency stop: WBGT critical
-        if (wbgt >= policy.getWbgtEmergencyStop()) {
+        if (BigDecimal.valueOf(wbgt).compareTo(policy.getWbgtEmergencyStop()) >= 0) {
             required.add(new PolicyDecision.PolicyAction(
                     PolicyDecision.Action.STOP_WORK.name(),
                     "EMERGENCY_STOP_RULE",
@@ -118,7 +118,7 @@ public class PolicyEngineService {
         }
 
         // WBGT exceeds threshold: recommend rest
-        if (wbgt >= threshold) {
+        if (BigDecimal.valueOf(wbgt).compareTo(threshold) >= 0) {
             String ruleRef;
             String action;
             List<String> appliesTo;
@@ -174,7 +174,7 @@ public class PolicyEngineService {
      * - LOW: WBGT below typical thresholds
      */
     private String determineBand(Double wbgt, HeatRestPolicy policy) {
-        if (wbgt >= policy.getWbgtEmergencyStop()) {
+        if (BigDecimal.valueOf(wbgt).compareTo(policy.getWbgtEmergencyStop()) >= 0) {
             return "CRITICAL";
         } else if (wbgt >= 28.0) {
             return "HIGH";
