@@ -12,7 +12,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -43,6 +43,40 @@ export default function ShiftListScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const dispatch = useAppDispatch();
+
+  /**
+   * Which shifts have their crew expanded (SCRUM-266).
+   *
+   * A set of ids rather than a single "which one is open", so a supervisor comparing two
+   * shifts can have both open at once — which is the reason to want this inline rather than
+   * on the detail screen, where seeing two means navigating back and forth.
+   *
+   * Local rather than in the slice: it is view state, gone when the screen is, and putting it
+   * in Redux would mean a refresh could reopen cards the supervisor had closed.
+   */
+  const [expandedShiftIds, setExpandedShiftIds] = useState<Set<string>>(new Set());
+
+  const workers = useAppSelector((state) => state.shifts.workers);
+
+  /**
+   * Assignments carry only `workerId`, and `GET /workers` returns ACTIVE workers only — so a
+   * shift referencing someone since offboarded resolves to no name. Saying so plainly beats
+   * showing a raw UUID, and matches what `ShiftDetailScreen` already does.
+   */
+  const workerNameFor = useCallback(
+    (workerId: string) =>
+      workers.find((worker) => worker.id === workerId)?.displayName ?? t("shifts.unknownWorker"),
+    [workers, t],
+  );
+
+  const toggleCrew = useCallback((shiftId: string) => {
+    setExpandedShiftIds((current) => {
+      const next = new Set(current);
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      next.has(shiftId) ? next.delete(shiftId) : next.add(shiftId);
+      return next;
+    });
+  }, []);
   const navigation = useNavigation<NativeStackNavigationProp<ShiftsStackParamList>>();
 
   const user = useAppSelector((state) => state.auth.user);
@@ -171,7 +205,7 @@ export default function ShiftListScreen() {
          * string rather than an object so the shallow compare actually short-circuits when
          * nothing relevant changed.
          */
-        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}`}
+        extraData={`${i18n.language}|${theme.highContrast}|${theme.fontScale}|${[...expandedShiftIds].join(",")}`}
         contentContainerStyle={[styles.content, shifts.length === 0 && styles.contentEmpty]}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={header}
@@ -209,11 +243,53 @@ export default function ShiftListScreen() {
               <ShiftStatusPill status={item.status} />
             </View>
 
-            <AppText variant="caption" tone="secondary" style={styles.cardMeta}>
-              {item.assignments.length === 0
-                ? t("shifts.unstaffed")
-                : t("shifts.assignmentCount", { count: item.assignments.length })}
-            </AppText>
+            {/*
+              The crew toggle, and the reason it is here rather than replacing the card's own
+              press: tapping the card still opens the shift, which is where editing lives.
+              Making the whole card expand instead would have taken the edit path away to add
+              a preview of it.
+
+              Unstaffed shifts get no toggle — there is nothing to expand, and a control that
+              opens onto an empty box is worse than no control.
+            */}
+            {item.assignments.length === 0 ? (
+              <AppText variant="caption" tone="secondary" style={styles.cardMeta}>
+                {t("shifts.unstaffed")}
+              </AppText>
+            ) : (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ expanded: expandedShiftIds.has(item.id) }}
+                onPress={() => toggleCrew(item.id)}
+                style={styles.crewToggle}
+              >
+                <AppText variant="caption" tone="secondary">
+                  {t("shifts.assignmentCount", { count: item.assignments.length })}
+                </AppText>
+                <AppText variant="caption" style={styles.crewToggleAction}>
+                  {expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")}
+                </AppText>
+              </TouchableOpacity>
+            )}
+
+            {expandedShiftIds.has(item.id)
+              ? item.assignments.map((assignment) => (
+                  <View
+                    key={assignment.id}
+                    style={[styles.crewRow, { borderTopColor: theme.colors.border }]}
+                  >
+                    <AppText variant="label">{workerNameFor(assignment.workerId)}</AppText>
+                    <AppText variant="caption" tone="secondary">
+                      {assignment.taskName ?? t("shifts.noTask")}
+                      {" · "}
+                      {t(`intensity.${assignment.intensity}`)}
+                      {assignment.acclimatisationDay !== null
+                        ? ` · ${t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}`
+                        : ""}
+                    </AppText>
+                  </View>
+                ))
+              : null}
           </TouchableOpacity>
         )}
       />
@@ -250,6 +326,24 @@ const styles = StyleSheet.create({
   cardTitle: {
     flex: 1,
     marginEnd: s(10),
+  },
+  crewToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: vs(6),
+    // A comfortable target: this sits inside another touchable, so it has to be
+    // unambiguously its own thing to hit.
+    paddingVertical: vs(6),
+  },
+  crewToggleAction: {
+    textDecorationLine: "underline",
+  },
+  crewRow: {
+    marginTop: vs(8),
+    paddingTop: vs(8),
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: vs(2),
   },
   cardMeta: {
     marginTop: vs(8),

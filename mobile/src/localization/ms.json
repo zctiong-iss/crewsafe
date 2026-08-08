@@ -215,7 +215,9 @@
     "notEditable": "Syif ini telah tamat dan tidak boleh disunting lagi.",
     "editActiveTitle": "Syif ini sedang berjalan",
     "editActiveBody": "Menukar intensiti sekarang mengubah peraturan haba yang sedang dipatuhi pekerja ini. Teruskan?",
-    "editActiveConfirm": "Simpan juga"
+    "editActiveConfirm": "Simpan juga",
+    "showCrew": "Tunjuk kru",
+    "hideCrew": "Sembunyi kru"
   },
   "weather": {
     "title": "Keadaan",

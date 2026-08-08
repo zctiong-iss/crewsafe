@@ -214,7 +214,9 @@
     "notEditable": "This shift has ended and can no longer be edited.",
     "editActiveTitle": "This shift is running",
     "editActiveBody": "Changing intensity now changes the heat rules this worker is already working under. Continue?",
-    "editActiveConfirm": "Save anyway"
+    "editActiveConfirm": "Save anyway",
+    "showCrew": "Show crew",
+    "hideCrew": "Hide crew"
   },
   "weather": {
     "title": "Conditions",

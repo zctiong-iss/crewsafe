@@ -215,7 +215,9 @@
     "notEditable": "এই শিফট শেষ হয়েছে, আর সম্পাদনা করা যাবে না।",
     "editActiveTitle": "এই শিফট চলছে",
     "editActiveBody": "এখন তীব্রতা বদলালে এই কর্মী যে তাপের নিয়ম মেনে কাজ করছেন তা বদলে যাবে। চালিয়ে যাবেন?",
-    "editActiveConfirm": "তবুও সংরক্ষণ"
+    "editActiveConfirm": "তবুও সংরক্ষণ",
+    "showCrew": "দল দেখান",
+    "hideCrew": "দল লুকান"
   },
   "weather": {
     "title": "অবস্থা",

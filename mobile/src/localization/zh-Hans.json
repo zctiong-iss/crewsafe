@@ -214,7 +214,9 @@
     "notEditable": "该班次已结束，无法再编辑。",
     "editActiveTitle": "该班次正在进行",
     "editActiveBody": "现在更改强度会改变该工人当前遵循的高温规定。是否继续？",
-    "editActiveConfirm": "仍然保存"
+    "editActiveConfirm": "仍然保存",
+    "showCrew": "显示班组",
+    "hideCrew": "隐藏班组"
   },
   "weather": {
     "title": "环境状况",
