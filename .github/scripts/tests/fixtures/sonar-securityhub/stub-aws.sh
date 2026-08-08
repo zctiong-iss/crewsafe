@@ -9,7 +9,7 @@ case "$service $operation" in
   "securityhub batch-import-findings")
     for arg in "$@"; do
       if [[ "$arg" == file://* ]]; then
-        jq -c '.[0] | {providerLabel: .FindingProviderFields.Severity.Label, providerOriginal: .FindingProviderFields.Severity.Original, sonarSeverity: .ProductFields["crewsafe/sonarSeverity"], createdAt: .CreatedAt, updatedAt: .UpdatedAt}' "${arg#file://}" >>"${MOCK_CALL_LOG:?}"
+        jq -c '.[0] | {providerLabel: .FindingProviderFields.Severity.Label, providerOriginal: .FindingProviderFields.Severity.Original, sonarSeverity: .ProductFields["crewsafe/sonarSeverity"], sourceUrl: .SourceUrl, createdAt: .CreatedAt, updatedAt: .UpdatedAt}' "${arg#file://}" >>"${MOCK_CALL_LOG:?}"
       fi
     done
     cat "${MOCK_AWS_IMPORT_RESPONSE_FILE:?}"

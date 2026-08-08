@@ -111,12 +111,14 @@ security_severity() {
 }
 
 lookup_and_import() {
-  local issue="$1" state="$2" action="$3" id lookup match_count existing_updated source_updated source_created payload response severity
+  local issue="$1" state="$2" action="$3" id issue_key source_url lookup match_count existing_updated source_updated source_created payload response severity
   severity="$(security_severity "$issue")"
   [[ "$severity" == BLOCKER || "$severity" == HIGH ]] || fail CANDIDATE_INVALID
   source_created="$(normalize_timestamp "$(jq -r '.creationDate' <<<"$issue")")" || fail CANDIDATE_INVALID
   source_updated="$(normalize_timestamp "$(jq -r '.updateDate' <<<"$issue")")" || fail CANDIDATE_INVALID
-  id="crewsafe/sonarcloud/${project_key}/$(jq -r '.key' <<<"$issue")"
+  issue_key="$(jq -r '.key' <<<"$issue")"
+  id="crewsafe/sonarcloud/${project_key}/${issue_key}"
+  source_url="${sonar_origin}/project/issues?id=${project_key}&open=${issue_key}"
   lookup="$(aws securityhub get-findings --region "$region" --filters "ProductArn=[{Value=${product_arn},Comparison=EQUALS}],Id=[{Value=${id},Comparison=EQUALS}]" --output json 2>/dev/null)" \
     || fail SECURITYHUB_LOOKUP_FAILED
   jq -e 'type == "object" and (.Findings | type == "array")' <<<"$lookup" >/dev/null || fail SECURITYHUB_RESPONSE_INVALID
@@ -136,7 +138,7 @@ lookup_and_import() {
   fi
   payload="$tmp_dir/finding.json"
   jq -n --arg id "$id" --arg product "$product_arn" --arg account "$expected_account" \
-    --arg project "$project_key" --arg issue_key "$(jq -r '.key' <<<"$issue")" \
+    --arg project "$project_key" --arg issue_key "$issue_key" --arg source_url "$source_url" \
     --arg rule "$(jq -r '.rule' <<<"$issue")" --arg severity "$severity" \
     --arg created "$source_created" --arg updated "$source_updated" \
     --arg commit "$GITHUB_SHA" --arg state "$state" '
@@ -144,6 +146,7 @@ lookup_and_import() {
       AwsAccountId:$account,CreatedAt:$created,UpdatedAt:$updated,RecordState:$state,
       Title:("SonarCloud vulnerability " + $severity + " rule " + $rule),
       Description:("Redacted SonarCloud vulnerability for project " + $project + ", rule " + $rule + ", commit " + $commit),
+      SourceUrl:$source_url,
       FindingProviderFields:{Severity:{Label:(if $severity == "BLOCKER" then "CRITICAL" else "HIGH" end),Original:$severity},Types:["Software and Configuration Checks/Vulnerabilities/CVE"]},
       ProductFields:{"crewsafe/sonarSeverity":$severity,"crewsafe/ruleKey":$rule},
       Resources:[{Type:"Other",Id:("crewsafe:sonarcloud:" + $project)}]}]

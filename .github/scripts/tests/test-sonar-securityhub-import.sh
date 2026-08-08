@@ -81,6 +81,7 @@ assert_not_contains "$calls" "&severities=BLOCKER,HIGH" "active query does not u
 assert_contains "$calls" '"providerLabel":"HIGH"' "MQR security impact maps to ASFF severity label"
 assert_contains "$calls" '"providerOriginal":"HIGH"' "ASFF severity preserves the provider value"
 assert_contains "$calls" '"sonarSeverity":"HIGH"' "MQR security impact is retained as provider metadata"
+assert_contains "$calls" '"sourceUrl":"https://sonarcloud.io/project/issues?id=zctiong-iss_crewsafe&open=SAFE-OPEN-1"' "ASFF includes the validated SonarCloud issue deep link"
 
 offset_timestamp="$work/offset-timestamp.json"
 jq '.valid | .issues[0].creationDate = "2026-08-08T00:00:00+0000" | .issues[0].updateDate = "2026-08-08T00:01:00+00:00"' "$FIXTURES/active-cases.json" >"$offset_timestamp"
