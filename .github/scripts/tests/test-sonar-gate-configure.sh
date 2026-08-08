@@ -28,6 +28,14 @@ mutating_call_count() {
   grep -cE '^method=(POST|PATCH)$' "$work/calls.log" 2>/dev/null || true
 }
 
+# SonarQube Cloud is multi-tenant: nearly every qualitygates/new_code_periods
+# call 400s without an explicit `organization` (discovered against the real
+# API, not just the mock -- see the get_by_project fix). Guards against that
+# regressing silently behind a mock that never enforced it either.
+sonar_calls_missing_organization() {
+  awk 'BEGIN{RS="curl\n"} /sonarcloud\.io/ && !/organization=/ {c++} END{print c+0}' "$1"
+}
+
 # assert_count <expected> <label> <actual>
 assert_count() {
   local expected="$1" label="$2" actual="$3"
@@ -62,12 +70,13 @@ envs=(
 assert_exit 0 "US1 AS1: absent gate run succeeds" run_configure "$out"
 calls="$(cat "$work/calls.log")"
 assert_contains "$calls" "url=https://sonarcloud.io/api/qualitygates/create" "US1 AS1: gate is created"
-assert_contains "$calls" "metric=new_security_issues" "US1 AS1: security condition added"
+assert_contains "$calls" "metric=new_security_rating" "US1 AS1: security condition added"
 assert_contains "$calls" "metric=new_security_hotspots_reviewed" "US1 AS1: hotspots condition added"
-assert_contains "$calls" "metric=new_reliability_issues" "US1 AS1: reliability condition added"
+assert_contains "$calls" "metric=new_reliability_rating" "US1 AS1: reliability condition added"
 assert_not_contains "$calls" "new_coverage" "US1 AS1 (FR-010 guard): no coverage metric ever sent"
 assert_not_contains "$calls" "new_duplicated_lines_density" "US1 AS1 (FR-010 guard): no duplication metric ever sent"
 assert_contains "$(cat "$out")" "action=gate_created target=CrewSafe Security Gate" "US1 AS1: Run Report logs gate_created"
+assert_count "0" "US1 AS1: every SonarQube call includes organization" "$(sonar_calls_missing_organization "$work/calls.log")"
 
 # AS2: gate already converged and assigned -> full no-op, zero mutating calls.
 envs=(
@@ -118,9 +127,10 @@ envs=(
 assert_exit 0 "US1 AS4: drifted-threshold run succeeds" run_configure "$out"
 calls="$(cat "$work/calls.log")"
 assert_contains "$calls" "url=https://sonarcloud.io/api/qualitygates/update_condition" "US1 AS4: update_condition is called"
-assert_contains "$calls" "metric=new_security_issues&op=GT&error=0" "US1 AS4: overwritten to the declared value (error=0, not the drifted 2)"
+assert_contains "$calls" "metric=new_security_rating&op=GT&error=3" "US1 AS4: overwritten to the declared value (error=3, not the drifted 1)"
 assert_not_contains "$calls" "create_condition" "US1 AS4: drift is an update, not a duplicate create"
-assert_contains "$(cat "$out")" "action=condition_updated target=new_security_issues" "US1 AS4: Run Report logs condition_updated"
+assert_contains "$(cat "$out")" "action=condition_updated target=new_security_rating" "US1 AS4: Run Report logs condition_updated"
+assert_count "0" "US1 AS4: update_condition call includes organization" "$(sonar_calls_missing_organization "$work/calls.log")"
 
 # --- User Story 1 (T008): New Code definition validate-and-warn -------------
 
@@ -147,6 +157,24 @@ assert_exit 0 "New Code (unacceptable): run still completes (non-fatal)" run_con
 out_content="$(cat "$out")"
 assert_contains "$out_content" "new_code_definition_warning target=REFERENCE_BRANCH" "New Code (unacceptable): warning is logged"
 assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (unacceptable): run continues past the warning"
+
+# New Code endpoint not exposed on this SonarQube instance (observed live
+# against real SonarQube Cloud as a 404 "Unknown url" on both /list and
+# /show) -- degrades to a skipped warning rather than failing the whole run.
+envs=(
+  SONAR_ADMIN_TOKEN=t GH_ADMIN_TOKEN=t
+  MOCK_GATE_LIST_RESPONSE_FILE="$FIXTURES/gate-list-found.json"
+  MOCK_GATE_SHOW_RESPONSE_FILE="$FIXTURES/gate-show-complete.json"
+  MOCK_GATE_BY_PROJECT_RESPONSE_FILE="$FIXTURES/gate-by-project-assigned.json"
+  MOCK_NEW_CODE_RESPONSE_FILE="$FIXTURES/new-code-periods-not-found.json"
+  MOCK_NEW_CODE_HTTP_STATUS=404
+  MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE="$FIXTURES/required-checks-complete.json"
+)
+assert_exit 0 "New Code (endpoint 404): run still completes (non-fatal)" run_configure "$out"
+out_content="$(cat "$out")"
+assert_contains "$out_content" "new_code_definition_check_unavailable" "New Code (endpoint 404): distinct unavailable warning is logged"
+assert_not_contains "$out_content" "new_code_definition_warning target=" "New Code (endpoint 404): not conflated with the wrong-value warning"
+assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (endpoint 404): run continues past the warning"
 
 # --- User Story 2 (T015): Acceptance Scenarios 1-3 ---------------------------
 
@@ -263,7 +291,7 @@ assert_exit 0 "--dry-run: fresh-gate run succeeds" run_configure "$out" --dry-ru
 assert_count "0" "--dry-run: zero mutating calls" "$(mutating_call_count)"
 out_content="$(cat "$out")"
 assert_contains "$out_content" "action=gate_created target=CrewSafe Security Gate mode=dry_run" "--dry-run: reports the gate it would create"
-assert_contains "$out_content" "action=condition_added target=new_security_issues mode=dry_run" "--dry-run: reports conditions it would add"
+assert_contains "$out_content" "action=condition_added target=new_security_rating mode=dry_run" "--dry-run: reports conditions it would add"
 assert_contains "$out_content" "action=required_checks_patched target=required_status_checks.contexts mode=dry_run" "--dry-run: reports the checks patch it would make"
 
 # --- Polish (T026): tokens never appear in the script's own output ----------

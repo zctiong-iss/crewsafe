@@ -49,8 +49,8 @@ case "$url" in
     respond "${MOCK_GATE_SELECT_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *api/qualitygates/get_by_project*)
     respond "${MOCK_GATE_BY_PROJECT_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
-  *api/new_code_periods/list*)
-    respond "${MOCK_NEW_CODE_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api/new_code_periods/show*)
+    respond "${MOCK_NEW_CODE_RESPONSE_FILE:?}" "${MOCK_NEW_CODE_HTTP_STATUS:-${MOCK_SONAR_HTTP_STATUS:-200}}" ;;
   */required_status_checks*)
     if [[ "$method" == "PATCH" ]]; then
       respond "${MOCK_REQUIRED_CHECKS_PATCH_RESPONSE_FILE:?}" "${MOCK_GITHUB_HTTP_STATUS:-200}"

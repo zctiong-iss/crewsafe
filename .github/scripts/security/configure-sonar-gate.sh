@@ -30,25 +30,35 @@ GATE_NAME="CrewSafe Security Gate"
 # makes the FR-010 guard ("never a coverage/duplication condition") true by
 # construction, not by discipline.
 #
+# Uses the *rating* metrics (new_security_rating, new_reliability_rating),
+# not severity-filtered issue-count metrics -- SonarQube Cloud rejects gate
+# conditions on the latter ("cannot be used to define a condition"), observed
+# live 2026-08-09. Confirmed against docs.sonarsource.com (two independent
+# verbatim fetches): this rating scale is A=0, B=Minor, C=Major, D=Critical,
+# E=Blocker -- the classic 5-tier model, with no literal "High" tier. FR-002's
+# "Blocker or High" is interpreted as the two most severe tiers in Sonar's
+# actual vocabulary (Blocker or Critical), hence GT 3 (numeric A=1..E=5) --
+# the same pattern the built-in "Sonar way" gate uses with its own GT 1.
+#
 # Plain indexed array + case lookups, not `declare -A`: associative arrays
 # need bash 4+, but this script (like the rest of .github/scripts/) must also
 # run on a developer's macOS workstation, whose stock /bin/bash is 3.2.57
 # (harness.sh's `in_dir` comment documents the same constraint).
-DECLARED_METRICS=(new_security_issues new_security_hotspots_reviewed new_reliability_issues)
+DECLARED_METRICS=(new_security_rating new_security_hotspots_reviewed new_reliability_rating)
 
 declared_op() {
   case "$1" in
-    new_security_issues) printf 'GT' ;;
+    new_security_rating) printf 'GT' ;;
     new_security_hotspots_reviewed) printf 'LT' ;;
-    new_reliability_issues) printf 'GT' ;;
+    new_reliability_rating) printf 'GT' ;;
   esac
 }
 
 declared_error() {
   case "$1" in
-    new_security_issues) printf '0' ;;
+    new_security_rating) printf '3' ;;
     new_security_hotspots_reviewed) printf '100' ;;
-    new_reliability_issues) printf '0' ;;
+    new_reliability_rating) printf '3' ;;
   esac
 }
 
@@ -183,7 +193,8 @@ converge_conditions() {
       else
         sonar_api POST "/api/qualitygates/create_condition" \
           --data-urlencode "gateId=${gate_id}" --data-urlencode "metric=${metric}" \
-          --data-urlencode "op=${op}" --data-urlencode "error=${error}"
+          --data-urlencode "op=${op}" --data-urlencode "error=${error}" \
+          --data-urlencode "organization=${SONAR_ORG}"
         check_sonar_auth
         [[ "$HTTP_STATUS" == "200" ]] || fail "SonarQube create_condition failed for $metric (HTTP $HTTP_STATUS): $HTTP_BODY"
         log_action condition_added "$metric"
@@ -196,7 +207,8 @@ converge_conditions() {
         condition_id="$(jq -r --arg m "$metric" '.conditions[]? | select(.metric==$m) | .id' <<<"$current")"
         sonar_api POST "/api/qualitygates/update_condition" \
           --data-urlencode "id=${condition_id}" --data-urlencode "metric=${metric}" \
-          --data-urlencode "op=${op}" --data-urlencode "error=${error}"
+          --data-urlencode "op=${op}" --data-urlencode "error=${error}" \
+          --data-urlencode "organization=${SONAR_ORG}"
         check_sonar_auth
         [[ "$HTTP_STATUS" == "200" ]] || fail "SonarQube update_condition failed for $metric (HTTP $HTTP_STATUS): $HTTP_BODY"
         log_action condition_updated "$metric"
@@ -208,7 +220,7 @@ converge_conditions() {
 assign_gate() {
   local gate_id="$1" current_gate_id
 
-  sonar_api GET "/api/qualitygates/get_by_project?project=${SONAR_PROJECT_KEY}"
+  sonar_api GET "/api/qualitygates/get_by_project?project=${SONAR_PROJECT_KEY}&organization=${SONAR_ORG}"
   check_sonar_auth
   [[ "$HTTP_STATUS" == "200" ]] || fail "SonarQube qualitygates/get_by_project failed (HTTP $HTTP_STATUS): $HTTP_BODY"
   current_gate_id="$(jq -r '.qualityGate.id // empty' <<<"$HTTP_BODY")"
@@ -224,7 +236,8 @@ assign_gate() {
   fi
 
   sonar_api POST "/api/qualitygates/select" \
-    --data-urlencode "gateId=${gate_id}" --data-urlencode "projectKey=${SONAR_PROJECT_KEY}"
+    --data-urlencode "gateId=${gate_id}" --data-urlencode "projectKey=${SONAR_PROJECT_KEY}" \
+    --data-urlencode "organization=${SONAR_ORG}"
   check_sonar_auth
   [[ "$HTTP_STATUS" == "200" || "$HTTP_STATUS" == "204" ]] \
     || fail "SonarQube qualitygates/select failed (HTTP $HTTP_STATUS): $HTTP_BODY"
@@ -232,12 +245,22 @@ assign_gate() {
 }
 
 check_new_code_definition() {
-  sonar_api GET "/api/new_code_periods/list?project=${SONAR_PROJECT_KEY}"
+  sonar_api GET "/api/new_code_periods/show?project=${SONAR_PROJECT_KEY}&organization=${SONAR_ORG}"
   check_sonar_auth
-  [[ "$HTTP_STATUS" == "200" ]] || fail "SonarQube new_code_periods/list failed (HTTP $HTTP_STATUS): $HTTP_BODY"
+
+  # This check is advisory (FR-003: warn, never block). A 404 here means the
+  # endpoint itself isn't exposed on this SonarQube Cloud instance -- observed
+  # live, not merely assumed -- so it degrades to a skipped warning rather
+  # than failing the whole run over a platform capability that may not exist,
+  # instead of a genuine per-run error.
+  if [[ "$HTTP_STATUS" == "404" ]]; then
+    warn_action new_code_definition_check_unavailable "endpoint not available on this SonarQube instance"
+    return
+  fi
+  [[ "$HTTP_STATUS" == "200" ]] || fail "SonarQube new_code_periods/show failed (HTTP $HTTP_STATUS): $HTTP_BODY"
 
   local type
-  type="$(jq -r --arg k "$SONAR_PROJECT_KEY" '.newCodePeriods[]? | select(.projectKey==$k) | .type' <<<"$HTTP_BODY")"
+  type="$(jq -r '.type' <<<"$HTTP_BODY")"
   case "$type" in
     PREVIOUS_VERSION | NUMBER_OF_DAYS) : ;;
     *) warn_action new_code_definition_warning "${type:-unset}" ;;
