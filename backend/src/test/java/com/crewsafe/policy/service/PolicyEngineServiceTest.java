@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +38,10 @@ import static org.mockito.Mockito.when;
 @DisplayName("PolicyEngineService")
 class PolicyEngineServiceTest {
 
+    private static BigDecimal bd(double value) {
+        return BigDecimal.valueOf(value);
+    }
+
     @Mock
     private PolicyConfigRepository policyRepository;
 
@@ -57,19 +62,19 @@ class PolicyEngineServiceTest {
                 .id(UUID.randomUUID())
                 .siteId(siteId)
                 // Unacclimatised thresholds
-                .wbgtThresholdUnacclimatisedLight(25.0)
-                .wbgtThresholdUnacclimatisedModerate(23.0)
-                .wbgtThresholdUnacclimatisedHeavy(21.0)
+                .wbgtThresholdUnacclimatisedLight(bd(25.0))
+                .wbgtThresholdUnacclimatisedModerate(bd(23.0))
+                .wbgtThresholdUnacclimatisedHeavy(bd(21.0))
                 // Partial thresholds
-                .wbgtThresholdPartialLight(26.0)
-                .wbgtThresholdPartialModerate(24.0)
-                .wbgtThresholdPartialHeavy(22.0)
+                .wbgtThresholdPartialLight(bd(26.0))
+                .wbgtThresholdPartialModerate(bd(24.0))
+                .wbgtThresholdPartialHeavy(bd(22.0))
                 // Full thresholds
-                .wbgtThresholdFullLight(28.0)
-                .wbgtThresholdFullModerate(26.0)
-                .wbgtThresholdFullHeavy(24.0)
+                .wbgtThresholdFullLight(bd(28.0))
+                .wbgtThresholdFullModerate(bd(26.0))
+                .wbgtThresholdFullHeavy(bd(24.0))
                 // Emergency (MOM Band 3: WBGT >= 33°C)
-                .wbgtEmergencyStop(33.0)
+                .wbgtEmergencyStop(bd(33.0))
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
