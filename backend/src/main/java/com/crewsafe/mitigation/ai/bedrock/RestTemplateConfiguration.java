@@ -16,13 +16,14 @@ public class RestTemplateConfiguration {
     @Bean(name = "bedrockRestTemplate")
     public RestTemplate bedrockRestTemplate(BedrockProperties properties) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout((int) Duration.ofMillis(properties.getBedrockTimeoutMs()).toMillis());
-        factory.setReadTimeout((int) Duration.ofMillis(properties.getBedrockTimeoutMs()).toMillis());
+        int timeoutMs = (int) Duration.ofMillis(properties.getBedrockTimeoutMs()).toMillis();
+        factory.setConnectTimeout(timeoutMs);
+        factory.setReadTimeout(timeoutMs);
 
         return new RestTemplateBuilder()
                 .requestFactory(() -> new BufferingClientHttpRequestFactory(factory))
-                .setConnectTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
-                .setReadTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
+                .connectTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
+                .readTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
                 .build();
     }
 }

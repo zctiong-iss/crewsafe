@@ -2,7 +2,7 @@ package com.crewsafe.policy.domain;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.UUID;
+import org.springframework.lang.Nullable;
 
 /**
  * Immutable result of policy evaluation.
@@ -14,21 +14,22 @@ import java.util.UUID;
 public record PolicyDecision(
     String policyVersion,
     String currentBand,
-    String forecastBand,
-    List<PolicyAction> required,
-    List<PolicyAction> advised
+    @Nullable String forecastBand,
+    List<PolicyAction> mandatoryActions,
+    List<PolicyAction> advisoryActions
 ) {
     /**
      * Represents a single recommended action with its rule source and applicability.
+     * Aligns with mobile app's PolicyEvaluationAction type.
      */
     public record PolicyAction(
-        String action,
+        String code,
         String ruleReference,
         List<String> appliesTo,
         String reasoning
     ) {
         public PolicyAction {
-            Objects.requireNonNull(action, "action must not be null");
+            Objects.requireNonNull(code, "code must not be null");
             Objects.requireNonNull(ruleReference, "ruleReference must not be null");
             Objects.requireNonNull(appliesTo, "appliesTo must not be null");
             Objects.requireNonNull(reasoning, "reasoning must not be null");
@@ -67,9 +68,9 @@ public record PolicyDecision(
     public PolicyDecision {
         Objects.requireNonNull(policyVersion, "policyVersion must not be null");
         Objects.requireNonNull(currentBand, "currentBand must not be null");
-        Objects.requireNonNull(forecastBand, "forecastBand must not be null");
-        Objects.requireNonNull(required, "required must not be null");
-        Objects.requireNonNull(advised, "advised must not be null");
+        // forecastBand may be null if forecast is unavailable (degraded mode per §7.1)
+        Objects.requireNonNull(mandatoryActions, "mandatoryActions must not be null");
+        Objects.requireNonNull(advisoryActions, "advisoryActions must not be null");
     }
 
     /**
@@ -77,28 +78,28 @@ public record PolicyDecision(
      * Used by legacy code that expects a boolean for rest requirement.
      */
     public boolean requiresRest() {
-        return !required.isEmpty();
+        return !mandatoryActions.isEmpty();
     }
 
     /**
-     * Check if any required action exists.
+     * Check if any mandatory action exists.
      */
     public boolean hasRequiredAction() {
-        return !required.isEmpty();
+        return !mandatoryActions.isEmpty();
     }
 
     /**
      * Check if emergency stop is required.
      */
     public boolean isEmergencyStop() {
-        return required.stream()
-                .anyMatch(action -> PolicyDecision.Action.STOP_WORK.name().equals(action.action()));
+        return mandatoryActions.stream()
+                .anyMatch(action -> PolicyDecision.Action.STOP_WORK.name().equals(action.code()));
     }
 
     /**
-     * Get the primary required action (first in list).
+     * Get the primary mandatory action (first in list).
      */
     public PolicyAction getPrimaryRequiredAction() {
-        return required.isEmpty() ? null : required.get(0);
+        return mandatoryActions.isEmpty() ? null : mandatoryActions.get(0);
     }
 }

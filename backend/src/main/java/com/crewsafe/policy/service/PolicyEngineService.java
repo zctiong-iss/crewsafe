@@ -67,8 +67,8 @@ public class PolicyEngineService {
         PolicyDecision decision = makeDecision(currentWbgt, threshold, level, workIntensity, policy);
 
         log.info(
-                "Policy evaluated for site={}, WBGT={}, intensity={}, acclimatisation={}, required={}, advised={}",
-                siteId, currentWbgt, workIntensity, level, decision.required().size(), decision.advised().size()
+                "Policy evaluated for site={}, WBGT={}, intensity={}, acclimatisation={}, mandatory={}, advisory={}",
+                siteId, currentWbgt, workIntensity, level, decision.mandatoryActions().size(), decision.advisoryActions().size()
         );
 
         return decision;
@@ -78,15 +78,17 @@ public class PolicyEngineService {
      * Make policy decision based on thresholds.
      *
      * Decision logic:
-     * 1. If WBGT >= emergency stop → STOP_WORK (required action)
-     * 2. If WBGT >= threshold → recommend rest (required or advised based on conditions)
-     *    - Unacclimatised + moderate/heavy = EXTENDED_REST (required)
-     *    - Partial + moderate/heavy = SHORT_REST (required)
-     *    - Full or light intensity = SHORT_REST (advised)
+     * 1. If WBGT >= emergency stop → STOP_WORK (mandatory action)
+     * 2. If WBGT >= threshold → recommend rest (mandatory or advisory based on conditions)
+     *    - Unacclimatised + moderate/heavy = EXTENDED_REST (mandatory)
+     *    - Partial + moderate/heavy = SHORT_REST (mandatory)
+     *    - Full or light intensity = SHORT_REST (advisory)
      * 3. If WBGT < threshold → CONTINUE (no actions needed)
      *
-     * Returns PolicyDecision with actions split into required vs advised.
+     * Returns PolicyDecision with actions split into mandatory vs advisory.
      * Each action includes ruleReference (which rule triggered it) and appliesTo[] (applicability conditions).
+     *
+     * forecastBand is null if forecast service is unavailable (degraded mode per §7.1).
      */
     private PolicyDecision makeDecision(
             Double wbgt,
@@ -97,14 +99,14 @@ public class PolicyEngineService {
     ) {
         String policyVersion = "1.0"; // MOM Heat Stress Management Standards
         String currentBand = determineBand(wbgt, policy);
-        String forecastBand = currentBand; // forecast band can be enhanced later with predicted WBGT
+        String forecastBand = currentBand; // TODO: integrate SCRUM-188 forecast service; null if unavailable
 
-        List<PolicyDecision.PolicyAction> required = new ArrayList<>();
-        List<PolicyDecision.PolicyAction> advised = new ArrayList<>();
+        List<PolicyDecision.PolicyAction> mandatoryActions = new ArrayList<>();
+        List<PolicyDecision.PolicyAction> advisoryActions = new ArrayList<>();
 
         // Emergency stop: WBGT critical
         if (BigDecimal.valueOf(wbgt).compareTo(policy.getWbgtEmergencyStop()) >= 0) {
-            required.add(new PolicyDecision.PolicyAction(
+            mandatoryActions.add(new PolicyDecision.PolicyAction(
                     PolicyDecision.Action.STOP_WORK.name(),
                     "EMERGENCY_STOP_RULE",
                     List.of("all_workers"),
@@ -114,7 +116,7 @@ public class PolicyEngineService {
                             wbgt, policy.getWbgtEmergencyStop()
                     )
             ));
-            return new PolicyDecision(policyVersion, currentBand, forecastBand, required, advised);
+            return new PolicyDecision(policyVersion, currentBand, forecastBand, mandatoryActions, advisoryActions);
         }
 
         // WBGT exceeds threshold: recommend rest
@@ -126,7 +128,7 @@ public class PolicyEngineService {
             if (level == AcclimatisationLevel.UNACCLIMATISED &&
                     (intensity == HeatRestPolicy.WorkIntensity.MODERATE ||
                      intensity == HeatRestPolicy.WorkIntensity.HEAVY)) {
-                // Unacclimatised workers under load need extended rest (required)
+                // Unacclimatised workers under load need extended rest (mandatory)
                 action = PolicyDecision.Action.EXTENDED_REST.name();
                 ruleRef = "UNACCLIMATISED_HEAVY_WORK_RULE";
                 appliesTo = List.of("unacclimatised", "moderate_or_heavy_work");
@@ -147,12 +149,12 @@ public class PolicyEngineService {
                             wbgt, threshold, level, intensity
                     )
             );
-            required.add(restAction);
-            return new PolicyDecision(policyVersion, currentBand, forecastBand, required, advised);
+            mandatoryActions.add(restAction);
+            return new PolicyDecision(policyVersion, currentBand, forecastBand, mandatoryActions, advisoryActions);
         }
 
         // WBGT within safe range - worker can continue
-        advised.add(new PolicyDecision.PolicyAction(
+        advisoryActions.add(new PolicyDecision.PolicyAction(
                 PolicyDecision.Action.CONTINUE.name(),
                 "SAFE_WORK_RULE",
                 List.of("all_workers"),
@@ -162,7 +164,7 @@ public class PolicyEngineService {
                         wbgt, threshold, level, intensity
                 )
         ));
-        return new PolicyDecision(policyVersion, currentBand, forecastBand, required, advised);
+        return new PolicyDecision(policyVersion, currentBand, forecastBand, mandatoryActions, advisoryActions);
     }
 
     /**
