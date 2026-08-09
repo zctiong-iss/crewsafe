@@ -1,0 +1,10 @@
+{
+  "component": {
+    "key": "zctiong-iss_crewsafe",
+    "name": "Crewsafe",
+    "qualifier": "TRK",
+    "measures": [
+      { "metric": "sca_rating_any_issue", "value": "5.0" }
+    ]
+  }
+}

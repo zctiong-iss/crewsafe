@@ -53,6 +53,39 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Build backend image
+        env:
+          REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+          SHA: ${{ github.sha }}
+        run: docker build -t "$REPO:$SHA" backend
+      # SCRUM-269 (User Story 3): filters the reviewed source ignorefile down
+      # to only its non-expired entries. trivyignores requires a path
+      # RELATIVE TO THE REPOSITORY (verified against the scan action's own
+      # docs -- an absolute $RUNNER_TEMP path is not accepted), so the
+      # active file is written inside the checkout; it is gitignored
+      # (.trivyignore-active-*) and never committed.
+      - name: Prepare Trivy ignorefile
+        run: |
+          .github/scripts/security/filter-trivyignore.sh \
+            .github/security/backend-image.trivyignore.source \
+            .trivyignore-active-backend
+      # SCRUM-269 (User Story 1): report-only for now (exit-code: '0').
+      # backend-ci.yml has never scanned this image before, so its baseline
+      # is unknown -- an immediate hard fail risks blocking every backend PR
+      # on pre-existing, untriaged findings, the same failure mode the
+      # dependency-risk gate's New Code scoping avoids for a known backlog.
+      # Flipping to blocking (matching web-ci.yml's threshold) is a
+      # deliberate, separate follow-up (FR-001a) once this report-only
+      # period's findings have been triaged -- not part of this change.
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
+          trivyignores: .trivyignore-active-backend
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
@@ -63,10 +96,8 @@ jobs:
         run: |
           aws ecr get-login-password --region ap-southeast-1 \
             | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}"
-      - name: Build and push
+      - name: Push backend image
         env:
           REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
           SHA: ${{ github.sha }}
-        run: |
-          docker build -t "$REPO:$SHA" backend
-          docker push "$REPO:$SHA"
+        run: docker push "$REPO:$SHA"

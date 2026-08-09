@@ -44,13 +44,27 @@ GATE_NAME="CrewSafe Security Gate"
 # need bash 4+, but this script (like the rest of .github/scripts/) must also
 # run on a developer's macOS workstation, whose stock /bin/bash is 3.2.57
 # (harness.sh's `in_dir` comment documents the same constraint).
-DECLARED_METRICS=(new_security_rating new_security_hotspots_reviewed new_reliability_rating)
+#
+# SCRUM-269: fourth condition, new_sca_rating_vulnerability (New Code, GT 3),
+# gating on the dependency-risk findings SonarCloud SCA already collects
+# (sonar.sca.enabled defaults to true; no separate scan step or SBOM import
+# is needed -- see specs/020-ci-vulnerability-scan-gates/research.md R1).
+# Live-verified via the connected sonarqube MCP server against this actual
+# project, not inferred from docs: new_sca_rating_vulnerability is a real,
+# bounded (1-5 / A-E) RATING metric distinct from the rejected
+# new_sca_severity_vulnerability aggregate (unbounded, summed across all
+# findings); Overall Code was already at 5.0/E from the existing 120-risk
+# backlog while New Code was empty, confirming GT 3 on the New Code variant
+# is both meaningful and non-blocking today -- the same "worse than C" =
+# Blocker/High interpretation already used for the other rating conditions.
+DECLARED_METRICS=(new_security_rating new_security_hotspots_reviewed new_reliability_rating new_sca_rating_vulnerability)
 
 declared_op() {
   case "$1" in
     new_security_rating) printf 'GT' ;;
     new_security_hotspots_reviewed) printf 'LT' ;;
     new_reliability_rating) printf 'GT' ;;
+    new_sca_rating_vulnerability) printf 'GT' ;;
   esac
 }
 
@@ -59,6 +73,7 @@ declared_error() {
     new_security_rating) printf '3' ;;
     new_security_hotspots_reviewed) printf '100' ;;
     new_reliability_rating) printf '3' ;;
+    new_sca_rating_vulnerability) printf '3' ;;
   esac
 }
 

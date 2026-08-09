@@ -76,6 +76,11 @@ crash.*.log
 .local-run/
 .crewsafe-runtime/
 
+# CI-generated active ignorefile (SCRUM-269) — filter-trivyignore.sh's
+# runtime-only output, never the reviewed source file
+# (.github/security/backend-image.trivyignore.source)
+.trivyignore-active-*
+
 # Scratch state for local/seed-cognito-local.sh — the emulator rewrites its own config
 # and persists pools here, so it must never be the checked-in fixture.
 local/.cognito-local/
