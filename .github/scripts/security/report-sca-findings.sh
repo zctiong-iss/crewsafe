@@ -80,6 +80,18 @@ else
 fi
 
 # --- FR-005a: downloadable report --------------------------------------
+#
+# KNOWN GAP, confirmed live 2026-08-09: this call returns 403 in production
+# with SONAR_TOKEN, even though the sibling search call above (same host,
+# same token) succeeds -- host/path are correct, this is a permissions gap
+# (SonarSource docs: Browse is enough to search dependency risks; report
+# generation appears to need more than that). Deliberately NOT fixed by
+# swapping in SONAR_ADMIN_TOKEN here -- that would put an org-admin
+# credential back into routine, automatically-triggered CI, the exact
+# SEC-001 problem already fixed once in this feature. Left failing open
+# (warn, don't fail the job) by design; see docs/runbooks/SCRUM-269-ci-
+# vulnerability-scan-gates.md #6 for the accepted tradeoff and follow-up
+# options.
 
 report_raw="$(curl -sS -w '\n%{http_code}' -X GET \
   -H "Authorization: Bearer ${SONAR_TOKEN}" \
