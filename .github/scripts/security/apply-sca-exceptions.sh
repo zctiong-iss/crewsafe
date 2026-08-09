@@ -20,10 +20,20 @@
 # beyond curl+jq).
 #
 # Requires SONAR_ADMIN_TOKEN (reused from specs/019, research.md R5).
+#
+# The SCA/DependencyService API lives on the SEPARATE api.* subdomain, not
+# under sonarcloud.io/api/v2, and the transition call is a single flat POST
+# with the target key in the BODY -- not a /{key}/transition path as first
+# guessed. Both corrected live 2026-08-09 (see report-sca-findings.sh's
+# header for the full verification trail: SwaggerHub SCA API docs +
+# SonarSource's own open-source sonarqube-mcp-server). The exact
+# `transitionKey` enum value for "accept this risk" is still UNVERIFIED --
+# see the inline note below and specs/020-ci-vulnerability-scan-gates/
+# tasks.md T036.
 # Usage: apply-sca-exceptions.sh <exceptions-file>
 set -euo pipefail
 
-SONAR_HOST="https://sonarcloud.io"
+SONAR_API_HOST="https://api.sonarcloud.io"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -39,38 +49,33 @@ EXCEPTIONS_FILE="$1"
 [[ -f "$EXCEPTIONS_FILE" ]] || fail "exceptions file not found: $EXCEPTIONS_FILE"
 [[ -n "${SONAR_ADMIN_TOKEN:-}" ]] || fail "SONAR_ADMIN_TOKEN is not set"
 
-PROPS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/sonar-project.properties"
-[[ -f "$PROPS_FILE" ]] || fail "sonar-project.properties not found at $PROPS_FILE"
-
-read_prop() {
-  local key="$1" value
-  value="$(grep -E "^${key}=" "$PROPS_FILE" | head -n1 | cut -d'=' -f2-)"
-  [[ -n "$value" ]] || fail "sonar-project.properties missing or empty: $key"
-  printf '%s' "$value"
-}
-
-SONAR_ORG="$(read_prop sonar.organization)"
-SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
-
 split_status() {
   local raw="$1"
   HTTP_STATUS="${raw##*$'\n'}"
   HTTP_BODY="${raw%$'\n'*}"
 }
 
-# Emit one "<key>\t<expires>" record per well-formed entry (key AND expires
-# both present, in that order within the entry -- our declared schema, see
-# contracts/exception-mechanisms.md). An entry missing either field emits
-# nothing for that record, which is what makes a malformed entry fail closed
-# by construction, not by an extra check.
+# Emit one "<key>\t<reason>\t<expires>" record per well-formed entry (key AND
+# expires both present, in that order within the entry -- our declared
+# schema, see contracts/exception-mechanisms.md; reason is optional but
+# expected). An entry missing key or expires emits nothing for that record,
+# which is what makes a malformed entry fail closed by construction, not by
+# an extra check.
 records="$(awk '
   /^[[:space:]]*-[[:space:]]*key:/ {
-    if (have_key) print key "\t" expires
+    if (have_key) print key "\t" reason "\t" expires
     sub(/^[[:space:]]*-[[:space:]]*key:[[:space:]]*/, "")
     key = $0
     gsub(/^["'"'"']|["'"'"']$/, "", key)
     have_key = 1
+    reason = ""
     expires = ""
+    next
+  }
+  /^[[:space:]]*reason:/ {
+    sub(/^[[:space:]]*reason:[[:space:]]*/, "")
+    reason = $0
+    gsub(/^["'"'"']|["'"'"']$/, "", reason)
     next
   }
   /^[[:space:]]*expires:/ {
@@ -79,23 +84,29 @@ records="$(awk '
     gsub(/^["'"'"']|["'"'"']$/, "", expires)
     next
   }
-  END { if (have_key) print key "\t" expires }
+  END { if (have_key) print key "\t" reason "\t" expires }
 ' "$EXCEPTIONS_FILE")"
 
 TODAY="$(date -u +%F)"
 applied=0
 
-while IFS=$'\t' read -r key expires; do
+while IFS=$'\t' read -r key reason expires; do
   [[ -n "$key" ]] || continue
   [[ -n "$expires" ]] || continue
   [[ "$expires" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || continue
   [[ "$expires" < "$TODAY" ]] && continue
 
+  # transitionKey: SonarCloud's "accept this risk" status transition value.
+  # The endpoint/host/body SHAPE are verified (see header); this specific
+  # enum value is not -- T036 still applies to it specifically.
+  body="$(jq -n --arg key "$key" --arg reason "${reason:-Accepted via apply-sca-exceptions.sh}" \
+    '{issueReleaseKey: $key, transitionKey: "ACCEPT", comment: $reason}')"
+
   raw="$(curl -sS -w '\n%{http_code}' -X POST \
     -H "Authorization: Bearer ${SONAR_ADMIN_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "{\"status\":\"ACCEPT\"}" \
-    "${SONAR_HOST}/api/v2/sca/issues-releases/${key}/transition?organization=${SONAR_ORG}&projectKey=${SONAR_PROJECT_KEY}")"
+    -d "$body" \
+    "${SONAR_API_HOST}/sca/issues-releases/change-status")"
   split_status "$raw"
 
   [[ "$HTTP_STATUS" == "200" || "$HTTP_STATUS" == "204" ]] \

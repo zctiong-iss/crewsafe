@@ -14,10 +14,20 @@
 # ambient in the `sast` job, not the organization-admin SONAR_ADMIN_TOKEN
 # (see check-sca-active.sh's header for why: SEC-001 keeps that token out of
 # routine, automatically-triggered CI). This script only reads data.
+#
+# The SCA/DependencyService API lives on a SEPARATE api.* subdomain, not
+# under sonarcloud.io/api/v2 -- confirmed live 2026-08-09 against a real
+# 404 in CI, then verified against both the official SwaggerHub-hosted SCA
+# API docs (api-docs.sonarsource.com, "public-dependencyservice-v1-4") and
+# SonarSource's own open-source sonarqube-mcp-server
+# (ServerApiHelper.buildApiSubdomainUrl / ScaApi.java), which derives
+# api.sonarcloud.io for the sonarcloud.io host and calls these same two
+# paths with no /api/v2 prefix. The risk-reports endpoint's query param is
+# `component`, not `projectKey` (confirmed from the same SwaggerHub schema).
 # Usage: report-sca-findings.sh <report-output-file>
 set -euo pipefail
 
-SONAR_HOST="https://sonarcloud.io"
+SONAR_API_HOST="https://api.sonarcloud.io"
 
 warn() {
   printf 'WARN: %s\n' "$1" >&2
@@ -38,10 +48,9 @@ read_prop() {
   grep -E "^${1}=" "$PROPS_FILE" | head -n1 | cut -d'=' -f2-
 }
 
-SONAR_ORG="$(read_prop sonar.organization)"
 SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
-if [[ -z "$SONAR_ORG" || -z "$SONAR_PROJECT_KEY" ]]; then
-  warn "sonar.organization/sonar.projectKey missing from sonar-project.properties; skipping findings report"
+if [[ -z "$SONAR_PROJECT_KEY" ]]; then
+  warn "sonar.projectKey missing from sonar-project.properties; skipping findings report"
   exit 0
 fi
 
@@ -55,7 +64,7 @@ split_status() {
 
 raw="$(curl -sS -w '\n%{http_code}' -X GET \
   -H "Authorization: Bearer ${SONAR_TOKEN}" \
-  "${SONAR_HOST}/api/v2/sca/issues-releases?projectKey=${SONAR_PROJECT_KEY}&organization=${SONAR_ORG}")"
+  "${SONAR_API_HOST}/sca/issues-releases?projectKey=${SONAR_PROJECT_KEY}")"
 split_status "$raw"
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
@@ -74,7 +83,8 @@ fi
 
 report_raw="$(curl -sS -w '\n%{http_code}' -X GET \
   -H "Authorization: Bearer ${SONAR_TOKEN}" \
-  "${SONAR_HOST}/api/v2/sca/risk-reports?projectKey=${SONAR_PROJECT_KEY}&organization=${SONAR_ORG}&format=json")"
+  -H "Accept: application/json" \
+  "${SONAR_API_HOST}/sca/risk-reports?component=${SONAR_PROJECT_KEY}")"
 split_status "$report_raw"
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
