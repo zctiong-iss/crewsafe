@@ -62,19 +62,20 @@ case "$url" in
     # check-sca-active.sh (SCRUM-269, FR-003a): whether a DependencyRisks
     # measure is present at all is how SCA-active is inferred.
     respond "${MOCK_SCA_MEASURES_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
-  *api/v2/sca/issues-releases*transition*)
+  *api.sonarcloud.io/sca/issues-releases/change-status*)
     # apply-sca-exceptions.sh (SCRUM-269, FR-007/FR-008): transitions a
-    # dependency-risk finding's status. Path form per research.md R4 --
-    # SonarSource confirmed the underlying "transitionIssueRelease" operation
-    # exists (DependencyService v1/v4, "Issues-Releases" group, documented
-    # since 2026-06-17) but the exact path was not live-verified this
-    # session; see specs/020-ci-vulnerability-scan-gates/tasks.md T036.
+    # dependency-risk finding's status. Host/path verified live 2026-08-09
+    # against the official SwaggerHub SCA API docs and SonarSource's own
+    # open-source sonarqube-mcp-server (api.sonarcloud.io, no /api/v2
+    # prefix, flat POST with the key in the body) -- corrected from an
+    # earlier unverified /api/v2/sca/issues-releases/{key}/transition guess.
+    # The exact transitionKey enum value is still unverified; see
+    # specs/020-ci-vulnerability-scan-gates/tasks.md T036.
     respond "${MOCK_DEPENDENCY_RISK_TRANSITION_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
-  *api/v2/sca/issues-releases*)
-    # report-sca-findings.sh (FR-005) / apply-sca-exceptions.sh: read a
-    # dependency risk (or the project's list of them) by key.
+  *api.sonarcloud.io/sca/issues-releases*)
+    # report-sca-findings.sh (FR-005): search dependency risks for a project.
     respond "${MOCK_DEPENDENCY_RISK_SEARCH_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
-  *api/v2/sca/risk-reports*)
+  *api.sonarcloud.io/sca/risk-reports*)
     # report-sca-findings.sh (FR-005a): downloadable dependency-risk report.
     respond "${MOCK_DEPENDENCY_RISK_REPORT_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *)
