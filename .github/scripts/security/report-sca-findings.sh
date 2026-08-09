@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Surface SonarCloud dependency-risk findings into CI output (SCRUM-269,
-# FR-005), and write the downloadable dependency-risk report to a path the
-# workflow can upload as an artifact (FR-005a).
+# FR-005).
 #
-# Unlike check-sca-active.sh, this script fails OPEN on its own API errors
-# (Clarifications Session 2026-08-09): the Quality Gate's actual blocking
-# decision is already made independently by `sonar.qualitygate.wait`, so a
-# flaky reporting/enrichment call here must not produce a false-positive job
-# failure on an otherwise-clean pull request. On any API error, this script
-# warns to stderr and still exits 0.
+# Fails OPEN on its own API errors (Clarifications Session 2026-08-09): the
+# Quality Gate's actual blocking decision is already made independently by
+# `sonar.qualitygate.wait`, so a flaky reporting/enrichment call here must
+# not produce a false-positive job failure on an otherwise-clean pull
+# request. On any API error, this script warns to stderr and still exits 0.
 #
 # Requires SONAR_TOKEN -- the existing analysis-scoped credential already
 # ambient in the `sast` job, not the organization-admin SONAR_ADMIN_TOKEN
@@ -21,10 +19,19 @@
 # API docs (api-docs.sonarsource.com, "public-dependencyservice-v1-4") and
 # SonarSource's own open-source sonarqube-mcp-server
 # (ServerApiHelper.buildApiSubdomainUrl / ScaApi.java), which derives
-# api.sonarcloud.io for the sonarcloud.io host and calls these same two
-# paths with no /api/v2 prefix. The risk-reports endpoint's query param is
-# `component`, not `projectKey` (confirmed from the same SwaggerHub schema).
-# Usage: report-sca-findings.sh <report-output-file>
+# api.sonarcloud.io for the sonarcloud.io host and calls this same path
+# with no /api/v2 prefix.
+#
+# FR-005a (a downloadable dependency-risk report, via GET .../sca/risk-
+# reports) was REMOVED 2026-08-09 after confirming live -- with an
+# org-Owner token, not just SONAR_TOKEN -- that this endpoint returns
+# 403 "SCA feature is not enabled at Enterprise level". It is a
+# SonarCloud plan/billing gate, not a permission that can be granted, so
+# there is nothing this script (or any token this project can provision)
+# can do about it short of an Enterprise-tier subscription. See
+# docs/runbooks/SCRUM-269-ci-vulnerability-scan-gates.md #6.
+#
+# Usage: report-sca-findings.sh
 set -euo pipefail
 
 SONAR_API_HOST="https://api.sonarcloud.io"
@@ -32,9 +39,6 @@ SONAR_API_HOST="https://api.sonarcloud.io"
 warn() {
   printf 'WARN: %s\n' "$1" >&2
 }
-
-[[ $# -eq 1 ]] || { printf 'ERROR: usage: report-sca-findings.sh <report-output-file>\n' >&2; exit 1; }
-REPORT_OUTPUT="$1"
 
 [[ -n "${SONAR_TOKEN:-}" ]] || { warn "SONAR_TOKEN is not set; skipping findings report"; exit 0; }
 
@@ -78,30 +82,3 @@ else
       + (if .release.recommendedVersion then " — upgrade to `\(.release.recommendedVersion)`" else " — see SonarCloud for remediation guidance" end)
   ' <<<"$HTTP_BODY" 2>/dev/null || warn "dependency-risk findings response could not be parsed; job summary will not include SCA detail this run"
 fi
-
-# --- FR-005a: downloadable report --------------------------------------
-#
-# KNOWN GAP, confirmed live 2026-08-09: this call returns 403 in production
-# with SONAR_TOKEN, even though the sibling search call above (same host,
-# same token) succeeds -- host/path are correct, this is a permissions gap
-# (SonarSource docs: Browse is enough to search dependency risks; report
-# generation appears to need more than that). Deliberately NOT fixed by
-# swapping in SONAR_ADMIN_TOKEN here -- that would put an org-admin
-# credential back into routine, automatically-triggered CI, the exact
-# SEC-001 problem already fixed once in this feature. Left failing open
-# (warn, don't fail the job) by design; see docs/runbooks/SCRUM-269-ci-
-# vulnerability-scan-gates.md #6 for the accepted tradeoff and follow-up
-# options.
-
-report_raw="$(curl -sS -w '\n%{http_code}' -X GET \
-  -H "Authorization: Bearer ${SONAR_TOKEN}" \
-  -H "Accept: application/json" \
-  "${SONAR_API_HOST}/sca/risk-reports?component=${SONAR_PROJECT_KEY}")"
-split_status "$report_raw"
-
-if [[ "$HTTP_STATUS" != "200" ]]; then
-  warn "dependency-risk report download failed (HTTP $HTTP_STATUS); no report artifact will be attached this run"
-  exit 0
-fi
-
-printf '%s' "$HTTP_BODY" >"$REPORT_OUTPUT"

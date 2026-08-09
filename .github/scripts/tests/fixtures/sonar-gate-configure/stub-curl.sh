@@ -74,10 +74,12 @@ case "$url" in
     respond "${MOCK_DEPENDENCY_RISK_TRANSITION_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *api.sonarcloud.io/sca/issues-releases*)
     # report-sca-findings.sh (FR-005): search dependency risks for a project.
+    # FR-005a (a risk-reports download route) was REMOVED 2026-08-09 -- that
+    # endpoint requires a SonarCloud Enterprise-tier subscription (confirmed
+    # live: 403 "SCA feature is not enabled at Enterprise level", even with
+    # an org-Owner token), a plan gate no token here can satisfy. See
+    # docs/runbooks/SCRUM-269-ci-vulnerability-scan-gates.md #6.
     respond "${MOCK_DEPENDENCY_RISK_SEARCH_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
-  *api.sonarcloud.io/sca/risk-reports*)
-    # report-sca-findings.sh (FR-005a): downloadable dependency-risk report.
-    respond "${MOCK_DEPENDENCY_RISK_REPORT_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *)
     printf 'stub-curl: unrecognized URL: %s\n' "$url" >&2
     exit 1
