@@ -73,23 +73,26 @@ rotation requires (and which closes SCRUM-243). Thresholds were also moved to `B
 in `0278317`, matching the precision convention the weather module already uses.
 
 **Residual deltas between the merged engine and what the agent needs.** Read against
-`PolicyEngineService` on `main`, not the PR description. Naming deltas are cosmetic; the
-first three are substantive and gate features in this ticket.
+`PolicyEngineService` on `main`, not any PR description. Corrected once already: an earlier
+version of this table mislabelled row 3 as a `priority` field — `PolicyAction` has no such
+field; what was actually found is `determineBand()`'s output, corrected below.
 
-| # | Merged engine emits | Needed | Why it matters |
-|---|---|---|---|
-| 1 | `appliesTo` = condition tags — `["all_workers"]`, `["unacclimatised", "moderate_or_heavy_work"]` (its own Javadoc says "applicability conditions") | Worker UUIDs, as §7.2 and [`domain.ts:168`](../../mobile/src/types/domain.ts) both specify | **Per-worker targeting does not exist.** Shift rotation and Ramadan mode both depend on it; SCRUM-243 stays open |
-| 2 | `action` ∈ `STOP_WORK`, `EXTENDED_REST`, `SHORT_REST`, `CONTINUE` | The granular allowlist codes below | `EXTENDED_REST` / `SHORT_REST` / `CONTINUE` have **no i18n string**, so mobile renders humanised English |
-| 3 | `priority` ∈ `CRITICAL`, `HIGH`, `MODERATE` | `HIGH`, `MEDIUM`, `LOW` | `MitigationSuggestion` validates `^(HIGH\|MEDIUM\|LOW)$` — `CRITICAL` and `MODERATE` fail it on both the Java and Pydantic side |
-| 4 | Only rest / stop / continue actions | Hydration, shade, reschedule, rotate | Four of the eight categories currently have **no producer** |
-| 5 | `forecastBand = currentBand` (`// can be enhanced later`) | Real 30/60-min forecast | The forecast service from SCRUM-188 still has no consumer |
-| 6 | `ruleReference` = `HEAT_STRESS_REST_RULE`, `EMERGENCY_STOP_RULE`, … | §7.2 uses `HS-32-HEAVY` form | Either convention renders (mobile passes it through `guidance.rule`), but pick one |
-| 7 | `required` / `advised`, `PolicyAction.action`, bands as `String` | `mandatoryActions` / `advisoryActions`, `code`, `WbgtBand` | Cosmetic until a policy endpoint serialises the record |
+**PR #139 (open, not yet merged) fixes rows 7 and the `forecastBand` nullability note** —
+renames `required`/`advised` → `mandatoryActions`/`advisoryActions`, `action` → `code`, and
+makes `forecastBand` `@Nullable` with a comment citing degraded mode per §7.1. Good change,
+worth merging. **It does not touch rows 1, 2, 3 or 4** — those still gate features in this
+ticket regardless of whether #139 merges.
 
-Also: `forecastBand` is `Objects.requireNonNull`, but mobile types it `WbgtBand | null`. If
-the forecast service is unavailable or a site has no forecast yet, a `PolicyDecision` cannot
-be constructed at all. Worth relaxing to nullable, since §7.1's stale-data rule expects the
-system to degrade rather than fail.
+| # | Merged engine emits | Needed | Why it matters | Status |
+|---|---|---|---|---|
+| 1 | `appliesTo` = condition tags — `["all_workers"]`, `["unacclimatised", "moderate_or_heavy_work"]` (its own Javadoc says "applicability conditions") | Worker UUIDs, as §7.2 and [`domain.ts:168`](../../mobile/src/types/domain.ts) both specify | **Per-worker targeting does not exist.** Shift rotation and Ramadan mode both depend on it; SCRUM-243 stays open | Open |
+| 2 | `action` ∈ `STOP_WORK`, `EXTENDED_REST`, `SHORT_REST`, `CONTINUE` | The granular allowlist codes above | `EXTENDED_REST` / `SHORT_REST` / `CONTINUE` have **no i18n string**, so mobile renders humanised English | Open |
+| 3 | `determineBand()` returns `"CRITICAL"`/`"HIGH"`/`"MODERATE"`/`"LOW"` for `currentBand`, using **hardcoded** 28.0°C/26.0°C thresholds unrelated to the configured `HeatRestPolicy` thresholds (only the emergency-stop branch reads the real per-site config) | `currentBand`/`forecastBand` in the §7.2 range form (`"32_TO_BELOW_33"`), matching mobile's `WbgtBand` and `WbgtBand.classify()` on `main` | **Two bugs, not one.** The vocabulary doesn't bind to mobile's `WbgtBand` type at all, and the hardcoded 26/28°C thresholds mean the reported band and the actual rest-triggering threshold run on two different scales — a site configured with a 32°C rest threshold could report `"HIGH"` well below where any rest is actually required | Open |
+| 4 | Only rest / stop / continue actions | Hydration, shade, reschedule, rotate | Four of the eight categories currently have **no producer** | Open |
+| 5 | `forecastBand = currentBand` (`// TODO: integrate SCRUM-188 forecast service`) | Real 30/60-min forecast | The forecast service from SCRUM-188 still has no consumer | Open |
+| 6 | `ruleReference` = `HEAT_STRESS_REST_RULE`, `EMERGENCY_STOP_RULE`, … | §7.2 uses `HS-32-HEAVY` form | Either convention renders (mobile passes it through `guidance.rule`), but pick one | Open |
+| 7 | `required` / `advised`, `PolicyAction.action`, bands as `String` | `mandatoryActions` / `advisoryActions`, `code` | — | **Fixed in PR #139** |
+| — | `forecastBand` non-null, so no forecast means no `PolicyDecision` at all | Nullable, degrading per §7.1's stale-data rule | — | **Fixed in PR #139** |
 
 Band derivation should reuse `weather/domain/WbgtBand.classify()` rather than recompute — it
 is on `main` with 13 boundary tests and a deliberate half-open, null-safe design (`32.0` is
@@ -201,14 +204,20 @@ with an unknown action code cannot be saved"*) and the §22 item *"action allowl
 enforced server-side"*, and is the mechanism behind §8.6's requirement that unsupported-action
 rate be zero.
 
-> **Safety gap — needs a product decision, not a naming one.** §7.1 requires a lightning
-> stop-work to *"direct workers to seek proper shelter immediately."* The nearest translated
-> string is `SEEK_SHADE` — *"Move into shade."* **Shade is not shelter from lightning.** No
-> translated string for the lightning instruction exists in any locale. Either a new
-> `SEEK_SHELTER` key gets written and translated (native-speaker review required for safety
-> strings per SCRUM-205), or the lightning path ships with `STOP_WORK` alone and the shelter
-> instruction is carried by the existing `LightningBanner` copy instead. Raised as an open
-> item below.
+> **Safety gap — decided.** §7.1 requires a lightning stop-work to *"direct workers to seek
+> proper shelter immediately."* The nearest translated string is `SEEK_SHADE` — *"Move into
+> shade."* **Shade is not shelter from lightning**, and no translated string for the actual
+> lightning instruction exists in any locale.
+>
+> **Decision: the agent emits `STOP_WORK` only for the lightning path — no `SEEK_SHADE`, no
+> new key.** Checked rather than assumed: mobile's `lightning.stopWorkBody` string already
+> reads *"Lightning near this site. Seek proper shelter immediately"* — the exact §7.1
+> instruction, already translated in all seven locales, rendered by `LightningBanner`
+> outside the translated-action-code system entirely. Nothing changes there. A
+> `SEEK_SHELTER` action code stays out of the allowlist. Revisit only if a future screen
+> needs the shelter instruction to travel as a dispatched action rather than banner copy —
+> at that point it needs a new key and native-speaker review per SCRUM-205, not a reuse of
+> `SEEK_SHADE`.
 
 **Dynamic values are typed fields, never prose.** Clients must not parse `action` text to
 recover a number — mobile ships seven locales (SCRUM-205) and a regex over translated text
@@ -426,7 +435,7 @@ Both paths run the same graph; the trigger supplies `trigger.type` and the audit
 |---|---|
 | Pydantic v2 | Yes — already present; the validation boundary for §8.5 |
 | LangGraph | Yes — the deterministic graph above; clean per-node tracing |
-| LangChain core | **Recommend omitting** — §10.3 lists it, so this needs a team decision. It interposes on `output_config.format` and `strict: true`, the exact features providing the guarantees. LangGraph nodes are plain functions and do not require it. |
+| LangChain core | **Decided: not used.** §10.3 names it as part of the stack, but it interposes on `output_config.format` and `strict: true` — the exact features providing this design's safety guarantees — for no capability LangGraph doesn't already provide on its own (LangGraph nodes are plain functions). §10.3 is a stack listing, not a per-ticket requirement, so this is a deviation worth a one-line mention in the final report, not a blocker. |
 | Anthropic SDK | Yes — replaces raw `boto3.invoke_model` |
 | boto3 | Retained, narrowed to the control plane (`list-foundation-models`) |
 | LangSmith | Yes — US-36, §8.5, AT-22; correlate on the `X-Request-Id` UUID standardised in SCRUM-180 |
@@ -525,27 +534,30 @@ Ordered by what blocks whom.
    is the single biggest blocker in the list.
 2. **Emit the granular action codes** (delta 2) — `REST_15_MIN_HOURLY` rather than
    `EXTENDED_REST`, so the app can render a translated string instead of humanised English.
-3. **Priority vocabulary** (delta 3) — `CRITICAL`/`MODERATE` fail `MitigationSuggestion`'s
-   `^(HIGH|MEDIUM|LOW)$` on both the Java and Pydantic side.
+3. **Fix `currentBand`/`forecastBand` vocabulary and thresholds** (delta 3, corrected) —
+   `determineBand()` returns `"CRITICAL"`/`"HIGH"`/`"MODERATE"`/`"LOW"` using hardcoded
+   26/28°C cutoffs that ignore the site's configured `HeatRestPolicy` thresholds outside the
+   emergency-stop branch. Needs the §7.2 range form (`"32_TO_BELOW_33"`) and needs to derive
+   from the same configured thresholds the rest of the engine uses, not a second hardcoded
+   scale.
 4. **Hydration / shade / reschedule / rotate actions** (delta 4) — four categories have no
    producer today.
 
-**Blocking a worker seeing correct instructions — for the group:**
-
-5. **Lightning shelter wording.** No translated string exists for "seek proper shelter";
-   `SEEK_SHADE` means something materially different and shade is not shelter from lightning.
-   Write and translate a `SEEK_SHELTER` key, or carry the instruction in `LightningBanner`
-   copy instead. Safety string, so native-speaker review applies (SCRUM-205).
-
 **Decisions, not blockers:**
 
-6. ~~**Migration renumbering**~~ — resolved: #126 took `V9`, #124 moved to `V10`.
-7. ~~**Policy output shape**~~ — resolved in `3b6c36c`; residual deltas above.
-8. **One approval flow** — the `recommendation`/`approval` tables, not `agent_draft_plans`;
-   the deciding factor is that the latter cannot reach a worker.
-9. **LangChain** — §10.3 lists it; this plan recommends omitting it. Needs an explicit
-   decision rather than a silent departure.
-10. **Ramadan privacy framing** — agree before building.
+5. ~~**Migration renumbering**~~ — resolved: #126 took `V9`, #124 moved to `V10`.
+6. ~~**Policy output shape (naming)**~~ — resolved in `3b6c36c` and PR #139; substantive
+   deltas 1–4 above remain.
+7. **One approval flow** — the `recommendation`/`approval` tables, not `agent_draft_plans`;
+   the deciding factor is that the latter cannot reach a worker. PRs #140 and #141 are the
+   same superseded design re-pushed from fresh branches — same reasoning applies to both;
+   no new review needed unless one diverges from #127.
+8. ~~**Lightning shelter wording**~~ — **decided:** `STOP_WORK` only, no `SEEK_SHELTER` code.
+   Mobile's `lightning.stopWorkBody` already carries the correct, translated shelter
+   instruction outside the action-code system. See the callout above.
+9. ~~**LangChain**~~ — **decided: not used.** See *Libraries*.
+10. **Ramadan privacy framing** — deferred with the feature; agree before building, not
+    before it's picked up (see *Feature scope*).
 11. **Rule-reference convention** (delta 6) — `HS-32-HEAVY` per §7.2, or the engine's
     `HEAT_STRESS_REST_RULE`. Either renders; pick one.
 12. **Weather range endpoint** — only `/weather/latest` is exposed; needed for trend
