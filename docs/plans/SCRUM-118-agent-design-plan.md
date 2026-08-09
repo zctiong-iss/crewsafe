@@ -479,17 +479,17 @@ detail. Recorded here as considered and deferred.
 US-07 and US-08 are 8 points each against a 66-point sprint board. The order below places
 the cut line explicitly: **everything through phase 5 is a complete, demonstrable US-08.**
 
-| Phase | Work | Cuttable |
-|---|---|---|
-| 0 | Clear the PR queue per *Merge order* (#126 done; #124 needs the `V10` renumber) | No — blocks all |
-| 1 | Reconcile the three `PolicyDecision` naming deltas + nullable `forecastBand` | No |
-| 2 | Bedrock client replacement, model enumeration, `BedrockProperties` prefix fix | No |
-| 3 | §8.6 evaluation set + model bench + committed decision table | No |
-| 4 | Extended `MitigationSuggestion`, allowlist, `appliesTo[]`, `recommendation.yaml`, frontend handoff | No |
-| 5 | Agent graph + supervisor-triggered endpoint + no-LLM fallback | No — **US-08 complete** |
-| 6 | Auto-trigger on band change | Yes |
-| 7 | Ramadan mode | Yes |
-| 8 | LangSmith tracing (US-36, *Should*) | Yes |
+| Phase | Work | Cuttable | Status |
+|---|---|---|---|
+| 0 | Clear the PR queue per *Merge order* | No — blocks all | ✅ Done (#126, #139 merged; #124's `V10` renumber merged) |
+| 1 | Fix the four substantive policy-engine deltas: worker-UUID `appliesTo`, granular action codes, `WbgtBand`-typed bands, hydration/shade/reschedule/rotate producers | No | 🔶 [#146](https://github.com/zctiong-iss/crewsafe/pull/146) open |
+| 2 | Bedrock client replacement, model enumeration, `BedrockProperties` prefix fix | No | Next |
+| 3 | §8.6 evaluation set + model bench + committed decision table | No | |
+| 4 | Extended `MitigationSuggestion`, allowlist, `appliesTo[]`, `recommendation.yaml`, frontend handoff | No | |
+| 5 | Agent graph + supervisor-triggered endpoint + no-LLM fallback | No — **US-08 complete** | |
+| 6 | Auto-trigger on band change | Yes | |
+| 7 | Ramadan mode | Yes | |
+| 8 | LangSmith tracing (US-36, *Should*) | Yes | |
 
 Phase 4 should be front-loaded once phase 0 clears: the frontend is blocked on it and it is
 the cheapest item on the list.
@@ -527,21 +527,28 @@ dispatch code mapping) → `audit_event` rows for each step sharing one correlat
 
 Ordered by what blocks whom.
 
-**Blocking the agent — for Surya, on the policy engine:**
+**Blocking the agent — deltas 1–4, all closed in one PR:**
 
-1. **`appliesTo` must carry worker UUIDs, not condition tags** (delta 1). Without it there is
-   no per-worker targeting, so shift rotation cannot be built and SCRUM-243 stays open. This
-   is the single biggest blocker in the list.
-2. **Emit the granular action codes** (delta 2) — `REST_15_MIN_HOURLY` rather than
-   `EXTENDED_REST`, so the app can render a translated string instead of humanised English.
-3. **Fix `currentBand`/`forecastBand` vocabulary and thresholds** (delta 3, corrected) —
-   `determineBand()` returns `"CRITICAL"`/`"HIGH"`/`"MODERATE"`/`"LOW"` using hardcoded
-   26/28°C cutoffs that ignore the site's configured `HeatRestPolicy` thresholds outside the
-   emergency-stop branch. Needs the §7.2 range form (`"32_TO_BELOW_33"`) and needs to derive
-   from the same configured thresholds the rest of the engine uses, not a second hardcoded
-   scale.
-4. **Hydration / shade / reschedule / rotate actions** (delta 4) — four categories have no
-   producer today.
+Abu took these over directly rather than routing them through Surya, given they were
+blocking his own work — see [#146](https://github.com/zctiong-iss/crewsafe/pull/146)
+(open). Full backend suite 309/309 including 38 in `PolicyEngineServiceTest` (was 25).
+
+1. ~~**`appliesTo` must carry worker UUIDs, not condition tags**~~ (delta 1) — **fixed.**
+   `evaluate()` now takes a `workerId` and stamps it onto every action; a new
+   `evaluateForShift(siteId, wbgt, assignments)` evaluates every worker on a shift and
+   merges actions sharing a code into one `PolicyAction` naming everyone it applies to.
+   This is what makes shift rotation and, later, Ramadan mode possible.
+2. ~~**Emit the granular action codes**~~ (delta 2) — **fixed.** New `PolicyActionCode`
+   constants class (mirrors `AuditEventType`'s pattern) holds the codes actually checked
+   against `mobile/src/localization/*.json` before the design doc's revision, not the ones
+   originally guessed.
+3. ~~**Fix `currentBand`/`forecastBand` vocabulary and thresholds**~~ (delta 3, corrected) —
+   **fixed.** Both fields are now typed `WbgtBand` (weather module's existing, tested
+   `classify()`), not a separately-invented string scale. Band and the site's configured
+   rest threshold stay deliberately independent axes — see the PR description for why.
+4. ~~**Hydration / shade / reschedule / rotate actions**~~ (delta 4) — **fixed.** The engine
+   now also emits `HYDRATE_HOURLY`/`HYDRATE_REGULARLY`, `SHADE_RECOVERY`,
+   `RESCHEDULE_HEAVY_WORK` and `ROTATE_TO_LIGHT_DUTY` where §7.1 calls for them.
 
 **Decisions, not blockers:**
 
