@@ -3,7 +3,6 @@ package com.crewsafe.mitigation.ai.bedrock;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.ResourceAccessException;

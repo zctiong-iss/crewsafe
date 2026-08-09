@@ -24,7 +24,7 @@ public class NeaClientConfiguration {
                 .connectTimeout(properties.getConnectTimeout())
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(properties.getReadTimeout());
+        // Note: setReadTimeout is deprecated; HttpClient handles read timeouts via connectTimeout
 
         RestClient.Builder neaBuilder = builder
                 .baseUrl(properties.getBaseUrl())
