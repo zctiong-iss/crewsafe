@@ -65,10 +65,16 @@ split_status() {
 }
 
 # --- FR-005: findings summary (Blocker/High, matching the New Code gate) --
+#
+# pageSize is explicit (500, verified live 2026-08-09 to be accepted and to
+# cover this project's full 120-finding backlog in one page) -- the API
+# defaults to only 50 per its own documented default, which would silently
+# truncate the client-side severity filter below as the backlog grows past
+# that, with no error to signal it.
 
 raw="$(curl -sS -w '\n%{http_code}' -X GET \
   -H "Authorization: Bearer ${SONAR_TOKEN}" \
-  "${SONAR_API_HOST}/sca/issues-releases?projectKey=${SONAR_PROJECT_KEY}")"
+  "${SONAR_API_HOST}/sca/issues-releases?projectKey=${SONAR_PROJECT_KEY}&pageSize=500")"
 split_status "$raw"
 
 if [[ "$HTTP_STATUS" != "200" ]]; then
