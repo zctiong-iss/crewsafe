@@ -58,6 +58,25 @@ case "$url" in
       respond "${MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE:?}" "${MOCK_GITHUB_HTTP_STATUS:-200}"
     fi
     ;;
+  *api/measures/component*)
+    # check-sca-active.sh (SCRUM-269, FR-003a): whether a DependencyRisks
+    # measure is present at all is how SCA-active is inferred.
+    respond "${MOCK_SCA_MEASURES_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api/v2/sca/issues-releases*transition*)
+    # apply-sca-exceptions.sh (SCRUM-269, FR-007/FR-008): transitions a
+    # dependency-risk finding's status. Path form per research.md R4 --
+    # SonarSource confirmed the underlying "transitionIssueRelease" operation
+    # exists (DependencyService v1/v4, "Issues-Releases" group, documented
+    # since 2026-06-17) but the exact path was not live-verified this
+    # session; see specs/020-ci-vulnerability-scan-gates/tasks.md T036.
+    respond "${MOCK_DEPENDENCY_RISK_TRANSITION_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api/v2/sca/issues-releases*)
+    # report-sca-findings.sh (FR-005) / apply-sca-exceptions.sh: read a
+    # dependency risk (or the project's list of them) by key.
+    respond "${MOCK_DEPENDENCY_RISK_SEARCH_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api/v2/sca/risk-reports*)
+    # report-sca-findings.sh (FR-005a): downloadable dependency-risk report.
+    respond "${MOCK_DEPENDENCY_RISK_REPORT_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *)
     printf 'stub-curl: unrecognized URL: %s\n' "$url" >&2
     exit 1

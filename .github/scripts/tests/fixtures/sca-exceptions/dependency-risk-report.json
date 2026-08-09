@@ -1,0 +1,17 @@
+{
+  "reportFormat": "JSON",
+  "generatedAt": "2026-08-09T00:00:00Z",
+  "project": "zctiong-iss_crewsafe",
+  "risks": [
+    {
+      "dependencyChain": ["org.apache.commons:commons-compress:1.24.0"],
+      "riskTitle": "Missing Encryption of Sensitive Data",
+      "type": "VULNERABILITY",
+      "severity": "BLOCKER",
+      "status": "OPEN",
+      "cvssScore": "5.5",
+      "vulnerabilityId": "CVE-2024-25710",
+      "assignedAt": "2026-08-08T17:01:10.425Z"
+    }
+  ]
+}

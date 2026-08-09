@@ -1,0 +1,23 @@
+{
+  "issuesReleases": [
+    {
+      "key": "00000000-0000-0000-0000-000000000001",
+      "severity": "BLOCKER",
+      "type": "VULNERABILITY",
+      "quality": "SECURITY",
+      "status": "OPEN",
+      "createdAt": "2026-08-08T17:01:10.425Z",
+      "vulnerabilityId": "CVE-2024-25710",
+      "cvssScore": "5.5",
+      "release": {
+        "packageName": "org.apache.commons:commons-compress",
+        "version": "1.24.0",
+        "packageManager": "MAVEN",
+        "newlyIntroduced": true,
+        "directSummary": false,
+        "recommendedVersion": "1.26.0"
+      }
+    }
+  ],
+  "paging": { "pageIndex": 1, "pageSize": 100, "total": 1 }
+}
