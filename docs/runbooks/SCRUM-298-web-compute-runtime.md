@@ -9,14 +9,18 @@ container, no ECS service, no ALB involvement.
 
 **Plan**: [SCRUM-298-web-compute-runtime-plan.md](../plans/SCRUM-298-web-compute-runtime-plan.md)
 
-**Status (2026-08-10)**: Terraform, tests, guards, and the sync workflow are written and pass
-offline (22/22 `terraform test` in `compute-shared-dev`, 3/3 in `iam-policy-management`, 44/44
-source-guard checks, 38/38 workflow-guard checks, 0 HIGH/CRITICAL Trivy findings). **Nothing has
-been applied to AWS.** §4's two-step apply (`iam-policy-management-shared-dev` first, then
-`compute-shared-dev`) and §7 (initial sync) are all still outstanding and require real AWS/GitHub
-access. §2 was originally written describing a hand-attachment mechanism that turned out to be
-wrong — corrected in place; see its own note.
-See the plan's Implementation Notes for what was found and fixed along the way.
+**Status (2026-08-10)**: **Live.** `iam-policy-management-shared-dev` and `compute-shared-dev` have
+both been applied for real (PR #152, merged to `main`); `CREWSAFE_WEB_BUCKET_NAME`,
+`CREWSAFE_WEB_DISTRIBUTION_ID`, and `CREWSAFE_WEB_SYNC_ROLE_ARN` repository variables are set; the
+initial sync ran successfully (§7's evidence table). Two real issues surfaced only once actual
+Terraform/AWS calls ran — a missing `s3:GetBucketCORS` (and several sibling `GetBucket*` reads)
+permission, and two unrelated CI guard scripts hardcoding a stale binding count — both fixed; full
+account in the plan's Implementation Notes. §2 was originally written describing a hand-attachment
+mechanism that turned out to be wrong — corrected in place; see its own note.
+
+**Still open**: confirm `$WEB_BASE/` and `$WEB_BASE/callback` per §7 step 5 (needs the actual
+`web_staging_base_url` value, not yet captured here), and the FR-019 follow-up (§8) has not been
+raised yet.
 
 ---
 
@@ -207,10 +211,13 @@ local AWS CLI session — every credential stays in CI/OIDC.
 
    | Field | Value |
    | --- | --- |
-   | Commit SHA synced | *(fill in at first real dispatch)* |
-   | Sync timestamp | *(fill in)* |
-   | Invalidation ID | *(fill in)* |
-   | Dispatched by / workflow run | *(fill in)* |
+   | Commit SHA synced | `a36b8ae96abd2ebbb0a8a1b779a65340e286b5b3` |
+   | Bucket | `crewsafe-shared-dev-web` |
+   | Distribution ID | `E3SDQ5PEZ490UE` |
+   | Sync role | `arn:aws:iam::669958787600:role/crewsafe-shared-dev-web-sync` |
+   | Sync timestamp | 2026-08-10, run started 10:02:19Z, completed 10:03:14Z |
+   | Invalidation ID | *(not captured from the run log — read `web_staging_base_url`'s CloudFront console or a future run's job summary)* |
+   | Dispatched by / workflow run | [Web Sync run 31376419141](https://github.com/zctiong-iss/crewsafe/actions/runs/31376419141/job/93419520661) |
 
 5. Verify:
 
