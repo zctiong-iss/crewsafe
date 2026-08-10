@@ -216,17 +216,17 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gat
   'The network, secrets, and database components own these (FR-053). Changes to them are changes to those components.'
 
 # FR-015 (SCRUM-298). aws_iam_role gets its own check, separate from the
-# forbid() list above: this component now legitimately creates exactly ONE —
-# the web sync role, a new least-privilege identity, not a resource belonging
-# to secrets-shared-dev. grep -E has no negative lookahead, so the exception
+# forbid() list above: this component legitimately creates only the web sync
+# role and SCRUM-271's backend deployment role, each a least-privilege CI
+# identity rather than a resource belonging to secrets-shared-dev. grep -E has no negative lookahead, so the exception
 # is expressed as a loop rather than folded into the pattern above.
 while IFS= read -r iam_role_line; do
   case "$iam_role_line" in
-  *'"web_sync"'*) ;;
+  *'"web_sync"'*|*'"backend_deploy"'*) ;;
   *)
     printf 'FAIL: %s declares an aws_iam_role resource outside the SCRUM-298 web_sync exception.\n  %s\n' \
       "$component_dir" \
-      'The network, secrets, and database components own every other IAM role (FR-053).' >&2
+      'The network, secrets, and database components own every other IAM role; only reviewed CI deployment identities belong here.' >&2
     printf '%s\n' "$iam_role_line" >&2
     exit 1
     ;;
