@@ -1003,6 +1003,165 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-266 — Editing a shift after it has been created
+
+Plan: [`docs/plans/SCRUM-266-edit-shifts-and-assignments-plan.md`](../docs/plans/SCRUM-266-edit-shifts-and-assignments-plan.md).
+
+Until this ticket a shift was create-and-delete-only in the app. A mistyped acclimatisation
+day, a start time an hour out, or a worker rostered onto the wrong crew all had the same
+remedy: delete the whole shift — destroying every other assignment on it — and rebuild it.
+
+The backend had accepted `PATCH` and `DELETE` on both the shift and its assignments since the
+SCRUM-159/160 fix. **Nothing in the app had ever called them.** This ticket is mostly the app
+catching up, plus one rule the server was missing.
+
+### What is editable, and what stops being editable
+
+| Shift state | Window | Assignments | Crew |
+|---|---|---|---|
+| `PLANNED`, not yet started | freely | freely | freely |
+| Started, not yet ended | warn, then allow | warn, then allow | freely |
+| Ended, or `CLOSED` | refused | refused | refused |
+
+The refusal is enforced in `ShiftService.assertEditable`, not only here. A rule that lives in
+one client is a rule every other client ignores, and these endpoints accepted an edit at any
+status until now. `CLOSED` **and** a past `endsAt` are both checked because they are not the
+same fact — nothing moves a shift to `CLOSED` on a timer, so status alone would leave
+yesterday's shifts looking editable.
+
+### The confirmation is not ceremony
+
+Changing intensity on a running shift changes the heat obligations the worker is already
+under, and the dispatch inbox may already hold actions computed from the old value. Moving the
+window changes when the whole crew is expected on site — so that confirmation names the crew
+size rather than a worker, and its wording differs for that reason:
+
+| Key | Text |
+|---|---|
+| `shifts.editActiveBody` | "Changing intensity now changes the heat rules this worker is already working under. Continue?" |
+| `shifts.editWindowActiveBody` | "Moving the times changes when {{crew}} worker(s) are expected on site. Continue?" |
+
+`{{crew}}` rather than `{{count}}` deliberately: `count` makes i18next resolve plural
+suffixes, and these strings are authored once per locale rather than in one/other pairs.
+
+### Taking a worker off is confirmed; correcting one is not
+
+An assignment edit is reversible in the same place it was made. A removal is not — once the
+worker is gone from the screen, putting them back means re-entering the task and
+acclimatisation day that were just discarded. So removal gets a dialog and an edit does not.
+
+### The crew is visible from the list, without opening anything
+
+The shift list previously said `2 workers` and nothing else, so answering "who is on the
+Tuesday shift, and on what" meant opening each shift in turn.
+
+**Altered text — `ShiftListScreen`.** The worker-count line was plain text. It is now a
+toggle. To revert, drop the `TouchableOpacity` wrapper and render the count alone:
+
+```tsx
+// Before SCRUM-266:
+<AppText variant="caption" tone="secondary" style={styles.cardMeta}>
+  {item.assignments.length === 0
+    ? t("shifts.unstaffed")
+    : t("shifts.assignmentCount", { count: item.assignments.length })}
+</AppText>
+```
+
+Expansion is held as a `Set` of shift ids, not a single open id — a supervisor comparing two
+shifts wants both open, and nothing about the layout requires an accordion. Unstaffed shifts
+keep the plain text, because a toggle that expands to nothing is a lie about there being
+something to see.
+
+`extraData` carries the expanded set alongside language and the accessibility settings.
+`FlatList` rows are memoised against it, and without the set an expand would not repaint the
+row it happened in.
+
+**Altered text — the toggle's label is now a chevron.** `ExpandChevron` rotates 0° → 180° on a
+220ms curve with a slight overshoot. To revert, drop the component and render the words again:
+
+```tsx
+// Before the chevron:
+<AppText variant="caption" style={styles.crewToggleAction}>
+  {expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")}
+</AppText>
+```
+
+`shifts.showCrew` and `shifts.hideCrew` are **still used** — they became the touchable's
+`accessibilityLabel`. A chevron announces nothing on its own, so removing them would have left
+the control unlabelled to a screen reader. Reduce Motion snaps to the destination angle rather
+than freezing at the old one: the chevron is state, and a supervisor with Reduce Motion on
+still has to see which cards are open.
+
+Not `AnimatedIcon`. Every motion that component offers loops forever and means "this is
+ongoing"; this is a single state transition that ends when the section opens.
+
+### Intensity has a colour, and the colour is never the whole message
+
+Light, Moderate and Heavy run green → amber → red, in the picker's selected segment and in
+every place the value is displayed back.
+
+| Intensity | Standard | High contrast |
+|---|---|---|
+| Light | `#1B5E20` | `#0B3D0B` |
+| Moderate | `#9A5B00` | `#7A4600` |
+| Heavy | `#C71A34` | `#B3001B` |
+
+Named `intensityLight/Moderate/Heavy` in the palette rather than pointing callers at
+`success`/`warningFill`/`danger`, though the values match today. Those three mean "healthy",
+"degraded" and "stop work"; **a HEAVY assignment is a normal thing to plan**, and a supervisor
+must not read a red chip as the app objecting to it.
+
+Moderate uses the darkened amber, not `warning`. Plain `#B26A00` is 4.24:1 against white and
+would put the selected "Moderate" label under the AA floor —
+[`intensityColor.test.ts`](src/helpers/intensityColor.test.ts) checks all six values in both
+directions, and that the three never collapse to one colour.
+
+The label is always beside the fill. A red-green colour-blind supervisor reads "Heavy", not the
+chip.
+
+### The acclimatisation pill moved above the buttons
+
+It is a property of the assignment, like the two rows above it. Below the controls, the card
+said what you could do to a worker before it had finished saying who they were. Centred and
+sized to its text — full width it read as a banner about the whole card rather than a note
+about one person.
+
+### Where each mutation's answer comes from
+
+Three of the four take the server's copy of the shift and replace what the store holds.
+`removeAssignment` cannot: it answers `204` with no body. That row is dropped locally instead —
+"this assignment is gone" is the one outcome that cannot be misread, and re-fetching the shift
+to learn it would cost a round trip to be told the same thing.
+
+`addWorkerToShift` and `removeWorkerFromShift` share one `staffingId` flag rather than having
+one each. Neither should run while the other is in flight: adding a worker while a removal is
+still resolving would race two answers for the same shift, and whichever landed second would
+win regardless of which was asked for first.
+
+### The add sheet filters the candidate list rather than validating it
+
+Only workers not already on the shift are offered. The server would refuse a duplicate anyway —
+`guardAgainstDoubleBooking` catches it, since a shift's own range trivially overlaps itself —
+but the error it produces talks about *overlapping shifts*, which is a confusing thing to be
+told about the person visibly listed on the screen behind the sheet.
+
+It is a filter, not a promise. A worker on a **different** shift at an overlapping time is
+still offered and still refused, because this screen cannot see other shifts' crews. That
+rejection is surfaced with the server's own wording.
+
+### Verified on device
+
+Local Cognito stack, `supervisor1`, a two-worker shift running at the time of the test:
+
+1. Expanded the crew from the shift list — both workers, task, intensity and acclimatisation
+   day, then collapsed again.
+2. Edited one assignment to `Drainage work` / Light / day 6; the running-shift confirmation
+   appeared and the save went through.
+3. `GET /api/v1/shifts/me` on `worker1`'s token returned the edited task, intensity and
+   acclimatisation day — the worker sees the change without any action of their own.
+
+---
+
 ## SCRUM-261 — Live lightning, and a source toggle
 
 Plan: [`docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md`](../docs/plans/SCRUM-261-live-lightning-and-freshness-plan.md).

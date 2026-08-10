@@ -144,6 +144,18 @@ jobs:
             exit 1
           fi
 
+      # SCRUM-269 (FR-003a): verify SonarCloud Advanced Security/SCA is
+      # active BEFORE trusting the Quality Gate's new_sca_rating_vulnerability
+      # condition below -- an inactive subscription would let the analysis
+      # step complete "successfully" with no dependency-risk data at all.
+      # Uses the same analysis-scoped SONAR_TOKEN as the rest of this job
+      # (read-only call); deliberately NOT SONAR_ADMIN_TOKEN, which SEC-001
+      # (specs/019) keeps out of routine, automatically-triggered CI.
+      - name: Verify SonarCloud SCA is active
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: .github/scripts/security/check-sca-active.sh
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.x"
@@ -232,6 +244,78 @@ jobs:
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=600
 
+      # SCRUM-269 (FR-005): surface dependency-risk findings into the job
+      # summary. Runs even if the Quality Gate above failed (`if: always()`)
+      # -- a blocked PR should still show reviewers WHICH finding blocked
+      # it, without requiring SonarCloud UI access. Fails OPEN on its own
+      # API errors (see report-sca-findings.sh's header) -- distinct from
+      # the SCA-active check above, which fails closed.
+      #
+      # FR-005a (a downloadable report artifact) was REMOVED 2026-08-09:
+      # confirmed live that the report-generation endpoint requires a
+      # SonarCloud Enterprise-tier subscription ("SCA feature is not
+      # enabled at Enterprise level"), a plan/billing gate no token this
+      # project can provision would satisfy. See
+      # docs/runbooks/SCRUM-269-ci-vulnerability-scan-gates.md #6.
+      - name: Report SCA findings
+        if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: .github/scripts/security/report-sca-findings.sh >> "$GITHUB_STEP_SUMMARY"
+
+  sonar-securityhub-import:
+    name: Sonar Security Hub Import
+    needs: sast
+    if: >-
+      always() && github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Check reviewed activation
+        id: activation
+        run: |
+          enabled="$(jq -r '.enabled' .github/securityhub-import.json)"
+          if [[ "$enabled" == true ]]; then
+            printf 'enabled=true\n' >>"$GITHUB_OUTPUT"
+          else
+            printf 'enabled=false\n' >>"$GITHUB_OUTPUT"
+            printf 'NOT-ACTIVATED\n' >>"$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Verify importer role configuration
+        if: steps.activation.outputs.enabled == 'true'
+        env:
+          IMPORT_ROLE_ARN: ${{ vars.CREWSAFE_SONAR_SECURITYHUB_IMPORT_ROLE_ARN }}
+        run: |
+          if [ -z "${IMPORT_ROLE_ARN}" ]; then
+            echo "::error::CREWSAFE_SONAR_SECURITYHUB_IMPORT_ROLE_ARN is not configured."
+            echo "::error::Set it to the reviewed Terraform output sonar_securityhub_import_role_arn before activating this importer."
+            exit 1
+          fi
+
+      - name: Configure importer identity
+        if: steps.activation.outputs.enabled == 'true'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_SONAR_SECURITYHUB_IMPORT_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeSonarSecurityHub-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Import selected redacted findings
+        if: steps.activation.outputs.enabled == 'true'
+        env:
+          SONAR_SECURITYHUB_TOKEN: ${{ secrets.SONAR_SECURITYHUB_TOKEN }}
+          CREWSAFE_SECURITYHUB_ACCOUNT_ID: ${{ vars.CREWSAFE_SECURITYHUB_ACCOUNT_ID }}
+          AWS_REGION: ap-southeast-1
+        run: .github/scripts/security/import-sonar-securityhub.sh
+
   gate-tests:
     name: Gate Self-Tests
     runs-on: ubuntu-latest
@@ -243,6 +327,20 @@ jobs:
       - name: Install scanners
         run: .github/scripts/security/install-scanners.sh
 
+      # test-web-image-workflow.sh (specs/014) and test-backend-image-
+      # workflow.sh (specs/020) both depend on `rg` for structural workflow
+      # assertions. Discovered live 2026-08-09: ubuntu-latest does NOT ship
+      # ripgrep by default -- this had gone unnoticed because
+      # test-web-image-workflow.sh was never wired into this job until now.
+      # Installed via apt (Ubuntu's own signed package repo), not a raw
+      # GitHub-release curl -- a stronger trust chain than install-scanners.sh
+      # needs for gitleaks, which apt does not package.
+      - name: Install ripgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
+          rg --version
+
       - name: Secret gate self-tests
         run: .github/scripts/tests/test-secret-scan-gate.sh
 
@@ -251,3 +349,37 @@ jobs:
 
       - name: SAST gate configuration lint
         run: .github/scripts/tests/test-sast-gate-config.sh
+
+      - name: Sonar Security Hub importer self-tests
+        run: .github/scripts/tests/test-sonar-securityhub-import.sh
+
+      - name: Sonar Quality Gate configurator self-tests
+        run: .github/scripts/tests/test-sonar-gate-configure.sh
+
+      # Pre-existing since specs/014 (SCRUM-257) but never wired into this
+      # job until now -- closing that gap alongside the SCRUM-269 additions
+      # below, since both structurally test a publish-image workflow.
+      - name: Web image workflow self-tests
+        run: .github/scripts/tests/test-web-image-workflow.sh
+
+      # SCRUM-269: the five new self-tests this feature adds.
+      - name: Backend image workflow self-tests
+        run: .github/scripts/tests/test-backend-image-workflow.sh
+
+      # SCRUM-270: extends the same job with the new digest-capture/
+      # contract-validation assertions (in the file above) and this new
+      # runbook content guard.
+      - name: Backend image promotion/rollback runbook self-tests
+        run: .github/scripts/tests/test-image-promotion-runbook.sh
+
+      - name: SCA-active verifier self-tests
+        run: .github/scripts/tests/test-check-sca-active.sh
+
+      - name: SCA findings reporter self-tests
+        run: .github/scripts/tests/test-report-sca-findings.sh
+
+      - name: Trivy ignorefile filter self-tests
+        run: .github/scripts/tests/test-filter-trivyignore.sh
+
+      - name: SCA exception applier self-tests
+        run: .github/scripts/tests/test-apply-sca-exceptions.sh

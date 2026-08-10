@@ -1,0 +1,18 @@
+# Version-controlled Trivy exceptions for the web container image scan
+# (SCRUM-269, mirrored from the backend image gate).
+#
+# This is the SOURCE file, reviewed via pull request like any other repo
+# change. It is NOT read directly by Trivy -- .github/scripts/security/
+# filter-trivyignore.sh filters it into a runtime-only "active" ignorefile
+# on every CI run, dropping any entry whose expiry date has passed or is
+# missing/malformed. An expired entry therefore reverts to blocking
+# automatically, with no other change required.
+#
+# Format (one entry per line):
+#   <CVE-ID>  # exp:<YYYY-MM-DD> reason:<why this is an accepted, time-bounded risk>
+#
+# Both exp: and reason: are required. A line missing either is dropped
+# (fails closed) rather than silently exempted. See
+# specs/020-ci-vulnerability-scan-gates/contracts/exception-mechanisms.md.
+#
+# No active entries yet -- nothing is currently excepted.
