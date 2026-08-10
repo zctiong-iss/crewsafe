@@ -149,3 +149,37 @@ jobs:
             echo "- Content digest: \`$image_digest\`"
             echo "- CI run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy staging backend
+    needs: publish-image
+    if: >
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REPOSITORY: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+      IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag }}
+      IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest }}
+      CLUSTER: ${{ vars.CREWSAFE_BACKEND_ECS_CLUSTER_NAME }}
+      SERVICE: ${{ vars.CREWSAFE_BACKEND_ECS_SERVICE_NAME }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Validate backend deployment contract
+        env:
+          DEPLOY_ROLE_ARN: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-backend-deploy$ ]]
+          [[ "$CLUSTER" == crewsafe-shared-dev && "$SERVICE" == backend ]]
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeBackendDeploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Deploy immutable backend release
+        run: .github/scripts/deploy/deploy-backend-staging.sh

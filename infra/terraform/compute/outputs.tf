@@ -67,3 +67,8 @@ output "web_sync_role_arn" {
   description = "The role a workflow_dispatch run assumes via OIDC to sync web/dist to web_bucket_name and invalidate the web distribution. SCRUM-271 reads this rather than hard-coding the role name."
   value       = aws_iam_role.web_sync.arn
 }
+
+output "backend_deploy_role_arn" {
+  description = "Dedicated GitHub OIDC role for SCRUM-271 backend release deployment; never use a Terraform apply role."
+  value       = aws_iam_role.backend_deploy.arn
+}
