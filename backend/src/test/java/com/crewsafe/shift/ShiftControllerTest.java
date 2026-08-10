@@ -21,9 +21,13 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -369,28 +373,43 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                         + " (10 Aug 2026 22:00 – 11 Aug 2026 06:00 Asia/Singapore)");
     }
 
-    /** A correction row that omits the corrected times is the least useful row in the log. */
+    /**
+     * A correction row that omits the corrected times is the least useful row in the log.
+     *
+     * <p>Anchored to tomorrow's date rather than a hardcoded one: {@link
+     * com.crewsafe.shift.service.ShiftService#assertEditable} rejects a PATCH once {@code
+     * endsAt} is no longer after the real wall clock, so a fixed past-tense literal (this test
+     * previously hardcoded 2026-08-10) is a ticking time bomb that fails the instant the suite
+     * runs on or after that date — which is exactly what happened. {@code LocalDate.now(...)}
+     * keeps both the corrected shift and the expected audit string true for as long as this
+     * test exists, the same pattern {@code Instant.now()} already establishes elsewhere in this
+     * file for tests that do not need a fixed, human-readable local time.
+     */
     @Test
     void shiftTimeCorrectionAuditRecordsTheNewLocalWallClock() throws Exception {
+        ZoneId sgt = ZoneId.of("Asia/Singapore");
+        LocalDate correctedDate = LocalDate.now(sgt).plusDays(1);
+
         String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                        shiftBody(Instant.parse("2026-08-10T00:00:00Z"),
-                                Instant.parse("2026-08-10T08:00:00Z"), List.of()))
+                        shiftBody(correctedDate.atTime(8, 0).atZone(sgt).toInstant(),
+                                correctedDate.atTime(16, 0).atZone(sgt).toInstant(), List.of()))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
 
         UUID shiftId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
 
         patchJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId, supervisorAToken,
-                        shiftBody(Instant.parse("2026-08-10T01:00:00Z"),    // 09:00 SGT
-                                Instant.parse("2026-08-10T09:00:00Z"), null))  // 17:00 SGT
+                        shiftBody(correctedDate.atTime(9, 0).atZone(sgt).toInstant(),
+                                correctedDate.atTime(17, 0).atZone(sgt).toInstant(), null))
                 .andExpect(status().isOk());
 
+        String expectedDate = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.UK).format(correctedDate);
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_UPDATED))
                 .filteredOn(e -> shiftId.equals(e.getTargetId()))
                 .singleElement()
                 .extracting(e -> e.getDetail())
                 .isEqualTo("Corrected shift times for site " + siteA.getId()
-                        + " to 10 Aug 2026 09:00–17:00 Asia/Singapore");
+                        + " to " + expectedDate + " 09:00–17:00 Asia/Singapore");
     }
 
     /**
