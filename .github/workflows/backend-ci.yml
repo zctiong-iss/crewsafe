@@ -51,8 +51,64 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      image_uri: ${{ steps.publish.outputs.image_uri }}
+      image_tag: ${{ steps.publish.outputs.image_tag }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
+      run_id: ${{ steps.publish.outputs.run_id }}
+      run_url: ${{ steps.publish.outputs.run_url }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # SCRUM-270 (User Story 2): fails fast on a bad repository, role, or
+      # tag before any build/scan/AWS-credentialed step runs, mirroring
+      # web-ci.yml's own publication-contract validation.
+      - name: Validate backend publication contract
+        env:
+          REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+          PUSH_ROLE_ARN: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$REPO" ]] || { echo "Missing CREWSAFE_ECR_REPOSITORY_URL" >&2; exit 1; }
+          [[ "$REPO" =~ ^[0-9]{12}\.dkr\.ecr\.ap-southeast-1\.amazonaws\.com/crewsafe/backend$ ]] || { echo "Backend repository must be the regional ECR crewsafe/backend repository" >&2; exit 1; }
+          [[ -n "$PUSH_ROLE_ARN" ]] || { echo "Missing CREWSAFE_ECR_PUSH_ROLE_ARN" >&2; exit 1; }
+          [[ "$PUSH_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-ecr-push$ ]] || { echo "Unexpected backend publisher role" >&2; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "GITHUB_SHA must be a 40-character lowercase commit SHA" >&2; exit 1; }
+          printf 'Validated repository=%s role=%s tag=%s\n' "$REPO" "$PUSH_ROLE_ARN" "$SHA"
+      - name: Build backend image
+        env:
+          REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+          SHA: ${{ github.sha }}
+        run: docker build -t "$REPO:$SHA" backend
+      # SCRUM-269 (User Story 3): filters the reviewed source ignorefile down
+      # to only its non-expired entries. trivyignores requires a path
+      # RELATIVE TO THE REPOSITORY (verified against the scan action's own
+      # docs -- an absolute $RUNNER_TEMP path is not accepted), so the
+      # active file is written inside the checkout; it is gitignored
+      # (.trivyignore-active-*) and never committed.
+      - name: Prepare Trivy ignorefile
+        run: |
+          .github/scripts/security/filter-trivyignore.sh \
+            .github/security/backend-image.trivyignore.source \
+            .trivyignore-active-backend
+      # SCRUM-269 (User Story 1): report-only for now (exit-code: '0').
+      # backend-ci.yml has never scanned this image before, so its baseline
+      # is unknown -- an immediate hard fail risks blocking every backend PR
+      # on pre-existing, untriaged findings, the same failure mode the
+      # dependency-risk gate's New Code scoping avoids for a known backlog.
+      # Flipping to blocking (matching web-ci.yml's threshold) is a
+      # deliberate, separate follow-up (FR-001a) once this report-only
+      # period's findings have been triaged -- not part of this change.
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
+          trivyignores: .trivyignore-active-backend
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
@@ -63,10 +119,33 @@ jobs:
         run: |
           aws ecr get-login-password --region ap-southeast-1 \
             | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}"
-      - name: Build and push
+      # SCRUM-270 (User Story 1): captures the pushed image's content digest
+      # (the only truly immutable reference -- a tag can be overwritten in
+      # the registry, a digest cannot), validates its shape, and surfaces
+      # image_uri/image_tag/image_digest/run_id/run_url as both job outputs
+      # and job-summary evidence, mirroring web-ci.yml's `id: publish` step.
+      - name: Push backend image and record digest
+        id: publish
         env:
           REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
           SHA: ${{ github.sha }}
+        shell: bash
         run: |
-          docker build -t "$REPO:$SHA" backend
+          set -euo pipefail
           docker push "$REPO:$SHA"
+          image_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$REPO:$SHA" | sed 's/.*@//')"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "No valid pushed image digest was returned" >&2; exit 1; }
+          {
+            echo "image_uri=$REPO:$SHA"
+            echo "image_tag=$SHA"
+            echo "image_digest=$image_digest"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '## Backend image publication'
+            echo "- Image URI: \`$REPO:$SHA\`"
+            echo "- Commit tag: \`$SHA\`"
+            echo "- Content digest: \`$image_digest\`"
+            echo "- CI run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"

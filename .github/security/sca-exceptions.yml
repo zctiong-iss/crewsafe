@@ -1,0 +1,24 @@
+# Version-controlled exceptions for SonarCloud dependency-risk findings
+# (SCRUM-269, User Story 3, FR-007/FR-008).
+#
+# Reviewed via pull request like any other repo change. Applying an entry
+# here requires manually running .github/scripts/security/
+# apply-sca-exceptions.sh (an operator-run script -- see quickstart.md; it
+# is deliberately NOT wired into automatic CI, since it needs the
+# organization-admin SONAR_ADMIN_TOKEN, which specs/019's SEC-001 keeps out
+# of routine, automatically-triggered runs). The applied transition persists
+# in SonarCloud and is picked up by the next automatic `sast` run.
+#
+# An entry whose `expires` date has passed is dropped before any transition
+# call is made -- both entries below and any newly added must keep the
+# `key`, `reason`, and `expires` fields in that order per entry. See
+# specs/020-ci-vulnerability-scan-gates/contracts/exception-mechanisms.md.
+#
+# Format:
+# exceptions:
+#   - key: <dependency-risk key, from SonarCloud's Dependency Risks view or Web API>
+#     reason: <why this is an accepted, time-bounded risk>
+#     expires: <YYYY-MM-DD>
+#
+# No active entries yet -- nothing is currently excepted.
+exceptions:

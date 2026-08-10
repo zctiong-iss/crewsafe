@@ -95,6 +95,16 @@ jobs:
         env:
           IMAGE_URI: ${{ vars.CREWSAFE_WEB_ECR_REPOSITORY_URL }}:${{ github.sha }}
         run: docker build --file web/Dockerfile --tag "$IMAGE_URI" web
+      # SCRUM-269 (mirrored from backend-ci.yml): filters the reviewed source
+      # ignorefile down to only its non-expired entries. trivyignores
+      # requires a path RELATIVE TO THE REPOSITORY, so the active file is
+      # written inside the checkout; it is gitignored
+      # (.trivyignore-active-*) and never committed.
+      - name: Prepare Trivy ignorefile
+        run: |
+          .github/scripts/security/filter-trivyignore.sh \
+            .github/security/web-image.trivyignore.source \
+            .trivyignore-active-web
       - name: Scan web image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -103,6 +113,7 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: 1
+          trivyignores: .trivyignore-active-web
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:

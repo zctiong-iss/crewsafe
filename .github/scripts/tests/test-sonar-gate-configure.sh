@@ -132,6 +132,60 @@ assert_not_contains "$calls" "create_condition" "US1 AS4: drift is an update, no
 assert_contains "$(cat "$out")" "action=condition_updated target=new_security_rating" "US1 AS4: Run Report logs condition_updated"
 assert_count "0" "US1 AS4: update_condition call includes organization" "$(sonar_calls_missing_organization "$work/calls.log")"
 
+# --- SCRUM-269 (T017): fourth declared condition, new_sca_rating_vulnerability
+
+# SCA condition absent -> created with the declared GT 3 value.
+envs=(
+  SONAR_ADMIN_TOKEN=t GH_ADMIN_TOKEN=t
+  MOCK_GATE_LIST_RESPONSE_FILE="$FIXTURES/gate-list-found.json"
+  MOCK_GATE_SHOW_RESPONSE_FILE="$FIXTURES/gate-show-missing-sca-condition.json"
+  MOCK_CONDITION_CREATE_RESPONSE_FILE="$FIXTURES/condition-create-sca-response.json"
+  MOCK_GATE_BY_PROJECT_RESPONSE_FILE="$FIXTURES/gate-by-project-assigned.json"
+  MOCK_NEW_CODE_RESPONSE_FILE="$FIXTURES/new-code-periods-acceptable.json"
+  MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE="$FIXTURES/required-checks-complete.json"
+)
+assert_exit 0 "SCRUM-269: SCA condition absent -> run succeeds" run_configure "$out"
+calls="$(cat "$work/calls.log")"
+assert_contains "$calls" "metric=new_sca_rating_vulnerability&op=GT&error=3" "SCRUM-269: SCA condition created with declared GT 3"
+assert_contains "$(cat "$out")" "action=condition_added target=new_sca_rating_vulnerability" "SCRUM-269: Run Report logs condition_added for the SCA metric"
+
+# SCA condition already converged, alongside the other three -> full no-op.
+envs=(
+  SONAR_ADMIN_TOKEN=t GH_ADMIN_TOKEN=t
+  MOCK_GATE_LIST_RESPONSE_FILE="$FIXTURES/gate-list-found.json"
+  MOCK_GATE_SHOW_RESPONSE_FILE="$FIXTURES/gate-show-complete-with-sca.json"
+  MOCK_GATE_BY_PROJECT_RESPONSE_FILE="$FIXTURES/gate-by-project-assigned.json"
+  MOCK_NEW_CODE_RESPONSE_FILE="$FIXTURES/new-code-periods-acceptable.json"
+  MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE="$FIXTURES/required-checks-complete.json"
+)
+assert_exit 0 "SCRUM-269: SCA condition already converged -> run succeeds" run_configure "$out"
+assert_count "0" "SCRUM-269: all four conditions converged -> zero mutating calls" "$(mutating_call_count)"
+
+# SCA condition drifted (wrong threshold) -> overwritten to declared value,
+# mirroring US1 AS4's coverage for the classic three conditions (analysis
+# finding F1).
+envs=(
+  SONAR_ADMIN_TOKEN=t GH_ADMIN_TOKEN=t
+  MOCK_GATE_LIST_RESPONSE_FILE="$FIXTURES/gate-list-found.json"
+  MOCK_GATE_SHOW_RESPONSE_FILE="$FIXTURES/gate-show-drifted-sca-condition.json"
+  MOCK_CONDITION_UPDATE_RESPONSE_FILE="$FIXTURES/condition-update-sca-response.json"
+  MOCK_GATE_BY_PROJECT_RESPONSE_FILE="$FIXTURES/gate-by-project-assigned.json"
+  MOCK_NEW_CODE_RESPONSE_FILE="$FIXTURES/new-code-periods-acceptable.json"
+  MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE="$FIXTURES/required-checks-complete.json"
+)
+assert_exit 0 "SCRUM-269: SCA condition drifted -> run succeeds" run_configure "$out"
+calls="$(cat "$work/calls.log")"
+assert_contains "$calls" "url=https://sonarcloud.io/api/qualitygates/update_condition" "SCRUM-269: drifted SCA condition triggers update_condition"
+assert_contains "$calls" "metric=new_sca_rating_vulnerability&op=GT&error=3" "SCRUM-269: overwritten to declared GT 3 (not the drifted 1)"
+assert_not_contains "$calls" "create_condition" "SCRUM-269: drift is an update, not a duplicate create"
+assert_contains "$(cat "$out")" "action=condition_updated target=new_sca_rating_vulnerability" "SCRUM-269: Run Report logs condition_updated for the SCA metric"
+
+# Extended FR-010 guard (research.md R1): the payload must never target
+# Overall Code (sca_rating_vulnerability, missing the new_ prefix) or the
+# rejected severity-aggregate metric family.
+assert_not_contains "$calls" "metric=sca_rating_vulnerability&" "SCRUM-269 (guard): never targets Overall Code sca_rating_vulnerability"
+assert_not_contains "$calls" "new_sca_severity_vulnerability" "SCRUM-269 (guard): never sends the rejected severity-aggregate metric"
+
 # --- User Story 1 (T008): New Code definition validate-and-warn -------------
 
 envs=(
