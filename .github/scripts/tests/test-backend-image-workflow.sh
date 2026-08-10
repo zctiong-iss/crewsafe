@@ -96,6 +96,16 @@ workflow_policy_guard() {
   rg -q -F -- 'severity: HIGH,CRITICAL' "$path" || return 1
   rg -q -F -- "exit-code: '0'" "$path" || return 1
   rg -q -F -- 'docker push' "$path" || return 1
+  # SCRUM-270 US1: the pushed image's digest MUST be captured, validated,
+  # and surfaced as job outputs -- FR-001/FR-002.
+  rg -q -F -- 'RepoDigests' "$path" || return 1
+  rg -q -F -- 'GITHUB_OUTPUT' "$path" || return 1
+  rg -q -F -- "run_id=\$GITHUB_RUN_ID" "$path" || return 1
+  # SCRUM-270 US2: the job MUST validate its repository/role/tag contract
+  # before building -- FR-004.
+  rg -q -F -- 'crewsafe/backend' "$path" || return 1
+  rg -q -F -- 'crewsafe-shared-dev-ecr-push' "$path" || return 1
+  rg -q -F -- '^[0-9a-f]{40}$' "$path" || return 1
 
   if rg -n 'uses: .+@' "$path" | rg -v '@[0-9a-f]{40}$' >/dev/null; then
     return 1
@@ -105,10 +115,15 @@ workflow_policy_guard() {
   fi
   # The scan step must precede AWS-credentialed steps -- a blocking/failed
   # scan must never reach a credentialed step (SEC-001).
-  local scan_line creds_line
+  local scan_line creds_line validate_line
   scan_line="$(rg -n -m 1 -F -- 'aquasecurity/trivy-action' "$path" | cut -d: -f1)"
   creds_line="$(rg -n -m 1 -F -- 'configure-aws-credentials' "$path" | cut -d: -f1)"
   [[ -n "$scan_line" && -n "$creds_line" && "$scan_line" -lt "$creds_line" ]] || return 1
+  # SCRUM-270 (SEC-001): the contract-validation step must also precede any
+  # AWS-credentialed step -- a bad repository/role/tag must never reach a
+  # credentialed step either.
+  validate_line="$(rg -n -m 1 -F -- 'Validate backend publication contract' "$path" | cut -d: -f1)"
+  [[ -n "$validate_line" && -n "$creds_line" && "$validate_line" -lt "$creds_line" ]] || return 1
   return 0
 }
 
@@ -133,6 +148,23 @@ mutate_fixture() {
       ;;
     mutable-action)
       printf '\n      - uses: actions/checkout@main\n' >>"$path"
+      ;;
+    missing-digest-capture)
+      sed '/RepoDigests/d' "$path" >"$path.next"
+      mv "$path.next" "$path"
+      ;;
+    missing-run-id-output)
+      sed '/run_id=/d' "$path" >"$path.next"
+      mv "$path.next" "$path"
+      ;;
+    invalid-repository)
+      replace_fixture_text "$path" 'crewsafe/backend' 'crewsafe/unrelated'
+      ;;
+    invalid-role)
+      replace_fixture_text "$path" 'crewsafe-shared-dev-ecr-push' 'crewsafe-shared-dev-ecr-web-push'
+      ;;
+    malformed-tag)
+      replace_fixture_text "$path" '{40}' '{39}'
       ;;
     *)
       printf 'unknown fixture mutation: %s\n' "$mutation" >&2
@@ -186,8 +218,31 @@ not_contains_in_build_test "validation job has no OIDC permission" 'id-token: wr
 not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
 not_contains_in_build_test "validation job has no image push" 'docker push'
 
-assert_order "build -> scan -> AWS credentials -> login -> push" "$WORKFLOW" \
-  'docker build' 'aquasecurity/trivy-action' 'configure-aws-credentials' 'aws ecr get-login-password' 'docker push'
+assert_order "build -> scan -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
+  'docker build' 'aquasecurity/trivy-action' 'configure-aws-credentials' 'aws ecr get-login-password' 'docker push' 'RepoDigests'
+
+# --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
+contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
+contains_in "publication validates digest shape" "$WORKFLOW" 'sha256:[0-9a-f]{64}'
+contains_in "publication writes job outputs" "$WORKFLOW" 'GITHUB_OUTPUT'
+contains_in "publication writes job summary" "$WORKFLOW" 'GITHUB_STEP_SUMMARY'
+contains_in "publication output declares image_uri" "$WORKFLOW" "image_uri=\$REPO:\$SHA"
+contains_in "publication output declares image_tag" "$WORKFLOW" "image_tag=\$SHA"
+contains_in "publication output declares image_digest" "$WORKFLOW" "image_digest=\$image_digest"
+contains_in "publication output declares run_id" "$WORKFLOW" "run_id=\$GITHUB_RUN_ID"
+contains_in "publication output declares run_url" "$WORKFLOW" "run_url=\$GITHUB_SERVER_URL"
+contains_in "publication job exposes image_uri output" "$WORKFLOW" "image_uri: \${{ steps.publish.outputs.image_uri }}"
+contains_in "publication job exposes image_tag output" "$WORKFLOW" "image_tag: \${{ steps.publish.outputs.image_tag }}"
+contains_in "publication job exposes image_digest output" "$WORKFLOW" "image_digest: \${{ steps.publish.outputs.image_digest }}"
+contains_in "publication job exposes run_id output" "$WORKFLOW" "run_id: \${{ steps.publish.outputs.run_id }}"
+contains_in "publication job exposes run_url output" "$WORKFLOW" "run_url: \${{ steps.publish.outputs.run_url }}"
+
+# --- SCRUM-270 US2 (T007): contract validation before build ---------------
+contains_in "publication validates the repository pattern" "$WORKFLOW" 'crewsafe/backend'
+contains_in "publication validates the push role pattern" "$WORKFLOW" 'crewsafe-shared-dev-ecr-push'
+contains_in "publication validates the commit SHA shape" "$WORKFLOW" '^[0-9a-f]{40}$'
+assert_order "contract validation precedes build" "$WORKFLOW" \
+  'Validate backend publication contract' 'docker build'
 
 # --- SCRUM-269 US3 (T034): ignorefile prep precedes the scan step ---------
 contains_in "ignorefile prep step references the source exceptions file" "$WORKFLOW" \
@@ -211,6 +266,15 @@ assert_rejected_fixture "negative missing scan step fixture is rejected" remove-
 assert_rejected_fixture "negative continue-on-error fixture is rejected" continue-on-error
 assert_rejected_fixture "negative static AWS key fixture is rejected" static-aws-key
 assert_rejected_fixture "negative mutable action fixture is rejected" mutable-action
+
+# --- SCRUM-270 US1 (T003): digest/output negative/mutation tests ----------
+assert_rejected_fixture "negative missing digest capture fixture is rejected" missing-digest-capture
+assert_rejected_fixture "negative missing run_id output fixture is rejected" missing-run-id-output
+
+# --- SCRUM-270 US2 (T008): contract-validation negative/mutation tests ----
+assert_rejected_fixture "negative invalid repository fixture is rejected" invalid-repository
+assert_rejected_fixture "negative invalid role fixture is rejected" invalid-role
+assert_rejected_fixture "negative malformed tag fixture is rejected" malformed-tag
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
