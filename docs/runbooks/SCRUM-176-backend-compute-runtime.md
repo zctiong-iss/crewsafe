@@ -521,6 +521,67 @@ the previous task set keeps serving throughout.
 **Always name a commit-SHA tag, never `latest`.** A mutable tag makes a rollback ambiguous, and
 re-pushing the same tag does not by itself cause a task to be replaced.
 
+### 8.1 SCRUM-242 — deployed web CORS origin rollout
+
+This procedure changes the existing non-secret SSM parameter
+`/crewsafe/shared-dev/cors/allowed-origins` to permit only
+`https://d3b75ru76gta2n.cloudfront.net`. SCRUM-271 owns the release path: its existing
+`Backend CI` workflow publishes the approved image and its `deploy-staging` job invokes the
+reviewed deployment script. **Do not use either direct AWS command shown above for this rollout.**
+
+**Prerequisite evidence:** SCRUM-271 is Done in Jira. Its reviewed release mechanism landed on
+`main` in commit `33f5ba9` (`Backend CI` plus
+`.github/scripts/deploy/deploy-backend-staging.sh`) and is included in this SCRUM-242 branch.
+
+| Evidence state | Required record |
+| --- | --- |
+| Pending | Approved SCRUM-242 main commit, Terraform plan/apply run identifiers, and the exact web origin. No live CORS claim. |
+| Deployed | Post-apply `Backend CI` run identifier, approved commit SHA, image digest, successful deployment job, preflight/API/health results, p95 summaries, and final no-change plan. |
+
+1. Merge the approved SCRUM-242 change to `main`. Record the reviewed merge commit SHA. A
+   push-triggered backend run that occurs before the CORS parameter apply is **not** CORS rollout
+   evidence.
+2. From `main`, dispatch and review `Terraform Plan` for `compute-shared-dev`, then dispatch
+   `Terraform Apply` for that exact reviewed plan. Use the workflow's current required
+   `plan_run_id`, `plan_run_attempt`, and typed confirmation
+   `APPLY <alias> compute-shared-dev`. Confirm the plan changes only the CORS parameter value.
+   Terraform remains CI-only; do not run it locally or edit the parameter directly.
+3. After the apply succeeds, confirm `main` still resolves to the reviewed merge commit, then
+   manually dispatch the existing workflow with `publish=true`:
+
+   ```bash
+   gh workflow run "Backend CI" --ref main -f publish=true
+   ```
+
+   Record the resulting workflow run ID, its resolved commit SHA, image digest, and successful
+   `Deploy staging backend` job. If the resolved SHA is not the approved merge commit, stop and
+   dispatch only after reconciling the approved release reference.
+4. With `API_BASE` set to the deployed backend URL and `WEB_ORIGIN` set to
+   `https://d3b75ru76gta2n.cloudfront.net`, record an allowed preflight, a denied preflight, and
+   health evidence. Do not enable shell tracing or print `ACCESS_TOKEN`.
+
+   ```bash
+   curl -sS -D - -o /dev/null -X OPTIONS "$API_BASE/api/v1/me" \
+     -H "Origin: $WEB_ORIGIN" \
+     -H 'Access-Control-Request-Method: GET' \
+     -H 'Access-Control-Request-Headers: Authorization'
+
+   curl -sS -D - -o /dev/null -X OPTIONS "$API_BASE/api/v1/me" \
+     -H 'Origin: https://untrusted.example' \
+     -H 'Access-Control-Request-Method: GET'
+
+   curl -fsS "$API_BASE/actuator/health"
+   ```
+
+5. Measure at least 20 successful end-to-end allowed preflights and 20 authenticated
+   `/api/v1/me` reads from the staging verification environment. Record redacted timing values
+   and the nearest-rank p95 for each set; both must be below one second. Never record an
+   Authorization value, token, Terraform state, or saved plan.
+6. Dispatch a final no-change `Terraform Plan` for `compute-shared-dev`. If configuration,
+   deployment, health, preflight, or p95 verification fails, stop. Prepare a reviewed corrective
+   change and repeat the CI apply followed by the existing `Backend CI` `publish=true` dispatch;
+   never recover with a manual SSM edit, task-definition registration, or `aws ecs update-service`.
+
 ### Rollback depth is bounded
 
 SCRUM-177's lifecycle policy keeps the newest **twenty** images with `tagStatus: any`. A rollback
