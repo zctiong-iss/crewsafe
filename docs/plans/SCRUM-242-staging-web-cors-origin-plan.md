@@ -10,7 +10,8 @@ https://d3b75ru76gta2n.cloudfront.net
 
 ## Scope and safeguards
 
-- Change only `infra/terraform/compute`'s existing non-secret CORS SSM parameter default.
+- Change `infra/terraform/compute`'s existing non-secret CORS SSM parameter default and correct
+  the existing SCRUM-271 Backend CI replay path for that task-start configuration.
 - Preserve the existing wildcard rejection and add exact-origin/no-localhost Terraform assertions.
 - Add Spring MockMvc positive and negative preflight coverage for `/api/v1/me`.
 - Keep server-side Cognito authentication and site/object authorization unchanged; CORS is a
@@ -24,8 +25,11 @@ https://d3b75ru76gta2n.cloudfront.net
    `deploy-staging` job are the sole release mechanism.
 2. Merge the approved SCRUM-242 change and run/review the CI Terraform plan and apply for
    `compute-shared-dev`.
-3. After the apply, manually dispatch existing `Backend CI` with `publish=true` from the exact
-   approved `main` commit. A pre-apply push-triggered run is not rollout evidence.
+3. After the apply, manually dispatch existing `Backend CI` from `main` with `redeploy=true` and
+   `redeploy_image_tag` set to the exact approved backend release commit. CI proves the full SHA is
+   an ancestor of `main`, resolves its pre-published immutable ECR image, and invokes the existing
+   deployment script without rebuilding or pushing. A pre-apply push-triggered run is not rollout
+   evidence.
 4. Record the CI run IDs, commit, image digest, allowed and denied preflights, authenticated API
    check, health check, end-to-end p95 timing summaries, and final no-change plan in
    `docs/runbooks/SCRUM-176-backend-compute-runtime.md`.
@@ -35,6 +39,9 @@ https://d3b75ru76gta2n.cloudfront.net
 - `cd backend && ./mvnw verify`
 - Compute source, CI, and staging-deployment workflow guards
 - Terraform fmt/validate/test and plan/apply evidence in CI only
+- Backend CI's deploy-only guard validates main-only approved-ancestor SHA and digest resolution,
+  no arbitrary repository/image URI/digest input, mutually exclusive publish/redeploy modes, and
+  no Docker build/push in redeploy mode
 - At least 20 redacted end-to-end allowed-preflight samples and 20 authenticated API-read samples;
   each p95 must be below one second.
 
