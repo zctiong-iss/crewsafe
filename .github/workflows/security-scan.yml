@@ -366,6 +366,12 @@ jobs:
       - name: Backend image workflow self-tests
         run: .github/scripts/tests/test-backend-image-workflow.sh
 
+      # SCRUM-270: extends the same job with the new digest-capture/
+      # contract-validation assertions (in the file above) and this new
+      # runbook content guard.
+      - name: Backend image promotion/rollback runbook self-tests
+        run: .github/scripts/tests/test-image-promotion-runbook.sh
+
       - name: SCA-active verifier self-tests
         run: .github/scripts/tests/test-check-sca-active.sh
 
