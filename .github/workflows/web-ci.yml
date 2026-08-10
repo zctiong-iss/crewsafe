@@ -29,6 +29,17 @@ jobs:
   build-test:
     name: Build and Test
     runs-on: ubuntu-latest
+    env:
+      WEB_BASE_URL: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      # Vite bakes these public browser settings into the static bundle. Keep
+      # this contract aligned with web-sync.yml: authConfig.ts throws before
+      # React renders if any required value is missing.
+      VITE_COGNITO_AUTHORITY: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.issuer_uri }}
+      VITE_COGNITO_CLIENT_ID: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.web_client_id }}
+      VITE_COGNITO_HOSTED_UI_DOMAIN: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.hosted_ui_url }}
+      VITE_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/callback
+      VITE_POST_LOGOUT_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/
+      VITE_API_BASE_URL: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
     defaults:
       run:
         working-directory: web
@@ -37,6 +48,17 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Validate web build configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$WEB_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_WEB_BASE_URL" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_AUTHORITY" ]] || { echo "Missing issuer_uri in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_CLIENT_ID" ]] || { echo "Missing web_client_id in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_HOSTED_UI_DOMAIN" ]] || { echo "Missing hosted_ui_url in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ "$VITE_REDIRECT_URI" == "$WEB_BASE_URL/callback" ]] || { echo "Unexpected VITE_REDIRECT_URI" >&2; exit 1; }
+          [[ "$VITE_POST_LOGOUT_REDIRECT_URI" == "$WEB_BASE_URL/" ]] || { echo "Unexpected VITE_POST_LOGOUT_REDIRECT_URI" >&2; exit 1; }
+          [[ "$VITE_API_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_BACKEND_BASE_URL" >&2; exit 1; }
       - name: Set up Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -72,17 +94,31 @@ jobs:
       WEB_BUCKET: ${{ vars.CREWSAFE_WEB_BUCKET_NAME }}
       WEB_SYNC_ROLE_ARN: ${{ vars.CREWSAFE_WEB_SYNC_ROLE_ARN }}
       WEB_DISTRIBUTION_ID: ${{ vars.CREWSAFE_WEB_DISTRIBUTION_ID }}
+      WEB_BASE_URL: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      VITE_COGNITO_AUTHORITY: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.issuer_uri }}
+      VITE_COGNITO_CLIENT_ID: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.web_client_id }}
+      VITE_COGNITO_HOSTED_UI_DOMAIN: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.hosted_ui_url }}
+      VITE_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/callback
+      VITE_POST_LOGOUT_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/
+      VITE_API_BASE_URL: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
     steps:
       - name: Check out exact revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: ${{ github.sha }}
-      - name: Validate web deployment contract
+      - name: Validate web build configuration
         shell: bash
         run: |
           set -euo pipefail
           [[ -n "$WEB_BUCKET" && -n "$WEB_DISTRIBUTION_ID" ]] || exit 1
           [[ "$WEB_SYNC_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-web-sync$ ]] || exit 1
+          [[ "$WEB_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_WEB_BASE_URL" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_AUTHORITY" ]] || { echo "Missing issuer_uri in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_CLIENT_ID" ]] || { echo "Missing web_client_id in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_HOSTED_UI_DOMAIN" ]] || { echo "Missing hosted_ui_url in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ "$VITE_REDIRECT_URI" == "$WEB_BASE_URL/callback" ]] || { echo "Unexpected VITE_REDIRECT_URI" >&2; exit 1; }
+          [[ "$VITE_POST_LOGOUT_REDIRECT_URI" == "$WEB_BASE_URL/" ]] || { echo "Unexpected VITE_POST_LOGOUT_REDIRECT_URI" >&2; exit 1; }
+          [[ "$VITE_API_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_BACKEND_BASE_URL" >&2; exit 1; }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22.x"
