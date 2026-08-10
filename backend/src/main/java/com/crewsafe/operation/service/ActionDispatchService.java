@@ -9,6 +9,7 @@ import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.ApprovalRepository;
+import com.crewsafe.wellbeing.service.WellbeingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -38,6 +39,8 @@ public class ActionDispatchService {
     private final ApprovalRepository approvalRepository;
     private final AppUserRepository appUserRepository;
     private final AuditService auditService;
+    /** Derives a wellbeing rest log from a completed rest dispatch — see {@code recordRestIfThisWasOne}. */
+    private final WellbeingService wellbeingService;
 
     /**
      * {@code REQUIRES_NEW} rather than the default propagation: SCRUM-193 calls this from
@@ -130,7 +133,38 @@ public class ActionDispatchService {
                 AUDIT_TARGET_TYPE, saved.getId(), "Action completed: " + dispatchId);
         log.info("Action dispatch completed: {}", dispatchId);
 
+        recordRestIfThisWasOne(saved);
+
         return saved;
+    }
+
+    /**
+     * A completed rest dispatch is a rest that actually happened, so it is logged as one (US-11).
+     *
+     * <p>Without this, "has this crew rested?" would have two answers in two places: self-logged
+     * rests in the wellbeing log, instructed ones only in this table. A supervisor should not have
+     * to know which feature recorded a rest in order to see that it happened.
+     *
+     * <p>Keyed off the action code rather than the instruction text, for the reason the whole
+     * catalogue exists: the text is server-authored English and matching on it would work here
+     * and nowhere else.
+     *
+     * <p>Failures are logged and swallowed. The worker has completed their rest and the dispatch
+     * says so — losing the derived wellbeing row is a reporting gap, and unwinding an
+     * already-committed completion to protect a summary would be the worse outcome.
+     */
+    private void recordRestIfThisWasOne(ActionDispatch dispatch) {
+        String actionCode = dispatch.getActionCode();
+        if (actionCode == null || !actionCode.startsWith("REST_")) {
+            return;
+        }
+
+        try {
+            UUID shiftId = dispatch.getApproval().getRecommendation().getShiftId();
+            wellbeingService.recordInstructedRest(shiftId, dispatch.getWorker().getId(), dispatch.getId());
+        } catch (RuntimeException e) {
+            log.warn("Could not record an instructed rest for dispatch {}: {}", dispatch.getId(), e.toString());
+        }
     }
 
     public List<ActionDispatch> getDispatchesForApproval(UUID approvalId) {

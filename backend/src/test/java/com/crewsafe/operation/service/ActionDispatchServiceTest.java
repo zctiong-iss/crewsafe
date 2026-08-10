@@ -11,6 +11,7 @@ import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.ApprovalRepository;
+import com.crewsafe.wellbeing.service.WellbeingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +48,11 @@ class ActionDispatchServiceTest {
     @Mock
     private AuditService auditService;
 
+    /* US-11: a completed rest dispatch is also logged as a rest. Mocked rather than asserted on
+       here — the derivation itself is covered where it belongs, in WellbeingControllerTest. */
+    @Mock
+    private WellbeingService wellbeingService;
+
     private ActionDispatchService service;
     private UUID approvalId;
     private UUID workerId;
@@ -58,7 +64,8 @@ class ActionDispatchServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ActionDispatchService(actionDispatchRepository, approvalRepository, appUserRepository, auditService);
+        service = new ActionDispatchService(actionDispatchRepository, approvalRepository, appUserRepository,
+                auditService, wellbeingService);
         approvalId = UUID.randomUUID();
         workerId = UUID.randomUUID();
         supervisorId = UUID.randomUUID();
