@@ -1,0 +1,128 @@
+name: Web Sync
+
+# SCRUM-298 FR-017 (Q2): the initial (and, until SCRUM-271 automates ongoing
+# deploys, every) web deployment is a manually-dispatched workflow_dispatch
+# run assuming the sync role via OIDC — never an operator's local AWS CLI
+# session. workflow_dispatch ONLY: this must never run automatically on push
+# or pull_request, unlike web-ci.yml's build-test job.
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Exact 40-character commit SHA on main to build and sync"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Build and sync to S3
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      WEB_BUCKET: ${{ vars.CREWSAFE_WEB_BUCKET_NAME }}
+      WEB_SYNC_ROLE_ARN: ${{ vars.CREWSAFE_WEB_SYNC_ROLE_ARN }}
+      WEB_DISTRIBUTION_ID: ${{ vars.CREWSAFE_WEB_DISTRIBUTION_ID }}
+      COMMIT_SHA: ${{ inputs.commit_sha }}
+    steps:
+      - name: Validate sync contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "commit_sha must be a 40-character lowercase hex commit SHA" >&2; exit 1; }
+          [[ -n "$WEB_BUCKET" ]] || { echo "Missing CREWSAFE_WEB_BUCKET_NAME" >&2; exit 1; }
+          [[ -n "$WEB_SYNC_ROLE_ARN" ]] || { echo "Missing CREWSAFE_WEB_SYNC_ROLE_ARN" >&2; exit 1; }
+          [[ "$WEB_SYNC_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-web-sync$ ]] || { echo "Unexpected web sync role" >&2; exit 1; }
+          [[ -n "$WEB_DISTRIBUTION_ID" ]] || { echo "Missing CREWSAFE_WEB_DISTRIBUTION_ID" >&2; exit 1; }
+          printf 'Validated bucket=%s role=%s distribution=%s commit=%s\n' \
+            "$WEB_BUCKET" "$WEB_SYNC_ROLE_ARN" "$WEB_DISTRIBUTION_ID" "$COMMIT_SHA"
+
+      # Same build steps web-ci.yml's build-test job already runs — not
+      # skipped or shortcut. That job is the required gate; this workflow
+      # consumes its own fresh build of the exact same commit rather than
+      # trusting an artifact from a separate, possibly-stale run.
+      - name: Check out exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+
+      - name: Type-check
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: web
+        run: npm test
+
+      - name: Production build
+        working-directory: web
+        run: npm run build
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ env.WEB_SYNC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: CrewSafeWebSync-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      # --delete removes objects no longer present in this build, so
+      # unreferenced hashed assets from prior builds do not accumulate in the
+      # bucket forever (research.md R-007).
+      - name: Sync build to S3
+        working-directory: web
+        run: aws s3 sync dist "s3://${WEB_BUCKET}" --delete
+
+      # Issue and return — this workflow does not poll for completion. The
+      # sync role's own permissions (research.md R-006) grant only
+      # CreateInvalidation, deliberately no wider read/status action on the
+      # distribution.
+      - name: Invalidate CloudFront distribution
+        id: invalidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "$WEB_DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)"
+          [[ -n "$invalidation_id" ]] || { echo "No invalidation id returned" >&2; exit 1; }
+          echo "invalidation_id=$invalidation_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record sync evidence
+        shell: bash
+        env:
+          INVALIDATION_ID: ${{ steps.invalidate.outputs.invalidation_id }}
+        run: |
+          {
+            echo '## Web sync'
+            echo "- Commit SHA: \`$COMMIT_SHA\`"
+            echo "- Bucket: \`$WEB_BUCKET\`"
+            echo "- Invalidation ID: \`$INVALIDATION_ID\`"
+            echo "- Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_STEP_SUMMARY"

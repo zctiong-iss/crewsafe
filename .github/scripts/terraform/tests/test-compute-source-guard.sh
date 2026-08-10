@@ -211,9 +211,27 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_ecr_' \
 # FR-053. The one exception is the single inbound rule on the network component's
 # application security group, which SCRUM-173 delegated here in that resource's own
 # description. Everything else upstream stays untouched.
-forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gateway|route_table|db_instance|secretsmanager_secret|iam_role)"' \
+forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gateway|route_table|db_instance|secretsmanager_secret)"' \
   'a resource owned by an upstream component' \
   'The network, secrets, and database components own these (FR-053). Changes to them are changes to those components.'
+
+# FR-015 (SCRUM-298). aws_iam_role gets its own check, separate from the
+# forbid() list above: this component now legitimately creates exactly ONE —
+# the web sync role, a new least-privilege identity, not a resource belonging
+# to secrets-shared-dev. grep -E has no negative lookahead, so the exception
+# is expressed as a loop rather than folded into the pattern above.
+while IFS= read -r iam_role_line; do
+  case "$iam_role_line" in
+  *'"web_sync"'*) ;;
+  *)
+    printf 'FAIL: %s declares an aws_iam_role resource outside the SCRUM-298 web_sync exception.\n  %s\n' \
+      "$component_dir" \
+      'The network, secrets, and database components own every other IAM role (FR-053).' >&2
+    printf '%s\n' "$iam_role_line" >&2
+    exit 1
+    ;;
+  esac
+done < <(grep -En '(^|[^a-z_])resource[[:space:]]+"aws_iam_role"[[:space:]]+"' < <(scan))
 
 # Terraform reads the entries behind the AWS-managed CloudFront prefix list while
 # refreshing the data source. Both workflows refresh it, so both roles need this
@@ -259,4 +277,71 @@ jq -e '
 ' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
   fail "$component_dir/iam/apply-role-policy.json must allow ec2:GetSecurityGroupsForVpc so ELBv2 can create the public load balancer"
 
-printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 32
+# --- SCRUM-298: the web bucket and distribution must stay private and additive --
+
+# FR-002. Every public-access-block flag must stay true. A single `false` here
+# reopens direct, unauthenticated access to the bucket's objects.
+forbid '(block_public_acls|block_public_policy|ignore_public_acls|restrict_public_buckets)[[:space:]]*=[[:space:]]*false' \
+  'a disabled S3 public-access-block flag' \
+  'All four flags must stay true (FR-002). A single false flag reopens direct public access to the web bucket.'
+
+# FR-002. BucketOwnerEnforced disables ACLs entirely; an ACL resource or a
+# public-read ACL argument would reintroduce a second, ACL-based access path.
+forbid '(^|[^a-z_])resource[[:space:]]+"aws_s3_bucket_acl"|acl[[:space:]]*=[[:space:]]*"public' \
+  'an S3 bucket ACL' \
+  'Object ownership is BucketOwnerEnforced, which disables ACLs entirely (FR-002). An ACL resource or a public-read ACL argument reopens the access path OAC exists to close.'
+
+# FR-003. Static website hosting serves over plain HTTP with no built-in
+# restriction to a specific CloudFront distribution; OAC is the only access path.
+forbid '(^|[^a-z_])resource[[:space:]]+"aws_s3_bucket_website_configuration"' \
+  'an S3 static-website-hosting configuration' \
+  'OAC is the only access path this bucket may have (FR-003, FR-004). Website hosting mode has no built-in restriction to a specific distribution.'
+
+# FR-005. The bucket policy must name this exact distribution, never a wildcard
+# principal or a wildcard SourceArn condition.
+forbid 'Principal[[:space:]]*=[[:space:]]*"\*"|SourceArn"?[[:space:]]*=[[:space:]]*"\*"' \
+  'a wildcard principal or SourceArn in a bucket policy' \
+  'The bucket policy must grant read access only to this exact distribution ARN (FR-005), never a wildcard principal or condition.'
+
+# FR-017. The sync role's trust condition must name the exact main-branch OIDC
+# subject via the validated variable, never a literal wildcarded value.
+forbid ':sub"[[:space:]]*=[[:space:]]*"[^"]*\*' \
+  'a wildcarded OIDC subject condition' \
+  'The sync role trust policy must condition on the exact var.github_oidc_main_subject value (FR-017), never a literal wildcard.'
+
+# research.md R-006. A wildcard action anywhere is the opposite of the
+# least-privilege grant the sync role, the plan policy, and the apply policy all
+# require.
+forbid '"(s3|cloudfront|iam):\*"' \
+  'a wildcard IAM action' \
+  'Every grant this feature adds is least-privilege and enumerated (FR-015, research.md R-006). A wildcard action on any service is not.'
+
+# FR-014, Simplicity Budget. This feature must add nothing that routes traffic
+# through the backend's existing shared ALB — that is Shape B, explicitly
+# superseded. A listener rule is the concrete mechanism that shape would have used.
+forbid '(^|[^a-z_])resource[[:space:]]+"aws_lb_listener_rule"' \
+  'an ALB listener rule' \
+  'Shape C (S3 + CloudFront) touches no resource the backend already owns (FR-014). A listener rule belongs to the extend-the-shared-ALB shape, explicitly superseded during /speckit-specify.'
+
+# User Story 2 (SCRUM-298): there is no task, no target group, and no circuit
+# breaker for a static origin, and that absence is deliberate — see the spec's
+# own User Story 2. `terraform test` cannot express "this resource type has no
+# second instance" (an undeclared reference is a hard error, not a graceful
+# absence check), so this is a count invariant, mirroring the
+# load_balancer_blocks check above: each of these resource types must stay at
+# exactly the ONE pre-existing backend instance. A second instance is the
+# concrete shape a health-check-driven target group for web would take.
+for resource_type in aws_lb_target_group aws_ecs_service aws_ecs_task_definition; do
+  count="$(grep -Ec "resource[[:space:]]+\"${resource_type}\"" < <(scan))"
+  [[ "$count" -eq 1 ]] ||
+    fail "$component_dir must declare exactly one $resource_type (the existing backend's) — found $count. A second instance would be compute-shaped health machinery this component's spec explicitly says does not belong here (User Story 2)."
+done
+
+# No separate health_check-block check is needed: the backend's EXISTING
+# target group already has one (legitimate, SCRUM-176), so a blanket forbid on
+# the construct itself would false-positive against already-applied code. The
+# aws_lb_target_group count check above already fully covers this — no new
+# target group means no new health_check block to attach one to, for web or
+# anything else.
+
+printf 'ok: %s final-cleanup source guard passed (%d checks)\n' "$component_dir" 44
