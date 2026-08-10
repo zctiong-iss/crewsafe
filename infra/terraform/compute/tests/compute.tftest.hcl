@@ -607,6 +607,16 @@ run "cross_origin_entry" {
     error_message = "The origin list must be explicit, never a wildcard (FR-039, SC-019)."
   }
 
+  assert {
+    condition     = aws_ssm_parameter.cors_allowed_origins.value == "https://d3b75ru76gta2n.cloudfront.net"
+    error_message = "Staging must permit only the deployed web origin (SCRUM-242)."
+  }
+
+  assert {
+    condition     = !strcontains(aws_ssm_parameter.cors_allowed_origins.value, "http://localhost:5173") && !strcontains(aws_ssm_parameter.cors_allowed_origins.value, "http://localhost:8081")
+    error_message = "Staging must not retain localhost browser origins after SCRUM-242."
+  }
+
   # The synthetic-user mappings. This entry exists because the application requires the
   # property to be PRESENT: DemoDataSeeder runs under the staging profile and throws on a
   # null value rather than seeding nothing, 60 seconds into startup and after the port is

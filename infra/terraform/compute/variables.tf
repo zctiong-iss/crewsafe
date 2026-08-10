@@ -167,13 +167,11 @@ variable "cors_allowed_origins" {
 
     These are CALLER origins, not this service's own URL — a same-origin request is not
     subject to cross-origin checks, so naming the staging backend here would permit nothing.
-    The default is the application's own local development origins, which keeps the staging
-    API callable from a developer's browser while no browser client is deployed.
-
-    Whichever issue deploys the web client replaces this with its real origin.
+    Staging permits only the stable deployed web origin. Local development origins are not
+    staging callers and must be supplied only in a local, non-staging configuration.
   EOT
   type        = string
-  default     = "http://localhost:5173,http://localhost:8081"
+  default     = "https://d3b75ru76gta2n.cloudfront.net"
   validation {
     condition     = length(trimspace(var.cors_allowed_origins)) > 0 && !can(regex("\\*", var.cors_allowed_origins))
     error_message = "cors_allowed_origins must be a non-empty explicit list of origins and must not contain a wildcard."
