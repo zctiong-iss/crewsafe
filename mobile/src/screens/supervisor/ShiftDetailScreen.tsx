@@ -370,6 +370,23 @@ export default function ShiftDetailScreen() {
           </AppText>
         ) : null}
 
+        {/*
+          The in-context way into US-09: a supervisor looking at a shift can reach the plans
+          drafted for it without hunting for the tab.
+
+          It opens the Plans tab rather than a shift-filtered list. The recommendation endpoint is
+          shift-scoped, so filtering is possible — but the list is short, it is already grouped by
+          shift window, and a second entry point with its own filtered state is more moving parts
+          than the ticket needs. Worth revisiting if a site ever runs enough concurrent shifts for
+          the unfiltered list to be hard to scan.
+        */}
+        <AppButton
+          title={t("shifts.viewRecommendations")}
+          variant="secondary"
+          onPress={() => navigation.getParent()?.navigate("RecommendationsTab")}
+          style={styles.block}
+        />
+
         <AppButton
           title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}
           variant="danger"

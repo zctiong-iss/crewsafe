@@ -197,3 +197,90 @@ export interface MyShift {
   status: ShiftStatus;
   assignment: MyShiftAssignment;
 }
+
+/**
+ * The action codes a mitigation may carry — mirrors `mitigation/domain/ActionCatalogue.java`
+ * (SCRUM-119).
+ *
+ * Typed as a union rather than `string` so that adding a code server-side without adding the
+ * matching `actions.*` translation is a compile error here, not a worker reading English they
+ * may not understand. `ActionCatalogueTest` enforces the same thing from the other side.
+ */
+export type ActionCode =
+  | "STOP_WORK"
+  | "RESUME_WORK"
+  | "REST_10_MIN_HOURLY"
+  | "REST_15_MIN_HOURLY"
+  | "REST_10_MIN"
+  | "REST_15_MIN"
+  | "HYDRATE_HOURLY"
+  | "HYDRATE_REGULARLY"
+  | "HYDRATE"
+  | "SHADE_RECOVERY"
+  | "SEEK_SHADE"
+  | "RESCHEDULE_HEAVY_WORK"
+  | "ROTATE_TO_LIGHT_DUTY"
+  | "CLOSE_MONITORING";
+
+/** The topic a mitigation is grouped under. Mirrors `ActionCatalogue`'s category values. */
+export type MitigationCategory =
+  | "STOP_WORK"
+  | "REST"
+  | "HYDRATION"
+  | "SHADE_COOLING"
+  | "WORK_SCHEDULING"
+  | "MONITORING";
+
+/**
+ * Mirrors `mitigation/domain/MitigationSuggestion.java`.
+ *
+ * `actionCode` and `category` are nullable because plans drafted before SCRUM-119 do not carry
+ * them. Render from `actionCode` whenever it is present — `action` is server-authored English
+ * that this app cannot translate, and parsing it for numbers works in English and fails in the
+ * other six locales.
+ */
+export interface Mitigation {
+  priority: string | null;
+  action: string;
+  rationale: string | null;
+  estimatedImpact: string | null;
+  actionCode: ActionCode | null;
+  category: MitigationCategory | null;
+}
+
+/** Mirrors `Approval.ApprovalDecision`. */
+export type ApprovalDecision = "APPROVED" | "REJECTED" | "EDITED";
+
+/** Mirrors `RecommendationController.ApprovalResponse` (SCRUM-119). */
+export interface Approval {
+  id: string;
+  approverId: string;
+  decision: ApprovalDecision;
+  reason: string | null;
+  /** Present only for an EDITED decision — what the supervisor actually approved. */
+  editedMitigations: Mitigation[] | null;
+  decidedAt: string;
+}
+
+/** Mirrors `Recommendation.RecommendationStatus`. Server-controlled. */
+export type RecommendationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+
+/**
+ * Mirrors `RecommendationController.RecommendationResponse` (SCRUM-119).
+ *
+ * `mitigations` is always the agent's original draft — it is never overwritten by a decision,
+ * so "what did the supervisor change" stays renderable as a diff against
+ * `approval.editedMitigations`.
+ */
+export interface Recommendation {
+  id: string;
+  shiftId: string;
+  /** Which policy version produced this. Shown so the supervisor can judge it (US-08/FR-16). */
+  policyVersion: string | null;
+  status: RecommendationStatus;
+  rationale: string | null;
+  createdAt: string;
+  mitigations: Mitigation[];
+  /** Null while the recommendation is still awaiting a decision. */
+  approval: Approval | null;
+}
