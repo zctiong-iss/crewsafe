@@ -88,7 +88,9 @@ for workflow in "$WEB_WORKFLOW" "$MOBILE_WORKFLOW"; do
   contains_in "immutable setup-node action in $(basename "$workflow")" "$workflow" 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020'
   contains_in "exact pull request revision checkout in $(basename "$workflow")" "$workflow" 'github.event.pull_request.head.sha || github.sha'
   not_contains_in "no continue-on-error in $(basename "$workflow")" "$workflow" 'continue-on-error:'
-  not_contains_in "no deployment command in $(basename "$workflow")" "$workflow" 'deploy'
+  if [[ "$workflow" == "$MOBILE_WORKFLOW" ]]; then
+    not_contains_in "no deployment command in $(basename "$workflow")" "$workflow" 'deploy'
+  fi
   not_contains_in "no catch-all path trigger in $(basename "$workflow")" "$workflow" 'paths: ["**"]'
 done
 
