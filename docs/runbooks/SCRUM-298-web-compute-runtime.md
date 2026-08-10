@@ -176,6 +176,21 @@ curl -sS -o /dev/null -w '%{http_code}\n' "http://${WEB_BASE#https://}/"        
 bucket and a missing single asset look identical from outside, because both hit the SPA-fallback
 error-response mapping. §7's recorded commit SHA is what actually proves the deployed content.
 
+### Recorded (2026-08-10, post initial sync — §7)
+
+`WEB_BASE=https://d3b75ru76gta2n.cloudfront.net`. Full verification re-run **after** the initial
+sync (so these results confirm real content, not just the empty-bucket fallback):
+
+| Check | Requirement | Result |
+| --- | --- | --- |
+| `GET /` | Real SPA shell, not the empty-bucket fallback | **200** — actual `index.html` referencing hashed `assets/index-B_LVC13p.js`/`.css`, `x-cache: Miss from cloudfront`, served from PoP `SIN2-P1` |
+| `GET http://.../` | FR-009, plaintext redirects | **301** → `https://d3b75ru76gta2n.cloudfront.net/` |
+| `GET /callback` | FR-010, SC-005, SPA fallback | **200** (not 404 — the client-side router resolves it) |
+| `GET https://<bucket>.s3.amazonaws.com/index.html` (and the regional endpoint, following the redirect) | SC-004, bucket not directly reachable | **403 AccessDenied** — OAC-only access confirmed |
+| Hostname vs backend's `staging_base_url` | FR-007, distinct origins | `d3b75ru76gta2n.cloudfront.net` vs. the backend's own distribution — distinct |
+
+All spec acceptance criteria (User Story 1, SC-001, SC-004, SC-005) confirmed live, not just planned.
+
 ---
 
 ## 6. Diagnosis path — no access logging (deliberate, not an oversight)
@@ -225,6 +240,10 @@ local AWS CLI session — every credential stays in CI/OIDC.
 curl -fsS "$WEB_BASE/"                                                    # real SPA shell content
 curl -sS -o /dev/null -w '%{http_code}\n' "$WEB_BASE/callback"            # 200 — SPA fallback, not 404
 ```
+
+   **Done, 2026-08-10** against `WEB_BASE=https://d3b75ru76gta2n.cloudfront.net` — both passed;
+   full results and the additional FR-007/FR-009/SC-004 checks are recorded in §5's "Recorded"
+   subsection above.
 
 ### Recovery
 
