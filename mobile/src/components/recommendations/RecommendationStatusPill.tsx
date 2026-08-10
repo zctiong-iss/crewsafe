@@ -59,9 +59,19 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
         },
       ]}
     >
+      {/*
+        One line, always.
+
+        Left to wrap, a long label breaks inside the fill and the second line renders outside the
+        pill's painted background — "Waiting on your decision" showed as "Waiting on your" with
+        the last word simply gone, no ellipsis to hint at it. A status pill is a compact marker
+        by definition; if a translation cannot fit, an ellipsis says so honestly where a silently
+        dropped word does not. The labels themselves are kept short for that reason.
+      */}
       <AppText
         variant="caption"
-        style={{ color: pending ? theme.colors.textInverse : color }}
+        numberOfLines={1}
+        style={[styles.label, { color: pending ? theme.colors.textInverse : color }]}
       >
         {label}
       </AppText>
@@ -76,5 +86,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: s(8),
     paddingVertical: vs(2),
     alignSelf: "flex-start",
+    /*
+     * A row, not a bare box.
+     *
+     * `alignSelf: "flex-start"` inside a column parent measured the pill against the text's
+     * *first line break opportunity* rather than the whole string, so "Waiting on your decision"
+     * rendered as a pill the width of "Waiting on your" with the last word cut off — no ellipsis,
+     * just gone. Laying the label out as a row item makes the pill size to the text it actually
+     * contains. The longest label is the pending one, and it is longer still in Tamil and
+     * Burmese, so this is not an English-only concern.
+     */
+    flexDirection: "row",
+    alignItems: "center",
+    maxWidth: "100%",
+  },
+  label: {
+    // Wraps to a second line inside the fill rather than overflowing it, at large text sizes
+    // where even a correctly measured pill cannot fit on one line.
+    flexShrink: 1,
   },
 });

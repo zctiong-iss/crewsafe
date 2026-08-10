@@ -386,7 +386,7 @@
     "title": "AI 拟定方案",
     "emptyTitle": "没有待办事项",
     "emptyBody": "需要您决定的拟定方案会显示在这里。",
-    "pending": "等待您的决定",
+    "pending": "待决定",
     "decidedApproved": "已批准",
     "decidedRejected": "已拒绝",
     "decidedEdited": "修改后批准",
@@ -431,7 +431,8 @@
     "removedLabel": "已删除",
     "sendEdited": "发送修改后的方案",
     "alreadyDecided": "已有人对此方案作出决定。",
-    "decisionFailedTitle": "决定未记录"
+    "decisionFailedTitle": "决定未记录",
+    "actionWording": "存档所用措辞"
   },
   "mitigationCategory": {
     "STOP_WORK": "停止作业",

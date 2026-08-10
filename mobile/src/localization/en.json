@@ -387,7 +387,7 @@
     "title": "AI-drafted plans",
     "emptyTitle": "Nothing waiting on you",
     "emptyBody": "Drafted plans needing your decision will appear here.",
-    "pending": "Waiting on your decision",
+    "pending": "Awaiting decision",
     "decidedApproved": "Approved",
     "decidedRejected": "Rejected",
     "decidedEdited": "Approved with edits",
@@ -432,7 +432,8 @@
     "removedLabel": "Removed",
     "sendEdited": "Send edited plan",
     "alreadyDecided": "Someone has already decided this plan.",
-    "decisionFailedTitle": "Decision not recorded"
+    "decisionFailedTitle": "Decision not recorded",
+    "actionWording": "Wording kept on the record"
   },
   "mitigationCategory": {
     "STOP_WORK": "Stop work",

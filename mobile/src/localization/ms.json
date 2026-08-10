@@ -387,7 +387,7 @@
     "title": "Pelan draf AI",
     "emptyTitle": "Tiada yang menunggu anda",
     "emptyBody": "Pelan draf yang perlukan keputusan anda akan muncul di sini.",
-    "pending": "Menunggu keputusan anda",
+    "pending": "Menunggu keputusan",
     "decidedApproved": "Diluluskan",
     "decidedRejected": "Ditolak",
     "decidedEdited": "Diluluskan dengan suntingan",
@@ -432,7 +432,8 @@
     "removedLabel": "Dibuang",
     "sendEdited": "Hantar pelan disunting",
     "alreadyDecided": "Seseorang telah pun memutuskan pelan ini.",
-    "decisionFailedTitle": "Keputusan tidak direkodkan"
+    "decisionFailedTitle": "Keputusan tidak direkodkan",
+    "actionWording": "Perkataan yang disimpan dalam rekod"
   },
   "mitigationCategory": {
     "STOP_WORK": "Henti kerja",

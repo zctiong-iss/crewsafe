@@ -387,7 +387,7 @@
     "title": "AI-খসড়া পরিকল্পনা",
     "emptyTitle": "আপনার জন্য কিছু অপেক্ষায় নেই",
     "emptyBody": "আপনার সিদ্ধান্তের অপেক্ষায় থাকা খসড়া এখানে দেখা যাবে।",
-    "pending": "আপনার সিদ্ধান্তের অপেক্ষায়",
+    "pending": "সিদ্ধান্ত বাকি",
     "decidedApproved": "অনুমোদিত",
     "decidedRejected": "প্রত্যাখ্যাত",
     "decidedEdited": "সম্পাদনা করে অনুমোদিত",
@@ -432,7 +432,8 @@
     "removedLabel": "সরানো হয়েছে",
     "sendEdited": "সম্পাদিত পরিকল্পনা পাঠান",
     "alreadyDecided": "এই পরিকল্পনায় ইতিমধ্যেই কেউ সিদ্ধান্ত নিয়েছেন।",
-    "decisionFailedTitle": "সিদ্ধান্ত নথিভুক্ত হয়নি"
+    "decisionFailedTitle": "সিদ্ধান্ত নথিভুক্ত হয়নি",
+    "actionWording": "নথিতে রাখা বয়ান"
   },
   "mitigationCategory": {
     "STOP_WORK": "কাজ বন্ধ",

@@ -386,7 +386,7 @@
     "title": "AI द्वारा तैयार योजनाएँ",
     "emptyTitle": "आपके लिए कुछ लंबित नहीं",
     "emptyBody": "आपके निर्णय की प्रतीक्षा करती योजनाएँ यहाँ दिखेंगी।",
-    "pending": "आपके निर्णय की प्रतीक्षा",
+    "pending": "निर्णय शेष",
     "decidedApproved": "स्वीकृत",
     "decidedRejected": "अस्वीकृत",
     "decidedEdited": "संशोधन के साथ स्वीकृत",
@@ -431,7 +431,8 @@
     "removedLabel": "हटाया गया",
     "sendEdited": "संशोधित योजना भेजें",
     "alreadyDecided": "इस योजना पर पहले ही निर्णय लिया जा चुका है।",
-    "decisionFailedTitle": "निर्णय दर्ज नहीं हुआ"
+    "decisionFailedTitle": "निर्णय दर्ज नहीं हुआ",
+    "actionWording": "रिकॉर्ड में रखा गया पाठ"
   },
   "mitigationCategory": {
     "STOP_WORK": "काम रोकें",

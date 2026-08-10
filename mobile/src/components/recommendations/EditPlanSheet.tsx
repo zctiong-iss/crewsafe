@@ -112,9 +112,12 @@ const EditPlanSheet: FC<EditPlanSheetProps> = ({
                   a removed row, so what is being taken out stays legible. */}
               <MitigationRow mitigation={row.mitigation} removed={row.removed} showDetail={false} />
 
+              {/* Labelled for what it is: the text kept on the record as the plan the supervisor
+                  approved. It is NOT what the crew receives — that comes from the action code
+                  above and is already in their own language. */}
               {!row.removed ? (
                 <AppTextInput
-                  label={t("recommendations.rationale")}
+                  label={t("recommendations.actionWording")}
                   value={row.mitigation.action}
                   onChangeText={(next) => setAction(index, next)}
                   multiline
