@@ -41,12 +41,12 @@ docker_args=(
 
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.
-if ! docker "${docker_args[@]}" zap.sh -cmd -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
+if ! docker "${docker_args[@]}" zap.sh -cmd -notel -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
   echo 'DAST policy preflight failed; no staging scan was started.' >&2
   exit 1
 fi
 
-if ! docker "${docker_args[@]}" zap.sh -cmd -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
+if ! docker "${docker_args[@]}" zap.sh -cmd -notel -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
   echo 'Authenticated DAST scan was unavailable or failed; it is not a clean result.' >&2
   exit 1
 fi

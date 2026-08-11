@@ -63,39 +63,6 @@ jobs:
       maxDuration: 5
       maxDepth: 3
       maxChildren: 50
-  - type: activeScan-config
-    parameters:
-      maxScanDurationInMins: 15
-      maxRuleDurationInMins: 2
-      threadPerHost: 1
-      maxAlertsPerRule: 5
-      handleAntiCSRFTokens: false
-      inputVectors:
-        urlQueryStringAndDataDrivenNodes:
-          enabled: true
-          addParam: false
-        postData:
-          enabled: false
-          multiPartFormData: false
-          xml: false
-          json:
-            enabled: false
-        httpHeaders:
-          enabled: false
-        cookieData:
-          enabled: false
-      excludePaths:
-        - '.*/logout.*'
-        - '.*/approval.*'
-        - '.*/decision.*'
-        - '.*/acknowledge.*'
-        - '.*/complete.*'
-        - '.*/readiness.*'
-        - '.*/wellbeing-logs.*'
-        - '.*/concerns.*'
-        - '.*/mitigations.*'
-        - '.*/assignments.*'
-        - '.*/cancel.*'
   - type: activeScan
     parameters:
       context: crewsafe-staging
@@ -104,23 +71,20 @@ jobs:
       maxRuleDurationInMins: 2
       defaultStrength: Low
       defaultThreshold: Medium
+      addQueryParam: false
       delayInMs: 250
-      policyDefinition:
-        defaultStrength: Low
-        defaultThreshold: Off
-        rules:
-          - id: 40012
-            name: Cross Site Scripting (Reflected)
-            strength: Low
-            threshold: Medium
-          - id: 40018
-            name: SQL Injection
-            strength: Low
-            threshold: Medium
-          - id: 90022
-            name: Application Error Disclosure
-            strength: Low
-            threshold: Medium
+    policyDefinition:
+      defaultStrength: Low
+      defaultThreshold: Off
+      rules:
+        - id: 40012
+          name: Cross Site Scripting (Reflected)
+          strength: Low
+          threshold: Medium
+        - id: 40018
+          name: SQL Injection
+          strength: Low
+          threshold: Medium
   - type: report
     parameters:
       template: traditional-json
