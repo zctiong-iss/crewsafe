@@ -29,10 +29,10 @@ jq -e '
 
 for mutation in actor ref confirmation alias; do
   case "$mutation" in
-    actor) command=(alice intruder "publish-mapping alice"); actor_env=operator; ref_env=refs/heads/main; registry_env="$registry" ;;
-    ref) command=(alice operator "publish-mapping alice"); actor_env=operator; ref_env=refs/heads/feature/test; registry_env="$registry" ;;
-    confirmation) command=(alice operator "publish-mapping wrong"); actor_env=operator; ref_env=refs/heads/main; registry_env="$registry" ;;
-    alias) command=(unknown operator "publish-mapping unknown"); actor_env=operator; ref_env=refs/heads/main; registry_env="$registry" ;;
+    actor) command=(alice intruder "publish-mapping alice"); ref_env=refs/heads/main; registry_env="$registry" ;;
+    ref) command=(alice operator "publish-mapping alice"); ref_env=refs/heads/feature/test; registry_env="$registry" ;;
+    confirmation) command=(alice operator "publish-mapping wrong"); ref_env=refs/heads/main; registry_env="$registry" ;;
+    alias) command=(unknown operator "publish-mapping unknown"); ref_env=refs/heads/main; registry_env="$registry" ;;
   esac
   if CREWSAFE_AWS_ACCOUNTS_JSON="$registry_env" CREWSAFE_COGNITO_ADMINS_JSON="$admins" \
     CREWSAFE_SHARED_COGNITO_JSON="$shared" SYNTHETIC_USERS_FILE="$fixture" \

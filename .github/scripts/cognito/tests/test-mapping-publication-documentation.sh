@@ -13,5 +13,8 @@ grep -Fq 'sanitized evidence' "$runbook"
 grep -Fq '30 minutes' "$runbook"
 grep -Fq 'Do not run Terraform, AWS CLI, or an AWS profile locally' "$runbook"
 grep -Fq 'Do not manually edit the database or parameter' "$runbook"
-! grep -Eiq 'aws ssm put-parameter|terraform apply|psql ' "$runbook"
+if grep -Eiq 'aws ssm put-parameter|terraform apply|psql ' "$runbook"; then
+  echo "runbook contains a forbidden direct-operation example" >&2
+  exit 1
+fi
 echo "Mapping publication documentation: PASS"
