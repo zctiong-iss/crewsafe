@@ -23,6 +23,10 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 run_log="$tmp_dir/zap.log"
 report_dir="$tmp_dir/report"
 mkdir -p "$report_dir"
+# ZAP runs as the non-root `zap` user. Keep the ephemeral parent private while
+# allowing that user to traverse it and write only the mounted report directory.
+chmod 711 "$tmp_dir"
+chmod 733 "$report_dir"
 
 redacted_zap_diagnostic() {
   local diagnostic
