@@ -85,6 +85,8 @@ contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
 contains "runner treats ZAP warning exit as advisory" "$RUNNER" "scan_rc == 2"
 contains "runner keeps ZAP error exit fatal" "$RUNNER" "scan_rc == 1"
 contains "runner records advisory warning state" "$RUNNER" "warning_state"
+not_contains "runner does not execute Markdown backticks" "$RUNNER" 'echo "- Trigger: `'
+contains "runner renders summary fields with printf" "$RUNNER" "printf -- '- Trigger: \`%s\` deployment at commit \`%s\`\\n'"
 contains "runner captures the mounted ZAP log" "$RUNNER" 'zap_log="$tmp_dir/zap.log"'
 contains "runner scans the ZAP log for diagnostics" "$RUNNER" 'for source in "$zap_log" "$run_log"; do'
 contains "runner skips stack-frame-only diagnostics" "$RUNNER" "grep -Ev"

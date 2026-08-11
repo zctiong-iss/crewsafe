@@ -162,13 +162,14 @@ informational="$(severity_count INFORMATIONAL)"
 duration_seconds="$(( $(date +%s) - started_at ))"
 
 {
-  echo '## Authenticated staging DAST (advisory)'
-  echo "- Trigger: `$TRIGGER_COMPONENT` deployment at commit `$TRIGGER_SHA`"
-  echo "- Scan origins: `$web_host`, `$backend_host`"
-  echo "- Scanner image: `${ZAP_IMAGE##*@}`"
-  echo "- Policy: `SCRUM-273 GET/HEAD active-scan boundary`"
-  echo "- Duration: ${duration_seconds}s"
-  echo "- Scan status: ${warning_state}"
-  echo "- Finding counts: high=${high}, medium=${medium}, low=${low}, informational=${informational}"
-  echo '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
+  printf '%s\n' '## Authenticated staging DAST (advisory)'
+  printf -- '- Trigger: `%s` deployment at commit `%s`\n' "$TRIGGER_COMPONENT" "$TRIGGER_SHA"
+  printf -- '- Scan origins: `%s`, `%s`\n' "$web_host" "$backend_host"
+  printf -- '- Scanner image: `%s`\n' "${ZAP_IMAGE##*@}"
+  printf -- '- Policy: `%s`\n' 'SCRUM-273 GET/HEAD active-scan boundary'
+  printf -- '- Duration: %ss\n' "$duration_seconds"
+  printf -- '- Scan status: %s\n' "$warning_state"
+  printf -- '- Finding counts: high=%s, medium=%s, low=%s, informational=%s\n' \
+    "$high" "$medium" "$low" "$informational"
+  printf '%s\n' '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
 } >>"$summary"
