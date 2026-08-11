@@ -20,15 +20,18 @@ started_at="$(date +%s)"
 web_host="${WEB_BASE_URL#https://}"
 backend_host="${BACKEND_BASE_URL#https://}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
-run_log="$tmp_dir/zap.log"
+run_log="$tmp_dir/zap-run.log"
 report_dir="$tmp_dir/report"
-zap_home="$tmp_dir/home"
-zap_log="$zap_home/zap.log"
-mkdir -p "$report_dir" "$zap_home"
+zap_log="$tmp_dir/zap.log"
+mkdir -p "$report_dir"
 # ZAP runs as the non-root `zap` user. Keep the ephemeral parent private while
-# allowing that user to traverse it and write only the mounted output directories.
+# allowing that user to traverse it and write the mounted output directories and
+# single internal log file. Mounting one file avoids leaving container-owned
+# runtime files on the GitHub runner during cleanup.
 chmod 711 "$tmp_dir"
-chmod 733 "$report_dir" "$zap_home"
+chmod 733 "$report_dir"
+: >"$zap_log"
+chmod 666 "$zap_log"
 
 redacted_zap_diagnostic() {
   local diagnostic source
@@ -101,11 +104,11 @@ docker_args=(
   -e 'DAST_REPORT_DIR=/zap/dast-output'
   -v "$workspace:/zap/wrk:ro"
   -v "$report_dir:/zap/dast-output"
-  -v "$zap_home:/zap/home"
+  -v "$zap_log:/home/zap/.ZAP/zap.log"
   "$ZAP_IMAGE"
 )
 
-zap_command=(zap.sh -dir /zap/home -loglevel INFO -cmd -notel)
+zap_command=(zap.sh -loglevel INFO -cmd -notel)
 
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.

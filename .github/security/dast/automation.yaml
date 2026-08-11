@@ -52,7 +52,9 @@ env:
         # on HTTP requests made by the spider and active scanner.
         method: headers
         parameters:
-          Authorization: "Bearer {%json:access_token%}"
+          # ZAP AuthUtils normalizes Cognito's AccessToken JSON field to
+          # `accesstoken`; the underscored `access_token` key is not resolved.
+          Authorization: "Bearer {%json:accesstoken%}"
       users:
         - name: synthetic-worker
           credentials:

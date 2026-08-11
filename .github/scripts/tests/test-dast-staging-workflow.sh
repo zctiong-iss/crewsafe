@@ -82,10 +82,12 @@ contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflig
 contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
 contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
 contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
-contains "runner captures a private ZAP home for internal logs" "$RUNNER" 'zap_home="$tmp_dir/home"'
-contains "runner scans the internal ZAP log for diagnostics" "$RUNNER" 'zap_log="$zap_home/zap.log"'
+contains "runner captures the mounted ZAP log" "$RUNNER" 'zap_log="$tmp_dir/zap.log"'
+contains "runner scans the ZAP log for diagnostics" "$RUNNER" 'for source in "$zap_log" "$run_log"; do'
 contains "runner requests an informative ZAP log level" "$RUNNER" "-loglevel INFO"
 contains "runner redacts bearer tokens from diagnostics" "$RUNNER" "Bearer[[:space:]]+"
+contains "runner mounts only the ZAP log file" "$RUNNER" "/home/zap/.ZAP/zap.log"
+not_contains "runner does not mount the full ZAP home" "$RUNNER" 'zap_home="$tmp_dir/home"'
 contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
 contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
 contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
@@ -107,7 +109,8 @@ contains "automation verifies authenticated API access" "$AUTOMATION" 'pollUrl: 
 contains "automation uses a positive authentication poll frequency" "$AUTOMATION" "pollFrequency: 1"
 not_contains "automation does not configure a zero authentication poll frequency" "$AUTOMATION" "pollFrequency: 0"
 contains "automation uses bearer-header session management" "$AUTOMATION" "method: headers"
-contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorization: "Bearer {%json:access_token%}"'
+contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorization: "Bearer {%json:accesstoken%}"'
+not_contains "automation does not use the unsupported underscored token key" "$AUTOMATION" "{%json:access_token%}"
 contains "automation uses a browser-capable client spider" "$AUTOMATION" "type: spiderClient"
 not_contains "automation does not use the traditional spider depth parameter" "$AUTOMATION" "maxDepth: 3"
 contains "automation includes web target" "$AUTOMATION" '${WEB_BASE_URL}'
