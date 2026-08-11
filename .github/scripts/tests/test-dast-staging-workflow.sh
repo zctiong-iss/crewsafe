@@ -105,6 +105,7 @@ contains "automation loads method guard" "$AUTOMATION" "active-scan-method-guard
 contains "automation leaves query injection disabled" "$AUTOMATION" "addQueryParam: false"
 not_contains "automation uses removed active-scan input-vector schema" "$AUTOMATION" "inputVectors:"
 contains "automation bounds active scan duration" "$AUTOMATION" "maxScanDurationInMins: 15"
+contains "automation preserves the Off threshold as a string" "$AUTOMATION" "defaultThreshold: \"Off\""
 contains "automation always runs report generation" "$AUTOMATION" "alwaysRun: true"
 contains "automation writes report to mounted output directory" "$AUTOMATION" "reportDir: /zap/dast-output"
 contains "method guard checks active-scanner initiator" "$METHOD_GUARD" "HttpSender.ACTIVE_SCANNER_INITIATOR"
