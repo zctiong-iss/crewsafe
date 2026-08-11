@@ -68,11 +68,13 @@ contains "workflow requires web allowlist entry" "$WORKFLOW" "approved_web_base_
 contains "workflow requires backend allowlist entry" "$WORKFLOW" "approved_backend_base_url"
 contains "workflow runs preflight before scanner" "$WORKFLOW" "validate-dast-staging-contract.sh"
 contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated-dast.sh"
-contains "runner uses an ephemeral runner directory" "$RUNNER" 'RUNNER_TEMP:-/tmp'
+contains "runner uses an ephemeral temporary directory" "$RUNNER" 'mktemp -d /tmp/crewsafe-dast.XXXXXX'
 contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
 contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
 contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
 contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
+contains "runner mounts reports outside read-only workspace" "$RUNNER" "DAST_REPORT_DIR=/zap/dast-output"
+not_contains "runner does not nest writable reports under read-only workspace" "$RUNNER" "/zap/wrk/dast-output"
 contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflight_failure_reason"
 contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
