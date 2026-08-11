@@ -70,6 +70,7 @@ contains "workflow runs preflight before scanner" "$WORKFLOW" "validate-dast-sta
 contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated-dast.sh"
 contains "runner uses an ephemeral runner directory" "$RUNNER" 'RUNNER_TEMP:-/tmp'
 contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
+contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 
 contains "backend caller depends on deployment" "$BACKEND_WORKFLOW" "needs: deploy-staging"
@@ -85,8 +86,8 @@ contains "automation disables browser authentication diagnostics" "$AUTOMATION" 
 contains "automation includes web target" "$AUTOMATION" '${WEB_BASE_URL}'
 contains "automation includes backend target" "$AUTOMATION" '${BACKEND_BASE_URL}'
 contains "automation loads method guard" "$AUTOMATION" "active-scan-method-guard.js"
-contains "automation disables post body vectors" "$AUTOMATION" "postData:"
-contains "automation disables JSON vectors" "$AUTOMATION" "enabled: false"
+contains "automation leaves query injection disabled" "$AUTOMATION" "addQueryParam: false"
+not_contains "automation uses removed active-scan input-vector schema" "$AUTOMATION" "inputVectors:"
 contains "automation bounds active scan duration" "$AUTOMATION" "maxScanDurationInMins: 15"
 contains "method guard checks active-scanner initiator" "$METHOD_GUARD" "HttpSender.ACTIVE_SCANNER_INITIATOR"
 contains "method guard allows GET" "$METHOD_GUARD" "GET"
