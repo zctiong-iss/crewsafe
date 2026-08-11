@@ -24,6 +24,23 @@ run_log="$tmp_dir/zap.log"
 report_dir="$tmp_dir/report"
 mkdir -p "$report_dir"
 
+redacted_zap_diagnostic() {
+  local diagnostic
+  diagnostic="$(grep -Ei 'error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected|timeout|timed out|refused' "$run_log" | tail -n 1 || true)"
+  if [[ -n "$diagnostic" ]]; then
+    diagnostic="$(printf '%s' "$diagnostic" \
+      | sed -E \
+          -e 's#https?://[^[:space:]]+#<redacted-url>#g' \
+          -e 's#DAST_[A-Z0-9_]+=[^[:space:]]+#DAST_[redacted]=[redacted]#g' \
+          -e 's#(password|token|cookie|authorization|username)[^= ]*=[^[:space:]]+#\1=[redacted]#Ig' \
+          -e 's#[[:alnum:]._%+-]+@[[:alnum:].-]+\.[A-Za-z]{2,}#<redacted-email>#g' \
+      | cut -c1-240)"
+    printf 'ZAP emitted a redacted diagnostic: %s' "$diagnostic"
+  else
+    echo 'ZAP did not emit a classifiable diagnostic'
+  fi
+}
+
 preflight_failure_reason() {
   if grep -Fq -- 'Could not determine local host name' "$run_log"; then
     echo 'ZAP container hostname resolution failed'
@@ -38,19 +55,25 @@ preflight_failure_reason() {
   elif grep -Fq -- 'Exception' "$run_log"; then
     echo 'ZAP reported an internal preflight exception'
   else
-    local diagnostic
-    diagnostic="$(grep -Ei 'error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected' "$run_log" | tail -n 1 || true)"
-    if [[ -n "$diagnostic" ]]; then
-      diagnostic="$(printf '%s' "$diagnostic" \
-        | sed -E \
-            -e 's#https?://[^[:space:]]+#<redacted-url>#g' \
-            -e 's#DAST_[A-Z0-9_]+=[^[:space:]]+#DAST_[redacted]=[redacted]#g' \
-            -e 's#(password|token|cookie|authorization|username)[^= ]*=[^[:space:]]+#\1=[redacted]#Ig' \
-        | cut -c1-240)"
-      printf 'ZAP emitted a redacted diagnostic: %s' "$diagnostic"
-    else
-      echo 'ZAP rejected the policy or failed to start'
-    fi
+    redacted_zap_diagnostic
+  fi
+}
+
+scan_failure_reason() {
+  if grep -Fq -- 'Blocked Active Scanner request outside approved staging hosts' "$run_log"; then
+    echo 'Active Scanner host guard blocked a request outside the approved staging hosts'
+  elif grep -Fq -- 'Blocked non-GET/HEAD Active Scanner request' "$run_log"; then
+    echo 'Active Scanner method guard blocked a non-GET/HEAD request'
+  elif grep -Eiq -- 'browser authentication|authentication.*(failed|error)|login.*(failed|error)' "$run_log"; then
+    echo 'ZAP browser authentication or session setup failed'
+  elif grep -Eiq -- 'connection refused|timed out|timeout|unknown host|name or service not known|unable to connect' "$run_log"; then
+    echo 'ZAP could not reach a staging target'
+  elif grep -Eiq -- 'report.*(failed|error)|failed.*report|dast-report\.json' "$run_log"; then
+    echo 'ZAP failed to write its reviewable report'
+  elif grep -Fq -- 'Exception' "$run_log"; then
+    echo 'ZAP reported an internal scan exception'
+  else
+    redacted_zap_diagnostic
   fi
 }
 
@@ -82,8 +105,12 @@ if (( preflight_rc != 0 )); then
   exit 1
 fi
 
-if ! docker "${docker_args[@]}" zap.sh -cmd -notel -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
-  echo 'Authenticated DAST scan was unavailable or failed; it is not a clean result.' >&2
+scan_rc=0
+docker "${docker_args[@]}" zap.sh -cmd -notel -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+  || scan_rc=$?
+if (( scan_rc != 0 )); then
+  printf 'Authenticated DAST scan failed (docker_exit=%s; %s); results are not reviewable.\n' \
+    "$scan_rc" "$(scan_failure_reason)" >&2
   exit 1
 fi
 

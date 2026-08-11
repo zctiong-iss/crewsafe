@@ -77,6 +77,10 @@ contains "runner mounts reports outside read-only workspace" "$RUNNER" "DAST_REP
 not_contains "runner does not nest writable reports under read-only workspace" "$RUNNER" "/zap/wrk/dast-output"
 contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflight_failure_reason"
 contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
+contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
+contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
+contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
+contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 
