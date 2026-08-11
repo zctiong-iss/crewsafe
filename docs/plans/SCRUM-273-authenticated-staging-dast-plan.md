@@ -17,6 +17,11 @@ method, or payload. The guard does not interfere with the separate browser-login
 Cognito. Request bodies, cookies, and headers are not active-scan input vectors.
 Operational and state-changing paths are excluded.
 
+The report job always runs and writes to the runner-mounted `/zap/dast-output` directory,
+including when an earlier scan job records an error. A non-zero ZAP exit still makes the
+security-control job unavailable; `alwaysRun` preserves evidence and does not turn a
+failed scan into a clean result.
+
 The workflow has `contents: read` only and receives only the DAST test password through
 an explicit secret mapping. Raw traffic, session state, and reports exist only in the
 ephemeral runner directory; the job summary contains release correlation, hostnames,

@@ -86,7 +86,11 @@ jobs:
           strength: Low
           threshold: Medium
   - type: report
+    # Preserve a reviewable report even when an earlier scan job records an
+    # error. The wrapper still fails the security-control job on a non-zero ZAP
+    # exit; this only prevents the report job from being skipped.
+    alwaysRun: true
     parameters:
       template: traditional-json
-      reportDir: ${DAST_REPORT_DIR}
+      reportDir: /zap/dast-output
       reportFile: dast-report.json
