@@ -749,6 +749,50 @@ run "web_sync_role_permissions" {
   }
 }
 
+# SCRUM-303 — mapping publication is deliberately a separate OIDC identity from
+# ordinary backend deployment. The assertions hold the trust, exact write target,
+# and the intentionally absent identity/secret read permissions together.
+run "mapping_publication_role_boundary" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.cognito_mapping_publication.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The mapping-publication role must trust only the exact main-branch GitHub OIDC subject."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
+      contains(stmt.Action, "ssm:PutParameter") &&
+      toset(stmt.Resource) == toset([aws_ssm_parameter.demo_users_json.arn])
+    ])
+    error_message = "The mapping-publication role may write only the fixed runtime mapping parameter."
+  }
+
+  assert {
+    condition = length(flatten([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement : [
+        for action in stmt.Action : action if can(regex("^(cognito-idp:|secretsmanager:|ssm:Get|ssm:Describe)", action))
+      ]
+    ])) == 0
+    error_message = "The mapping-publication role must not read mappings, access Cognito, or access Secrets Manager."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
+      toset(stmt.Action) == toset(["iam:PassRole"]) &&
+      toset(stmt.Resource) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
+    ])
+    error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # US1 — reach the deployed web app over a stable HTTPS origin, independent of
 # the backend's own domain
