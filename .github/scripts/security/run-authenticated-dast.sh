@@ -150,6 +150,19 @@ fi
 
 [[ -s "$report" ]] || { echo 'DAST scan produced no reviewable report.' >&2; exit 1; }
 
+sites_scanned="$(jq '[.site[]?] | length' "$report")"
+endpoints_scanned="$(jq '[.insights[]? | select(.key=="insight.endpoint.total") | (.statistic | tonumber?)] | add // 0' "$report")"
+
+# A report with zero scanned endpoints means the crawl never generated
+# reviewable traffic, regardless of what the ZAP exit code claims. Treat that
+# as an unavailable security-control result rather than a clean or advisory
+# one, so an aborted authentication/crawl cannot silently read as "0 findings".
+if (( endpoints_scanned == 0 )); then
+  printf 'Authenticated DAST scan produced a report with zero scanned endpoints (docker_exit=%s; %s; sites=%s); treating as an incomplete scan, not a clean result.\n' \
+    "$scan_rc" "$(redacted_zap_diagnostic)" "$sites_scanned" >&2
+  exit 1
+fi
+
 severity_count() {
   local severity="$1"
   jq --arg severity "$severity" '[.. | objects | select((.riskdesc? // .risk? // "") | tostring | ascii_upcase | startswith($severity))] | length' "$report"
@@ -169,6 +182,7 @@ duration_seconds="$(( $(date +%s) - started_at ))"
   printf -- '- Policy: `%s`\n' 'SCRUM-273 GET/HEAD active-scan boundary'
   printf -- '- Duration: %ss\n' "$duration_seconds"
   printf -- '- Scan status: %s\n' "$warning_state"
+  printf -- '- Endpoint coverage: sites=%s, endpoints=%s\n' "$sites_scanned" "$endpoints_scanned"
   printf -- '- Finding counts: high=%s, medium=%s, low=%s, informational=%s\n' \
     "$high" "$medium" "$low" "$informational"
   printf '%s\n' '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
