@@ -98,6 +98,10 @@ not_contains "runner does not mount the full ZAP home" "$RUNNER" 'zap_home="$tmp
 contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
 contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
 contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
+contains "runner counts scanned sites" "$RUNNER" 'sites_scanned="$(jq'
+contains "runner counts scanned endpoints" "$RUNNER" 'endpoints_scanned="$(jq'
+contains "runner fails on zero scanned endpoints" "$RUNNER" "endpoints_scanned == 0"
+contains "runner surfaces endpoint coverage in the summary" "$RUNNER" "Endpoint coverage:"
 not_contains "runner does not classify the expected report filename as an error" "$RUNNER" "dast-report\\.json'"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
