@@ -31,6 +31,9 @@ request, or CI summary.
   never sent. Redirects to out-of-scope hosts are rewritten as bodyless HEAD requests
   to the reviewed web origin's dedicated sink path; the original host is never
   contacted.
+- Report generation always runs against the mounted ephemeral output directory, even
+  when an earlier scan step records an error. A non-zero ZAP exit remains an unavailable
+  security-control result; the report is retained only for the wrapper's in-job review.
 - Target, policy, identity, scanner, or authentication validation failures are failed
   security-control states. Do not relabel them as a clean scan and do not bypass them
   with a workstation procedure.
