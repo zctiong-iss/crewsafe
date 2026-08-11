@@ -99,6 +99,11 @@ contains "web caller identifies web trigger" "$WEB_WORKFLOW" "trigger_component:
 contains "automation uses browser authentication" "$AUTOMATION" "method: browser"
 contains "automation supplies browser login URL" "$AUTOMATION" 'loginPageUrl: ${WEB_BASE_URL}'
 contains "automation disables browser authentication diagnostics" "$AUTOMATION" "diagnostics: false"
+contains "automation verifies authenticated API access" "$AUTOMATION" 'pollUrl: ${BACKEND_BASE_URL}/api/v1/me'
+contains "automation uses bearer-header session management" "$AUTOMATION" "method: headers"
+contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorization: "Bearer {%json:access_token%}"'
+contains "automation uses a browser-capable client spider" "$AUTOMATION" "type: spiderClient"
+not_contains "automation does not use the traditional spider depth parameter" "$AUTOMATION" "maxDepth: 3"
 contains "automation includes web target" "$AUTOMATION" '${WEB_BASE_URL}'
 contains "automation includes backend target" "$AUTOMATION" '${BACKEND_BASE_URL}'
 contains "automation loads method guard" "$AUTOMATION" "active-scan-method-guard.js"

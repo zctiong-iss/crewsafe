@@ -17,6 +17,13 @@ method, or payload. The guard does not interfere with the separate browser-login
 Cognito. Request bodies, cookies, and headers are not active-scan input vectors.
 Operational and state-changing paths are excluded.
 
+Because the SPA authenticates its backend calls with a Cognito bearer token rather than
+a server session cookie, the context uses ZAP header-based session management and carries
+the token returned by the browser code flow on scanner requests. Authentication is
+verified by polling the protected `/api/v1/me` endpoint. The client spider runs the
+browser-side application flow before the active scanner starts, so the scan does not
+mistake the SPA shell or an unauthenticated API response for authenticated coverage.
+
 The report job always runs and writes to the runner-mounted `/zap/dast-output` directory,
 including when an earlier scan job records an error. A non-zero ZAP exit still makes the
 security-control job unavailable; `alwaysRun` preserves evidence and does not turn a
