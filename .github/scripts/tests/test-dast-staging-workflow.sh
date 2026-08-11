@@ -103,7 +103,9 @@ contains "automation bounds active scan duration" "$AUTOMATION" "maxScanDuration
 contains "method guard checks active-scanner initiator" "$METHOD_GUARD" "HttpSender.ACTIVE_SCANNER_INITIATOR"
 contains "method guard allows GET" "$METHOD_GUARD" "GET"
 contains "method guard allows HEAD" "$METHOD_GUARD" "HEAD"
-contains "method guard rejects unsafe active requests" "$METHOD_GUARD" "throw"
+contains "method guard rejects out-of-scope hosts" "$METHOD_GUARD" "Blocked Active Scanner request outside approved staging hosts"
+contains "method guard rewrites unsafe active requests" "$METHOD_GUARD" "request.setMethod('HEAD')"
+contains "method guard clears unsafe request bodies" "$METHOD_GUARD" "msg.setRequestBody('')"
 
 contains "runbook explains advisory status" "$RUNBOOK" "advisory"
 contains "runbook names SCRUM-297 handoff" "$RUNBOOK" "SCRUM-297"
