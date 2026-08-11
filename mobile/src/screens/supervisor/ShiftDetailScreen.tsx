@@ -14,7 +14,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -25,6 +25,7 @@ import AppSafeView from "@/components/views/AppSafeView";
 import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import ShiftStatusPill from "@/components/shifts/ShiftStatusPill";
+import CrewWellbeingRow from "@/components/wellbeing/CrewWellbeingRow";
 import EditAssignmentSheet from "@/components/shifts/EditAssignmentSheet";
 import EditShiftWindowSheet from "@/components/shifts/EditShiftWindowSheet";
 import AddWorkerSheet from "@/components/shifts/AddWorkerSheet";
@@ -38,6 +39,7 @@ import {
   removeWorkerFromShift,
 } from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
+import { loadCrewWellbeing } from "@/store/reducers/wellbeingSlice";
 import { formatDateTime } from "@/helpers/dateTime";
 import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
@@ -61,6 +63,13 @@ export default function ShiftDetailScreen() {
   const savingAssignmentId = useAppSelector((state) => state.shifts.savingAssignmentId);
   const savingWindow = useAppSelector((state) => state.shifts.savingWindow);
   const staffingId = useAppSelector((state) => state.shifts.staffingId);
+
+  /* US-11: how the crew is coping, loaded alongside the shift itself. */
+  const crew = useAppSelector((state) => state.wellbeing.crew);
+
+  useEffect(() => {
+    void dispatch(loadCrewWellbeing({ siteId, shiftId }));
+  }, [dispatch, siteId, shiftId]);
 
   const [editing, setEditing] = useState<ShiftAssignment | null>(null);
   const [editingWindow, setEditingWindow] = useState(false);
@@ -256,6 +265,37 @@ export default function ShiftDetailScreen() {
           ) : null}
         </View>
 
+        {/*
+          US-11: how the crew is coping, above the assignment cards.
+
+          Above, not below, because it is the time-sensitive half. Who is on the shift changes
+          rarely; whether somebody has drunk water in the last two hours changes constantly, and
+          is the reason a supervisor opens this screen mid-shift at all.
+
+          Rendered from the shift's own roster rather than from the wellbeing response, so a
+          worker who has logged nothing still gets a row. That absent row is the one worth acting
+          on, and driving the list off the response would hide exactly it.
+        */}
+        {shift.assignments.length > 0 ? (
+          <View
+            style={[
+              styles.card,
+              cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+              { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <AppText variant="subtitle">{t("wellbeing.crewTitle")}</AppText>
+            {shift.assignments.map((assignment) => (
+              <CrewWellbeingRow
+                key={`wellbeing-${assignment.id}`}
+                workerName={workerNameFor(assignment.workerId)}
+                row={crew.find((row) => row.workerId === assignment.workerId) ?? null}
+                locale={i18n.language}
+              />
+            ))}
+          </View>
+        ) : null}
+
         <AppText variant="subtitle" style={styles.sectionTitle}>
           {t("shifts.assignments")}
         </AppText>
@@ -369,6 +409,23 @@ export default function ShiftDetailScreen() {
             {t("shifts.notEditable")}
           </AppText>
         ) : null}
+
+        {/*
+          The in-context way into US-09: a supervisor looking at a shift can reach the plans
+          drafted for it without hunting for the tab.
+
+          It opens the Plans tab rather than a shift-filtered list. The recommendation endpoint is
+          shift-scoped, so filtering is possible — but the list is short, it is already grouped by
+          shift window, and a second entry point with its own filtered state is more moving parts
+          than the ticket needs. Worth revisiting if a site ever runs enough concurrent shifts for
+          the unfiltered list to be hard to scan.
+        */}
+        <AppButton
+          title={t("shifts.viewRecommendations")}
+          variant="secondary"
+          onPress={() => navigation.getParent()?.navigate("RecommendationsTab")}
+          style={styles.block}
+        />
 
         <AppButton
           title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}

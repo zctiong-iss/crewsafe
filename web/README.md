@@ -145,8 +145,11 @@ typeable URL.
 ```bash
 npm test          # vitest
 npm run typecheck
+npm run lint
+npm run build
 ```
 
 They cover the decisions above rather than chasing coverage: which screen each auth state
 produces, the 401/403 split, that returning from Cognito actually signs you in, and that
-tokens never reach `localStorage`.
+tokens never reach `localStorage`. `lint` and `build` are the same static checks used by the
+web CI workflow.

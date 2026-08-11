@@ -19,7 +19,7 @@
  */
 import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";
-import { mockAcknowledge, mockPendingDispatches } from "../mock/dispatch";
+import { mockAcknowledge, mockComplete, mockPendingDispatches } from "../mock/dispatch";
 import type { ActionDispatch } from "@/types/domain";
 
 const MOCK_LATENCY_MS = 400;
@@ -78,5 +78,27 @@ export function acknowledgeDispatch(
     url: `/api/action-dispatch/${dispatchId}/acknowledge`,
     method: "POST",
     headers: { "Idempotency-Key": idempotencyKey },
+  });
+}
+
+/**
+ * `POST /api/action-dispatch/{id}/complete` — the rest was served (US-11).
+ *
+ * The endpoint has existed since SCRUM-185 and nothing ever called it: the rest timer expired
+ * client-side and the card simply disappeared, so the server never learned the rest was actually
+ * taken. That gap is what made an instructed rest invisible to the supervisor's wellbeing view.
+ *
+ * Calling it now closes the loop — the server derives a `WellbeingLog` tagged `INSTRUCTED` from
+ * the completion, so instructed and self-logged rests land in one timeline.
+ *
+ * Idempotent server-side: completing an already-completed dispatch returns the existing row and
+ * the unique `dispatch_id` on the log means a retry cannot record a second rest.
+ */
+export function completeDispatch(dispatchId: string): Promise<ActionDispatch> {
+  if (isMockApi()) return delay(() => mockComplete(dispatchId));
+
+  return request<ActionDispatch>({
+    url: `/api/action-dispatch/${dispatchId}/complete`,
+    method: "POST",
   });
 }

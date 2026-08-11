@@ -26,8 +26,8 @@
  *
  * @author Justin Chua
  */
-import { useCallback } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Alert, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { vs } from "react-native-size-matters";
 
@@ -40,10 +40,14 @@ import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import LightningBanner from "@/components/safety/LightningBanner";
 import FreshnessNotice from "@/components/safety/FreshnessNotice";
 import WbgtCard from "@/components/safety/WbgtCard";
+import WellbeingLogCard from "@/components/wellbeing/WellbeingLogCard";
+import RaiseConcernSheet from "@/components/wellbeing/RaiseConcernSheet";
 import HeatGuidance from "@/components/safety/HeatGuidance";
 import ShiftCard from "@/components/safety/ShiftCard";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { logWellbeing, raiseConcern } from "@/store/reducers/wellbeingSlice";
+import { showToast } from "@/store/reducers/uiSlice";
 import { isMockApi } from "@/auth/authMode";
 import { loadWorkerSafety } from "@/store/reducers/safetySlice";
 import { useNow } from "@/hooks/useNow";
@@ -83,6 +87,16 @@ export default function MyShiftScreen() {
   const user = useAppSelector((state) => state.auth.user);
   const { status, shift, lightning, conditions, policy, errorKey, requestId, refreshing } =
     useAppSelector((state) => state.safety);
+
+  /* US-11. `justLogged` is only ever this device's own feedback — the supervisor's view reads the
+     server — but it is what stops a worker in gloves pressing twice because nothing happened. */
+  const {
+    justLogged,
+    loggingType,
+    raisingConcern: sendingConcern,
+    errorKey: wellbeingErrorKey,
+  } = useAppSelector((state) => state.wellbeing);
+  const [raisingConcern, setRaisingConcern] = useState(false);
 
   /*
    * One clock for the screen, ticking every second.
@@ -227,6 +241,24 @@ export default function MyShiftScreen() {
           <WbgtCard conditions={conditions} superseded={stopWorkActive} />
         ) : null}
 
+        {/*
+          US-11, and below the readings on purpose.
+
+          A worker opens this screen to find out whether it is safe to keep working; logging what
+          they have already done is the second question, not the first. It needs a shift for the
+          same reason everything else here does — a log has to belong to a crew, and without one
+          there is nothing to log against.
+        */}
+        {shift ? (
+          <WellbeingLogCard
+            justLogged={justLogged}
+            loggingType={loggingType}
+            errorKey={wellbeingErrorKey}
+            onLog={(logType) => void dispatch(logWellbeing({ shiftId: shift.shiftId, logType }))}
+            onRaiseConcern={() => setRaisingConcern(true)}
+          />
+        ) : null}
+
         {__DEV__ ? (
           <View
             style={[
@@ -286,6 +318,27 @@ export default function MyShiftScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <RaiseConcernSheet
+        visible={raisingConcern}
+        saving={sendingConcern}
+        onCancel={() => setRaisingConcern(false)}
+        onSend={(values) => {
+          if (!shift) return;
+          setRaisingConcern(false);
+          void (async () => {
+            const result = await dispatch(raiseConcern({ shiftId: shift.shiftId, input: values }));
+            if (raiseConcern.fulfilled.match(result)) {
+              /* Confirmed out loud. A worker who has just told someone they feel unwell needs to
+                 know the message left the phone — the sheet closing looks the same either way. */
+              dispatch(showToast({ messageKey: "wellbeing.concernSentToast", tone: "success" }));
+              return;
+            }
+            Alert.alert(t("wellbeing.concernFailedTitle"),
+              t(result.payload?.errorKey ?? "errors.unknown"), [{ text: t("common.close") }]);
+          })();
+        }}
+      />
     </AppSafeView>
   );
 }

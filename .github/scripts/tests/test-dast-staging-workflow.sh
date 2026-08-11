@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+WORKFLOW="$ROOT/.github/workflows/dast-staging.yml"
+BACKEND_WORKFLOW="$ROOT/.github/workflows/backend-ci.yml"
+WEB_WORKFLOW="$ROOT/.github/workflows/web-ci.yml"
+VALIDATOR="$ROOT/.github/scripts/security/validate-dast-staging-contract.sh"
+RUNNER="$ROOT/.github/scripts/security/run-authenticated-dast.sh"
+AUTOMATION="$ROOT/.github/security/dast/automation.yaml"
+METHOD_GUARD="$ROOT/.github/security/dast/active-scan-method-guard.js"
+RUNBOOK="$ROOT/docs/runbooks/SCRUM-273-authenticated-staging-dast.md"
+PLAN="$ROOT/docs/plans/SCRUM-273-authenticated-staging-dast-plan.md"
+TESTS_RUN=0
+TESTS_FAILED=0
+
+pass() { printf '  ok   %s\n' "$1"; }
+fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+
+file_exists() {
+  local label="$1" path="$2"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  [[ -f "$path" ]] && pass "$label" || fail "$label"
+}
+
+contains() {
+  local label="$1" path="$2" needle="$3"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  [[ -f "$path" ]] && rg -q -F -- "$needle" "$path" && pass "$label" || fail "$label"
+}
+
+not_contains() {
+  local label="$1" path="$2" needle="$3"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  { [[ ! -f "$path" ]] || ! rg -q -F -- "$needle" "$path"; } && pass "$label" || fail "$label"
+}
+
+script_rejects() {
+  local label="$1"; shift
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if "$@" >/dev/null 2>&1; then fail "$label"; else pass "$label"; fi
+}
+
+script_accepts() {
+  local label="$1"; shift
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if "$@" >/dev/null 2>&1; then pass "$label"; else fail "$label"; fi
+}
+
+file_exists "reusable DAST workflow exists" "$WORKFLOW"
+file_exists "DAST validator exists" "$VALIDATOR"
+file_exists "DAST runner exists" "$RUNNER"
+file_exists "ZAP automation policy exists" "$AUTOMATION"
+file_exists "active-scan method guard exists" "$METHOD_GUARD"
+file_exists "DAST operating procedure exists" "$RUNBOOK"
+file_exists "durable DAST plan exists" "$PLAN"
+contains "validator uses portable grep checks" "$VALIDATOR" "grep -Fq"
+not_contains "validator has no runtime ripgrep dependency" "$VALIDATOR" "rg -q"
+
+contains "workflow is reusable" "$WORKFLOW" "workflow_call:"
+contains "workflow is read-only" "$WORKFLOW" "contents: read"
+not_contains "workflow has no AWS identity permission" "$WORKFLOW" "id-token: write"
+not_contains "workflow never inherits every secret" "$WORKFLOW" "secrets: inherit"
+not_contains "workflow does not upload raw artifacts" "$WORKFLOW" "upload-artifact"
+not_contains "workflow does not create GitHub issues" "$WORKFLOW" "issues: write"
+contains "workflow maps only DAST password" "$WORKFLOW" "DAST_SYNTHETIC_WORKER_PASSWORD"
+contains "workflow requires web allowlist entry" "$WORKFLOW" "approved_web_base_url"
+contains "workflow requires backend allowlist entry" "$WORKFLOW" "approved_backend_base_url"
+contains "workflow runs preflight before scanner" "$WORKFLOW" "validate-dast-staging-contract.sh"
+contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated-dast.sh"
+contains "runner uses an ephemeral temporary directory" "$RUNNER" 'mktemp -d /tmp/crewsafe-dast.XXXXXX'
+contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
+contains "runner requires envsubst to resolve the policy" "$RUNNER" "command -v envsubst"
+contains "runner resolves policy env vars before mounting the plan" "$RUNNER" "envsubst '\${WEB_BASE_URL} \${BACKEND_BASE_URL} \${HOSTED_UI_URL} \${DAST_USERNAME} \${DAST_SYNTHETIC_WORKER_PASSWORD}'"
+contains "runner copies the guard script alongside the resolved plan" "$RUNNER" 'cp "$guard_path" "$plan_dir/active-scan-method-guard.js"'
+contains "runner mounts the resolved plan directory, not the full workspace" "$RUNNER" '-v "$plan_dir:/zap/plan:ro"'
+not_contains "runner no longer mounts the full workspace into the scanner" "$RUNNER" '/zap/wrk:ro'
+contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
+contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
+contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
+contains "runner mounts reports outside read-only workspace" "$RUNNER" "DAST_REPORT_DIR=/zap/dast-output"
+not_contains "runner does not nest writable reports under read-only workspace" "$RUNNER" "/zap/wrk/dast-output"
+contains "runner makes report parent traversable for non-root ZAP" "$RUNNER" "chmod 711"
+contains "runner makes report mount writable for non-root ZAP" "$RUNNER" "chmod 733"
+not_contains "runner does not make the report mount world-readable" "$RUNNER" "chmod 777"
+contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflight_failure_reason"
+contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
+contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
+contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
+contains "runner treats ZAP warning exit as advisory" "$RUNNER" "scan_rc == 2"
+contains "runner keeps ZAP error exit fatal" "$RUNNER" "scan_rc == 1"
+contains "runner records advisory warning state" "$RUNNER" "warning_state"
+not_contains "runner does not execute Markdown backticks" "$RUNNER" 'echo "- Trigger: `'
+contains "runner renders summary fields with printf" "$RUNNER" "printf -- '- Trigger: \`%s\` deployment at commit \`%s\`\\n'"
+contains "runner captures the mounted ZAP log" "$RUNNER" 'zap_log="$tmp_dir/zap.log"'
+contains "runner scans the ZAP log for diagnostics" "$RUNNER" 'for source in "$zap_log" "$run_log"; do'
+contains "runner skips stack-frame-only diagnostics" "$RUNNER" "grep -Ev"
+contains "runner surfaces exception causes" "$RUNNER" "caused by"
+contains "runner requests an informative ZAP log level" "$RUNNER" "-loglevel INFO"
+contains "runner redacts bearer tokens from diagnostics" "$RUNNER" "Bearer[[:space:]]+"
+contains "runner mounts only the ZAP log file" "$RUNNER" "/home/zap/.ZAP/zap.log"
+not_contains "runner does not mount the full ZAP home" "$RUNNER" 'zap_home="$tmp_dir/home"'
+contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
+contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
+contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
+contains "runner counts scanned sites" "$RUNNER" 'sites_scanned="$(jq'
+contains "runner counts scanned endpoints" "$RUNNER" 'endpoints_scanned="$(jq'
+contains "runner fails on zero scanned endpoints" "$RUNNER" "endpoints_scanned == 0"
+contains "runner surfaces endpoint coverage in the summary" "$RUNNER" "Endpoint coverage:"
+not_contains "runner does not classify the expected report filename as an error" "$RUNNER" "dast-report\\.json'"
+not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
+not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
+
+contains "backend caller depends on deployment" "$BACKEND_WORKFLOW" "needs: deploy-staging"
+contains "backend caller invokes reusable DAST workflow" "$BACKEND_WORKFLOW" "uses: ./.github/workflows/dast-staging.yml"
+contains "backend caller identifies backend trigger" "$BACKEND_WORKFLOW" "trigger_component: backend"
+contains "web caller depends on deployment" "$WEB_WORKFLOW" "needs: deploy-staging"
+contains "web caller invokes reusable DAST workflow" "$WEB_WORKFLOW" "uses: ./.github/workflows/dast-staging.yml"
+contains "web caller identifies web trigger" "$WEB_WORKFLOW" "trigger_component: web"
+
+contains "automation uses browser authentication" "$AUTOMATION" "method: browser"
+contains "automation supplies browser login URL" "$AUTOMATION" 'loginPageUrl: ${WEB_BASE_URL}'
+contains "automation disables browser authentication diagnostics" "$AUTOMATION" "diagnostics: false"
+contains "automation verifies authenticated API access" "$AUTOMATION" 'pollUrl: ${BACKEND_BASE_URL}/api/v1/me'
+contains "automation uses a positive authentication poll frequency" "$AUTOMATION" "pollFrequency: 1"
+not_contains "automation does not configure a zero authentication poll frequency" "$AUTOMATION" "pollFrequency: 0"
+contains "automation uses bearer-header session management" "$AUTOMATION" "method: headers"
+contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorization: "Bearer {%json:accesstoken%}"'
+not_contains "automation does not use the unsupported underscored token key" "$AUTOMATION" "{%json:access_token%}"
+contains "automation uses a browser-capable client spider" "$AUTOMATION" "type: spiderClient"
+not_contains "automation does not use the traditional spider depth parameter" "$AUTOMATION" "maxDepth: 3"
+contains "automation waits for the passive scanner before reporting" "$AUTOMATION" "type: passiveScan-wait"
+contains "automation includes web target" "$AUTOMATION" '${WEB_BASE_URL}'
+contains "automation includes backend target" "$AUTOMATION" '${BACKEND_BASE_URL}'
+contains "automation loads method guard" "$AUTOMATION" "active-scan-method-guard.js"
+contains "automation leaves query injection disabled" "$AUTOMATION" "addQueryParam: false"
+not_contains "automation uses removed active-scan input-vector schema" "$AUTOMATION" "inputVectors:"
+contains "automation bounds active scan duration" "$AUTOMATION" "maxScanDurationInMins: 15"
+contains "automation preserves the Off threshold as a string" "$AUTOMATION" "defaultThreshold: \"Off\""
+contains "automation always runs report generation" "$AUTOMATION" "alwaysRun: true"
+contains "automation writes report to mounted output directory" "$AUTOMATION" "reportDir: /zap/dast-output"
+contains "method guard checks active-scanner initiator" "$METHOD_GUARD" "HttpSender.ACTIVE_SCANNER_INITIATOR"
+contains "method guard allows GET" "$METHOD_GUARD" "GET"
+contains "method guard allows HEAD" "$METHOD_GUARD" "HEAD"
+contains "method guard sinks out-of-scope hosts on approved web origin" "$METHOD_GUARD" "System.getenv('WEB_BASE_URL')"
+contains "method guard uses a dedicated sink path" "$METHOD_GUARD" "/crewsafe-dast-blocked"
+contains "method guard rewrites out-of-scope host header" "$METHOD_GUARD" "request.setHeader('Host', sinkHost)"
+not_contains "method guard does not use a refused loopback sink" "$METHOD_GUARD" "127.0.0.1:9"
+contains "method guard rewrites unsafe active requests" "$METHOD_GUARD" "request.setMethod('HEAD')"
+contains "method guard clears unsafe request bodies" "$METHOD_GUARD" "msg.setRequestBody('')"
+
+contains "runbook explains advisory status" "$RUNBOOK" "advisory"
+contains "runbook names SCRUM-297 handoff" "$RUNBOOK" "SCRUM-297"
+contains "runbook forbids secrets in evidence" "$RUNBOOK" "Never record"
+contains "runbook includes recovery path" "$RUNBOOK" "Recovery"
+contains "durable plan states constitution compliance" "$PLAN" "Constitution compliance"
+
+if [[ -x "$VALIDATOR" ]]; then
+  script_accepts "validator accepts reviewed contract" env \
+    TRIGGER_COMPONENT=backend TRIGGER_SHA=0123456789012345678901234567890123456789 \
+    WEB_BASE_URL=https://d3b75ru76gta2n.cloudfront.net BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    APPROVED_WEB_BASE_URL=https://d3b75ru76gta2n.cloudfront.net APPROVED_BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    HOSTED_UI_URL=https://crewsafe.auth.ap-southeast-1.amazoncognito.com \
+    DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
+    ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
+    DAST_POLICY_PATH="$AUTOMATION" "$VALIDATOR"
+  script_rejects "validator rejects non-HTTPS target without leaking password" env \
+    TRIGGER_COMPONENT=backend TRIGGER_SHA=0123456789012345678901234567890123456789 \
+    WEB_BASE_URL=http://example.invalid BACKEND_BASE_URL=https://d3b75ru76gta2n.cloudfront.net \
+    APPROVED_WEB_BASE_URL=http://example.invalid APPROVED_BACKEND_BASE_URL=https://d3b75ru76gta2n.cloudfront.net \
+    HOSTED_UI_URL=https://example.auth.ap-southeast-1.amazoncognito.com \
+    DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
+    ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
+    "$VALIDATOR"
+  script_rejects "validator rejects an IP-address target" env \
+    TRIGGER_COMPONENT=web TRIGGER_SHA=0123456789012345678901234567890123456789 \
+    WEB_BASE_URL=https://127.0.0.1 BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    APPROVED_WEB_BASE_URL=https://127.0.0.1 APPROVED_BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    HOSTED_UI_URL=https://crewsafe.auth.ap-southeast-1.amazoncognito.com \
+    DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
+    ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
+    "$VALIDATOR"
+  script_rejects "validator rejects a query-bearing target" env \
+    TRIGGER_COMPONENT=web TRIGGER_SHA=0123456789012345678901234567890123456789 \
+    WEB_BASE_URL='https://d3b75ru76gta2n.cloudfront.net/?token=synthetic' BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    APPROVED_WEB_BASE_URL='https://d3b75ru76gta2n.cloudfront.net/?token=synthetic' APPROVED_BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    HOSTED_UI_URL=https://crewsafe.auth.ap-southeast-1.amazoncognito.com \
+    DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
+    ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
+    "$VALIDATOR"
+  script_rejects "validator rejects an unapproved target" env \
+    TRIGGER_COMPONENT=web TRIGGER_SHA=0123456789012345678901234567890123456789 \
+    WEB_BASE_URL=https://unapproved.cloudfront.net BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    APPROVED_WEB_BASE_URL=https://d3b75ru76gta2n.cloudfront.net APPROVED_BACKEND_BASE_URL=https://d9a1b2c3d4e5f.cloudfront.net \
+    HOSTED_UI_URL=https://crewsafe.auth.ap-southeast-1.amazoncognito.com \
+    DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
+    ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
+    "$VALIDATOR"
+else
+  TESTS_RUN=$((TESTS_RUN + 1)); fail "validator is executable"
+fi
+
+printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
+[[ "$TESTS_FAILED" -eq 0 ]]

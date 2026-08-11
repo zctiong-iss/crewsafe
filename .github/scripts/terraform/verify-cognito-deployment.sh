@@ -69,6 +69,16 @@ verify_client web_client_id crewsafe-web false 15 minutes
 verify_client mobile_client_id crewsafe-mobile false 1 hours
 verify_client cli_client_id crewsafe-cli-integration true 15 minutes
 
+web_client_id="$(terraform -chdir="$tf_root" output -raw web_client_id)"
+web_client="$(aws cognito-idp describe-user-pool-client \
+  --user-pool-id "$pool_id" --client-id "$web_client_id" --output json)"
+jq -e \
+  --argjson expected_callback_urls '["http://localhost:5173/callback", "https://d3b75ru76gta2n.cloudfront.net/callback"]' \
+  --argjson expected_logout_urls '["http://localhost:5173/", "https://d3b75ru76gta2n.cloudfront.net/"]' '
+  ((.UserPoolClient.CallbackURLs // []) | sort) == ($expected_callback_urls | sort)
+  and ((.UserPoolClient.LogoutURLs // []) | sort) == ($expected_logout_urls | sort)
+' <<<"$web_client" >/dev/null || fail "web URI allowlist mismatch"
+
 domain_url="$(terraform -chdir="$tf_root" output -raw domain_url)"
 domain_prefix="${domain_url#https://}"
 domain_prefix="${domain_prefix%%.auth.*}"

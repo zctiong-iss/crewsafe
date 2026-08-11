@@ -39,3 +39,36 @@ output "log_group_name" {
   description = "Where container output lands, under a 14-day retention. The only diagnosis path for a task that fails to start: an image-pull failure, a failed migration, a missing required configuration property, and a read-only-filesystem startup failure all surface here and nowhere else. Its name is constrained rather than chosen - outside /crewsafe/shared-dev/* the execution role's log-write grant does not cover it and the task cannot start."
   value       = aws_cloudwatch_log_group.backend.name
 }
+
+# ---------------------------------------------------------------------------
+# SCRUM-298 — web additions. Additive to the contract above, not a
+# replacement: see contracts/terraform-outputs.md. Consumed by SCRUM-242
+# (CORS origin configuration) and SCRUM-271 (automated web sync workflow).
+#
+# Like every output above, none of these three carries a credential and none
+# is marked sensitive - each is a URL, a bucket name, or a role ARN, not a
+# secret. The sync role ARN in particular grants nothing by itself; the
+# actual grant is the trust policy's OIDC condition (research.md R-005),
+# which only a workflow_dispatch run on this repository's main branch can
+# satisfy.
+# ---------------------------------------------------------------------------
+
+output "web_staging_base_url" {
+  description = "Public base URL of the deployed web app. A DIFFERENT hostname from staging_base_url (the backend's), by construction (FR-007) - SCRUM-242 reads this to populate CORS_ALLOWED_ORIGINS on the backend, which only makes sense across genuinely different origins."
+  value       = "https://${aws_cloudfront_distribution.web.domain_name}"
+}
+
+output "web_bucket_name" {
+  description = "The bucket SCRUM-271's automated sync workflow (and this component's own initial manual workflow_dispatch sync) targets. Not independently useful without web_sync_role_arn below - the bucket blocks every unauthenticated write."
+  value       = aws_s3_bucket.web.id
+}
+
+output "web_sync_role_arn" {
+  description = "The role a workflow_dispatch run assumes via OIDC to sync web/dist to web_bucket_name and invalidate the web distribution. SCRUM-271 reads this rather than hard-coding the role name."
+  value       = aws_iam_role.web_sync.arn
+}
+
+output "backend_deploy_role_arn" {
+  description = "Dedicated GitHub OIDC role for SCRUM-271 backend release deployment; never use a Terraform apply role."
+  value       = aws_iam_role.backend_deploy.arn
+}

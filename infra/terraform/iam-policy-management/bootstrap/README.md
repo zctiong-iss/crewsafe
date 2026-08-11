@@ -5,6 +5,12 @@ These are account-bootstrap artifacts for the two GitHub OIDC roles that execute
 the IAM policy-management root must not create or modify the identity it needs in order to
 run.
 
+The source files are the three `.json.tftpl` templates in this directory:
+`trust-policy.json.tftpl`, `plan-role-policy.json.tftpl`, and
+`apply-role-policy.json.tftpl`. The AWS CLI commands below use the rendered output names
+`trust-policy.json`, `plan-role-policy.json`, and `apply-role-policy.json`; keep rendered
+files outside the repository and remove them after the account-admin bootstrap.
+
 The templates assume the CrewSafe state backend is already provisioned by SCRUM-155 in
 `ap-southeast-1`. Replace `<ACCOUNT_ID>` with the target account ID and
 `<GITHUB_OIDC_MAIN_SUBJECT>` with the exact value of the repository variable
@@ -12,7 +18,8 @@ The templates assume the CrewSafe state backend is already provisioned by SCRUM-
 
 ## 1. Validate the templates
 
-Render each template, then validate the rendered documents before using them. The trust
+Render each `.json.tftpl` template with the target account ID and immutable GitHub subject,
+then validate the rendered documents before using them. The trust
 document must contain the account's `token.actions.githubusercontent.com` provider, the
 `sts.amazonaws.com` audience, and the exact immutable repository `main` subject. The plan
 and apply documents must be valid IAM policy JSON.

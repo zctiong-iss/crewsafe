@@ -587,3 +587,389 @@ resource "aws_ecs_service" "backend" {
     ignore_changes = [task_definition, desired_count]
   }
 }
+
+# ---------------------------------------------------------------------------
+# SCRUM-298 — web static hosting runtime and staging origin
+#
+# S3 + CloudFront, not a container. web/ is a plain client-rendered Vite SPA
+# with no server-side runtime need (no environment variable, no session, no
+# computation) — confirmed by reading web/package.json and web/vite.config.ts
+# directly during /speckit-specify. This section adds NO resource referencing
+# aws_lb.public, aws_lb_listener.public, or aws_ecs_cluster.main above: the web
+# origin is a second, independent leaf, not a branch grafted onto the backend's
+# compute layer (FR-014, spec.md Architecture).
+#
+# Zero terraform_remote_state reads (research.md R-011) — no VPC, subnet,
+# security group, secret, or database value is needed.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Sync identity
+#
+# Assumed exclusively by a manually-dispatched GitHub Actions workflow_dispatch
+# run on main, via OIDC — never a human's local session (FR-017, Q2). Trust
+# policy shape copied from infra/terraform/ecr/main.tf's web push role, the
+# same pattern already reviewed and applied for an identical purpose.
+# ---------------------------------------------------------------------------
+
+locals {
+  web_sync_assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowGitHubActionsMainBranchToAssume"
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+          }
+        }
+      },
+    ]
+  })
+
+  # Two statements, least-privilege, scoped to exactly the two resources this
+  # role needs (research.md R-006). s3:DeleteObject is present because the sync
+  # invocation uses `--delete` (research.md R-007) — without it, every prior
+  # build's now-unreferenced hashed assets accumulate in the bucket forever.
+  # cloudfront:GetInvalidation is deliberately ABSENT: the workflow issues an
+  # invalidation and returns, it does not poll for completion.
+  # One statement, both the bucket ARN (ListBucket needs it) and the object
+  # prefix (the object-level actions need it) as a Resource list — research.md
+  # R-006 specifies exactly two statements total for this policy; splitting
+  # this into two would leave three once the CreateInvalidation statement
+  # below is added, contradicting that design and compute.tftest.hcl's
+  # "web_sync_role_permissions" assertion.
+  web_sync_policy = {
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SyncWebBuildToBucket"
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+        ]
+        Resource = [
+          aws_s3_bucket.web.arn,
+          "${aws_s3_bucket.web.arn}/*",
+        ]
+      },
+    ]
+  }
+}
+
+resource "aws_iam_role" "web_sync" {
+  name               = "${local.name_prefix}-web-sync"
+  assume_role_policy = local.web_sync_assume_role_policy
+}
+
+resource "aws_iam_role_policy" "web_sync" {
+  name = "${local.name_prefix}-web-sync"
+  role = aws_iam_role.web_sync.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      local.web_sync_policy.Statement,
+      [
+        {
+          Sid      = "InvalidateWebDistribution"
+          Effect   = "Allow"
+          Action   = ["cloudfront:CreateInvalidation"]
+          Resource = aws_cloudfront_distribution.web.arn
+        },
+      ]
+    )
+  })
+}
+
+# SCRUM-271: release deployment is deliberately separate from Terraform apply.
+resource "aws_iam_role" "backend_deploy" {
+  name = "${local.name_prefix}-backend-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "backend_deploy" {
+  name = "${local.name_prefix}-backend-deploy"
+  role = aws_iam_role.backend_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = "${local.ecr.repository_arn}" },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = aws_ecs_service.backend.id },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } }
+    ]
+  })
+}
+
+# SCRUM-303: publishing the application-user mapping changes which signed Cognito
+# subjects can enter CrewSafe. It must therefore never share the ordinary backend
+# deployment role. This OIDC role can write exactly the one runtime parameter and
+# then reuse the already-reviewed immutable-image deployment mechanism.
+resource "aws_iam_role" "cognito_mapping_publication" {
+  name = "${local.name_prefix}-cognito-mapping-publish"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "cognito_mapping_publication" {
+  name = "${local.name_prefix}-cognito-mapping-publish"
+  role = aws_iam_role.cognito_mapping_publication.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # The publication flow never reads this value: it re-derives it from
+      # reviewed repository sources and may overwrite only this exact parameter.
+      { Effect = "Allow", Action = ["ssm:PutParameter"], Resource = [aws_ssm_parameter.demo_users_json.arn] },
+      # The existing deploy script verifies the immutable main image before it
+      # registers a replacement task definition and updates this one service.
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = [local.ecr.repository_arn] },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = [aws_ecs_service.backend.id] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } },
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# Web bucket
+#
+# Private, versioned, encrypted, ACLs disabled entirely — the same pattern
+# infra/terraform/bootstrap/state/main.tf established, plus a noncurrent-version
+# lifecycle rule that bucket does not need (research.md R-009): every sync writes
+# a full build's worth of new object versions, unlike Terraform state's roughly
+# constant key set.
+# ---------------------------------------------------------------------------
+
+resource "aws_s3_bucket" "web" {
+  bucket = "${local.name_prefix}-web"
+
+  # The account-match guard is not repeated here — aws_ecs_cluster.main above
+  # already carries it, and one precondition anywhere in the plan is enough to
+  # halt the whole apply on a mismatched account. A second copy would only
+  # break "rejects_mismatched_account" (compute.tftest.hcl)'s single-resource
+  # expect_failures assertion for no additional safety.
+}
+
+resource "aws_s3_bucket_versioning" "web" {
+  bucket = aws_s3_bucket.web.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# AWS-managed SSE-S3 (AES256), matching infra/terraform/bootstrap/state/main.tf's
+# own accepted exemption (SCRUM-155) — avoiding a cross-service KMS key,
+# rotation, and IAM-grant dependency for this bucket too. The reasoning is
+# stronger here than for Terraform state: this bucket's contents are a
+# browser-delivered SPA bundle, already fully visible to any client that loads
+# the site (spec.md SEC-003). Its privacy exists for integrity and origin
+# authenticity — only this distribution can serve it, only a reviewed Terraform
+# change can alter it — not confidentiality of the content itself, which a
+# customer-managed key would protect but this component has no need to.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "web" {
+  bucket = aws_s3_bucket.web.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "web" {
+  bucket = aws_s3_bucket.web.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# FR-002. All four flags true — no public ACL, no public policy, no exception.
+resource "aws_s3_bucket_public_access_block" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = var.web_bucket_noncurrent_version_expiration_days
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Public edge
+#
+# CloudFront reaches the bucket exclusively through Origin Access Control —
+# never a public bucket endpoint, never the legacy Origin Access Identity
+# (FR-004). Two managed cache policies, referenced as data sources rather than
+# authored, mirroring this component's existing convention for the backend
+# distribution (Managed-CachingDisabled is already declared above; reused here,
+# not redeclared).
+#
+# AWS-0011 (no WAF) accepted on the same basis the backend distribution's
+# exemption already records: a single shared-dev environment whose only client
+# is the team, where an untuned managed rule group would buy a passing scan and
+# false blocks, not real protection.
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudfront_origin_access_control" "web" {
+  name                              = "${local.name_prefix}-web"
+  description                       = "OAC restricting the web bucket to this distribution only."
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
+#trivy:ignore:AWS-0011
+resource "aws_cloudfront_distribution" "web" {
+  enabled             = true
+  comment             = "crewsafe shared-dev web static hosting (SCRUM-298). S3 via Origin Access Control only."
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+
+  origin {
+    origin_id                = "web"
+    domain_name              = aws_s3_bucket.web.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.web.id
+  }
+
+  # Hashed JS/CSS/asset bundles are cache-safe by construction: a filename either
+  # names the old build's content (never re-requested) or the new build's (a
+  # distinct URL). Aggressive caching here is free of staleness risk.
+  default_cache_behavior {
+    target_origin_id       = "web"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id = data.aws_cloudfront_cache_policy.caching_optimized.id
+  }
+
+  # index.html is the one object every deploy changes, so it must not be
+  # treated as long-lived (FR-011). Reuses the SAME managed policy already
+  # declared for the backend distribution above — a data source lookup, not a
+  # distribution-scoped resource.
+  ordered_cache_behavior {
+    path_pattern           = "/index.html"
+    target_origin_id       = "web"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id = data.aws_cloudfront_cache_policy.caching_disabled.id
+  }
+
+  # Reproduces web/nginx.conf's `try_files $uri /index.html` SPA fallback with
+  # no compute at the edge (FR-010). A client-side route with no matching S3
+  # object still resolves in the browser.
+  custom_error_response {
+    error_code         = 403
+    response_code      = "200"
+    response_page_path = "/index.html"
+  }
+
+  custom_error_response {
+    error_code         = 404
+    response_code      = "200"
+    response_page_path = "/index.html"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  # TLSv1 is what the default certificate forces, not a choice — the same
+  # honest-not-aspirational value the backend distribution already asserts,
+  # for the identical reason (FR-013, research.md R-008). Raising the floor
+  # needs a custom domain and an ACM certificate in us-east-1; neither exists.
+  viewer_certificate {
+    cloudfront_default_certificate = true
+    minimum_protocol_version       = "TLSv1"
+  }
+}
+
+# The bucket policy must come after the distribution: it grants read access
+# scoped to this exact distribution's ARN, by reference, so a distribution
+# replacement cannot leave a stale grant behind (FR-005).
+locals {
+  # jsonencode(), not data "aws_iam_policy_document" — this file's own header
+  # comment already records why: mock_provider "aws" fabricates a random string
+  # for that data source's .json attribute rather than rendering it, which
+  # fails every test that plans this resource. jsonencode() over literal HCL
+  # values is exactly the pattern the secrets component chose for the same
+  # reason, and web_sync_assume_role_policy/web_sync_policy above already
+  # follow it — this bucket policy was the one place that didn't, and testing
+  # caught it immediately.
+  web_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowCloudFrontReadViaOAC"
+        Effect    = "Allow"
+        Action    = ["s3:GetObject"]
+        Resource  = "${aws_s3_bucket.web.arn}/*"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.web.arn
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "web" {
+  bucket = aws_s3_bucket.web.id
+  policy = local.web_bucket_policy
+}

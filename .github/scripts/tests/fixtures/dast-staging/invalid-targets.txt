@@ -1,0 +1,4 @@
+http://example.invalid
+https://127.0.0.1
+https://d3b75ru76gta2n.cloudfront.net/?token=synthetic
+https://unapproved.cloudfront.net
