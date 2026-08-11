@@ -5,6 +5,7 @@ This directory contains the local development stack for CrewSafe.
 ## What it starts
 
 - `postgres` on host port `5434`
+- `adminer` on host port `8081` (database browser; server `postgres` inside Compose)
 - `backend` on host port `8080`
 - `web` on host port `5173`
 
@@ -30,7 +31,7 @@ Before starting the stack, make sure:
 - `CREWSAFE_SHARED_COGNITO_JSON` is available through GitHub repository variables
 - the selected account alias exists in that shared Cognito config
 
-The launcher resolves the required environment for both services:
+The launcher resolves the required environment for the application containers:
 
 - `APP_COGNITO_ISSUER_URI`
 - `APP_COGNITO_JWK_SET_URI`
@@ -45,12 +46,26 @@ The launcher resolves the required environment for both services:
 
 ## Useful options
 
-- `--no-web` starts only `postgres` and `backend`
+- `--no-web` starts `postgres`, `adminer`, and `backend`, but not the web container. It still
+  writes `web/.env.local` so Vite can run on the host.
 - `--reset` deletes the local PostgreSQL volume before starting
+
+To inspect the database, open `http://localhost:8081` and use:
+
+- **System:** PostgreSQL
+- **Server:** `postgres`
+- **Username:** `crewsafe`
+- **Password:** `crewsafe_local_dev`
+- **Database:** `crewsafe`
 
 ## Notes
 
 - Backend traffic goes through `http://localhost:8080`
 - Web traffic goes through `http://localhost:5173`
+- Adminer is available at `http://localhost:8081`
 - The backend expects PostgreSQL at `postgres:5432` inside the Compose network
 - The web app must use the same Cognito pool as the backend or token validation will fail
+- Weather and lightning ingestion are enabled by default for the local stack. Set
+  `WEATHER_DATA_MODE=fixture` to replay bundled data without calling data.gov.sg; the
+  `WEATHER_INGESTION_ENABLED`, `WEATHER_FIXTURE_LOOP`, `LIGHTNING_INGESTION_ENABLED`, and
+  `LIGHTNING_FIXTURE_LOOP` variables can be overridden before starting the launcher.
