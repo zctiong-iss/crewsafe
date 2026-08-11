@@ -143,6 +143,10 @@ run "reject_wildcard_web_callback_url" {
     github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
     web_callback_urls        = ["http://localhost:5173/callback", "https://*.cloudfront.net/callback"]
   }
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
   expect_failures = [var.web_callback_urls]
 }
 
@@ -153,6 +157,10 @@ run "reject_alternate_port_web_callback_url" {
     account_alias            = "alice"
     github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
     web_callback_urls        = ["http://localhost:5174/callback"]
+  }
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
   }
   expect_failures = [var.web_callback_urls]
 }
@@ -165,6 +173,10 @@ run "reject_wildcard_web_logout_url" {
     github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
     web_logout_urls          = ["http://localhost:5173/", "https://*.cloudfront.net/"]
   }
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
   expect_failures = [var.web_logout_urls]
 }
 
@@ -175,6 +187,10 @@ run "reject_mobile_web_logout_url" {
     account_alias            = "alice"
     github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
     web_logout_urls          = ["crewsafe://"]
+  }
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
   }
   expect_failures = [var.web_logout_urls]
 }
