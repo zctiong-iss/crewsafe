@@ -14,6 +14,7 @@ run_resolver() {
   CREWSAFE_COGNITO_ADMINS_JSON="$admins" \
   CREWSAFE_SHARED_COGNITO_JSON="$shared" \
   SYNTHETIC_USERS_FILE="$fixture" \
+  GITHUB_OUTPUT="" \
   WORKFLOW_REF="refs/heads/main" \
     "$resolver" alice operator "publish-mapping alice"
 }
@@ -36,6 +37,7 @@ for mutation in actor ref confirmation alias; do
   esac
   if CREWSAFE_AWS_ACCOUNTS_JSON="$registry_env" CREWSAFE_COGNITO_ADMINS_JSON="$admins" \
     CREWSAFE_SHARED_COGNITO_JSON="$shared" SYNTHETIC_USERS_FILE="$fixture" \
+    GITHUB_OUTPUT="" \
     WORKFLOW_REF="$ref_env" "$resolver" "${command[@]}" >/dev/null 2>&1; then
     echo "publication resolver accepted unsafe $mutation" >&2
     exit 1
