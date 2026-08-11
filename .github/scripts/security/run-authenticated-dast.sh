@@ -11,6 +11,7 @@ policy_rel='.github/security/dast/automation.yaml'
 policy_path="$workspace/$policy_rel"
 guard_path="$workspace/.github/security/dast/active-scan-method-guard.js"
 [[ -r "$policy_path" && -r "$guard_path" ]] || { echo 'DAST policy files are unavailable' >&2; exit 1; }
+command -v envsubst >/dev/null || { echo 'envsubst is required to resolve the DAST policy' >&2; exit 1; }
 
 tmp_dir="$(mktemp -d /tmp/crewsafe-dast.XXXXXX)"
 cleanup() { rm -rf "$tmp_dir"; }
@@ -23,7 +24,8 @@ summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 run_log="$tmp_dir/zap-run.log"
 report_dir="$tmp_dir/report"
 zap_log="$tmp_dir/zap.log"
-mkdir -p "$report_dir"
+plan_dir="$tmp_dir/plan"
+mkdir -p "$report_dir" "$plan_dir"
 # ZAP runs as the non-root `zap` user. Keep the ephemeral parent private while
 # allowing that user to traverse it and write the mounted output directories and
 # single internal log file. Mounting one file avoids leaving container-owned
@@ -32,6 +34,19 @@ chmod 711 "$tmp_dir"
 chmod 733 "$report_dir"
 : >"$zap_log"
 chmod 666 "$zap_log"
+
+# ZAP's Automation Framework does not reliably substitute ${ENV_VAR} in every
+# field of the plan — pollUrl in particular is a documented gap
+# (zaproxy/zaproxy#8777, #7201) even though the same syntax resolves correctly
+# in context.urls. Resolve every placeholder ourselves before ZAP ever sees the
+# file, so a scan can't silently run against a broken, unsubstituted URL. The
+# guard script is copied alongside the resolved plan because its `source:`
+# path is resolved relative to the plan file's own directory.
+envsubst '${WEB_BASE_URL} ${BACKEND_BASE_URL} ${HOSTED_UI_URL} ${DAST_USERNAME} ${DAST_SYNTHETIC_WORKER_PASSWORD}' \
+  <"$policy_path" >"$plan_dir/automation.yaml"
+cp "$guard_path" "$plan_dir/active-scan-method-guard.js"
+chmod 711 "$plan_dir"
+chmod 644 "$plan_dir/automation.yaml" "$plan_dir/active-scan-method-guard.js"
 
 redacted_zap_diagnostic() {
   local diagnostic source
@@ -104,7 +119,7 @@ docker_args=(
   -e "DAST_WEB_HOST=$web_host"
   -e "DAST_BACKEND_HOST=$backend_host"
   -e 'DAST_REPORT_DIR=/zap/dast-output'
-  -v "$workspace:/zap/wrk:ro"
+  -v "$plan_dir:/zap/plan:ro"
   -v "$report_dir:/zap/dast-output"
   -v "$zap_log:/home/zap/.ZAP/zap.log"
   "$ZAP_IMAGE"
@@ -115,7 +130,7 @@ zap_command=(zap.sh -loglevel INFO -cmd -notel)
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.
 preflight_rc=0
-docker "${docker_args[@]}" "${zap_command[@]}" -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+docker "${docker_args[@]}" "${zap_command[@]}" -autocheck /zap/plan/automation.yaml >"$run_log" 2>&1 \
   || preflight_rc=$?
 if (( preflight_rc != 0 )); then
   printf 'DAST policy preflight failed (docker_exit=%s; %s); no staging scan was started.\n' \
@@ -124,7 +139,7 @@ if (( preflight_rc != 0 )); then
 fi
 
 scan_rc=0
-docker "${docker_args[@]}" "${zap_command[@]}" -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+docker "${docker_args[@]}" "${zap_command[@]}" -autorun /zap/plan/automation.yaml >"$run_log" 2>&1 \
   || scan_rc=$?
 report="$report_dir/dast-report.json"
 warning_state='none'

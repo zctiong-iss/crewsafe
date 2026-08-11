@@ -70,6 +70,11 @@ contains "workflow runs preflight before scanner" "$WORKFLOW" "validate-dast-sta
 contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated-dast.sh"
 contains "runner uses an ephemeral temporary directory" "$RUNNER" 'mktemp -d /tmp/crewsafe-dast.XXXXXX'
 contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
+contains "runner requires envsubst to resolve the policy" "$RUNNER" "command -v envsubst"
+contains "runner resolves policy env vars before mounting the plan" "$RUNNER" "envsubst '\${WEB_BASE_URL} \${BACKEND_BASE_URL} \${HOSTED_UI_URL} \${DAST_USERNAME} \${DAST_SYNTHETIC_WORKER_PASSWORD}'"
+contains "runner copies the guard script alongside the resolved plan" "$RUNNER" 'cp "$guard_path" "$plan_dir/active-scan-method-guard.js"'
+contains "runner mounts the resolved plan directory, not the full workspace" "$RUNNER" '-v "$plan_dir:/zap/plan:ro"'
+not_contains "runner no longer mounts the full workspace into the scanner" "$RUNNER" '/zap/wrk:ro'
 contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
 contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
 contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
