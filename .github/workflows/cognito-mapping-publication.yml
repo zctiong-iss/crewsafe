@@ -104,12 +104,12 @@ jobs:
         id: publish
         env:
           IMAGE_TAG: ${{ github.sha }}
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
         run: |
           set -euo pipefail
           mapping_file="$(mktemp)"; trap 'rm -f "$mapping_file"' EXIT
-          CREWSAFE_AWS_ACCOUNTS_JSON="${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}" \
-            CREWSAFE_SHARED_COGNITO_JSON="${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}" \
-            .github/scripts/cognito/build-runtime-mappings.sh "$ACCOUNT_ALIAS" strict-publication >"$mapping_file"
+          .github/scripts/cognito/build-runtime-mappings.sh "$ACCOUNT_ALIAS" strict-publication >"$mapping_file"
           actual_checksum="$(shasum -a 256 "$mapping_file" | awk '{print $1}')"
           [[ "$actual_checksum" == "$EXPECTED_MAPPING_CHECKSUM" ]]
           aws ssm put-parameter --name "$PARAMETER_NAME" --type String --overwrite --value "$(<"$mapping_file")" >/dev/null
