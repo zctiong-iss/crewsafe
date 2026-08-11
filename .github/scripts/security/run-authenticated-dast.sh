@@ -26,6 +26,8 @@ mkdir -p "$report_dir"
 
 docker_args=(
   run --rm
+  --hostname zap-dast
+  --add-host 'zap-dast:127.0.0.1'
   -e "WEB_BASE_URL=$WEB_BASE_URL"
   -e "BACKEND_BASE_URL=$BACKEND_BASE_URL"
   -e "HOSTED_UI_URL=$HOSTED_UI_URL"
