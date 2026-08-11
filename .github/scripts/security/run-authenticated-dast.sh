@@ -12,7 +12,7 @@ policy_path="$workspace/$policy_rel"
 guard_path="$workspace/.github/security/dast/active-scan-method-guard.js"
 [[ -r "$policy_path" && -r "$guard_path" ]] || { echo 'DAST policy files are unavailable' >&2; exit 1; }
 
-tmp_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/crewsafe-dast.XXXXXX")"
+tmp_dir="$(mktemp -d /tmp/crewsafe-dast.XXXXXX)"
 cleanup() { rm -rf "$tmp_dir"; }
 trap cleanup EXIT INT TERM
 started_at="$(date +%s)"
@@ -65,9 +65,9 @@ docker_args=(
   -e "DAST_SYNTHETIC_WORKER_PASSWORD=$DAST_SYNTHETIC_WORKER_PASSWORD"
   -e "DAST_WEB_HOST=$web_host"
   -e "DAST_BACKEND_HOST=$backend_host"
-  -e 'DAST_REPORT_DIR=/zap/wrk/dast-output'
+  -e 'DAST_REPORT_DIR=/zap/dast-output'
   -v "$workspace:/zap/wrk:ro"
-  -v "$report_dir:/zap/wrk/dast-output"
+  -v "$report_dir:/zap/dast-output"
   "$ZAP_IMAGE"
 )
 
