@@ -36,8 +36,10 @@ request, or CI summary.
   to the reviewed web origin's dedicated sink path; the original host is never
   contacted.
 - Report generation always runs against the mounted ephemeral output directory, even
-  when an earlier scan step records an error. A non-zero ZAP exit remains an unavailable
-  security-control result; the report is retained only for the wrapper's in-job review.
+  when an earlier scan step records an error. A ZAP error exit remains an unavailable
+  security-control result. ZAP warning exit `2` is advisory when a reviewable report is
+  present, matching the policy's `failOnWarning: false` setting; the report is retained
+  only for the wrapper's in-job review.
 - On a non-zero scan exit, the wrapper checks the ephemeral ZAP internal log as well as
   scanner output and prints at most one bounded, redacted diagnostic. Only the log file
   is mounted from the runner; raw logs and all other ZAP runtime state remain ephemeral

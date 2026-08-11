@@ -27,12 +27,13 @@ does not mistake the SPA shell or an unauthenticated API response for authentica
 coverage.
 
 The report job always runs and writes to the runner-mounted `/zap/dast-output` directory,
-including when an earlier scan job records an error. A non-zero ZAP exit still makes the
-security-control job unavailable; `alwaysRun` preserves evidence and does not turn a
-failed scan into a clean result. The wrapper also gives ZAP an informative log level and
-mounts only its internal log file, so a failed run can emit one bounded, redacted
-diagnostic from the scanner output or internal ZAP log without retaining raw scanner
-state or leaving container-owned files for runner cleanup.
+including when an earlier scan job records an error. A ZAP error exit makes the
+security-control job unavailable; a warning exit remains advisory when a reviewable
+report exists, matching the policy's `failOnWarning: false` setting. `alwaysRun` preserves
+evidence and does not turn a failed scan into a clean result. The wrapper also gives ZAP
+an informative log level and mounts only its internal log file, so a failed run can emit
+one bounded, redacted diagnostic from the scanner output or internal ZAP log without
+retaining raw scanner state or leaving container-owned files for runner cleanup.
 
 The workflow has `contents: read` only and receives only the DAST test password through
 an explicit secret mapping. Raw traffic, session state, and reports exist only in the

@@ -82,8 +82,13 @@ contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflig
 contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
 contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
 contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
+contains "runner treats ZAP warning exit as advisory" "$RUNNER" "scan_rc == 2"
+contains "runner keeps ZAP error exit fatal" "$RUNNER" "scan_rc == 1"
+contains "runner records advisory warning state" "$RUNNER" "warning_state"
 contains "runner captures the mounted ZAP log" "$RUNNER" 'zap_log="$tmp_dir/zap.log"'
 contains "runner scans the ZAP log for diagnostics" "$RUNNER" 'for source in "$zap_log" "$run_log"; do'
+contains "runner skips stack-frame-only diagnostics" "$RUNNER" "grep -Ev"
+contains "runner surfaces exception causes" "$RUNNER" "caused by"
 contains "runner requests an informative ZAP log level" "$RUNNER" "-loglevel INFO"
 contains "runner redacts bearer tokens from diagnostics" "$RUNNER" "Bearer[[:space:]]+"
 contains "runner mounts only the ZAP log file" "$RUNNER" "/home/zap/.ZAP/zap.log"
