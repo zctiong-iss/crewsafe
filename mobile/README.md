@@ -1003,9 +1003,9 @@ person re-sets one switch once.
 
 ---
 
-## US-11 — Logging rest and hydration, and raising a concern
+## SCRUM-125 — Logging rest and hydration, and raising a concern
 
-Plan: [`docs/plans/US-11-rest-hydration-and-concerns-plan.md`](../docs/plans/US-11-rest-hydration-and-concerns-plan.md).
+Plan: [`docs/plans/SCRUM-125-rest-hydration-and-concerns-plan.md`](../docs/plans/SCRUM-125-rest-hydration-and-concerns-plan.md).
 
 A worker records a rest or a drink with one tap, or tells their supervisor they are unwell. The
 supervisor sees how the crew is coping on the shift screen, and gets a **Concerns** tab with a

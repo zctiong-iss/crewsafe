@@ -1,6 +1,6 @@
-# US-11 — Worker logs rest / hydration or raises a concern
+# SCRUM-125 — Worker logs rest / hydration or raises a concern
 
-Feature F-12. Mobile (React Native) + Backend (Spring Boot). Branched from `origin/main`.
+US-11, feature F-12. Mobile (React Native) + Backend (Spring Boot). Branched from `origin/main`.
 
 ## Outcome
 
@@ -14,7 +14,7 @@ Nothing in the system recorded either. Two things existed nearby and were delibe
 as-is:
 
 - **`readiness_submission` (V7)** is a *pre-shift* gate carrying `adequate_hydration` as a boolean
-  and a `SymptomFlag` set. That answers "am I fit to start", asked once. US-11 is an ongoing log
+  and a `SymptomFlag` set. That answers "am I fit to start", asked once. SCRUM-125 is an ongoing log
   *during* the shift, so the table is not reusable — but the **symptom vocabulary is**, and is.
 - **The rest timer (SCRUM-206)** already counted down an acknowledged `REST_15_MIN` and dismissed
   the card. That recorded *rest instructed and acknowledged*, never *rest taken*, because
