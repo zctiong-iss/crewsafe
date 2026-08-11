@@ -27,6 +27,7 @@ import java.util.UUID;
  * and managing acknowledgements with full idempotency support.
  *
  * @author Surya Kumaraguru
+ * @author Justin Chua
  */
 @Service
 @RequiredArgsConstructor

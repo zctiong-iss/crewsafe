@@ -1,4 +1,5 @@
 -- V11: Worker wellbeing logs and concerns (US-11 / F-12)
+-- @author Justin Chua
 --
 -- Two tables, deliberately not one. A rest or a hydration is a fact with no state — it
 -- happened, at a time, and nothing further is ever true of it. A concern has a life: someone

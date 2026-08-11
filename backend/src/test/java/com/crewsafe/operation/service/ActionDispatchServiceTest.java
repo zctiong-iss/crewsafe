@@ -32,6 +32,7 @@ import static org.mockito.Mockito.*;
  * Unit tests for ActionDispatchService.
  *
  * @author Surya Kumaraguru
+ * @author Justin Chua
  */
 @ExtendWith(MockitoExtension.class)
 class ActionDispatchServiceTest {

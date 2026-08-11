@@ -10,6 +10,7 @@ package com.crewsafe.common.audit;
  * constant here before writing the new event type.
  *
  * @author Jemilin Beulah
+ * @author Justin Chua
  */
 public final class AuditEventType {
 
