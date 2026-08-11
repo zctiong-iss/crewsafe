@@ -22,10 +22,10 @@ const wrap = (ui: React.ReactElement) =>
     </MemoryRouter>,
   );
 
-const liveSnapshot = (wbgt: number, observedAt: string) => ({
+const liveSnapshot = (wbgt: number, observedAt: string, humidity = 70) => ({
   siteId: "s1", asOf: "2026-08-06T07:40:12Z", activeShift: null, lightning: null,
   conditions: {
-    wbgt, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+    wbgt, temperature: 33, humidity, windSpeed: 2, rainfall: 0,
     observedAt, source: "NEA" as const, freshness: "LIVE" as const,
   },
 });
@@ -59,7 +59,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
           validUntil: new Date(Date.now() + 60_000).toISOString(),
           freshness: "LIVE",
         },
-      });
+      }, []);
     });
 
     // Banner should appear
@@ -90,7 +90,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
 
     act(() => {
       handlers.onStatus("live");
-      handlers.onSnapshot(liveSnapshot(31, "2026-08-06T07:40:00Z"));
+      handlers.onSnapshot(liveSnapshot(31, "2026-08-06T07:40:00Z"), []);
     });
     expect(screen.getByText(/31/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -100,8 +100,92 @@ describe("ConditionsPanel — degraded on staleness", () => {
     expect(screen.getByText(/31/)).toBeInTheDocument();
 
     act(() => {
-      handlers.onSnapshot(liveSnapshot(30, "2026-08-06T07:55:00Z"));
+      handlers.onSnapshot(liveSnapshot(30, "2026-08-06T07:55:00Z"), []);
     });
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows an unverified sensor warning and clears it after an in-range reading", async () => {
+    let handlers!: ConditionsStreamHandlers;
+    const fakeSubscribe = (_siteId: string, h: ConditionsStreamHandlers) => {
+      handlers = h;
+      return () => {};
+    };
+
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(36.1, "2026-08-06T07:40:00Z"), [{
+        metric: "wbgt",
+        value: 36.1,
+        minimum: 20,
+        maximum: 36,
+      }]);
+    });
+
+    expect(screen.getByText(/36\.1 °C/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/take necessary heat-safety action/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/verify against official NEA data/i);
+
+    act(() => {
+      handlers.onSnapshot(liveSnapshot(35, "2026-08-06T07:55:00Z"), []);
+    });
+
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the below-range verification message for a 19.9°C WBGT reading", async () => {
+    let handlers!: ConditionsStreamHandlers;
+    const fakeSubscribe = (_siteId: string, h: ConditionsStreamHandlers) => {
+      handlers = h;
+      return () => {};
+    };
+
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(19.9, "2026-08-06T07:40:00Z"), [{
+        metric: "wbgt",
+        value: 19.9,
+        minimum: 20,
+        maximum: 36,
+      }]);
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/19\.9°C.*below 20\.0°C/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/verify against official NEA data/i);
+  });
+
+  it.each([
+    ["low", 29.9],
+    ["excessive", 100.1],
+  ])("shows a sensor warning for %s humidity", async (_label, humidity) => {
+    let handlers!: ConditionsStreamHandlers;
+    const fakeSubscribe = (_siteId: string, h: ConditionsStreamHandlers) => {
+      handlers = h;
+      return () => {};
+    };
+
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(30, "2026-08-06T07:40:00Z", humidity), [{
+        metric: "humidity",
+        value: humidity,
+        minimum: 30,
+        maximum: 100,
+      }]);
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      new RegExp(`${humidity}%.*outside the expected range`, "i"),
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/sensor data may be unreliable/i);
   });
 });
