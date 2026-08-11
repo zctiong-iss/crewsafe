@@ -71,6 +71,8 @@ contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated
 contains "runner uses an ephemeral runner directory" "$RUNNER" 'RUNNER_TEMP:-/tmp'
 contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
 contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
+contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
+contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 
 contains "backend caller depends on deployment" "$BACKEND_WORKFLOW" "needs: deploy-staging"
