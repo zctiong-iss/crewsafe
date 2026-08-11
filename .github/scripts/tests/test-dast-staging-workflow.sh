@@ -73,6 +73,8 @@ contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT
 contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
 contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
 contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
+contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflight_failure_reason"
+not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 
 contains "backend caller depends on deployment" "$BACKEND_WORKFLOW" "needs: deploy-staging"

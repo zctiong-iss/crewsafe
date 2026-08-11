@@ -24,6 +24,24 @@ run_log="$tmp_dir/zap.log"
 report_dir="$tmp_dir/report"
 mkdir -p "$report_dir"
 
+preflight_failure_reason() {
+  if grep -Fq -- 'Could not determine local host name' "$run_log"; then
+    echo 'ZAP container hostname resolution failed'
+  elif grep -Fq -- 'Error reading parameters' "$run_log"; then
+    echo 'ZAP Automation Framework parameter validation failed'
+  elif grep -Fq -- 'Unrecognised active scan rule ID' "$run_log"; then
+    echo 'ZAP active-scan policy contains an unrecognised rule'
+  elif grep -Fq -- 'No such file' "$run_log"; then
+    echo 'ZAP policy or script file was unavailable'
+  elif grep -Fq -- 'Permission denied' "$run_log"; then
+    echo 'ZAP policy or report path permission was denied'
+  elif grep -Fq -- 'Exception' "$run_log"; then
+    echo 'ZAP reported an internal preflight exception'
+  else
+    echo 'ZAP rejected the policy or failed to start'
+  fi
+}
+
 docker_args=(
   run --rm
   --hostname zap-dast
@@ -44,7 +62,8 @@ docker_args=(
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.
 if ! docker "${docker_args[@]}" zap.sh -cmd -notel -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
-  echo 'DAST policy preflight failed; no staging scan was started.' >&2
+  printf 'DAST policy preflight failed (%s); no staging scan was started.\n' \
+    "$(preflight_failure_reason)" >&2
   exit 1
 fi
 
