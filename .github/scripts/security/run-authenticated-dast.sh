@@ -22,27 +22,33 @@ backend_host="${BACKEND_BASE_URL#https://}"
 summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
 run_log="$tmp_dir/zap.log"
 report_dir="$tmp_dir/report"
-mkdir -p "$report_dir"
+zap_home="$tmp_dir/home"
+zap_log="$zap_home/zap.log"
+mkdir -p "$report_dir" "$zap_home"
 # ZAP runs as the non-root `zap` user. Keep the ephemeral parent private while
-# allowing that user to traverse it and write only the mounted report directory.
+# allowing that user to traverse it and write only the mounted output directories.
 chmod 711 "$tmp_dir"
-chmod 733 "$report_dir"
+chmod 733 "$report_dir" "$zap_home"
 
 redacted_zap_diagnostic() {
-  local diagnostic
-  diagnostic="$(grep -Ei 'error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected|timeout|timed out|refused' "$run_log" | tail -n 1 || true)"
-  if [[ -n "$diagnostic" ]]; then
+  local diagnostic source
+  for source in "$zap_log" "$run_log"; do
+    [[ -r "$source" ]] || continue
+    diagnostic="$(grep -Ei 'automation framework|automation plan|error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected|timeout|timed out|refused' "$source" | tail -n 1 || true)"
+    [[ -n "$diagnostic" ]] || continue
     diagnostic="$(printf '%s' "$diagnostic" \
       | sed -E \
           -e 's#https?://[^[:space:]]+#<redacted-url>#g' \
           -e 's#DAST_[A-Z0-9_]+=[^[:space:]]+#DAST_[redacted]=[redacted]#g' \
-          -e 's#(password|token|cookie|authorization|username)[^= ]*=[^[:space:]]+#\1=[redacted]#Ig' \
+          -e 's#(password|token|cookie|authorization|username|secret|access_token|refresh_token)[^:= ]*[:=][[:space:]]*[^,;[:space:]]+#\1=[redacted]#Ig' \
+          -e 's#Bearer[[:space:]]+[A-Za-z0-9._~+/=-]+#Bearer [redacted]#Ig' \
+          -e 's#[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}#<redacted-jwt>#g' \
           -e 's#[[:alnum:]._%+-]+@[[:alnum:].-]+\.[A-Za-z]{2,}#<redacted-email>#g' \
       | cut -c1-240)"
-    printf 'ZAP emitted a redacted diagnostic: %s' "$diagnostic"
-  else
-    echo 'ZAP did not emit a classifiable diagnostic'
-  fi
+    printf 'ZAP emitted a redacted diagnostic from %s: %s' "$(basename "$source")" "$diagnostic"
+    return 0
+  done
+  echo 'ZAP did not emit a classifiable diagnostic (checked scanner output and internal ZAP log)'
 }
 
 preflight_failure_reason() {
@@ -95,13 +101,16 @@ docker_args=(
   -e 'DAST_REPORT_DIR=/zap/dast-output'
   -v "$workspace:/zap/wrk:ro"
   -v "$report_dir:/zap/dast-output"
+  -v "$zap_home:/zap/home"
   "$ZAP_IMAGE"
 )
+
+zap_command=(zap.sh -dir /zap/home -loglevel INFO -cmd -notel)
 
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.
 preflight_rc=0
-docker "${docker_args[@]}" zap.sh -cmd -notel -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+docker "${docker_args[@]}" "${zap_command[@]}" -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
   || preflight_rc=$?
 if (( preflight_rc != 0 )); then
   printf 'DAST policy preflight failed (docker_exit=%s; %s); no staging scan was started.\n' \
@@ -110,7 +119,7 @@ if (( preflight_rc != 0 )); then
 fi
 
 scan_rc=0
-docker "${docker_args[@]}" zap.sh -cmd -notel -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+docker "${docker_args[@]}" "${zap_command[@]}" -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
   || scan_rc=$?
 report="$report_dir/dast-report.json"
 if (( scan_rc != 0 )); then

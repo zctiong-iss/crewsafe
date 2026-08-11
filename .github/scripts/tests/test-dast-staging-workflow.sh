@@ -82,6 +82,10 @@ contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflig
 contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
 contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
 contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
+contains "runner captures a private ZAP home for internal logs" "$RUNNER" 'zap_home="$tmp_dir/home"'
+contains "runner scans the internal ZAP log for diagnostics" "$RUNNER" 'zap_log="$zap_home/zap.log"'
+contains "runner requests an informative ZAP log level" "$RUNNER" "-loglevel INFO"
+contains "runner redacts bearer tokens from diagnostics" "$RUNNER" "Bearer[[:space:]]+"
 contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
 contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
 contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
