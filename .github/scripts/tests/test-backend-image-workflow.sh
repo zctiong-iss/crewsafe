@@ -127,6 +127,38 @@ workflow_policy_guard() {
   return 0
 }
 
+# SCRUM-242: an applied task-start parameter needs a fresh task, but its
+# approved backend release may predate the current workflow change. The replay
+# branch must therefore deploy only an approved ancestor's existing image.
+redeploy_policy_guard() {
+  local path="$1" block
+  [[ -f "$path" ]] || return 1
+  rg -q -F -- 'redeploy:' "$path" || return 1
+  rg -q -F -- 'redeploy_image_tag:' "$path" || return 1
+  rg -q -F -- 'inputs.redeploy && !inputs.publish' "$path" || return 1
+  rg -q -F -- 'inputs.publish && !inputs.redeploy' "$path" || return 1
+  rg -q -F -- 'resolve-existing-image:' "$path" || return 1
+  rg -q -F -- 'github.event_name == '"'"'workflow_dispatch'"'"'' "$path" || return 1
+  rg -q -F -- 'inputs.redeploy_image_tag' "$path" || return 1
+  rg -q -F -- 'fetch-depth: 0' "$path" || return 1
+  rg -q -F -- 'git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA"' "$path" || return 1
+  rg -q -F -- 'aws ecr describe-images' "$path" || return 1
+  rg -q -F -- 'imageTag="$IMAGE_TAG"' "$path" || return 1
+  rg -q -F -- 'crewsafe-shared-dev-backend-deploy' "$path" || return 1
+  rg -q -F -- 'deploy-backend-staging.sh' "$path" || return 1
+  ! rg -q -F -- 'redeploy_image_uri:' "$path" || return 1
+
+  block="$(awk '
+    /^  resolve-existing-image:/ { started = 1 }
+    started && /^  deploy-staging:/ { exit }
+    started { print }
+  ' "$path")"
+  [[ "$block" == *'needs: build-test'* ]] || return 1
+  [[ "$block" == *'ecr:DescribeImages'* || "$block" == *'describe-images'* ]] || return 1
+  [[ "$block" != *'docker build'* && "$block" != *'docker push'* ]] || return 1
+  return 0
+}
+
 replace_fixture_text() {
   local path="$1" pattern="$2" replacement="$3"
   sed "s|$pattern|$replacement|g" "$path" >"$path.next"
@@ -166,6 +198,19 @@ mutate_fixture() {
     malformed-tag)
       replace_fixture_text "$path" '{40}' '{39}'
       ;;
+    missing-redeploy-exclusion)
+      replace_fixture_text "$path" 'inputs.redeploy && !inputs.publish' 'inputs.redeploy'
+      ;;
+    malformed-redeploy-tag)
+      replace_fixture_text "$path" 'redeploy_image_tag' 'redeploy_image_ref'
+      ;;
+    missing-ancestry-check)
+      sed '/git merge-base --is-ancestor/d' "$path" >"$path.next"
+      mv "$path.next" "$path"
+      ;;
+    arbitrary-image-input)
+      printf '\n    redeploy_image_uri:\n      description: arbitrary image URI\n      type: string\n' >>"$path"
+      ;;
     *)
       printf 'unknown fixture mutation: %s\n' "$mutation" >&2
       return 1
@@ -188,6 +233,21 @@ assert_rejected_fixture() {
   fi
 }
 
+assert_rejected_redeploy_fixture() {
+  local label="$1" mutation="$2"
+  local fixture
+  fixture="$(mktemp)"
+  TMP_DIRS+=("$fixture")
+  cp "$WORKFLOW" "$fixture"
+  mutate_fixture "$fixture" "$mutation"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if ! redeploy_policy_guard "$fixture"; then
+    pass "$label"
+  else
+    fail "$label" "redeploy policy guard accepted mutation: $mutation"
+  fi
+}
+
 printf 'test-backend-image-workflow\n'
 check_file "backend workflow exists" "$WORKFLOW"
 check_file "backend Dockerfile exists" "$ROOT/backend/Dockerfile"
@@ -202,6 +262,10 @@ contains_in "push publication predicate exists" "$WORKFLOW" "github.event_name =
 contains_in "manual publication predicate exists" "$WORKFLOW" 'inputs.publish'
 contains_in "publication has read permission" "$WORKFLOW" 'contents: read'
 contains_in "publication has OIDC permission" "$WORKFLOW" 'id-token: write'
+
+# --- SCRUM-242 US3: post-apply immutable-image replay ---------------------
+contains_in "manual redeploy input exists" "$WORKFLOW" 'redeploy:'
+contains_in "redeploy resolves an existing image job" "$WORKFLOW" 'resolve-existing-image:'
 
 # --- US1 AS1/AS2 (T013): report-only scan step present, correctly configured
 contains_in "publication builds backend image" "$WORKFLOW" 'docker build'
@@ -275,6 +339,19 @@ assert_rejected_fixture "negative missing run_id output fixture is rejected" mis
 assert_rejected_fixture "negative invalid repository fixture is rejected" invalid-repository
 assert_rejected_fixture "negative invalid role fixture is rejected" invalid-role
 assert_rejected_fixture "negative malformed tag fixture is rejected" malformed-tag
+
+# --- SCRUM-242 US3: deploy-only safety mutations --------------------------
+TESTS_RUN=$((TESTS_RUN + 1))
+if redeploy_policy_guard "$WORKFLOW"; then
+  pass "base workflow passes redeploy policy guard"
+else
+  fail "base workflow passes redeploy policy guard"
+fi
+
+assert_rejected_redeploy_fixture "negative missing redeploy exclusion fixture is rejected" missing-redeploy-exclusion
+assert_rejected_redeploy_fixture "negative malformed redeploy tag fixture is rejected" malformed-redeploy-tag
+assert_rejected_redeploy_fixture "negative missing ancestry check fixture is rejected" missing-ancestry-check
+assert_rejected_redeploy_fixture "negative arbitrary image input fixture is rejected" arbitrary-image-input
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

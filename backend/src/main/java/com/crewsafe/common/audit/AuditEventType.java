@@ -10,6 +10,7 @@ package com.crewsafe.common.audit;
  * constant here before writing the new event type.
  *
  * @author Jemilin Beulah
+ * @author Justin Chua
  */
 public final class AuditEventType {
 
@@ -74,6 +75,15 @@ public final class AuditEventType {
      * original draft is retained on the recommendation; the edited version is retained on
      * the resulting approval. */
     public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
+
+    /** A worker logged a rest or a drink of water (US-11). */
+    public static final String WELLBEING_LOGGED = "WELLBEING_LOGGED";
+
+    /** A worker reported that they are struggling (US-11). */
+    public static final String CONCERN_RAISED = "CONCERN_RAISED";
+
+    /** A supervisor confirmed they have seen a worker's concern (US-11). */
+    public static final String CONCERN_ACKNOWLEDGED = "CONCERN_ACKNOWLEDGED";
 
     private AuditEventType() {
     }

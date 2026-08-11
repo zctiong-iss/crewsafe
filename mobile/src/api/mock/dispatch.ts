@@ -212,3 +212,20 @@ export function resetMockDispatches(): void {
   dispatches.clear();
   for (const d of SEED) dispatches.set(d.id, { ...d });
 }
+
+/**
+ * Completing a dispatch in mock mode (US-11).
+ *
+ * Idempotent like the server: a rest timer that expires while a retry is already in flight must
+ * not produce two completions, and the real endpoint returns the existing row rather than
+ * failing.
+ */
+export function mockComplete(dispatchId: string): ActionDispatch {
+  const found = dispatches.get(dispatchId);
+  if (!found) {
+    throw new ApiError("not-found", "No such dispatch", 404, null);
+  }
+  found.status = "COMPLETED";
+  found.endTime = new Date().toISOString();
+  return materialise(found);
+}

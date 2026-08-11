@@ -26,6 +26,29 @@ variable "aws_region" {
   }
 }
 
+variable "github_oidc_main_subject" {
+  description = <<-EOT
+    Exact owner/repository-ID OIDC subject for this repo's main branch, so only a
+    workflow run on main can assume the web sync role (SCRUM-298 FR-017).
+
+    This is the fourth of the four TF_VAR_* values the shared plan and apply
+    workflows already pass to every component's dispatch — it was simply never
+    declared here before, because nothing in this component needed a
+    GitHub-Actions-assumable role until the web sync role. Declaring it now
+    consumes a value CI already offers; it requires no change to the shared
+    workflows (research.md R-004, SCRUM-298 FR-022).
+
+    No default, deliberately — matches infra/terraform/ecr/variables.tf's identical
+    declaration for the same reason: this is a security-sensitive value that must
+    come from dispatch, never a committed one.
+  EOT
+  type        = string
+  validation {
+    condition     = can(regex("^repo:[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+:ref:refs/heads/main$", var.github_oidc_main_subject))
+    error_message = "github_oidc_main_subject must be the exact immutable owner/repository-ID main-branch subject without wildcards."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Every variable below this line has a default, and that is a requirement rather
 # than a convenience (FR-047).
@@ -144,13 +167,11 @@ variable "cors_allowed_origins" {
 
     These are CALLER origins, not this service's own URL — a same-origin request is not
     subject to cross-origin checks, so naming the staging backend here would permit nothing.
-    The default is the application's own local development origins, which keeps the staging
-    API callable from a developer's browser while no browser client is deployed.
-
-    Whichever issue deploys the web client replaces this with its real origin.
+    Staging permits only the stable deployed web origin. Local development origins are not
+    staging callers and must be supplied only in a local, non-staging configuration.
   EOT
   type        = string
-  default     = "http://localhost:5173,http://localhost:8081"
+  default     = "https://d3b75ru76gta2n.cloudfront.net"
   validation {
     condition     = length(trimspace(var.cors_allowed_origins)) > 0 && !can(regex("\\*", var.cors_allowed_origins))
     error_message = "cors_allowed_origins must be a non-empty explicit list of origins and must not contain a wildcard."
@@ -184,5 +205,29 @@ variable "demo_users_json" {
   validation {
     condition     = can(jsondecode(var.demo_users_json)) && startswith(trimspace(var.demo_users_json), "[")
     error_message = "demo_users_json must be a valid JSON array. The application parses it as a list of mappings, and a malformed value fails the task at startup rather than at plan time."
+  }
+}
+
+variable "web_bucket_noncurrent_version_expiration_days" {
+  description = <<-EOT
+    Days after which a NONCURRENT object version in the web bucket is expired
+    (SCRUM-298 research.md R-009).
+
+    The web bucket is versioned (FR-006), but unlike the Terraform state bucket
+    (which this pattern is otherwise copied from), this bucket receives a full
+    build's worth of new object versions on every sync — the state bucket's
+    pattern has no equivalent lifecycle rule because Terraform state doesn't
+    accumulate versions the same way. Without this rule, every synced-over or
+    deleted object's prior version is retained indefinitely.
+
+    30 days gives comfortable rollback headroom without unbounded storage growth
+    — longer than SCRUM-177's twenty-image ECR retention typically covers in
+    elapsed time for a similar push cadence.
+  EOT
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.web_bucket_noncurrent_version_expiration_days > 0
+    error_message = "web_bucket_noncurrent_version_expiration_days must be a positive number of days."
   }
 }

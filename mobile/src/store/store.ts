@@ -24,6 +24,8 @@ import shifts from "./reducers/shiftsSlice";
 import ui from "./reducers/uiSlice";
 import profile from "./reducers/profileSlice";
 import dispatchInbox from "./reducers/dispatchInboxSlice";
+import recommendations from "./reducers/recommendationsSlice";
+import wellbeing from "./reducers/wellbeingSlice";
 
 const rootReducer = combineReducers({
   preferences,
@@ -31,6 +33,12 @@ const rootReducer = combineReducers({
   safety,
   weather,
   shifts,
+  // Not persisted: a decision is recorded server-side, and a stale pending item rehydrated
+  // from disk would invite a supervisor to decide something already decided.
+  recommendations,
+  // Not persisted: a rest logged on this device is a fact the server holds, and rehydrating a
+  // stale "logged at" would tell a worker they rested when the write never landed.
+  wellbeing,
   ui,
   profile,
   // Nested persist: this slice needs two of its fields kept and the rest discarded. See
