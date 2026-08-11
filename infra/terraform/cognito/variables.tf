@@ -34,18 +34,30 @@ variable "github_oidc_main_subject" {
 
 variable "web_callback_urls" {
   type    = list(string)
-  default = ["http://localhost:5173/callback"]
+  default = [
+    "http://localhost:5173/callback",
+    "https://d3b75ru76gta2n.cloudfront.net/callback",
+  ]
   validation {
-    condition     = var.web_callback_urls == tolist(["http://localhost:5173/callback"])
-    error_message = "The shared development web client has one reviewed localhost callback."
+    condition = var.web_callback_urls == tolist([
+      "http://localhost:5173/callback",
+      "https://d3b75ru76gta2n.cloudfront.net/callback",
+    ])
+    error_message = "The shared development web client has exactly the reviewed localhost and staging callbacks."
   }
 }
 variable "web_logout_urls" {
   type    = list(string)
-  default = ["http://localhost:5173/"]
+  default = [
+    "http://localhost:5173/",
+    "https://d3b75ru76gta2n.cloudfront.net/",
+  ]
   validation {
-    condition     = var.web_logout_urls == tolist(["http://localhost:5173/"])
-    error_message = "The shared development web client has one reviewed localhost logout URL."
+    condition = var.web_logout_urls == tolist([
+      "http://localhost:5173/",
+      "https://d3b75ru76gta2n.cloudfront.net/",
+    ])
+    error_message = "The shared development web client has exactly the reviewed localhost and staging logout URLs."
   }
 }
 variable "mobile_callback_urls" {
