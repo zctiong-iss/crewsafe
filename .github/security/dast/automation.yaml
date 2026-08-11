@@ -75,13 +75,21 @@ jobs:
   # The React/Vite application creates its authenticated API traffic in the
   # browser. Client Spider executes that browser flow and supports the same
   # context authentication/session configuration as the active scanner.
+  #
+  # maxChildren/maxCrawlDepth are kept small deliberately: staging runs have
+  # repeatedly hit an internal ZAP HSQLDB "connection exception: closed"
+  # (docker_exit=2) under the wider limits, with real crawl coverage recorded
+  # but zero alerts persisted — a known class of ZAP bug under sustained
+  # Client Spider load (zaproxy/zaproxy#6719). Shrinking concurrent browser
+  # tabs and total crawl volume is the first mitigation to try before
+  # changing the pinned scanner image.
   - type: spiderClient
     parameters:
       context: crewsafe-staging
       user: synthetic-worker
       maxDuration: 5
-      maxCrawlDepth: 3
-      maxChildren: 50
+      maxCrawlDepth: 2
+      maxChildren: 10
   # The passive scanner analyzes traffic asynchronously in a background queue;
   # it does not finish just because the job that generated the traffic did.
   # Without waiting here, the active scanner can start against an unsettled
