@@ -37,8 +37,21 @@ env:
           loginPageWait: 5
           browserId: firefox-headless
           diagnostics: false
+        verification:
+          method: poll
+          loggedInRegex: "200 OK"
+          loggedOutRegex: "401 Unauthorized"
+          pollFrequency: 0
+          pollUnits: seconds
+          pollUrl: ${BACKEND_BASE_URL}/api/v1/me
+          pollPostData: ""
       sessionManagement:
-        method: cookie
+        # CrewSafe is a bearer-token SPA: the backend does not authenticate a
+        # browser cookie. Preserve the token returned by the Cognito code flow
+        # on HTTP requests made by the spider and active scanner.
+        method: headers
+        parameters:
+          Authorization: "Bearer {%json:access_token%}"
       users:
         - name: synthetic-worker
           credentials:
@@ -56,12 +69,15 @@ jobs:
       engine: ECMAScript
       name: active-scan-method-guard
       source: active-scan-method-guard.js
-  - type: spider
+  # The React/Vite application creates its authenticated API traffic in the
+  # browser. Client Spider executes that browser flow and supports the same
+  # context authentication/session configuration as the active scanner.
+  - type: spiderClient
     parameters:
       context: crewsafe-staging
       user: synthetic-worker
       maxDuration: 5
-      maxDepth: 3
+      maxCrawlDepth: 3
       maxChildren: 50
   - type: activeScan
     parameters:
