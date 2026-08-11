@@ -75,7 +75,8 @@ jobs:
       delayInMs: 250
     policyDefinition:
       defaultStrength: Low
-      defaultThreshold: Off
+      # Quote Off so YAML does not coerce it to the boolean false.
+      defaultThreshold: "Off"
       rules:
         - id: 40012
           name: Cross Site Scripting (Reflected)
