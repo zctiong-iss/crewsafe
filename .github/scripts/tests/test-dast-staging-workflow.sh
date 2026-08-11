@@ -54,6 +54,8 @@ file_exists "ZAP automation policy exists" "$AUTOMATION"
 file_exists "active-scan method guard exists" "$METHOD_GUARD"
 file_exists "DAST operating procedure exists" "$RUNBOOK"
 file_exists "durable DAST plan exists" "$PLAN"
+contains "validator uses portable grep checks" "$VALIDATOR" "grep -Fq"
+not_contains "validator has no runtime ripgrep dependency" "$VALIDATOR" "rg -q"
 
 contains "workflow is reusable" "$WORKFLOW" "workflow_call:"
 contains "workflow is read-only" "$WORKFLOW" "contents: read"

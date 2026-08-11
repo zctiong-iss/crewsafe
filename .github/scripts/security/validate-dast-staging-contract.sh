@@ -36,9 +36,9 @@ valid_cloudfront_origin='^https://[a-z0-9]+\.cloudfront\.net$'
 
 policy_path="${DAST_POLICY_PATH:-.github/security/dast/automation.yaml}"
 [[ -r "$policy_path" ]] || fail "DAST automation policy is unavailable"
-rg -q -F 'method: browser' "$policy_path" || fail "DAST policy does not require browser authentication"
-rg -q -F 'active-scan-method-guard.js' "$policy_path" || fail "DAST policy does not load the method guard"
-rg -q -F 'maxScanDurationInMins: 15' "$policy_path" || fail "DAST policy does not enforce scan duration"
+grep -Fq -- 'method: browser' "$policy_path" || fail "DAST policy does not require browser authentication"
+grep -Fq -- 'active-scan-method-guard.js' "$policy_path" || fail "DAST policy does not load the method guard"
+grep -Fq -- 'maxScanDurationInMins: 15' "$policy_path" || fail "DAST policy does not enforce scan duration"
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
   {
