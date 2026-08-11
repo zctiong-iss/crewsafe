@@ -120,6 +120,7 @@ contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorizat
 not_contains "automation does not use the unsupported underscored token key" "$AUTOMATION" "{%json:access_token%}"
 contains "automation uses a browser-capable client spider" "$AUTOMATION" "type: spiderClient"
 not_contains "automation does not use the traditional spider depth parameter" "$AUTOMATION" "maxDepth: 3"
+contains "automation waits for the passive scanner before reporting" "$AUTOMATION" "type: passiveScan-wait"
 contains "automation includes web target" "$AUTOMATION" '${WEB_BASE_URL}'
 contains "automation includes backend target" "$AUTOMATION" '${BACKEND_BASE_URL}'
 contains "automation loads method guard" "$AUTOMATION" "active-scan-method-guard.js"
