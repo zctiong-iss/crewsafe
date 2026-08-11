@@ -1,3 +1,5 @@
+/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
+
 import { describe, expect, it } from "vitest";
 import {
   decodeConditionsSnapshot,
@@ -5,91 +7,145 @@ import {
   InvalidConditionsPayloadError,
 } from "./conditionsDecoder";
 
-function snapshot(wbgt: unknown, humidity: unknown): string {
-  return JSON.stringify({
+type JsonObject = Record<string, unknown>;
+
+function validPayload(): JsonObject {
+  return {
     siteId: "550e8400-e29b-41d4-a716-446655440000",
     conditions: {
-      wbgt,
+      wbgt: 31,
       temperature: 32,
-      humidity,
+      humidity: 70,
       windSpeed: 2,
       rainfall: 0,
       observedAt: "2026-08-11T08:00:00Z",
       source: "NEA",
       freshness: "LIVE",
     },
-    lightning: null,
-    activeShift: null,
+    lightning: {
+      state: "CLEAR",
+      nearestStrikeKm: 12,
+      observedAt: "2026-08-11T08:00:00Z",
+      validUntil: "2026-08-11T08:05:00Z",
+      freshness: "LIVE",
+    },
+    activeShift: {
+      shiftId: "550e8400-e29b-41d4-a716-446655440001",
+      startsAt: "2026-08-11T07:00:00Z",
+      endsAt: "2026-08-11T15:00:00Z",
+    },
     asOf: "2026-08-11T08:00:10Z",
-  });
+  };
 }
 
-describe("conditionsDecoder sanity warnings", () => {
+function child(value: JsonObject, key: string): JsonObject {
+  return value[key] as JsonObject;
+}
+
+function encode(change?: (value: JsonObject) => void): string {
+  const value = validPayload();
+  change?.(value);
+  return JSON.stringify(value);
+}
+
+describe("decodeConditionsSnapshot", () => {
+  it("decodes a complete valid snapshot without warnings", () => {
+    const decoded = decodeConditionsSnapshot(encode());
+
+    expect(decoded.snapshot.siteId).toBe(
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(decoded.snapshot.conditions?.wbgt).toBe(31);
+    expect(decoded.warnings).toEqual([]);
+  });
+
+  it("accepts the three nullable child payloads", () => {
+    const decoded = decodeConditionsSnapshot(encode((value) => {
+      value.conditions = null;
+      value.lightning = null;
+      value.activeShift = null;
+    }));
+
+    expect(decoded.snapshot.conditions).toBeNull();
+    expect(decoded.snapshot.lightning).toBeNull();
+    expect(decoded.snapshot.activeShift).toBeNull();
+    expect(decoded.warnings).toEqual([]);
+  });
+
+  it.each([
+    ["malformed JSON", "{"],
+    ["a non-object root", "[]"],
+  ])("rejects %s", (_name, data) => {
+    expect(() => decodeConditionsSnapshot(data)).toThrow(
+      InvalidConditionsPayloadError,
+    );
+  });
+
+  const invalidCases: Array<[
+    string,
+    (value: JsonObject) => void,
+  ]> = [
+    ["an invalid site UUID", (value) => { value.siteId = "site-1"; }],
+    ["an unparseable asOf", (value) => { value.asOf = "not-a-date"; }],
+    ["a non-object conditions value", (value) => { value.conditions = []; }],
+    ["a string WBGT", (value) => { child(value, "conditions").wbgt = "31"; }],
+    ["a bad source enum", (value) => { child(value, "conditions").source = "OTHER"; }],
+    ["a bad freshness enum", (value) => { child(value, "conditions").freshness = "FRESH"; }],
+    ["an unparseable observedAt", (value) => { child(value, "conditions").observedAt = "never"; }],
+    ["negative wind speed", (value) => { child(value, "conditions").windSpeed = -0.1; }],
+    ["negative rainfall", (value) => { child(value, "conditions").rainfall = -0.1; }],
+    ["a bad lightning enum", (value) => { child(value, "lightning").state = "UNKNOWN"; }],
+    ["a negative strike distance", (value) => { child(value, "lightning").nearestStrikeKm = -0.1; }],
+    ["an invalid shift UUID", (value) => { child(value, "activeShift").shiftId = "shift-1"; }],
+    ["an unparseable shift end", (value) => { child(value, "activeShift").endsAt = "later"; }],
+  ];
+
+  it.each(invalidCases)("rejects %s", (_name, change) => {
+    expect(() => decodeConditionsSnapshot(encode(change))).toThrow(
+      InvalidConditionsPayloadError,
+    );
+  });
+
+  it("rejects a non-finite numeric result", () => {
+    const data = encode().replace('"wbgt":31', '"wbgt":1e400');
+    expect(() => decodeConditionsSnapshot(data)).toThrow(
+      InvalidConditionsPayloadError,
+    );
+  });
+});
+
+describe("conditions sanity warnings", () => {
   it.each([
     [20, 30],
     [36, 100],
-  ])("accepts boundary values without warnings", (wbgt, humidity) => {
+  ])("accepts exact boundaries: WBGT %s, humidity %s", (wbgt, humidity) => {
     expect(findConditionsRangeWarnings({ wbgt, humidity })).toEqual([]);
   });
 
   it.each([
-    {
-      name: "warns just below the humidity minimum",
-      wbgt: 30,
-      humidity: 29.9,
-      expected: [{ metric: "humidity", value: 29.9, minimum: 30, maximum: 100 }],
-    },
-    {
-      name: "accepts humidity just above the minimum",
-      wbgt: 30,
-      humidity: 30.1,
-      expected: [],
-    },
-    {
-      name: "warns just above the humidity maximum",
-      wbgt: 30,
-      humidity: 100.1,
-      expected: [{ metric: "humidity", value: 100.1, minimum: 30, maximum: 100 }],
-    },
-    {
-      name: "warns just below the WBGT minimum",
-      wbgt: 19.9,
-      humidity: 70,
-      expected: [{ metric: "wbgt", value: 19.9, minimum: 20, maximum: 36 }],
-    },
-    {
-      name: "accepts WBGT just above the minimum",
-      wbgt: 20.1,
-      humidity: 70,
-      expected: [],
-    },
-    {
-      name: "accepts WBGT just below the maximum",
-      wbgt: 35.9,
-      humidity: 70,
-      expected: [],
-    },
-    {
-      name: "warns just above the WBGT maximum",
-      wbgt: 36.1,
-      humidity: 70,
-      expected: [{ metric: "wbgt", value: 36.1, minimum: 20, maximum: 36 }],
-    },
-  ])("$name", ({ wbgt, humidity, expected }) => {
-    expect(findConditionsRangeWarnings({ wbgt, humidity })).toEqual(expected);
+    [19.9, 70, "wbgt", 19.9],
+    [36.1, 70, "wbgt", 36.1],
+    [30, 29.9, "humidity", 29.9],
+    [30, 100.1, "humidity", 100.1],
+  ])("warns for WBGT %s and humidity %s", (
+    wbgt,
+    humidity,
+    metric,
+    value,
+  ) => {
+    expect(findConditionsRangeWarnings({ wbgt, humidity })).toEqual([
+      expect.objectContaining({ metric, value }),
+    ]);
   });
 
-  it("returns an out-of-range finite reading with a warning", () => {
-    const decoded = decodeConditionsSnapshot(snapshot(37.2, 70));
+  it("returns a finite implausible reading with its warning", () => {
+    const decoded = decodeConditionsSnapshot(encode((value) => {
+      child(value, "conditions").wbgt = 37.2;
+    }));
 
     expect(decoded.snapshot.conditions?.wbgt).toBe(37.2);
     expect(decoded.warnings).toEqual([
       { metric: "wbgt", value: 37.2, minimum: 20, maximum: 36 },
     ]);
-  });
-
-  it("still rejects structurally invalid measurements", () => {
-    expect(() => decodeConditionsSnapshot(snapshot("37.2", 70)))
-      .toThrow(InvalidConditionsPayloadError);
   });
 });

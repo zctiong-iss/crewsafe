@@ -3,7 +3,7 @@ data "aws_caller_identity" "current" {}
 # ---------------------------------------------------------------------------
 # Producers
 #
-# Four remote states, no re-declaration. Every identifier this component needs
+# Five remote states, no re-declaration. Every identifier this component needs
 # already has an owner, and reading it here rather than copying it means a change
 # upstream cannot leave a stale value behind.
 #
@@ -599,8 +599,8 @@ resource "aws_ecs_service" "backend" {
 # origin is a second, independent leaf, not a branch grafted onto the backend's
 # compute layer (FR-014, spec.md Architecture).
 #
-# Zero terraform_remote_state reads (research.md R-011) — no VPC, subnet,
-# security group, secret, or database value is needed.
+# One Cognito state read supplies the browser's issuer and Hosted UI origins — no VPC, subnet,
+# secret, database or mutable credential is consumed.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -633,18 +633,17 @@ locals {
     ]
   })
 
-  # Two statements, least-privilege, scoped to exactly the two resources this
-  # role needs (research.md R-006). s3:DeleteObject is present because the sync
+  # Two statements, least-privilege, scoped to the S3 sync target and verified
+  # CloudFront edge (research.md R-006). s3:DeleteObject is present because the sync
   # invocation uses `--delete` (research.md R-007) — without it, every prior
   # build's now-unreferenced hashed assets accumulate in the bucket forever.
   # cloudfront:GetInvalidation is deliberately ABSENT: the workflow issues an
   # invalidation and returns, it does not poll for completion.
   # One statement, both the bucket ARN (ListBucket needs it) and the object
   # prefix (the object-level actions need it) as a Resource list — research.md
-  # R-006 specifies exactly two statements total for this policy; splitting
-  # this into two would leave three once the CreateInvalidation statement
-  # below is added, contradicting that design and compute.tftest.hcl's
-  # "web_sync_role_permissions" assertion.
+  # R-006 specifies exactly two statements total for this policy. The second
+  # statement combines invalidation with the narrowly scoped read actions that
+  # verify the distribution's attached response-headers policy.
   web_sync_policy = {
     Version = "2012-10-17"
     Statement = [
@@ -680,11 +679,18 @@ resource "aws_iam_role_policy" "web_sync" {
       local.web_sync_policy.Statement,
       [
         {
-          Sid      = "InvalidateWebDistribution"
-          Effect   = "Allow"
-          Action   = ["cloudfront:CreateInvalidation"]
-          Resource = aws_cloudfront_distribution.web.arn
-        },
+          Sid    = "ManageVerifiedWebDistribution"
+          Effect = "Allow"
+          Action = [
+            "cloudfront:CreateInvalidation",
+            "cloudfront:GetDistributionConfig",
+            "cloudfront:GetResponseHeadersPolicy",
+          ]
+          Resource = [
+            aws_cloudfront_distribution.web.arn,
+            "arn:aws:cloudfront::${var.expected_account_id}:response-headers-policy/${aws_cloudfront_response_headers_policy.web_security.id}",
+          ]
+        }
       ]
     )
   })
@@ -883,8 +889,9 @@ resource "aws_cloudfront_distribution" "web" {
   # names the old build's content (never re-requested) or the new build's (a
   # distinct URL). Aggressive caching here is free of staleness risk.
   default_cache_behavior {
-    target_origin_id       = "web"
-    viewer_protocol_policy = "redirect-to-https"
+    target_origin_id           = "web"
+    viewer_protocol_policy     = "redirect-to-https"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web_security.id
 
     allowed_methods = ["GET", "HEAD"]
     cached_methods  = ["GET", "HEAD"]
@@ -897,9 +904,10 @@ resource "aws_cloudfront_distribution" "web" {
   # declared for the backend distribution above — a data source lookup, not a
   # distribution-scoped resource.
   ordered_cache_behavior {
-    path_pattern           = "/index.html"
-    target_origin_id       = "web"
-    viewer_protocol_policy = "redirect-to-https"
+    path_pattern               = "/index.html"
+    target_origin_id           = "web"
+    viewer_protocol_policy     = "redirect-to-https"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.web_security.id
 
     allowed_methods = ["GET", "HEAD"]
     cached_methods  = ["GET", "HEAD"]

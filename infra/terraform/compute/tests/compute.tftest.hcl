@@ -126,6 +126,15 @@ override_data {
   }
 }
 
+override_data {
+  target = data.terraform_remote_state.cognito
+  values = {
+    outputs = {
+      domain_url = "https://crewsafe-shared-dev.auth.ap-southeast-1.amazoncognito.com"
+    }
+  }
+}
+
 # AWS-published. Preparation assertions prove this managed identifier is the
 # public ALB's only ingress source rather than a caller-supplied CIDR.
 override_data {
@@ -680,9 +689,9 @@ run "base_url_is_derived_not_literal" {
 # ---------------------------------------------------------------------------
 # SCRUM-298 — web static hosting runtime and staging origin
 #
-# This feature reads ZERO remote state (research.md R-011): no VPC, subnet,
-# security group, secret, or database value. It needs no new override_data
-# block for a producer — only for the resources it declares itself.
+# The web-hosting resources need no VPC, subnet, security-group, secret, or
+# database remote state. The browser policy consumes Cognito's published
+# domain_url, which is supplied by the offline override_data above.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -715,8 +724,9 @@ run "web_sync_role_trust_policy" {
 run "web_sync_role_permissions" {
   command = apply
 
-  # Exactly two statements: one scoped to the web bucket, one to the web
-  # distribution. Nothing broader (research.md R-006, FR-015).
+  # Exactly two statements: one scoped to the web bucket, one to the verified
+  # web distribution and its response-headers policy. Nothing broader
+  # (research.md R-006, FR-015).
   assert {
     condition     = length(jsondecode(aws_iam_role_policy.web_sync.policy).Statement) == 2
     error_message = "The sync role's permissions policy must declare exactly two statements — one for the bucket, one for the distribution (research.md R-006)."
@@ -733,9 +743,16 @@ run "web_sync_role_permissions" {
   assert {
     condition = anytrue([
       for stmt in jsondecode(aws_iam_role_policy.web_sync.policy).Statement :
-      toset(stmt.Action) == toset(["cloudfront:CreateInvalidation"])
+      toset(stmt.Action) == toset([
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:GetResponseHeadersPolicy",
+        ]) && toset(stmt.Resource) == toset([
+        aws_cloudfront_distribution.web.arn,
+        "arn:aws:cloudfront::${var.expected_account_id}:response-headers-policy/${aws_cloudfront_response_headers_policy.web_security.id}",
+      ])
     ])
-    error_message = "The distribution statement must grant exactly CreateInvalidation — no broader CloudFront action (research.md R-006)."
+    error_message = "The CloudFront statement must grant only invalidation plus the two exact read actions on the distribution and its response-headers policy."
   }
 
   # research.md R-006: cloudfront:GetInvalidation is deliberately absent — the
@@ -909,6 +926,23 @@ run "web_distribution_edge" {
       tostring(er.response_code) == "200" && er.response_page_path == "/index.html"
     ])
     error_message = "Both 403 and 404 must map to a 200 response serving /index.html — the SPA fallback (FR-010)."
+  }
+
+  assert {
+    condition = alltrue([
+      for behavior in aws_cloudfront_distribution.web.default_cache_behavior :
+      behavior.response_headers_policy_id == aws_cloudfront_response_headers_policy.web_security.id
+    ])
+    error_message = "The default web behaviour must attach the security response-headers policy."
+  }
+
+  assert {
+    condition = alltrue([
+      for behavior in aws_cloudfront_distribution.web.ordered_cache_behavior :
+      behavior.path_pattern != "/index.html" ||
+      behavior.response_headers_policy_id == aws_cloudfront_response_headers_policy.web_security.id
+    ])
+    error_message = "The /index.html behaviour must attach the security response-headers policy."
   }
 
   # FR-007's actual hostname-distinctness guarantee is the two separate

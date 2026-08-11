@@ -81,7 +81,7 @@ function member<T extends string>(value: unknown, values: readonly T[], path: st
   return value as T;
 }
 
-// Check data within sanity bounds
+// Check data within sanity bounds - and only returns warnings
 export function findConditionsRangeWarnings(
   value: Pick<ConditionsPayload, "wbgt" | "humidity">,
 ): ConditionsRangeWarning[] {

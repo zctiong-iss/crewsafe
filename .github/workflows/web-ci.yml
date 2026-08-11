@@ -133,8 +133,12 @@ jobs:
           aws-region: ap-southeast-1
           role-session-name: CrewSafeWebDeploy-${{ github.run_id }}
           mask-aws-account-id: true
-      - run: aws s3 sync dist "s3://${WEB_BUCKET}" --delete
+      - name: Verify bundle-to-edge security contract
         working-directory: web
+        run: ./scripts/verify-edge-contract.sh
+      - name: Sync hashed assets and SPA shell to S3
+        working-directory: web
+        run: ./scripts/sync-static-site.sh
       - id: invalidate
         run: echo "invalidation_id=$(aws cloudfront create-invalidation --distribution-id "$WEB_DISTRIBUTION_ID" --paths '/*' --query 'Invalidation.Id' --output text)" >> "$GITHUB_OUTPUT"
       - run: |
