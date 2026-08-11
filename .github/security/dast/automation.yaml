@@ -1,0 +1,128 @@
+# SCRUM-273: reviewable, non-destructive authenticated staging DAST policy.
+# Environment values are supplied only by the reusable workflow after its
+# fail-closed contract validation. The Cognito URL is authentication-only and
+# is deliberately absent from the scan context.
+env:
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    continueOnFailure: false
+    progressToStdout: false
+  contexts:
+    - name: crewsafe-staging
+      urls:
+        - ${WEB_BASE_URL}
+        - ${BACKEND_BASE_URL}
+      includePaths:
+        - '^${WEB_BASE_URL}/.*$'
+        - '^${BACKEND_BASE_URL}/.*$'
+      excludePaths:
+        - '.*/logout.*'
+        - '.*/approval.*'
+        - '.*/decision.*'
+        - '.*/acknowledge.*'
+        - '.*/complete.*'
+        - '.*/readiness.*'
+        - '.*/wellbeing-logs.*'
+        - '.*/concerns.*'
+        - '.*/mitigations.*'
+        - '.*/assignments.*'
+        - '.*/cancel.*'
+      authentication:
+        method: browser
+        parameters:
+          # The deployed SPA initiates the Cognito Hosted UI redirect. The
+          # hosted UI itself is never added to the scan context.
+          loginPageUrl: ${WEB_BASE_URL}
+          loginPageWait: 5
+          browserId: firefox-headless
+          diagnostics: false
+      sessionManagement:
+        method: cookie
+      users:
+        - name: synthetic-worker
+          credentials:
+            username: ${DAST_USERNAME}
+            password: ${DAST_SYNTHETIC_WORKER_PASSWORD}
+  vars:
+    webBaseUrl: ${WEB_BASE_URL}
+    backendBaseUrl: ${BACKEND_BASE_URL}
+    hostedUiUrl: ${HOSTED_UI_URL}
+jobs:
+  - type: script
+    parameters:
+      action: add
+      type: httpsender
+      engine: ECMAScript
+      name: active-scan-method-guard
+      source: active-scan-method-guard.js
+  - type: spider
+    parameters:
+      context: crewsafe-staging
+      user: synthetic-worker
+      maxDuration: 5
+      maxDepth: 3
+      maxChildren: 50
+  - type: activeScan-config
+    parameters:
+      maxScanDurationInMins: 15
+      maxRuleDurationInMins: 2
+      threadPerHost: 1
+      maxAlertsPerRule: 5
+      handleAntiCSRFTokens: false
+      inputVectors:
+        urlQueryStringAndDataDrivenNodes:
+          enabled: true
+          addParam: false
+        postData:
+          enabled: false
+          multiPartFormData: false
+          xml: false
+          json:
+            enabled: false
+        httpHeaders:
+          enabled: false
+        cookieData:
+          enabled: false
+      excludePaths:
+        - '.*/logout.*'
+        - '.*/approval.*'
+        - '.*/decision.*'
+        - '.*/acknowledge.*'
+        - '.*/complete.*'
+        - '.*/readiness.*'
+        - '.*/wellbeing-logs.*'
+        - '.*/concerns.*'
+        - '.*/mitigations.*'
+        - '.*/assignments.*'
+        - '.*/cancel.*'
+  - type: activeScan
+    parameters:
+      context: crewsafe-staging
+      user: synthetic-worker
+      maxScanDurationInMins: 15
+      maxRuleDurationInMins: 2
+      defaultStrength: Low
+      defaultThreshold: Medium
+      delayInMs: 250
+      policyDefinition:
+        defaultStrength: Low
+        defaultThreshold: Off
+        rules:
+          - id: 40012
+            name: Cross Site Scripting (Reflected)
+            strength: Low
+            threshold: Medium
+          - id: 40018
+            name: SQL Injection
+            strength: Low
+            threshold: Medium
+          - id: 90022
+            name: Application Error Disclosure
+            strength: Low
+            threshold: Medium
+  - type: report
+    parameters:
+      template: traditional-json
+      reportDir: ${DAST_REPORT_DIR}
+      reportFile: dast-report.json
