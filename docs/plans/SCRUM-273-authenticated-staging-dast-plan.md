@@ -29,7 +29,9 @@ coverage.
 The report job always runs and writes to the runner-mounted `/zap/dast-output` directory,
 including when an earlier scan job records an error. A non-zero ZAP exit still makes the
 security-control job unavailable; `alwaysRun` preserves evidence and does not turn a
-failed scan into a clean result.
+failed scan into a clean result. The wrapper also gives ZAP an ephemeral home directory
+and informative log level so a failed run can emit one bounded, redacted diagnostic from
+the scanner output or internal ZAP log without retaining raw scanner logs.
 
 The workflow has `contents: read` only and receives only the DAST test password through
 an explicit secret mapping. Raw traffic, session state, and reports exist only in the
