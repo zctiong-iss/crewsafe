@@ -284,3 +284,66 @@ export interface Recommendation {
   /** Null while the recommendation is still awaiting a decision. */
   approval: Approval | null;
 }
+
+/**
+ * What a worker reports about how they are coping (US-11).
+ *
+ * Mirrors `wellbeing/domain/WellbeingLog.java`. A log is a timestamp and a kind — deliberately
+ * nothing else, because the control that records it has to be usable in gloves, in the sun,
+ * mid-shift.
+ */
+export type WellbeingLogType = "REST" | "HYDRATION";
+
+/** SELF when the worker tapped the button; INSTRUCTED when a dispatched rest ran to completion. */
+export type WellbeingLogSource = "SELF" | "INSTRUCTED";
+
+export interface WellbeingLog {
+  id: string;
+  shiftId: string;
+  logType: WellbeingLogType;
+  source: WellbeingLogSource;
+  loggedAt: string;
+}
+
+/** Mirrors `shift/domain/SymptomFlag.java`. Every value has an `symptoms.*` translation. */
+export type SymptomFlag =
+  | "NONE"
+  | "DIZZINESS"
+  | "NAUSEA"
+  | "HEADACHE"
+  | "FATIGUE"
+  | "MUSCLE_CRAMPS"
+  | "OTHER";
+
+/**
+ * Mirrors `Concern.ConcernStatus`. There is no RESOLVED — the app can know a supervisor saw the
+ * report, not whether the worker is now all right.
+ */
+export type ConcernStatus = "OPEN" | "ACKNOWLEDGED";
+
+/** Mirrors `WorkerWellbeingController.ConcernResponse`. */
+export interface Concern {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  symptoms: SymptomFlag[];
+  /** The worker's own words, in their own language. Null when they chose only chips. */
+  note: string | null;
+  status: ConcernStatus;
+  raisedAt: string;
+  acknowledgedAt: string | null;
+}
+
+/**
+ * Mirrors `SupervisorWellbeingController.CrewWellbeingRow` — one row per worker who has logged
+ * anything. A worker with no logs is absent, and the screen renders "nothing logged" from the
+ * shift's own roster rather than expecting an empty row here.
+ */
+export interface CrewWellbeingRow {
+  workerId: string;
+  lastRestAt: string | null;
+  lastRestSource: WellbeingLogSource | null;
+  lastHydrationAt: string | null;
+  restCount: number;
+  hydrationCount: number;
+}

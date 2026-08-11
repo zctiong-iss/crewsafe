@@ -1003,6 +1003,108 @@ person re-sets one switch once.
 
 ---
 
+## SCRUM-125 — Logging rest and hydration, and raising a concern
+
+Plan: [`docs/plans/SCRUM-125-rest-hydration-and-concerns-plan.md`](../docs/plans/SCRUM-125-rest-hydration-and-concerns-plan.md).
+
+A worker records a rest or a drink with one tap, or tells their supervisor they are unwell. The
+supervisor sees how the crew is coping on the shift screen, and gets a **Concerns** tab with a
+count for workers reporting something wrong.
+
+### One tap, and nothing else asked
+
+Two buttons on My shift. No duration, no "how much" — this is used in gloves, in direct sun, in
+the middle of doing something else, and any control that asks a follow-up question gets used once
+and then ignored. A log nobody makes tells a supervisor nothing.
+
+Each button shows when it was last used, **from the server's timestamp rather than the device
+clock**: a phone with a wrong clock must not tell its owner they rested at a time their supervisor
+will never see. A button that does nothing visible gets pressed again, so the feedback is not
+decoration.
+
+### Two sources of rest, and the difference is visible
+
+| Source | Written when |
+|---|---|
+| `SELF` | the worker taps "I rested" |
+| `INSTRUCTED` | a dispatched `REST_` action runs its timer to completion |
+
+`POST /api/action-dispatch/{id}/complete` has existed since SCRUM-185 and **nothing had ever
+called it** — the timer expired client-side and the card vanished, so the server never learned the
+rest was taken. It is called now on rest-timer expiry, which is what puts an instructed rest in
+the same timeline as a self-logged one.
+
+Only for real rest deadlines. A three-minute dwell on a `HYDRATE` card is a card being tidied
+away, not an action being completed — the `hasRestTimer` flag already distinguishes them.
+
+Fire-and-forget: the rest happened whether or not the record landed, and a failure must not stop
+the card disappearing. `wellbeing_log.dispatch_id` is unique, so a retry cannot log a second rest.
+
+### Raising a concern: chips first, words optional
+
+The symptom chips reuse `SymptomFlag` from the pre-shift readiness check — already translated in
+all seven locales. A worker taps DIZZINESS in Tamil and their supervisor reads "Dizzy" in English,
+because both render the same enum through `symptoms.*`.
+
+**The note is optional and must stay optional.** A worker must never be unable to say they are
+struggling because they cannot write in a language their supervisor reads. When present it is
+shown as written and labelled *"Written by the worker in their own language"* — the app cannot
+translate free text, and pretending otherwise would put words in someone's mouth on a safety
+record.
+
+`NONE` is deliberately not offered here. It exists for the readiness check, where "any symptoms?"
+needs a negative answer; someone opening this sheet is already saying something is wrong.
+
+### What the supervisor sees
+
+**Crew wellbeing sits above the assignment cards.** Who is on a shift changes rarely; whether
+someone has drunk water in the last two hours changes constantly, and the second is why anyone
+opens that screen mid-shift.
+
+The list is driven by **the shift's own roster**, not the wellbeing response. The endpoint only
+returns workers who have logged something, so driving the list off it would hide the worker who
+has logged nothing — which is exactly the row worth acting on. That row reads "Nothing logged yet"
+in amber.
+
+**Concerns get their own tab, with a badge.** A concern is time-sensitive in a way a hydration
+timestamp is not. The count loads when the tab bar mounts, not when the tab is opened — a badge
+that appears only after you look tells you nothing you did not already know.
+
+| State | Shown as |
+|---|---|
+| `OPEN` | "Needs a look", red border |
+| `ACKNOWLEDGED` | "Seen", plus who and when, border recedes |
+
+There is no `RESOLVED`. The app can know a supervisor read the report; it cannot know whether the
+worker is now all right. Acknowledged concerns stay on the list — "did anyone deal with the
+dizziness at 11:20" is a question asked hours later.
+
+Unseen concerns sort above handled ones regardless of age. A second acknowledgement is a **409**,
+not an overwrite: who responded first is the fact worth keeping.
+
+### Roles
+
+| | Log / raise | See crew status | Acknowledge |
+|---|---|---|---|
+| `WORKER` | ✅ own only | ❌ | ❌ |
+| `SUPERVISOR`, `ADMIN` | ❌ | ✅ | ✅ |
+| `SAFETY_MANAGER` | ❌ | ✅ | ❌ — oversight is not the same as responding |
+
+No `workerId` appears in any worker request or path: the subject is always the token holder, which
+is a stronger guarantee than validating one. Every write also checks the caller is actually
+assigned to the shift — without it a worker could log rest against a crew they have nothing to do
+with, and a supervisor would read a wellbeing picture of people who were never there.
+
+### Verified on device
+
+Live Cognito stack. worker1 logged a rest and a drink and raised a concern with two chips and a
+note; all three landed in Postgres with the right source and status. As supervisor1 the Concerns
+badge read **1** before the tab was opened, the shift showed one worker's times and the other as
+"Nothing logged yet", and acknowledging flipped the card to "Seen", cleared the badge and left the
+card in place. Audit trail: `WELLBEING_LOGGED` ×2, `CONCERN_RAISED`, `CONCERN_ACKNOWLEDGED`.
+
+---
+
 ## SCRUM-119 — Supervisor approves, edits or rejects an AI-drafted plan
 
 Plan: [`docs/plans/SCRUM-119-mobile-recommendation-decisions-plan.md`](../docs/plans/SCRUM-119-mobile-recommendation-decisions-plan.md).
