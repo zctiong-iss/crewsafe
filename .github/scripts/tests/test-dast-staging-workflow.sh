@@ -74,6 +74,7 @@ contains "runner disables ZAP telemetry" "$RUNNER" "-notel"
 contains "runner pins a resolvable ZAP hostname" "$RUNNER" "--hostname zap-dast"
 contains "runner maps its ZAP hostname locally" "$RUNNER" "--add-host"
 contains "runner emits only classified preflight diagnostics" "$RUNNER" "preflight_failure_reason"
+contains "runner reports the preflight Docker exit code" "$RUNNER" "docker_exit"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 

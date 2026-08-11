@@ -38,7 +38,19 @@ preflight_failure_reason() {
   elif grep -Fq -- 'Exception' "$run_log"; then
     echo 'ZAP reported an internal preflight exception'
   else
-    echo 'ZAP rejected the policy or failed to start'
+    local diagnostic
+    diagnostic="$(grep -Ei 'error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected' "$run_log" | tail -n 1 || true)"
+    if [[ -n "$diagnostic" ]]; then
+      diagnostic="$(printf '%s' "$diagnostic" \
+        | sed -E \
+            -e 's#https?://[^[:space:]]+#<redacted-url>#g' \
+            -e 's#DAST_[A-Z0-9_]+=[^[:space:]]+#DAST_[redacted]=[redacted]#g' \
+            -e 's#(password|token|cookie|authorization|username)[^= ]*=[^[:space:]]+#\1=[redacted]#Ig' \
+        | cut -c1-240)"
+      printf 'ZAP emitted a redacted diagnostic: %s' "$diagnostic"
+    else
+      echo 'ZAP rejected the policy or failed to start'
+    fi
   fi
 }
 
@@ -61,9 +73,12 @@ docker_args=(
 
 # Validate the policy syntax before any target request. Redirect all scanner output
 # to temporary storage because browser/session diagnostics can be sensitive.
-if ! docker "${docker_args[@]}" zap.sh -cmd -notel -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1; then
-  printf 'DAST policy preflight failed (%s); no staging scan was started.\n' \
-    "$(preflight_failure_reason)" >&2
+preflight_rc=0
+docker "${docker_args[@]}" zap.sh -cmd -notel -autocheck "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
+  || preflight_rc=$?
+if (( preflight_rc != 0 )); then
+  printf 'DAST policy preflight failed (docker_exit=%s; %s); no staging scan was started.\n' \
+    "$preflight_rc" "$(preflight_failure_reason)" >&2
   exit 1
 fi
 
