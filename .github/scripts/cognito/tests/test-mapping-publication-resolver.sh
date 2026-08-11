@@ -34,6 +34,7 @@ for mutation in actor ref confirmation alias; do
     ref) command=(alice operator "publish-mapping alice"); ref_env=refs/heads/feature/test; registry_env="$registry" ;;
     confirmation) command=(alice operator "publish-mapping wrong"); ref_env=refs/heads/main; registry_env="$registry" ;;
     alias) command=(unknown operator "publish-mapping unknown"); ref_env=refs/heads/main; registry_env="$registry" ;;
+    *) echo "unexpected mutation: $mutation" >&2; exit 1 ;;
   esac
   if CREWSAFE_AWS_ACCOUNTS_JSON="$registry_env" CREWSAFE_COGNITO_ADMINS_JSON="$admins" \
     CREWSAFE_SHARED_COGNITO_JSON="$shared" SYNTHETIC_USERS_FILE="$fixture" \

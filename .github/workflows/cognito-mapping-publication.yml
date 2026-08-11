@@ -38,11 +38,13 @@ jobs:
           CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
           CREWSAFE_COGNITO_ADMINS_JSON: ${{ vars.CREWSAFE_COGNITO_ADMINS_JSON }}
           CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          TARGET_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          CONFIRMATION: ${{ inputs.confirmation }}
           WORKFLOW_ACTOR: ${{ github.actor }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
           .github/scripts/cognito/resolve-mapping-publication.sh \
-            "${{ inputs.target_account_alias }}" "$WORKFLOW_ACTOR" "${{ inputs.confirmation }}"
+            "$TARGET_ACCOUNT_ALIAS" "$WORKFLOW_ACTOR" "$CONFIRMATION"
 
   publish-and-redeploy:
     needs: preflight
@@ -69,11 +71,12 @@ jobs:
           CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
           CREWSAFE_COGNITO_ADMINS_JSON: ${{ vars.CREWSAFE_COGNITO_ADMINS_JSON }}
           CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          CONFIRMATION: ${{ inputs.confirmation }}
           WORKFLOW_ACTOR: ${{ github.actor }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
           .github/scripts/cognito/resolve-mapping-publication.sh \
-            "$ACCOUNT_ALIAS" "$WORKFLOW_ACTOR" "${{ inputs.confirmation }}"
+            "$ACCOUNT_ALIAS" "$WORKFLOW_ACTOR" "$CONFIRMATION"
       - name: Verify re-derived checksum before credentials
         env:
           RERESOLVED_MAPPING_CHECKSUM: ${{ steps.resolve.outputs.mapping_checksum }}
