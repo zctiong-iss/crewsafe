@@ -217,12 +217,13 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gat
 
 # FR-015 (SCRUM-298). aws_iam_role gets its own check, separate from the
 # forbid() list above: this component legitimately creates only the web sync
-# role and SCRUM-271's backend deployment role, each a least-privilege CI
+# role, SCRUM-271's backend deployment role, and SCRUM-303's mapping-publication
+# role, each a least-privilege CI
 # identity rather than a resource belonging to secrets-shared-dev. grep -E has no negative lookahead, so the exception
 # is expressed as a loop rather than folded into the pattern above.
 while IFS= read -r iam_role_line; do
   case "$iam_role_line" in
-  *'"web_sync"'*|*'"backend_deploy"'*) ;;
+  *'"web_sync"'*|*'"backend_deploy"'*|*'"cognito_mapping_publication"'*) ;;
   *)
     printf 'FAIL: %s declares an aws_iam_role resource outside the SCRUM-298 web_sync exception.\n  %s\n' \
       "$component_dir" \
@@ -336,6 +337,30 @@ for resource_type in aws_lb_target_group aws_ecs_service aws_ecs_task_definition
   [[ "$count" -eq 1 ]] ||
     fail "$component_dir must declare exactly one $resource_type (the existing backend's) — found $count. A second instance would be compute-shaped health machinery this component's spec explicitly says does not belong here (User Story 2)."
 done
+
+# SCRUM-303: this role is intentionally separate from backend_deploy. It can
+# write the one mapping parameter, but cannot read it, manage Cognito, or access
+# Secrets Manager. The ECS grants match only deploy-backend-staging.sh.
+require 'resource[[:space:]]+"aws_iam_role"[[:space:]]+"cognito_mapping_publication"' \
+  'the dedicated mapping-publication OIDC role' \
+  'Authorization mapping publication must not widen the ordinary backend deployment identity.'
+require 'name[[:space:]]*=[[:space:]]*"\$\{local\.name_prefix\}-cognito-mapping-publish"' \
+  'the fixed mapping-publication role name' \
+  'The workflow derives this fixed role name from a validated account ID; it is never an operator input.'
+require 'Action[[:space:]]*=[[:space:]]*\["ssm:PutParameter"\].*aws_ssm_parameter\.demo_users_json\.arn' \
+  'the exact runtime-mapping SSM write grant' \
+  'The publication role may overwrite only the existing demo-users-json runtime parameter.'
+require 'Action[[:space:]]*=[[:space:]]*\["ecr:DescribeImages"\].*local\.ecr\.repository_arn' \
+  'the exact backend image inspection grant' \
+  'The deployment handoff may inspect only the existing backend repository.'
+publication_policy="$(awk '
+  /resource "aws_iam_role_policy" "cognito_mapping_publication"/ { capture = 1 }
+  capture { print }
+  capture && /^}$/ { exit }
+' "$ROOT/$component_dir/main.tf")"
+if grep -Eq '(cognito-idp:|secretsmanager:|ssm:(Get|Describe|GetParameters))' <<<"$publication_policy"; then
+  fail "mapping-publication policy may not read identity, secret, or live parameter state"
+fi
 
 # No separate health_check-block check is needed: the backend's EXISTING
 # target group already has one (legitimate, SCRUM-176), so a blanket forbid on

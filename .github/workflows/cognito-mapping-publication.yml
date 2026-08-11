@@ -1,0 +1,132 @@
+name: Cognito Mapping Publication
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_account_alias:
+        description: Registered staging account alias
+        required: true
+        type: string
+      confirmation:
+        description: "Exact phrase: publish-mapping <alias>"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cognito-mapping-publication-${{ inputs.target_account_alias }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      account_alias: ${{ steps.resolve.outputs.account_alias }}
+      region: ${{ steps.resolve.outputs.region }}
+      parameter_name: ${{ steps.resolve.outputs.parameter_name }}
+      role_arn: ${{ steps.resolve.outputs.role_arn }}
+      mapping_checksum: ${{ steps.resolve.outputs.mapping_checksum }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - id: resolve
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          CREWSAFE_COGNITO_ADMINS_JSON: ${{ vars.CREWSAFE_COGNITO_ADMINS_JSON }}
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          TARGET_ACCOUNT_ALIAS: ${{ inputs.target_account_alias }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          WORKFLOW_ACTOR: ${{ github.actor }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          .github/scripts/cognito/resolve-mapping-publication.sh \
+            "$TARGET_ACCOUNT_ALIAS" "$WORKFLOW_ACTOR" "$CONFIRMATION"
+
+  publish-and-redeploy:
+    needs: preflight
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ACCOUNT_ALIAS: ${{ needs.preflight.outputs.account_alias }}
+      PARAMETER_NAME: ${{ needs.preflight.outputs.parameter_name }}
+      ROLE_ARN: ${{ needs.preflight.outputs.role_arn }}
+      EXPECTED_MAPPING_CHECKSUM: ${{ needs.preflight.outputs.mapping_checksum }}
+      REPOSITORY: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+      CLUSTER: crewsafe-shared-dev
+      SERVICE: backend
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Re-derive closed publication contract
+        id: resolve
+        env:
+          CREWSAFE_AWS_ACCOUNTS_JSON: ${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}
+          CREWSAFE_COGNITO_ADMINS_JSON: ${{ vars.CREWSAFE_COGNITO_ADMINS_JSON }}
+          CREWSAFE_SHARED_COGNITO_JSON: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          WORKFLOW_ACTOR: ${{ github.actor }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          .github/scripts/cognito/resolve-mapping-publication.sh \
+            "$ACCOUNT_ALIAS" "$WORKFLOW_ACTOR" "$CONFIRMATION"
+      - name: Verify re-derived checksum before credentials
+        env:
+          RERESOLVED_MAPPING_CHECKSUM: ${{ steps.resolve.outputs.mapping_checksum }}
+        run: |
+          set -euo pipefail
+          [[ "$RERESOLVED_MAPPING_CHECKSUM" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$RERESOLVED_MAPPING_CHECKSUM" == "$EXPECTED_MAPPING_CHECKSUM" ]]
+      - name: Validate fixed deployment contract
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-cognito-mapping-publish$ ]]
+          [[ "$PARAMETER_NAME" == "/crewsafe/shared-dev/cognito/demo-users-json" ]]
+          [[ "$REPOSITORY" =~ ^[0-9]{12}\.dkr\.ecr\.ap-southeast-1\.amazonaws\.com/crewsafe/backend$ ]]
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CLUSTER" == crewsafe-shared-dev && "$SERVICE" == backend ]]
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ needs.preflight.outputs.role_arn }}
+          aws-region: ${{ needs.preflight.outputs.region }}
+          role-session-name: CrewSafeCognitoMappingPublication-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Write verified mapping and resolve immutable image
+        id: publish
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          mapping_file="$(mktemp)"; trap 'rm -f "$mapping_file"' EXIT
+          CREWSAFE_AWS_ACCOUNTS_JSON="${{ vars.CREWSAFE_AWS_ACCOUNTS_JSON }}" \
+            CREWSAFE_SHARED_COGNITO_JSON="${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}" \
+            .github/scripts/cognito/build-runtime-mappings.sh "$ACCOUNT_ALIAS" strict-publication >"$mapping_file"
+          actual_checksum="$(shasum -a 256 "$mapping_file" | awk '{print $1}')"
+          [[ "$actual_checksum" == "$EXPECTED_MAPPING_CHECKSUM" ]]
+          aws ssm put-parameter --name "$PARAMETER_NAME" --type String --overwrite --value "$(<"$mapping_file")" >/dev/null
+          image_digest="$(aws ecr describe-images --repository-name crewsafe/backend --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'image_tag=%s\nimage_digest=%s\n' "$IMAGE_TAG" "$image_digest" >>"$GITHUB_OUTPUT"
+      - name: Redeploy approved immutable backend image
+        env:
+          IMAGE_TAG: ${{ steps.publish.outputs.image_tag }}
+          IMAGE_DIGEST: ${{ steps.publish.outputs.image_digest }}
+        run: .github/scripts/deploy/deploy-backend-staging.sh
+      - name: Record sanitized evidence
+        run: |
+          {
+            echo '## Cognito mapping publication'
+            echo "- Account alias: \`$ACCOUNT_ALIAS\`"
+            echo "- Mapping checksum: \`$EXPECTED_MAPPING_CHECKSUM\`"
+            echo '- Parameter scope: verified fixed runtime mapping parameter'
+            echo '- Deployment handoff: completed'
+          } >> "$GITHUB_STEP_SUMMARY"

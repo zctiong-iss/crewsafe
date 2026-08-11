@@ -721,6 +721,45 @@ resource "aws_iam_role_policy" "backend_deploy" {
   })
 }
 
+# SCRUM-303: publishing the application-user mapping changes which signed Cognito
+# subjects can enter CrewSafe. It must therefore never share the ordinary backend
+# deployment role. This OIDC role can write exactly the one runtime parameter and
+# then reuse the already-reviewed immutable-image deployment mechanism.
+resource "aws_iam_role" "cognito_mapping_publication" {
+  name = "${local.name_prefix}-cognito-mapping-publish"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "cognito_mapping_publication" {
+  name = "${local.name_prefix}-cognito-mapping-publish"
+  role = aws_iam_role.cognito_mapping_publication.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # The publication flow never reads this value: it re-derives it from
+      # reviewed repository sources and may overwrite only this exact parameter.
+      { Effect = "Allow", Action = ["ssm:PutParameter"], Resource = [aws_ssm_parameter.demo_users_json.arn] },
+      # The existing deploy script verifies the immutable main image before it
+      # registers a replacement task definition and updates this one service.
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = [local.ecr.repository_arn] },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = [aws_ecs_service.backend.id] },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } },
+    ]
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Web bucket
 #
