@@ -81,6 +81,8 @@ contains "runner classifies scan failures" "$RUNNER" "scan_failure_reason"
 contains "runner reports scan Docker exit code" "$RUNNER" "scan_rc"
 contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
 contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
+contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
+not_contains "runner does not classify the expected report filename as an error" "$RUNNER" "dast-report\\.json'"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
 
@@ -103,8 +105,10 @@ contains "automation bounds active scan duration" "$AUTOMATION" "maxScanDuration
 contains "method guard checks active-scanner initiator" "$METHOD_GUARD" "HttpSender.ACTIVE_SCANNER_INITIATOR"
 contains "method guard allows GET" "$METHOD_GUARD" "GET"
 contains "method guard allows HEAD" "$METHOD_GUARD" "HEAD"
-contains "method guard sinks out-of-scope hosts" "$METHOD_GUARD" "http://127.0.0.1:9/crewsafe-dast-blocked"
-contains "method guard rewrites out-of-scope host header" "$METHOD_GUARD" "request.setHeader('Host', '127.0.0.1:9')"
+contains "method guard sinks out-of-scope hosts on approved web origin" "$METHOD_GUARD" "System.getenv('WEB_BASE_URL')"
+contains "method guard uses a dedicated sink path" "$METHOD_GUARD" "/crewsafe-dast-blocked"
+contains "method guard rewrites out-of-scope host header" "$METHOD_GUARD" "request.setHeader('Host', sinkHost)"
+not_contains "method guard does not use a refused loopback sink" "$METHOD_GUARD" "127.0.0.1:9"
 contains "method guard rewrites unsafe active requests" "$METHOD_GUARD" "request.setMethod('HEAD')"
 contains "method guard clears unsafe request bodies" "$METHOD_GUARD" "msg.setRequestBody('')"
 

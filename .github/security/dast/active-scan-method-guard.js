@@ -22,10 +22,17 @@ function sendingRequest(msg, initiator, helper) {
 
   if (allowedHosts.indexOf(host) === -1) {
     // Redirects discovered during active scanning can point at authentication
-    // or other external hosts. Send nothing to that host: use a loopback discard
-    // port and return a bodyless HEAD request so the plan can continue safely.
-    request.setURI(new URI('http://127.0.0.1:9/crewsafe-dast-blocked', true));
-    request.setHeader('Host', '127.0.0.1:9');
+    // or other external hosts. Keep the request inside the reviewed web origin
+    // so a refused loopback sink cannot turn a blocked redirect into a plan
+    // error. The bodyless HEAD request is not sent to the original host.
+    var sinkOrigin = String(System.getenv('WEB_BASE_URL')).replace(/\/+$/, '');
+    var sinkUri = new URI(sinkOrigin + '/crewsafe-dast-blocked', true);
+    var sinkHost = String(sinkUri.getHost());
+    if (sinkUri.getPort() > 0) {
+      sinkHost += ':' + String(sinkUri.getPort());
+    }
+    request.setURI(sinkUri);
+    request.setHeader('Host', sinkHost);
     request.setMethod('HEAD');
     request.setHeader('Content-Length', null);
     request.setHeader('Transfer-Encoding', null);

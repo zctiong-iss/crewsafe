@@ -68,7 +68,7 @@ scan_failure_reason() {
     echo 'ZAP browser authentication or session setup failed'
   elif grep -Eiq -- 'connection refused|timed out|timeout|unknown host|name or service not known|unable to connect' "$run_log"; then
     echo 'ZAP could not reach a staging target'
-  elif grep -Eiq -- 'report.*(failed|error)|failed.*report|dast-report\.json' "$run_log"; then
+  elif grep -Eiq -- 'report.*(failed|error)|failed to (generate|write).*report|could not (generate|write).*report|unable to (generate|write).*report' "$run_log"; then
     echo 'ZAP failed to write its reviewable report'
   elif grep -Fq -- 'Exception' "$run_log"; then
     echo 'ZAP reported an internal scan exception'
@@ -108,13 +108,15 @@ fi
 scan_rc=0
 docker "${docker_args[@]}" zap.sh -cmd -notel -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
   || scan_rc=$?
+report="$report_dir/dast-report.json"
 if (( scan_rc != 0 )); then
-  printf 'Authenticated DAST scan failed (docker_exit=%s; %s); results are not reviewable.\n' \
-    "$scan_rc" "$(scan_failure_reason)" >&2
+  report_state='no reviewable report was produced'
+  [[ -s "$report" ]] && report_state='a report was produced, but the Automation Framework plan was not clean'
+  printf 'Authenticated DAST scan failed (docker_exit=%s; %s; %s).\n' \
+    "$scan_rc" "$(scan_failure_reason)" "$report_state" >&2
   exit 1
 fi
 
-report="$report_dir/dast-report.json"
 [[ -s "$report" ]] || { echo 'DAST scan produced no reviewable report.' >&2; exit 1; }
 
 severity_count() {
