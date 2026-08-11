@@ -26,6 +26,12 @@ runs the browser-side application flow before the active scanner starts, so the 
 does not mistake the SPA shell or an unauthenticated API response for authenticated
 coverage.
 
+The plan waits for the passive scanner to drain its background analysis queue after the
+client spider and again after the active scanner, before the report job runs. The passive
+scanner analyzes traffic asynchronously; without waiting, the report job can read the
+alerts store while the passive scanner is still concurrently writing to it, producing an
+incomplete or empty report even when the crawl and active scan otherwise succeeded.
+
 The report job always runs and writes to the runner-mounted `/zap/dast-output` directory,
 including when an earlier scan job records an error. A ZAP error exit makes the
 security-control job unavailable; a warning exit remains advisory when a reviewable

@@ -82,6 +82,14 @@ jobs:
       maxDuration: 5
       maxCrawlDepth: 3
       maxChildren: 50
+  # The passive scanner analyzes traffic asynchronously in a background queue;
+  # it does not finish just because the job that generated the traffic did.
+  # Without waiting here, the active scanner can start against an unsettled
+  # passive baseline and, worse, the final report job can race the passive
+  # scanner's still-in-flight writes to the alerts store.
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 5
   - type: activeScan
     parameters:
       context: crewsafe-staging
@@ -105,6 +113,12 @@ jobs:
           name: SQL Injection
           strength: Low
           threshold: Medium
+  # Flush passive analysis of the active scanner's traffic before generating
+  # the report; otherwise the report job can read an alerts store that is
+  # still being concurrently written by the passive scanner.
+  - type: passiveScan-wait
+    parameters:
+      maxDuration: 2
   - type: report
     # Preserve a reviewable report even when an earlier scan job records an
     # error. The wrapper still fails the security-control job on a non-zero ZAP
