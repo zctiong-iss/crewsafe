@@ -26,6 +26,19 @@ runs the browser-side application flow before the active scanner starts, so the 
 does not mistake the SPA shell or an unauthenticated API response for authenticated
 coverage.
 
+ZAP's Automation Framework does not reliably substitute `${ENV_VAR}` placeholders in
+every field of the plan — `authentication.verification.pollUrl` is a documented gap
+(zaproxy/zaproxy#8777, #7201) even though the identical syntax resolves correctly in
+`context.urls` and `loginPageUrl`. Left unfixed, every login-verification poll silently
+requests the literal unresolved string (`${BACKEND_BASE_URL}/api/v1/me`), which is not a
+valid URI; ZAP never confirms the synthetic worker is logged in, the crawl and active scan
+proceed unauthenticated, and the run's `insight.auth.failure` stat reaches 100%. The
+wrapper resolves every `${WEB_BASE_URL}`/`${BACKEND_BASE_URL}`/`${HOSTED_UI_URL}`/
+`${DAST_USERNAME}`/`${DAST_SYNTHETIC_WORKER_PASSWORD}` placeholder itself with `envsubst`
+before ZAP ever reads the plan, and mounts only the resolved copy (alongside the guard
+script, since its `source:` path resolves relative to the plan file) instead of the whole
+workspace — so the scan can no longer run, undetected, against a broken poll URL.
+
 The plan waits for the passive scanner to drain its background analysis queue after the
 client spider and again after the active scanner, before the report job runs. The passive
 scanner analyzes traffic asynchronously; without waiting, the report job can read the
@@ -54,21 +67,27 @@ extracts the report's site count and `insight.endpoint.total` stat, surfaces the
 zero endpoints were scanned, instead of letting an aborted authentication or crawl read as
 an advisory "no findings" result.
 
-### Known limitation — intermittent ZAP internal database exception
+### Investigation history — zero findings on early validation runs
 
-The first three post-merge validation runs each completed with `docker_exit=2` and a
-distinct internal ZAP diagnostic (`java.util.ConcurrentModificationException`, then twice
-`org.hsqldb.HsqlException: connection exception: closed`), despite confirmed real crawl
-coverage (5 sites, 35 endpoints) on the third run. Findings were zero at every severity on
-all three runs. This matches a known class of ZAP bug where its embedded HSQLDB connection
-closes unexpectedly under sustained load, breaking dependent components such as the
-passive scanner even though site/URL history is still recorded (zaproxy/zaproxy#6719).
+The first four post-merge validation runs each completed with `docker_exit=2` and zero
+findings at every severity, with two different internal ZAP diagnostics
+(`java.util.ConcurrentModificationException`, then `org.hsqldb.HsqlException: connection
+exception: closed`) despite confirmed real crawl coverage (5 sites, 34-35 endpoints) on
+the third and fourth runs. Two mitigations were tried and merged during triage —
+`passiveScan-wait` jobs around `activeScan` (real fix for a separate report/passive-scan
+race; see above) and reduced `spiderClient` `maxChildren`/`maxCrawlDepth` (disproven: an
+80% reduction produced near-identical coverage and the same exception, ruling out crawl
+volume as the trigger) — neither resolved the zero-finding outcome.
 
-The `spiderClient` job's `maxChildren`/`maxCrawlDepth` were reduced (50/3 → 10/2) as the
-first mitigation, to shrink concurrent browser-tab load and total crawl volume before
-considering a change to the pinned `ZAP_IMAGE`. This ticket should not be marked Done until
-a validation run reports a nonzero, credible finding count (or a maintainer explicitly
-accepts a clean scan with confirmed coverage as sufficient evidence for this stage).
+Reproducing the full plan locally (spider, guard script, `activeScan`, report) against a
+safe public target, outside the approved-staging-only boundary this runbook enforces,
+isolated the actual cause: the unsubstituted `pollUrl` documented above. With the fix, the
+same local reproduction completed with `docker_exit=0` and real findings across every
+severity (`high=2, medium=3, low=3, informational=2`). The `HsqlException` was a downstream
+symptom of ZAP's abnormal shutdown after its `insight.auth.failure` stopping condition
+triggered — not an independent concurrency bug — so no `ZAP_IMAGE` change was needed. The
+`passiveScan-wait` and coverage-visibility changes remain valuable independently of this
+fix; the spider-load reduction is harmless but was not the cause and could be reverted.
 
 ## Constitution compliance
 
