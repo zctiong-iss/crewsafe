@@ -3,6 +3,7 @@
 // Cognito Hosted UI login is a separate Browser Authentication initiator and
 // is intentionally not affected by this Active Scanner-only guard.
 var HttpSender = Java.type('org.parosproxy.paros.network.HttpSender');
+var URI = Java.type('org.apache.commons.httpclient.URI');
 var System = Java.type('java.lang.System');
 
 var allowedHosts = [
@@ -20,7 +21,17 @@ function sendingRequest(msg, initiator, helper) {
   var method = String(request.getMethod()).toUpperCase();
 
   if (allowedHosts.indexOf(host) === -1) {
-    throw new Error('Blocked Active Scanner request outside approved staging hosts');
+    // Redirects discovered during active scanning can point at authentication
+    // or other external hosts. Send nothing to that host: use a loopback discard
+    // port and return a bodyless HEAD request so the plan can continue safely.
+    request.setURI(new URI('http://127.0.0.1:9/crewsafe-dast-blocked', true));
+    request.setHeader('Host', '127.0.0.1:9');
+    request.setMethod('HEAD');
+    request.setHeader('Content-Length', null);
+    request.setHeader('Transfer-Encoding', null);
+    request.setHeader('Content-Type', null);
+    msg.setRequestBody('');
+    return;
   }
   if (method !== 'GET' && method !== 'HEAD') {
     // HTTP Sender hooks cannot cancel a request without raising a script error,
