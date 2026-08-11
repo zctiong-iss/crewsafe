@@ -2,7 +2,7 @@ package com.crewsafe.mitigation.ai.bedrock;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "crewsafe.bedrock")
+@ConfigurationProperties(prefix = "app.bedrock")
 public class BedrockProperties {
     private String region = "ap-southeast-1";
     private String modelId = "anthropic.claude-3-5-sonnet-20241022-v2:0";
