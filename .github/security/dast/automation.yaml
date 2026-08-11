@@ -41,7 +41,8 @@ env:
           method: poll
           loggedInRegex: "200 OK"
           loggedOutRegex: "401 Unauthorized"
-          pollFrequency: 0
+          # ZAP treats zero as a plan warning; poll once per second instead.
+          pollFrequency: 1
           pollUnits: seconds
           pollUrl: ${BACKEND_BASE_URL}/api/v1/me
           pollPostData: ""
