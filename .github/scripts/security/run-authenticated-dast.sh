@@ -37,7 +37,9 @@ redacted_zap_diagnostic() {
   local diagnostic source
   for source in "$zap_log" "$run_log"; do
     [[ -r "$source" ]] || continue
-    diagnostic="$(grep -Ei 'automation framework|automation plan|error|warn|fail|exception|invalid|unknown|unable|denied|not found|rejected|timeout|timed out|refused' "$source" | tail -n 1 || true)"
+    diagnostic="$(grep -Ei 'automation framework|automation plan|error|warn|fail|exception|caused by|invalid|unknown|unable|denied|not found|rejected|timeout|timed out|refused' "$source" \
+      | grep -Ev '^[[:space:]]+at ' \
+      | tail -n 1 || true)"
     [[ -n "$diagnostic" ]] || continue
     diagnostic="$(printf '%s' "$diagnostic" \
       | sed -E \
@@ -125,7 +127,20 @@ scan_rc=0
 docker "${docker_args[@]}" "${zap_command[@]}" -autorun "/zap/wrk/$policy_rel" >"$run_log" 2>&1 \
   || scan_rc=$?
 report="$report_dir/dast-report.json"
-if (( scan_rc != 0 )); then
+warning_state='none'
+if (( scan_rc == 1 )); then
+  report_state='no reviewable report was produced'
+  [[ -s "$report" ]] && report_state='a report was produced, but the Automation Framework plan was not clean'
+  printf 'Authenticated DAST scan failed (docker_exit=%s; %s; %s).\n' \
+    "$scan_rc" "$(scan_failure_reason)" "$report_state" >&2
+  exit 1
+elif (( scan_rc == 2 )); then
+  warning_state='ZAP reported plan warnings (docker_exit=2)'
+  report_state='no reviewable report was produced'
+  [[ -s "$report" ]] && report_state='a report was produced; warnings remain advisory'
+  printf 'Authenticated DAST scan completed with warnings (docker_exit=2; %s; %s).\n' \
+    "$(redacted_zap_diagnostic)" "$report_state" >&2
+elif (( scan_rc != 0 )); then
   report_state='no reviewable report was produced'
   [[ -s "$report" ]] && report_state='a report was produced, but the Automation Framework plan was not clean'
   printf 'Authenticated DAST scan failed (docker_exit=%s; %s; %s).\n' \
@@ -153,6 +168,7 @@ duration_seconds="$(( $(date +%s) - started_at ))"
   echo "- Scanner image: `${ZAP_IMAGE##*@}`"
   echo "- Policy: `SCRUM-273 GET/HEAD active-scan boundary`"
   echo "- Duration: ${duration_seconds}s"
+  echo "- Scan status: ${warning_state}"
   echo "- Finding counts: high=${high}, medium=${medium}, low=${low}, informational=${informational}"
   echo '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
 } >>"$summary"
