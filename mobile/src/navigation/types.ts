@@ -43,8 +43,14 @@ export type ShiftsStackParamList = {
   ShiftDetail: { siteId: string; shiftId: string };
 };
 
+/** The supervisor's crew-wellbeing surface (US-11). */
+export type ConcernsStackParamList = {
+  Concerns: undefined;
+};
+
 export type SupervisorTabParamList = {
   ShiftsTab: undefined;
+  ConcernsTab: undefined;
   WeatherTab: undefined;
   ProfileTab: undefined;
 };
