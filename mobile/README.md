@@ -1105,6 +1105,103 @@ card in place. Audit trail: `WELLBEING_LOGGED` ×2, `CONCERN_RAISED`, `CONCERN_A
 
 ---
 
+## SCRUM-119 — Supervisor approves, edits or rejects an AI-drafted plan
+
+Plan: [`docs/plans/SCRUM-119-mobile-recommendation-decisions-plan.md`](../docs/plans/SCRUM-119-mobile-recommendation-decisions-plan.md).
+
+US-09. A **Plans** tab lists every drafted plan across the supervisor's shifts; opening one shows
+what it relied on and what it proposes, and offers approve / edit / reject. Approving dispatches
+the actions to every worker on the shift, in that worker's own language.
+
+The backend for this already existed and had never been called from the app. So did the fan-out to
+workers — `RecommendationService.fanOutDispatches` has created dispatches on approval since
+SCRUM-193.
+
+### The bug this had to fix first
+
+Every AI-sourced dispatch went out under the constant `AI_RECOMMENDED_ACTION`. **No locale
+translates it**, so `humaniseActionCode` rendered "Ai recommended action" — in English, to every
+worker, whatever language they read — and every mitigation on a plan looked identical in their
+inbox.
+
+Fixed by giving a mitigation a real `actionCode` and mapping it on the way out. Both fields are
+nullable and additive: `draft_plan` is serialised JSON, so there is no migration, and plans written
+before this keep working (and keep using the placeholder — that path is deliberately preserved and
+tested).
+
+| Recommendation code | Dispatched as | Why |
+|---|---|---|
+| `REST_15_MIN_HOURLY` | `REST_15_MIN` | the timer recovers duration with `REST_(\d+)_MIN`; the `_HOURLY` form leaves it matching a prefix |
+| `REST_10_MIN_HOURLY` | `REST_10_MIN` | same |
+| `HYDRATE_HOURLY` / `HYDRATE_REGULARLY` | `HYDRATE` | recurrence is not a one-shot instruction |
+| `SHADE_RECOVERY` | `SEEK_SHADE` | same |
+| everything else | itself | so a newly translated code is dispatchable without a second edit |
+
+`ActionCatalogueTest` reads the seven shipped locale files and fails the build if any dispatchable
+code has no translation. That is the promise checked against the actual files, not restated.
+
+**No lightning instruction is in the catalogue.** §7.1 requires "seek proper shelter"; the nearest
+translated string is `SEEK_SHADE`, and shade is not shelter from lightning. That instruction
+reaches workers as banner copy (`lightning.stopWorkBody`) and must never be approximated by an
+action code.
+
+### Render from the code, never from the prose
+
+`actionCode` resolves through `actions.*` and is what the worker acts on. `action` is
+server-authored English — shown only when a plan carries no code, and labelled as server-written
+when it is. Parsing it for numbers is forbidden: it works in English and fails in the other six,
+exactly as documented for the rest timer in SCRUM-206.
+
+This is why the edit sheet's text field is labelled **"Wording kept on the record"** rather than
+anything implying the crew reads it. Editing that text changes what is retained as the approved
+plan; it cannot change the instruction a worker receives.
+
+### Edit narrows a plan; it never adds to one
+
+Remove, reorder, reword. **No adding** — an action typed by hand has no policy rule and no forecast
+behind it, and would appear beside actions that do, formatted identically, with nothing to tell
+them apart. The server enforces the same boundary by rejecting any code outside `ActionCatalogue`.
+
+Removed rows stay visible and struck through, with a Restore button. A list that silently shrinks
+gives a supervisor no way to check their own work before it reaches a crew.
+
+Removing everything is blocked: that is a rejection, and a rejection carries a reason on the record
+where an empty plan would not.
+
+### What is retained
+
+The draft is never overwritten. An edited decision shows the original draft **and** "What you
+approved", so "what did the supervisor change" is answerable months later by anyone with read
+access. That is the retention half of the acceptance criteria.
+
+### Roles
+
+| | Read | Decide |
+|---|---|---|
+| `SUPERVISOR`, `ADMIN` | ✅ | ✅ |
+| `SAFETY_MANAGER` | ✅ | ❌ — the screen says so, rather than offering buttons that 403 |
+
+### Getting data to test against
+
+SCRUM-118 is not built, so nothing creates a recommendation. `local/seed-recommendation.sh` writes
+one against a live shift in the shape the agent has been designed to produce:
+
+```bash
+./local/seed-recommendation.sh            # attach to the site's most recent unfinished shift
+./local/seed-recommendation.sh <shiftId>  # or a specific one
+```
+
+Mock auth mode seeds its own fixtures and needs nothing.
+
+### Verified on device
+
+Live Cognito stack, three-action plan on a two-worker shift: edited it down to two and sent it.
+Only those two dispatched, as `HYDRATE` and `RESCHEDULE_HEAVY_WORK`. Signing in as the worker and
+switching to Tamil translated both instruction titles while the server-authored detail line stayed
+English — the split the contract intends, and the thing that was broken before this ticket.
+
+---
+
 ## SCRUM-266 — Editing a shift after it has been created
 
 Plan: [`docs/plans/SCRUM-266-edit-shifts-and-assignments-plan.md`](../docs/plans/SCRUM-266-edit-shifts-and-assignments-plan.md).

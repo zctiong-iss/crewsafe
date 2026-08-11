@@ -17,6 +17,8 @@ import ShiftListScreen from "@/screens/supervisor/ShiftListScreen";
 import ShiftDetailScreen from "@/screens/supervisor/ShiftDetailScreen";
 import CreateShiftScreen from "@/screens/supervisor/CreateShiftScreen";
 import ConcernsScreen from "@/screens/supervisor/ConcernsScreen";
+import RecommendationsScreen from "@/screens/supervisor/RecommendationsScreen";
+import RecommendationDetailScreen from "@/screens/supervisor/RecommendationDetailScreen";
 import SettingsScreen from "@/screens/settings/SettingsScreen";
 import { s } from "react-native-size-matters";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -27,6 +29,7 @@ import type {
   InboxStackParamList,
   MyShiftStackParamList,
   ProfileStackParamList,
+  RecommendationsStackParamList,
   ShiftsStackParamList,
   WeatherStackParamList,
 } from "./types";
@@ -145,6 +148,29 @@ export function ConcernsStack() {
         options={{ title: t("wellbeing.concernsTitle") }}
       />
     </ConcernsStackNavigator.Navigator>
+  );
+}
+
+/* ------------------------------ Recommendations --------------------------------- */
+
+const RecommendationsStackNavigator = createNativeStackNavigator<RecommendationsStackParamList>();
+
+export function RecommendationsStack() {
+  const { t } = useTranslation();
+
+  return (
+    <RecommendationsStackNavigator.Navigator screenOptions={useScreenOptions()}>
+      <RecommendationsStackNavigator.Screen
+        name="RecommendationList"
+        component={RecommendationsScreen}
+        options={{ title: t("recommendations.title") }}
+      />
+      <RecommendationsStackNavigator.Screen
+        name="RecommendationDetail"
+        component={RecommendationDetailScreen}
+        options={{ title: t("recommendations.title") }}
+      />
+    </RecommendationsStackNavigator.Navigator>
   );
 }
 

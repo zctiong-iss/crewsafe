@@ -8,7 +8,13 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { ConcernsStack, ProfileStack, ShiftsStack, WeatherStack } from "./stacks";
+import {
+  ConcernsStack,
+  ProfileStack,
+  RecommendationsStack,
+  ShiftsStack,
+  WeatherStack,
+} from "./stacks";
 import { tabScreenOptions } from "./tabOptions";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useAppSelector } from "@/store/hooks";
@@ -57,8 +63,13 @@ export default function SupervisorTabs() {
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
         }}
       />
-      {/* Second, before Weather: a worker saying they feel unwell in the heat outranks the
-          forecast that caused it. */}
+      {/*
+        Concerns then Plans, both before Weather.
+
+        Each is something a supervisor owes somebody, so neither belongs behind the forecast.
+        Concerns leads because a worker saying they feel unwell in the heat is a person in
+        trouble now, where a plan awaiting a decision is work waiting to start.
+      */}
       <Tab.Screen
         name="ConcernsTab"
         component={ConcernsStack}
@@ -80,6 +91,16 @@ export default function SupervisorTabs() {
             openConcerns > 0
               ? `${t("wellbeing.concernsTab")}, ${t("wellbeing.concernOpen")}: ${openConcerns}`
               : t("wellbeing.concernsTab"),
+        }}
+      />
+      <Tab.Screen
+        name="RecommendationsTab"
+        component={RecommendationsStack}
+        options={{
+          title: t("recommendations.tabTitle"),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="clipboard" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen
