@@ -1,6 +1,10 @@
 @startuml terraform-architecture
 
-title CrewSafe SG — Runtime Architecture
+' This source is intentionally split into focused pages. Keeping delivery,
+' runtime services, and Terraform contracts separate prevents long labels from
+' crossing unrelated edges when PlantUML lays out the graph.
+
+title CrewSafe SG — Request and Data Path
 
 left to right direction
 skinparam dpi 160
@@ -10,10 +14,105 @@ skinparam shadowing false
 skinparam linetype ortho
 skinparam packageStyle rectangle
 skinparam componentStyle rectangle
-skinparam wrapWidth 190
-skinparam maxMessageSize 160
-skinparam nodesep 45
-skinparam ranksep 65
+skinparam wrapWidth 155
+skinparam maxMessageSize 130
+skinparam nodesep 55
+skinparam ranksep 85
+skinparam ArrowColor #455A64
+
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontColor #1B5E20
+  FontSize 18
+}
+skinparam cloud {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #0D47A1
+  FontSize 18
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #EF6C00
+  FontColor #E65100
+  FontSize 18
+}
+
+actor "Browser" as browser
+actor "Mobile / CLI" as client
+cloud "Cognito\nOAuth clients" as cognito
+
+package "Web edge" as web_edge {
+  cloud "CloudFront web\nHTTPS" as web_cf
+  database "S3 web bucket\nprivate · OAC" as web_bucket
+}
+
+package "API edge" as api_edge {
+  cloud "CloudFront API\nHTTPS" as api_cf
+  rectangle "Public ALB\nCloudFront prefix-list only" as alb
+}
+
+package "VPC · 2 AZ" as vpc {
+  rectangle "ECS Fargate\nprivate · no public IP" as ecs
+  database "RDS PostgreSQL\nprivate · TLS" as rds
+  rectangle "NAT gateway\nsingle AZ" as nat
+}
+
+cloud "NEA weather API" as weather
+
+browser --> cognito
+client --> cognito
+browser --> web_cf
+web_cf --> web_bucket
+browser --> api_cf
+client --> api_cf
+api_cf --> alb
+alb --> ecs
+ecs --> rds
+ecs --> nat
+nat --> weather
+
+note right of api_cf
+  Viewer HTTPS.
+  Origin HTTP.
+  ALB hostname has no project cert.
+end note
+
+note right of ecs
+  Authz server-side.
+  No public IP.
+end note
+
+note right of rds
+  Ingress: app SG → TCP 5432.
+  No egress rule.
+end note
+
+legend right
+  |= Color |= Meaning |
+  |<#E3F2FD>| Public edge / identity |
+  |<#E8F5E9>| Network and compute |
+  |<#FFF3E0>| Data and configuration |
+  --> | Request or runtime flow |
+endlegend
+
+newpage
+
+title CrewSafe SG — Platform Controls
+
+left to right direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 18
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 155
+skinparam maxMessageSize 130
+skinparam nodesep 55
+skinparam ranksep 85
 skinparam ArrowColor #455A64
 
 skinparam rectangle {
@@ -41,79 +140,48 @@ skinparam artifact {
   FontSize 18
 }
 
-actor "Web / mobile / CLI\nclients" as clients
-cloud "NEA / data.gov.sg\nweather API" as weather
+artifact "GitHub Actions\nCI + release" as github
+cloud "SonarCloud" as sonar
 
-package "AWS account · ap-southeast-1 · shared-dev" as aws {
-  package "Public edge" as edge {
-    cloud "Cognito User Pool\nweb · mobile · CLI clients\nOAuth tokens / JWKS" as cognito
-    cloud "CloudFront distribution\nviewer HTTPS" as cloudfront
-  }
-
-  package "VPC · two Availability Zones" as vpc {
-    rectangle "Internet Gateway" as igw
-    rectangle "NAT Gateway\nEIP · single egress AZ" as nat
-
-    package "Public subnets" as public {
-      rectangle "Public Application Load Balancer\nport 80 CloudFront origin" as alb
-    }
-
-    package "Private subnets" as private {
-      rectangle "ECS cluster + Fargate service\nCrewSafe backend tasks\nno public IP" as ecs
-      database "RDS PostgreSQL\nprivate subnet group\nTLS required" as rds
-    }
-  }
-
-  database "ECR repositories\ncrewsafe/backend + crewsafe/web\nimmutable tags · scan on push" as ecr
-  database "SSM Parameter Store\n/crewsafe/shared-dev/*\nconfiguration + DB URL" as ssm
-  database "Secrets Manager\nweather API key\nRDS-managed master credential" as secrets
-  artifact "CloudWatch Logs\nbackend: 14 days\nPostgreSQL: 7 days" as logs
+package "Backend dependencies" as runtime {
+  rectangle "ECS task" as ecs_platform
+  database "ECR\nbackend + web\nimmutable · scan on push" as ecr
+  database "SSM\nruntime config" as ssm
+  database "Secrets Manager\nweather + RDS creds" as secrets
+  artifact "CloudWatch\napp + DB logs" as logs
 }
 
-clients --> cognito : sign in
-clients --> cloudfront : API requests
-cloudfront --> alb : origin HTTP : 80
-alb --> ecs : target group
-ecs --> rds : JDBC TLS : 5432
-ecs --> ecr
-ecs --> ssm
-ecs --> secrets
-ecs --> logs
-rds --> logs
-ecs --> weather
-private --> nat
-nat --> igw
+package "Security" as security {
+  artifact "OIDC importer\nBatchImport only" as importer
+  artifact "Security Hub\nInspector + Sonar" as securityhub
+}
 
-note right of alb
-  ALB security group:
-  ingress from CloudFront's
-  AWS-managed prefix list only.
+github --> ecr
+github --> ecs_platform
+github --> importer
+sonar --> importer
+ecr --> securityhub
+importer --> securityhub
+ecs_platform --> ecr
+ecs_platform --> ssm
+ecs_platform --> secrets
+ecs_platform --> logs
+
+note right of ecs_platform
+  ECS roles separate.
+  Release workflow owns revision.
 end note
 
-note right of ecs
-  Application security group:
-  ingress from ALB only.
-
-  ECS task execution role handles
-  image pull, log write, and
-  config/secret resolution.
-  ECS task role reads application
-  secrets only.
-end note
-
-note right of rds
-  Database security group:
-  app security group → TCP 5432.
-  No egress rule is declared.
+note right of importer
+  No remediation / tickets.
 end note
 
 legend right
   |= Color |= Meaning |
-  |<#E3F2FD>| Public edge / identity |
-  |<#E8F5E9>| Network and compute |
+  |<#E8F5E9>| Runtime |
   |<#FFF3E0>| Data and configuration |
-  |<#F3E5F5>| Operations |
-  --> | Runtime data or request flow |
+  |<#F3E5F5>| Operations and delivery control |
+  --> | Delivery or control flow |
 endlegend
 
 newpage
@@ -123,63 +191,88 @@ title CrewSafe SG — Terraform Component Contracts
 left to right direction
 skinparam dpi 160
 skinparam defaultFontName Arial
-skinparam defaultFontSize 18
+skinparam defaultFontSize 17
 skinparam shadowing false
 skinparam linetype ortho
-skinparam wrapWidth 190
-skinparam maxMessageSize 160
-skinparam nodesep 50
+skinparam packageStyle rectangle
+skinparam wrapWidth 180
+skinparam maxMessageSize 150
+skinparam nodesep 45
 skinparam ranksep 70
+skinparam ArrowColor #455A64
 
-actor "GitHub Actions" as github_tf
-artifact "Versioned S3 state bucket\nSSE-S3 · public access blocked\nseparate key per component" as s3_tf
+skinparam rectangle {
+  BackgroundColor #ECEFF1
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 17
+}
+skinparam artifact {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+  FontSize 17
+}
 
-rectangle "Terraform: network" as tf_network #ECEFF1
-rectangle "Terraform: compute" as tf_compute #ECEFF1
-rectangle "Terraform: database" as tf_database #ECEFF1
-rectangle "Terraform: secrets" as tf_secrets #ECEFF1
-rectangle "Terraform: cognito" as tf_cognito #ECEFF1
-rectangle "Terraform: ecr" as tf_ecr #ECEFF1
+artifact "GitHub Actions\nOIDC · reviewed CI" as ci
+artifact "Versioned S3 state\naccount-isolated" as tf_state
 
-tf_network ..> tf_compute
-tf_network ..> tf_database
+package "Terraform roots" as roots {
+  rectangle "Cognito\ncognito/shared-dev.tfstate" as tf_cognito
+  rectangle "Network\nnetwork/shared-dev.tfstate" as tf_network
+  rectangle "Secrets\nsecrets/shared-dev.tfstate" as tf_secrets
+  rectangle "Database\ndatabase/shared-dev.tfstate" as tf_database
+  rectangle "ECR\necr/shared-dev.tfstate" as tf_ecr
+  rectangle "Compute\ncompute/shared-dev.tfstate" as tf_compute
+  rectangle "IAM policy mgmt\niam-policy-management/shared-dev.tfstate" as tf_iam
+  rectangle "SecurityHub import\nsecurityhub-import/shared-dev.tfstate" as tf_importer
+}
+
+rectangle "State backend\nbootstrap/terraform.tfstate\nself-bootstrap" as state_backend
+
+' Contract edges carry no labels here; the exact contracts are listed in the
+' architecture Markdown and the output contract files. This keeps the rendered
+' page readable while preserving dependency direction.
 tf_cognito ..> tf_secrets
-tf_secrets ..> tf_compute
+tf_network ..> tf_secrets
+tf_network ..> tf_database
+tf_network ..> tf_compute
 tf_secrets ..> tf_database
+tf_secrets ..> tf_compute
 tf_database ..> tf_compute
 tf_ecr ..> tf_compute
 
-github_tf --> s3_tf
-tf_network ..> s3_tf
-tf_compute ..> s3_tf
-tf_database ..> s3_tf
-tf_secrets ..> s3_tf
-tf_cognito ..> s3_tf
-tf_ecr ..> s3_tf
+ci --> state_backend
+ci --> tf_cognito
+ci --> tf_network
+ci --> tf_secrets
+ci --> tf_database
+ci --> tf_ecr
+ci --> tf_compute
+ci --> tf_iam
+ci --> tf_importer
+state_backend ..> tf_state
 
-note right of s3_tf
-  State is account-isolated and keyed
-  per component. No DynamoDB lock table
-  is declared.
+note right of tf_state
+  One key per root.
+  Bootstrap creates the bucket;
+  other roots use remote state.
 end note
 
-note bottom of tf_compute
-  Remote-state inputs:
-  network = VPC, subnets, security groups
-  secrets = parameter prefix, IAM roles
-  database = DB address, URL parameter, credential ARN
-  ecr = repository ARN / URL
+note bottom of tf_iam
+  Managed CI policy bindings.
+  No runtime dependency.
 end note
 
-note bottom of tf_secrets
-  Remote-state input:
-  cognito = issuer, JWKS, client IDs
+note bottom of tf_importer
+  OIDC role for Sonar → Security Hub.
+  No remote-state input.
 end note
 
 legend right
   |= Style |= Meaning |
-  ..> | Terraform remote-state contract |
   --> | CI control flow |
+  ..> | Remote-state dependency or state location |
 endlegend
 
 @enduml
