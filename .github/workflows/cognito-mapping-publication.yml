@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirmation:
-        description: Exact phrase: publish-mapping <alias>
+        description: "Exact phrase: publish-mapping <alias>"
         required: true
         type: string
 
