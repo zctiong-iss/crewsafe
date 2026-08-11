@@ -25,8 +25,9 @@ request, or CI summary.
 - Only the reviewed web and backend CloudFront HTTPS origins are scan targets.
 - The exact Cognito Hosted UI hostname is authentication-only.
 - The SPA uses Cognito bearer tokens for backend calls. ZAP keeps that token in
-  header-based session management and verifies the protected `/api/v1/me` endpoint;
-  no token or cookie is written to CI output.
+  header-based session management and verifies the protected `/api/v1/me` endpoint
+  once per second; do not set the poll frequency to zero because ZAP reports that as
+  a warning-only plan result. No token or cookie is written to CI output.
 - The active scanner permits GET/HEAD only. POST, PUT, PATCH, DELETE, and operational,
   logout, approval, decision, acknowledgement, completion, readiness, wellbeing,
   concern, mitigation, assignment, and cancellation probes are rewritten to a

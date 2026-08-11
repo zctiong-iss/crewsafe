@@ -100,6 +100,8 @@ contains "automation uses browser authentication" "$AUTOMATION" "method: browser
 contains "automation supplies browser login URL" "$AUTOMATION" 'loginPageUrl: ${WEB_BASE_URL}'
 contains "automation disables browser authentication diagnostics" "$AUTOMATION" "diagnostics: false"
 contains "automation verifies authenticated API access" "$AUTOMATION" 'pollUrl: ${BACKEND_BASE_URL}/api/v1/me'
+contains "automation uses a positive authentication poll frequency" "$AUTOMATION" "pollFrequency: 1"
+not_contains "automation does not configure a zero authentication poll frequency" "$AUTOMATION" "pollFrequency: 0"
 contains "automation uses bearer-header session management" "$AUTOMATION" "method: headers"
 contains "automation carries the Cognito access token" "$AUTOMATION" 'Authorization: "Bearer {%json:access_token%}"'
 contains "automation uses a browser-capable client spider" "$AUTOMATION" "type: spiderClient"
