@@ -8,7 +8,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { ProfileStack, ShiftsStack, WeatherStack } from "./stacks";
+import { ProfileStack, RecommendationsStack, ShiftsStack, WeatherStack } from "./stacks";
 import { tabScreenOptions } from "./tabOptions";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { SupervisorTabParamList } from "./types";
@@ -34,6 +34,18 @@ export default function SupervisorTabs() {
         options={{
           title: t("tabs.shifts"),
           tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+        }}
+      />
+      {/* Second, not last: a plan waiting on a decision is the most time-sensitive thing this
+          role holds, and burying it behind Weather would make it the tab nobody opens. */}
+      <Tab.Screen
+        name="RecommendationsTab"
+        component={RecommendationsStack}
+        options={{
+          title: t("recommendations.tabTitle"),
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="clipboard" size={size} color={color} />
+          ),
         }}
       />
       <Tab.Screen

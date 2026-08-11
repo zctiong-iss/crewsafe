@@ -43,8 +43,20 @@ export type ShiftsStackParamList = {
   ShiftDetail: { siteId: string; shiftId: string };
 };
 
+/**
+ * The supervisor's decision surface (SCRUM-119).
+ *
+ * `RecommendationDetail` carries the site and shift as well as the recommendation, because the
+ * endpoint is nested under both — a recommendation id alone cannot be fetched or decided on.
+ */
+export type RecommendationsStackParamList = {
+  RecommendationList: undefined;
+  RecommendationDetail: { siteId: string; shiftId: string; recommendationId: string };
+};
+
 export type SupervisorTabParamList = {
   ShiftsTab: undefined;
+  RecommendationsTab: undefined;
   WeatherTab: undefined;
   ProfileTab: undefined;
 };
