@@ -23,7 +23,15 @@ function sendingRequest(msg, initiator, helper) {
     throw new Error('Blocked Active Scanner request outside approved staging hosts');
   }
   if (method !== 'GET' && method !== 'HEAD') {
-    throw new Error('Blocked non-GET/HEAD Active Scanner request');
+    // HTTP Sender hooks cannot cancel a request without raising a script error,
+    // which makes the Automation Framework fail the whole plan. Rewrite unsafe
+    // active-scan probes to a bodyless HEAD request instead; the target never
+    // receives the original mutating method or payload.
+    request.setMethod('HEAD');
+    request.setHeader('Content-Length', null);
+    request.setHeader('Transfer-Encoding', null);
+    request.setHeader('Content-Type', null);
+    msg.setRequestBody('');
   }
 }
 

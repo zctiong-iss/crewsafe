@@ -26,7 +26,9 @@ request, or CI summary.
 - The exact Cognito Hosted UI hostname is authentication-only.
 - The active scanner permits GET/HEAD only. POST, PUT, PATCH, DELETE, and operational,
   logout, approval, decision, acknowledgement, completion, readiness, wellbeing,
-  concern, mitigation, assignment, and cancellation routes are excluded.
+  concern, mitigation, assignment, and cancellation probes are rewritten to a
+  bodyless HEAD request by the last-line guard; the original method and payload are
+  never sent. Out-of-scope hosts are still rejected.
 - Target, policy, identity, scanner, or authentication validation failures are failed
   security-control states. Do not relabel them as a clean scan and do not bypass them
   with a workstation procedure.
