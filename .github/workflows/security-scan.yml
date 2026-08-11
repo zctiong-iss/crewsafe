@@ -365,6 +365,9 @@ jobs:
       - name: Staging deployment workflow self-tests
         run: .github/scripts/tests/test-staging-deployment-workflows.sh
 
+      - name: Authenticated staging DAST self-tests
+        run: .github/scripts/tests/test-dast-staging-workflow.sh
+
       # SCRUM-269: the five new self-tests this feature adds.
       - name: Backend image workflow self-tests
         run: .github/scripts/tests/test-backend-image-workflow.sh
