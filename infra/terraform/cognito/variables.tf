@@ -33,7 +33,7 @@ variable "github_oidc_main_subject" {
 }
 
 variable "web_callback_urls" {
-  type    = list(string)
+  type = list(string)
   default = [
     "http://localhost:5173/callback",
     "https://d3b75ru76gta2n.cloudfront.net/callback",
@@ -47,7 +47,7 @@ variable "web_callback_urls" {
   }
 }
 variable "web_logout_urls" {
-  type    = list(string)
+  type = list(string)
   default = [
     "http://localhost:5173/",
     "https://d3b75ru76gta2n.cloudfront.net/",
