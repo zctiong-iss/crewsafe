@@ -768,7 +768,7 @@ run "mapping_publication_role_boundary" {
     condition = anytrue([
       for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
       contains(stmt.Action, "ssm:PutParameter") &&
-      toset(stmt.Resource) == toset([aws_ssm_parameter.demo_users_json.arn])
+      try(toset(stmt.Resource), toset([])) == toset([aws_ssm_parameter.demo_users_json.arn])
     ])
     error_message = "The mapping-publication role may write only the fixed runtime mapping parameter."
   }
@@ -786,7 +786,7 @@ run "mapping_publication_role_boundary" {
     condition = anytrue([
       for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
       toset(stmt.Action) == toset(["iam:PassRole"]) &&
-      toset(stmt.Resource) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(toset(stmt.Resource), toset([])) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
       try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
     ])
     error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
