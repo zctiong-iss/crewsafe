@@ -28,7 +28,8 @@ request, or CI summary.
   logout, approval, decision, acknowledgement, completion, readiness, wellbeing,
   concern, mitigation, assignment, and cancellation probes are rewritten to a
   bodyless HEAD request by the last-line guard; the original method and payload are
-  never sent. Out-of-scope hosts are still rejected.
+  never sent. Redirects to out-of-scope hosts are sent only to a loopback discard
+  port; the original host is never contacted.
 - Target, policy, identity, scanner, or authentication validation failures are failed
   security-control states. Do not relabel them as a clean scan and do not bypass them
   with a workstation procedure.

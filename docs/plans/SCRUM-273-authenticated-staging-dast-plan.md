@@ -8,13 +8,13 @@ dedicated synthetic worker through Cognito Hosted UI browser authentication, ass
 only the reviewed staging web and backend origins, and treats Cognito as
 authentication-only.
 
-The active scanner may issue only GET/HEAD requests. A ZAP HTTP Sender guard rejects an
-Active-Scanner request to any other host before it can be sent and rewrites any other
-method to a bodyless HEAD request. This keeps the Automation Framework from failing the
-whole plan while ensuring the target never receives the original mutating method or
-payload. The guard does not interfere with the separate browser-login POST to Cognito.
-Request bodies, cookies, and headers are not active-scan input vectors. Operational and
-state-changing paths are excluded.
+The active scanner may issue only GET/HEAD requests to the reviewed origins. A ZAP HTTP
+Sender guard routes an Active-Scanner request to any other host to a loopback discard
+port, and rewrites any other method to a bodyless HEAD request. This keeps the
+Automation Framework from failing the whole plan while ensuring no external host sees
+the original request, mutating method, or payload. The guard does not interfere with the
+separate browser-login POST to Cognito. Request bodies, cookies, and headers are not
+active-scan input vectors. Operational and state-changing paths are excluded.
 
 The workflow has `contents: read` only and receives only the DAST test password through
 an explicit secret mapping. Raw traffic, session state, and reports exist only in the
