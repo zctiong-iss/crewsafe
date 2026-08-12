@@ -73,7 +73,20 @@ export type WeatherStackParamList = {
   Weather: undefined;
 };
 
+/**
+ * Profile, and the administrative surfaces reached from it.
+ *
+ * The heat policy screens (SCRUM-120) live here rather than in a tab of their own: configuration
+ * is rare and done sitting down, and a sixth supervisor tab would also appear for supervisors, who
+ * may read the policy but not change it. Settings is here for the same reason.
+ *
+ * One stack rather than a nested policy navigator — three routes do not need their own navigator,
+ * and nesting one would put a second header bar above screens that already have one.
+ */
 export type ProfileStackParamList = {
   Profile: undefined;
   Settings: undefined;
+  PolicyVersions: undefined;
+  PolicyVersionDetail: { versionId: string };
+  NewPolicyVersion: undefined;
 };

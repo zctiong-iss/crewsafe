@@ -347,3 +347,59 @@ export interface CrewWellbeingRow {
   restCount: number;
   hydrationCount: number;
 }
+
+/**
+ * Heat policy versioning (SCRUM-120 / US-24).
+ *
+ * Mirrors `policy/api/PolicyVersionController.PolicyVersionResponse`. A version is the set of
+ * WBGT thresholds in force at a site, with the source it came from and the date it takes effect —
+ * so a recommendation can be traced to the exact rules that produced it rather than to a label
+ * somebody typed.
+ */
+export type PolicyVersionStatus = "DRAFT" | "ACTIVE" | "SUPERSEDED";
+
+/**
+ * The three acclimatisation levels a threshold set is indexed by, and the three intensities
+ * within each. Named here so the screens can iterate them rather than hardcoding nine field
+ * names in render order.
+ */
+export type AcclimatisationLevel = "UNACCLIMATISED" | "PARTIAL" | "FULL";
+
+export interface PolicyVersion {
+  id: string;
+  siteId: string;
+  /** Unique per site — the server answers 409 on a duplicate. */
+  versionLabel: string;
+  /** Where the rules came from, e.g. "MOM Work-Rest Guidelines 2026 rev 1". */
+  source: string;
+  /** ISO 8601 *date*, no time. The server stores a LocalDate. */
+  effectiveDate: string;
+  status: PolicyVersionStatus;
+
+  /*
+   * Numbers, not strings. The server's `BigDecimal` serialises as a JSON number (25.0), and
+   * typing these as strings made `TextInput value={25}` render blank — the create form opened
+   * with every threshold empty while claiming to have copied them. Whatever the merits of
+   * carrying decimals as strings, this is what the wire actually sends.
+   */
+  wbgtThresholdUnacclimatisedLight: number;
+  wbgtThresholdUnacclimatisedModerate: number;
+  wbgtThresholdUnacclimatisedHeavy: number;
+  wbgtThresholdPartialLight: number;
+  wbgtThresholdPartialModerate: number;
+  wbgtThresholdPartialHeavy: number;
+  wbgtThresholdFullLight: number;
+  wbgtThresholdFullModerate: number;
+  wbgtThresholdFullHeavy: number;
+  /** Stop work at or above this, whatever the acclimatisation. Server bounds it to 20..40. */
+  wbgtEmergencyStop: number;
+
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Null until activated. */
+  activatedAt: string | null;
+  /** Null unless a later version replaced this one. */
+  supersededAt: string | null;
+}
