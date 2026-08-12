@@ -73,6 +73,18 @@
       "Resource": "*"
     },
     {
+      "Sid": "ManageResponseHeadersPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateResponseHeadersPolicy",
+        "cloudfront:DeleteResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicyConfig",
+        "cloudfront:UpdateResponseHeadersPolicy"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "ManageLoadBalancerSecurityGroupAndTheOneDelegatedRule",
       "Effect": "Allow",
       "Action": [

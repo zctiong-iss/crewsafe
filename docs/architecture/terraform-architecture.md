@@ -1,145 +1,298 @@
 # Terraform Architecture
 
-This diagram is derived from the Terraform roots under `infra/terraform/` and
-describes the architecture declared for the shared development
-environment. It is an infrastructure view, not a live AWS inventory; the
-compute component deliberately lets CI own the running ECS task-definition
-revision.
+This is the infrastructure architecture **declared in this repository**, derived
+from the Terraform component catalogue and roots under `infra/terraform/`. It is
+not a live AWS inventory: a merged Terraform change is not deployed until its
+reviewed CI plan and apply complete. Terraform runs in CI only.
 
 PlantUML source: [`terraform-architecture.puml`](terraform-architecture.puml)
+
+DevSecOps toolchain source: [`devsecops-toolchain.puml`](devsecops-toolchain.puml)
 
 ```mermaid
 %%{init: {
   "theme": "base",
   "themeVariables": {
     "fontFamily": "Arial, sans-serif",
-    "fontSize": "20px",
+    "fontSize": "15px",
     "primaryTextColor": "#17202a",
     "lineColor": "#455a64",
     "edgeLabelBackground": "#ffffff"
   },
   "flowchart": {
-    "nodeSpacing": 55,
-    "rankSpacing": 75,
-    "htmlLabels": true
+    "nodeSpacing": 65,
+    "rankSpacing": 85,
+    "htmlLabels": true,
+    "useMaxWidth": false
   }
 }}%%
 flowchart LR
-  %% External actors and managed AWS services
-  users[Web / mobile / CLI clients]
-  github[GitHub Actions]
-  weather[NEA / data.gov.sg weather API]
+  browser[Browser]
+  mobile[Mobile / CLI<br/>client]
+  github[GitHub Actions<br/>CI + release]
+  nea[NEA weather API]
+  sonar[SonarCloud]
 
   subgraph aws[AWS account · ap-southeast-1 · shared-dev]
-    subgraph edge[Public edge]
-      cognito[Cognito User Pool\nweb · mobile · CLI clients\nOAuth tokens / JWKS]
-      cf[CloudFront distribution\nviewer HTTPS\nHTTP origin to ALB]
+    cognito[Cognito<br/>OAuth clients]
+
+    subgraph webedge[Web delivery]
+      webcf[CloudFront: web<br/>viewer HTTPS]
+      webbucket[Private S3 web bucket<br/>OAC-only read access]
+    end
+
+    subgraph apiedge[API delivery]
+      apicf[CloudFront: API<br/>viewer HTTPS]
+      alb[Public ALB<br/>CloudFront prefix-list<br/>only]
     end
 
     subgraph vpc[VPC · two Availability Zones]
-      igw[Internet Gateway]
-      nat[NAT Gateway\nEIP · single egress AZ]
-
-      subgraph public[Public subnets]
-        alb[Public Application Load Balancer\nport 80 origin]
-        albsg[ALB security group\nIngress: CloudFront managed prefix list]
-      end
-
-      subgraph private[Private subnets]
-        ecs[ECS cluster + Fargate service\nCrewSafe backend tasks\nno public IP]
-        appsg[Application security group\nIngress: ALB only\nEgress: outbound]
-        rds[RDS PostgreSQL\nMulti-AZ subnet group placement\nTLS required]
-        rdssg[Database security group\nIngress: app SG → TCP 5432\nNo egress rule]
-      end
+      nat[NAT gateway<br/>single egress AZ]
+      ecs[ECS Fargate<br/>private · no public IP]
+      rds[RDS PostgreSQL<br/>private · TLS]
     end
 
-    ecr[ECR repositories\ncrewsafe/backend + crewsafe/web\nimmutable tags · scan on push]
-    ssm[SSM Parameter Store\n/crewsafe/shared-dev/*\nconfiguration + DB URL]
-    secrets[Secrets Manager\nweather API key\nRDS-managed master credential]
-    logs[CloudWatch Logs\nbackend: 14 days\nPostgreSQL: 7 days]
-
-    subgraph state[Terraform state]
-      s3[S3 versioned state bucket\nSSE-S3 · public access blocked\nseparate key per component]
-    end
+    ecr[ECR<br/>backend + web<br/>immutable + scan]
+    ssm[SSM<br/>runtime config]
+    secrets[Secrets Manager<br/>weather + RDS creds]
+    logs[CloudWatch<br/>app + DB logs]
+    securityhub[Security Hub<br/>Inspector + Sonar]
+    importer[OIDC importer<br/>BatchImport only]
+    state[Versioned S3 state<br/>account-isolated]
   end
 
-  users -->|Sign in / obtain JWT| cognito
-  users -->|API requests| cf
-  cognito -.->|Issuer / JWKS / client IDs| ecs
-  cf -->|Origin HTTP: 80| alb
-  alb -->|Target group / health checks| ecs
-  albsg -.->|Allows CloudFront prefix list| alb
-  appsg -.->|Allows ALB container port| ecs
-  ecs -->|JDBC TLS · TCP 5432| rds
-  appsg -->|Referenced by DB ingress rule| rdssg
-  rdssg -.->|Only app SG → 5432| rds
-  private -->|Outbound internet only| nat
-  nat --> igw
-  alb --> igw
+  browser -->|sign in| cognito
+  mobile -->|sign in| cognito
+  browser -->|SPA| webcf -->|OAC read| webbucket
+  browser -->|API| apicf -->|HTTP origin| alb -->|health checks| ecs
+  mobile -->|API| apicf
+  cognito -.->|issuer + JWKS| ecs
+  ecs -->|JDBC TLS| rds
+  ecs -->|config| ssm
+  ecs -->|secrets| secrets
+  ecs -->|image| ecr
+  ecs -->|logs| logs
+  rds -->|logs| logs
+  ecs -->|egress| nat --> nea
+  ecr -.->|Inspector| securityhub
 
-  github -->|Existing backend CI OIDC publisher| ecr
-  ecr -->|Pull image layers at task start| ecs
-  ecs -->|Read config parameters| ssm
-  ecs -->|Read task secrets| secrets
-  ecs -->|Write container logs| logs
-  rds -->|Write PostgreSQL logs| logs
-  ecs -->|Weather ingestion via NAT| weather
+  github -->|publish| ecr
+  github -->|web sync| webbucket
+  github -->|import role| importer -->|redacted import| securityhub
+  sonar -.->|findings| github
+  github -->|Terraform OIDC| state
 
-  %% Terraform component contracts / remote state
-  network[Terraform: network]
-  compute[Terraform: compute]
-  database[Terraform: database]
-  secrets_tf[Terraform: secrets]
-  cognito_tf[Terraform: cognito]
-  ecr_tf[Terraform: ecr]
-
-  network -.->|vpc, subnet IDs, security groups| compute
-  network -.->|private subnets, DB SG| database
-  cognito_tf -.->|issuer, JWKS, client IDs| secrets_tf
-  secrets_tf -.->|parameter prefix, IAM roles| compute
-  secrets_tf -.->|parameter prefix, execution role| database
-  database -.->|DB address, URL parameter, credential ARN| compute
-  ecr_tf -.->|repository ARN / URL| compute
-
-  github -->|Terraform plan/apply via OIDC| s3
-  network -.-> s3
-  compute -.-> s3
-  database -.-> s3
-  secrets_tf -.-> s3
-  cognito_tf -.-> s3
-  ecr_tf -.-> s3
-
-  classDef external fill:#f5f5f5,stroke:#616161,color:#212121,font-size:20px;
-  classDef edgeNode fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,font-size:20px;
-  classDef networkNode fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,font-size:20px;
-  classDef dataNode fill:#fff3e0,stroke:#ef6c00,color:#e65100,font-size:20px;
-  classDef opsNode fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c,font-size:20px;
-  classDef tfNode fill:#eceff1,stroke:#455a64,color:#263238,font-size:20px;
-
-  class users,github,weather external;
-  class cognito,cf edgeNode;
-  class igw,nat,alb,albsg,ecs,appsg networkNode;
-  class rds,rdssg,ecr,ssm,secrets dataNode;
-  class logs,s3 opsNode;
-  class network,compute,database,secrets_tf,cognito_tf,ecr_tf tfNode;
+  classDef client fill:#f5f5f5,stroke:#616161,color:#212121,font-size:15px;
+  classDef edge fill:#e3f2fd,stroke:#1565c0,color:#0d47a1,font-size:15px;
+  classDef compute fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,font-size:15px;
+  classDef data fill:#fff3e0,stroke:#ef6c00,color:#e65100,font-size:15px;
+  classDef ops fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c,font-size:15px;
+  class browser,mobile,github,nea,sonar client;
+  class cognito,webcf,apicf,alb edge;
+  class nat,ecs compute;
+  class webbucket,rds,ecr,ssm,secrets data;
+  class logs,securityhub,importer,state ops;
 ```
 
-## Architecture notes
+## Runtime boundaries
 
-- The ALB is public but only accepts origin traffic from CloudFront's AWS-managed
-  prefix list; the backend remains in private subnets with no public IP.
-- The single NAT gateway provides outbound access for private workloads. The
-  database security group has the only database ingress rule and declares no
-  egress rule.
-- ECS task execution and task roles are separate. Execution reads image layers,
-  logs, parameters, and secret references; the running application receives only
-  its application secret reads.
-- Cognito is provisioned separately and its issuer/JWKS/client identifiers flow
-  into the secrets component through remote state before being consumed by ECS.
-- Terraform state is account-isolated in one versioned S3 bucket, with an
-  independent state key for each component. No DynamoDB lock table is declared.
-- The shared ECR boundary contains the existing backend repository and the web repository
-  provisioned by SCRUM-253. The GitHub Actions edge represents the existing backend publisher;
-  the future web publisher is intentionally not represented until its follow-up workflow exists.
-- `web/`, `mobile/`, ML, and agent runtimes are otherwise not represented because their
-  Terraform roots do not yet exist.
+- The web SPA and backend API have **separate CloudFront distributions and
+  hostnames**. The web distribution reads a private, versioned S3 bucket through
+  Origin Access Control; it has no ECS, ALB, or VPC dependency.
+- API traffic is CloudFront → public ALB → private ECS task. The ALB accepts its
+  origin traffic only from AWS's managed CloudFront prefix list. The temporary
+  CloudFront-to-ALB origin transport is HTTP on port 80 because the AWS-owned ALB
+  hostname has no project-controlled certificate; viewer traffic is redirected to
+  HTTPS and application authentication/authorisation remains server-side.
+- The backend task has no public IP. Its application security group is the sole
+  allowed source to PostgreSQL on TCP 5432; the database security group declares
+  no egress rule. A single NAT gateway provides private workload egress, including
+  weather ingestion.
+- ECS task execution and task roles are separate. Execution resolves image layers,
+  logs, configuration and secret references; the running task role is restricted
+  to the application reads it needs. Neither Terraform outputs nor this diagram
+  expose credential values.
+- ECR provides immutable, scan-on-push backend and web repositories. The deployed
+  web app is a static S3 sync, not an ECR runtime consumer. Terraform deliberately
+  ignores the ECS service's task-definition revision and desired count: the
+  reviewed release workflow is authoritative for the running backend revision.
+- Security Hub receives Inspector ECR findings. The separately provisioned,
+  main-branch GitHub OIDC role can import narrowly redacted eligible SonarCloud
+  findings; it has no remediation or ticket-creation permission.
+
+## Terraform component contracts
+
+The [component catalogue](../../.github/terraform/components.json) is the
+authoritative inventory of deployable roots. All managed components use a distinct
+key in the account-isolated S3 state bucket. The `state-backend` component is the
+exception: it self-bootstraps before using its own remote key.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Arial, sans-serif",
+    "fontSize": "15px",
+    "primaryTextColor": "#17202a",
+    "lineColor": "#455a64",
+    "edgeLabelBackground": "#ffffff"
+  },
+  "flowchart": {
+    "nodeSpacing": 70,
+    "rankSpacing": 90,
+    "htmlLabels": true,
+    "useMaxWidth": false
+  }
+}}%%
+flowchart LR
+  gha[GitHub Actions<br/>OIDC · reviewed CI]
+  state[Versioned S3 state<br/>account-isolated]
+  bootstrap[State backend<br/>bootstrap/terraform.tfstate]
+  cognito[Cognito<br/>cognito/shared-dev.tfstate]
+  secrets[Secrets<br/>secrets/shared-dev.tfstate]
+  network[Network<br/>network/shared-dev.tfstate]
+  database[Database<br/>database/shared-dev.tfstate]
+  ecr[ECR<br/>ecr/shared-dev.tfstate]
+  compute[Compute<br/>compute/shared-dev.tfstate]
+  iam[IAM policy mgmt<br/>iam-policy-management/shared-dev.tfstate]
+  importer[SecurityHub import<br/>securityhub-import/shared-dev.tfstate]
+
+  gha --> bootstrap
+  gha --> cognito
+  gha --> secrets
+  gha --> network
+  gha --> database
+  gha --> ecr
+  gha --> compute
+  gha --> iam
+  gha --> importer
+  bootstrap -.->|creates| state
+  cognito -.->|Cognito outputs| secrets
+  network -.->|network outputs| database
+  network -.->|network outputs| compute
+  secrets -.->|secret outputs| database
+  secrets -.->|secret outputs| compute
+  database -.->|database outputs| compute
+  ecr -.->|ECR outputs| compute
+  cognito -.-> state
+  secrets -.-> state
+  network -.-> state
+  database -.-> state
+  ecr -.-> state
+  compute -.-> state
+  iam -.-> state
+  importer -.-> state
+```
+
+`iam-policy-management-shared-dev` is intentionally not shown as a remote-state
+consumer: it centrally creates and attaches reviewed Terraform plan/apply policies
+to the pre-existing GitHub OIDC roles. `securityhub-import-shared-dev` independently
+creates the narrow SonarCloud-to-Security-Hub importer role. Neither component
+creates a runtime application dependency.
+
+## DevSecOps toolchain
+
+The repository implements the following CI/CD and security flow. Checks run on pull
+requests and pushes where the workflow is scoped; promotion and infrastructure
+mutation remain controlled main-branch workflows.
+
+The detailed standalone PlantUML version is
+[`devsecops-toolchain.puml`](devsecops-toolchain.puml); it includes the CI lanes,
+OIDC roles, artifact flow, plan/apply controls and evidence paths.
+
+```mermaid
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Arial, sans-serif",
+    "fontSize": "15px",
+    "primaryTextColor": "#17202a",
+    "lineColor": "#455a64",
+    "edgeLabelBackground": "#ffffff"
+  },
+  "flowchart": {
+    "nodeSpacing": 65,
+    "rankSpacing": 85,
+    "htmlLabels": true,
+    "useMaxWidth": false
+  }
+}}%%
+flowchart LR
+  dev[Developer]
+  actions[GitHub Actions<br/>PR · push · schedule · dispatch]
+
+  subgraph build[Build and test]
+    backend[Backend CI<br/>Java 21 · Maven]
+    web[Web CI<br/>Node 22 · test]
+    mobile[Mobile CI<br/>Node 22 · test]
+  end
+
+  subgraph security[Security gates]
+    secrets[Secret scan<br/>gitleaks · fail closed]
+    sast[SAST / SCA<br/>SonarCloud]
+    iac[IaC scan<br/>Terraform · Trivy]
+    selftests[Gate self-tests]
+  end
+
+  subgraph artifacts[Reviewed artifacts]
+    ecr[ECR<br/>immutable images]
+    s3[S3<br/>versioned web bundle]
+    plan[Terraform plan<br/>exact bundle]
+  end
+
+  subgraph delivery[Controlled delivery]
+    ecs[ECS staging<br/>backend]
+    webstg[CloudFront + S3<br/>web staging]
+    apply[Terraform Apply<br/>main + confirmation]
+    hub[Security Hub<br/>controlled import]
+  end
+
+  dev --> actions
+  actions --> backend
+  actions --> web
+  actions --> mobile
+  actions --> secrets
+  actions --> sast
+  actions --> iac
+  actions --> selftests
+  backend --> ecr --> ecs
+  web --> s3 --> webstg
+  iac --> plan --> apply
+  sast --> hub
+```
+
+Backend and web promotion uses immutable, commit-addressed artifacts. Terraform
+mutation is CI-only and requires the exact reviewed plan, commit, account and typed
+confirmation. Security scanning fails closed for unavailable secret scanning; the
+SonarCloud analysis covers backend, web and mobile, with coverage generated before
+analysis. The SonarCloud-to-Security-Hub path is a controlled, redacted import with no
+remediation or ticket-creation permission.
+
+## Declared component inventory
+
+| Component | Responsibility | Upstream Terraform state |
+| --- | --- | --- |
+| `state-backend` | Account-isolated, versioned and protected state bucket | Self-bootstrap |
+| `cognito-shared-dev` | Shared user pool, OAuth clients, groups and administration role | — |
+| `network-shared-dev` | VPC, two-AZ public/private subnets, NAT, app and database security groups | — |
+| `secrets-shared-dev` | Runtime configuration, weather-secret container and ECS roles | Cognito |
+| `database-shared-dev` | PostgreSQL, subnet/parameter groups, logs and connection configuration | Network, secrets |
+| `ecr-shared-dev` | Backend/web repositories, Inspector scanning and Security Hub insight | — |
+| `compute-shared-dev` | Backend ECS/ALB/API edge and static web S3/CloudFront delivery | Network, secrets, database, ECR |
+| `iam-policy-management-shared-dev` | Centrally managed least-privilege Terraform CI policies and attachments | — |
+| `securityhub-import-shared-dev` | OIDC role restricted to controlled SonarCloud finding imports | — |
+
+## Deliberate limitations and follow-ups
+
+- This shared-development architecture does not declare the planned internal ML
+  service, agent runtime, mobile deployment runtime, EventBridge scheduling, or
+  production custom domains/certificates. They remain product-plan targets, not
+  current Terraform resources.
+- Both CloudFront distributions use provider-issued hostnames. Their declared
+  default-certificate setting therefore has a TLS 1.0 minimum; raising that floor
+  requires a project-controlled domain, ACM certificate in `us-east-1`, and DNS
+  work as a separately reviewed change.
+- The diagram intentionally does not represent Terraform state as a source of
+  truth for the running ECS revision, credentials, live configuration values, or
+  AWS inventory. Consult the reviewed deployment workflows and AWS service
+  observations for operational state.

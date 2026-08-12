@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   subscribeToConditions, type ConditionsSnapshot, type StreamStatus,
 } from "@/api/conditionsStream";
+import type { ConditionsRangeWarning } from "@/api/conditionsDecoder";
 import { appendTrendPoint, isConnectionStale, isStopWorkActive, type TrendPoint } from "./streamLogic";
 
 const TREND_CAP = 60;
@@ -13,6 +14,7 @@ export interface ConditionsStreamView {
   connectionState: ConnectionState;
   trend: TrendPoint[];
   stopWorkActive: boolean;  
+  rangeWarnings: ConditionsRangeWarning[];
 }
 
 export function useConditionsStream(
@@ -24,13 +26,20 @@ export function useConditionsStream(
   const [lastSnapshotAt, setLastSnapshotAt] = useState<number | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [rangeWarnings, setRangeWarnings] =
+    useState<ConditionsRangeWarning[]>([]);
 
   useEffect(() => {
     const unsubscribe = subscribe(siteId, {
-      onSnapshot: (next) => {
+      onSnapshot: (next, warnings) => {
         setSnapshot(next);
         setLastSnapshotAt(Date.now());
-        setTrend((buffer) => appendTrendPoint(buffer, next, TREND_CAP));
+        setRangeWarnings([...warnings]);
+
+        // Do not add an unverified WBGT measurement to the trend chart.
+        if (!warnings.some((warning) => warning.metric === "wbgt")) {
+          setTrend((buffer) => appendTrendPoint(buffer, next, TREND_CAP));
+        }
       },
       onStatus: setStatus,
     });
@@ -55,5 +64,11 @@ export function useConditionsStream(
   [snapshot?.lightning, now],
 );
 
-  return { snapshot, connectionState, trend, stopWorkActive };
+  return {
+    snapshot,
+    connectionState,
+    trend,
+    stopWorkActive,
+    rangeWarnings,
+  };
 }

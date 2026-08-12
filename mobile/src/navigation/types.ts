@@ -43,8 +43,26 @@ export type ShiftsStackParamList = {
   ShiftDetail: { siteId: string; shiftId: string };
 };
 
+/** The supervisor's crew-wellbeing surface (US-11). */
+export type ConcernsStackParamList = {
+  Concerns: undefined;
+};
+
+/**
+ * The supervisor's decision surface (SCRUM-119).
+ *
+ * `RecommendationDetail` carries the site and shift as well as the recommendation, because the
+ * endpoint is nested under both — a recommendation id alone cannot be fetched or decided on.
+ */
+export type RecommendationsStackParamList = {
+  RecommendationList: undefined;
+  RecommendationDetail: { siteId: string; shiftId: string; recommendationId: string };
+};
+
 export type SupervisorTabParamList = {
   ShiftsTab: undefined;
+  RecommendationsTab: undefined;
+  ConcernsTab: undefined;
   WeatherTab: undefined;
   ProfileTab: undefined;
 };
@@ -55,7 +73,20 @@ export type WeatherStackParamList = {
   Weather: undefined;
 };
 
+/**
+ * Profile, and the administrative surfaces reached from it.
+ *
+ * The heat policy screens (SCRUM-120) live here rather than in a tab of their own: configuration
+ * is rare and done sitting down, and a sixth supervisor tab would also appear for supervisors, who
+ * may read the policy but not change it. Settings is here for the same reason.
+ *
+ * One stack rather than a nested policy navigator — three routes do not need their own navigator,
+ * and nesting one would put a second header bar above screens that already have one.
+ */
 export type ProfileStackParamList = {
   Profile: undefined;
   Settings: undefined;
+  PolicyVersions: undefined;
+  PolicyVersionDetail: { versionId: string };
+  NewPolicyVersion: undefined;
 };

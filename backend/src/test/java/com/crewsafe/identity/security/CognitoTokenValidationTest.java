@@ -12,6 +12,8 @@ import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.Test;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.AdminAddUserToGroupRequest;
+import software.amazon.awssdk.services.cognitoidentityprovider.model.CreateGroupRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
@@ -103,6 +105,26 @@ class CognitoTokenValidationTest extends AbstractIntegrationTest {
         String token = mintAccessToken(username);
 
         mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cognitoGroupMembershipCannotGrantAnUnmappedUserAccess() throws Exception {
+        // Cognito groups are an identity-provider concern only. CrewSafe resolves
+        // role, status, and site scope exclusively from its server-side AppUser row.
+        String username = "tokentest-group-only-" + UUID.randomUUID();
+        createCognitoUser(username);
+        COGNITO.createGroup(CreateGroupRequest.builder()
+                .userPoolId(POOL_ID)
+                .groupName("developers")
+                .build());
+        COGNITO.adminAddUserToGroup(AdminAddUserToGroupRequest.builder()
+                .userPoolId(POOL_ID)
+                .username(username)
+                .groupName("developers")
+                .build());
+
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer " + mintAccessToken(username)))
                 .andExpect(status().isUnauthorized());
     }
 

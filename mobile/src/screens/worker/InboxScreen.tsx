@@ -31,6 +31,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   acknowledge,
   canSwipeDismiss,
+  completeRest,
   dismissed,
   loadInbox,
   resetAcknowledgements,
@@ -205,7 +206,19 @@ export default function InboxScreen() {
             onAcknowledge={() => void dispatch(acknowledge({ dispatchId: item.id }))}
             locale={i18n.language}
             dismissAt={acknowledged[item.id]?.dismissAt ?? null}
-            onExpire={() => dispatch(dismissed(item.id))}
+            onExpire={() => {
+              dispatch(dismissed(item.id));
+              /*
+               * A rest timer reaching zero means the rest was served, and until US-11 nobody told
+               * the server that — the card simply vanished. Reporting it is what lets an
+               * instructed rest appear in the supervisor's wellbeing view beside self-logged
+               * ones. Only for real rest deadlines: a three-minute dwell on a HYDRATE card is a
+               * card being tidied away, not an action being completed.
+               */
+              if (acknowledged[item.id]?.hasRestTimer) {
+                void dispatch(completeRest({ dispatchId: item.id }));
+              }
+            }}
             hasRestTimer={acknowledged[item.id]?.hasRestTimer ?? false}
           />
           </SwipeToDismiss>

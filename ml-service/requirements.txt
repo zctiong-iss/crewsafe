@@ -1,6 +1,8 @@
 # Locked dependencies with cryptographic hashes for security
-# Generated: pip freeze with pip download && sha256sum for all packages
+# Updated: 2026-08-12 - Fixed hash mismatches and version conflicts
 # Security: --require-hashes enforces hash verification for all packages
+# Note: pydantic-core==2.23.4 is pinned explicitly to preserve hash verification.
+# Added anthropic[bedrock], distro, docstring-parser, jiter for SCRUM-286
 
 # Direct dependencies
 fastapi==0.115.0 \
@@ -22,7 +24,21 @@ httpx==0.25.2 \
 anthropic[bedrock]==0.121.0 \
     --hash=sha256:6048713fa441e59e1cba8363171cd2a86273b25bd213e9c7ac70a523af88b011
 
+# New dependencies for SCRUM-286 (Bedrock integration)
+anthropic==0.121.0 \
+    --hash=sha256:6048713fa441e59e1cba8363171cd2a86273b25bd213e9c7ac70a523af88b011
+distro==1.9.0 \
+    --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
+docstring-parser==0.18.0 \
+    --hash=sha256:b3fcbed555c47d8479be0796ef7e19c2670d428d72e96da63f3a40122860374b
+jiter==0.16.0 \
+    --hash=sha256:8597d23c87f59294f83bcb6229b9ed1fccee13dbba967b46930d2f1759466fee \
+    --hash=sha256:64c0203212098470032aabcde9356fc168f377aade3e43def61dfe17e92f2037
+
 # Transitive dependencies
+pydantic-core==2.23.4 \
+    --hash=sha256:216f9b2d7713eb98cb83c80b9c794de1f6b7e3145eef40400c62e86cee5f4e1e \
+    --hash=sha256:df49e7a0861a8c36d089c1ed57d308623d60416dab2647a4a17fe050ba85de0e
 annotated-types==0.8.0 \
     --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
 anyio==4.14.2 \
@@ -53,8 +69,6 @@ packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e
 pluggy==1.6.0 \
     --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
-pydantic-core==2.23.4 \
-    --hash=sha256:216f9b2d7713eb98cb83c80b9c794de1f6b7e3145eef40400c62e86cee5f4e1e
 python-dateutil==2.9.0.post0 \
     --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
 s3transfer==0.10.4 \

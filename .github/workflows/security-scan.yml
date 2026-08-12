@@ -356,11 +356,24 @@ jobs:
       - name: Sonar Quality Gate configurator self-tests
         run: .github/scripts/tests/test-sonar-gate-configure.sh
 
+      # Added web tests for SCRUM-311 (Security enhancements for front-end)
+      - name: Web runtime configuration self-tests
+        run: .github/scripts/tests/test-web-ci-runtime-config.sh
+
+      - name: Manual web sync workflow self-tests
+        run: .github/scripts/tests/test-web-sync-workflow.sh
+
       # Pre-existing since specs/014 (SCRUM-257) but never wired into this
       # job until now -- closing that gap alongside the SCRUM-269 additions
       # below, since both structurally test a publish-image workflow.
-      - name: Web image workflow self-tests
-        run: .github/scripts/tests/test-web-image-workflow.sh
+      - name: Web deployment workflow self-tests
+        run: .github/scripts/tests/test-web-deployment-workflow.sh
+
+      - name: Staging deployment workflow self-tests
+        run: .github/scripts/tests/test-staging-deployment-workflows.sh
+
+      - name: Authenticated staging DAST self-tests
+        run: .github/scripts/tests/test-dast-staging-workflow.sh
 
       # SCRUM-269: the five new self-tests this feature adds.
       - name: Backend image workflow self-tests
@@ -383,3 +396,6 @@ jobs:
 
       - name: SCA exception applier self-tests
         run: .github/scripts/tests/test-apply-sca-exceptions.sh
+
+      - name: Structured logging safety self-tests
+        run: .github/scripts/tests/test-log-safety-guards.sh

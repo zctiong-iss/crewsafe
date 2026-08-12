@@ -127,6 +127,20 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
             {"mitigations":[{"priority":"HIGH","action":"Reduce work hours to 20 min active / 10 min rest",\
             "rationale":"WBGT forecast exceeds safe continuous work limits","estimatedImpact":"10-15% reduction in heat stress risk"}]}""";
 
+    /**
+     * A plan drafted after SCRUM-119: every mitigation carries an action code the mobile app has
+     * a translation for. {@code REST_15_MIN_HOURLY} is the interesting one — it is a recurring
+     * recommendation code with no dispatch form of its own, so it must arrive as
+     * {@code REST_15_MIN}.
+     */
+    private static final String CODED_DRAFT_PLAN = """
+            {"mitigations":[{"priority":"HIGH","action":"Rest 15 minutes every hour",\
+            "rationale":"Forecast WBGT reaches the 33 band on heavy tasks","estimatedImpact":"Keeps core temperature within MOM guidance",\
+            "actionCode":"REST_15_MIN_HOURLY","category":"REST"},\
+            {"priority":"MEDIUM","action":"Drink water at least once an hour",\
+            "rationale":"Sustained sweat loss","estimatedImpact":"Maintains hydration",\
+            "actionCode":"HYDRATE_HOURLY","category":"HYDRATION"}]}""";
+
     private ResultActions getAuthenticated(String url, String token) throws Exception {
         return mockMvc.perform(get(url).header("Authorization", "Bearer " + token));
     }
@@ -369,6 +383,60 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
         assertThat(dispatches).allMatch(d -> d.getStatus() == ActionDispatch.ActionDispatchStatus.PENDING);
         assertThat(dispatches).extracting(d -> d.getWorker().getId())
                 .containsExactlyInAnyOrder(workerA.getId(), secondWorker.getId());
+    }
+
+    // --- SCRUM-119: the dispatched code is the mitigation's own, mapped for dispatch ---
+
+    @Test
+    void approvingDispatchesEachMitigationUnderItsOwnTranslatedCode() throws Exception {
+        assign(shiftA, workerA);
+        Recommendation r = recommendation(shiftA, CODED_DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        List<ActionDispatch> dispatches = actionDispatches.findByApprovalId(approvalId);
+        // Before this, both went out as AI_RECOMMENDED_ACTION — a code no locale translates, so
+        // the worker's inbox showed two identical rows of humanised English.
+        assertThat(dispatches).extracting(ActionDispatch::getActionCode)
+                .containsExactlyInAnyOrder("REST_15_MIN", "HYDRATE");
+    }
+
+    @Test
+    void aPlanWithoutActionCodesStillDispatchesUnderTheLegacyPlaceholder() throws Exception {
+        assign(shiftA, workerA);
+        Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        // Rows drafted before SCRUM-119 have no code to use. They must stay decidable rather than
+        // failing — the placeholder is the honest answer, not a regression.
+        assertThat(actionDispatches.findByApprovalId(approvalId))
+                .allMatch(d -> d.getActionCode().equals("AI_RECOMMENDED_ACTION"));
+    }
+
+    @Test
+    void anEditedPlanCarryingAnUnknownActionCodeIsRejected() throws Exception {
+        Recommendation r = recommendation(shiftA, CODED_DRAFT_PLAN);
+
+        Map<String, Object> invented = new LinkedHashMap<>();
+        invented.put("priority", "HIGH");
+        invented.put("action", "Seek proper shelter immediately");
+        invented.put("rationale", "Lightning within 8 km");
+        invented.put("estimatedImpact", "Removes strike exposure");
+        // No locale translates this, so a worker would receive "Seek shelter now" humanised into
+        // English. §8.5: a plan with an unknown action code cannot be saved.
+        invented.put("actionCode", "SEEK_SHELTER_NOW");
+
+        postJson(recommendationsUrl(shiftA) + "/" + r.getId() + "/decision", supervisorAToken,
+                        decisionBody("EDITED", null, List.of(invented)))
+                .andExpect(status().isBadRequest());
+
+        // Nothing was recorded: the recommendation is still waiting for a decision, so the
+        // supervisor can correct the plan and decide again rather than being locked out by a 409.
+        assertThat(recommendations.findById(r.getId()))
+                .get()
+                .extracting(Recommendation::getStatus)
+                .isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
     }
 
     @Test
