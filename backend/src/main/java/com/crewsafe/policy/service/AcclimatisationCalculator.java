@@ -45,10 +45,7 @@ public class AcclimatisationCalculator {
         long daysElapsed = java.time.temporal.ChronoUnit.DAYS.between(startDate, refDate);
         int acclimatisationDay = (int) Math.min(daysElapsed + 1, 365);
 
-        log.debug(
-                "Acclimatisation calculated: start={}, reference={}, day={}",
-                startDate, refDate, acclimatisationDay
-        );
+        log.debug("acclimatisation_calculation_completed day={}", acclimatisationDay);
 
         return acclimatisationDay;
     }

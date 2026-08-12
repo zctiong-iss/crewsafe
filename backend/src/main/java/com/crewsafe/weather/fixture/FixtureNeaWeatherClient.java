@@ -79,9 +79,7 @@ public class FixtureNeaWeatherClient implements NeaWeatherClient {
 
             // capturedAt and description describe the replay scenario itself. Individual
             // frame timestamps remain the observation times stored by weather ingestion.
-            log.info("Loaded weather fixture '{}' captured at {} with {} frames from {}",
-                    document.description(), document.capturedAt(), loadedFrames.size(),
-                    resource.getDescription());
+            log.info("weather_fixture_loaded frames={}", loadedFrames.size());
             return loadedFrames;
         } catch (IOException exception) {
             throw new IllegalStateException("Weather fixture could not be loaded", exception);

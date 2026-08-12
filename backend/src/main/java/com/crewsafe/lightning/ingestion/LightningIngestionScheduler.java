@@ -28,11 +28,11 @@ public class LightningIngestionScheduler {
             LightningIngestionResult result = ingestionService.ingestCurrentConditions();
             log.info("NEA lightning ingestion completed: sites={}, inserted={}, duplicates={}",
                     result.sitesProcessed(), result.inserted(), result.duplicates());
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException failure) {
             // A scheduled task stops running forever if its exception escapes. Record the
             // failure and let Spring invoke the next interval, where the DB constraint
             // makes a retry safe.
-            log.error("NEA lightning ingestion failed; the next scheduled run will retry", exception);
+            log.error("nea_lightning_ingestion_failed_retry_scheduled");
         }
     }
 }

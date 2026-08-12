@@ -78,9 +78,8 @@ public class PolicyEngineService {
                 List.of(workerId), currentWbgt, threshold, level, workIntensity, policy);
 
         log.info(
-                "Policy evaluated for site={}, worker={}, WBGT={}, intensity={}, acclimatisation={}, "
-                        + "mandatory={}, advisory={}",
-                siteId, workerId, currentWbgt, workIntensity, level,
+                "policy_evaluation_completed intensity={} acclimatisation={} mandatory={} advisory={}",
+                workIntensity, level,
                 decision.mandatoryActions().size(), decision.advisoryActions().size()
         );
 

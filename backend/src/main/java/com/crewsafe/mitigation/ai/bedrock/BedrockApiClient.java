@@ -1,10 +1,8 @@
 package com.crewsafe.mitigation.ai.bedrock;
 
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
@@ -19,8 +17,6 @@ import java.time.Instant;
 public class BedrockApiClient {
     private final RestTemplate bedrockRestTemplate;
     private final BedrockProperties properties;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     public MitigationSuggestion.Batch generateMitigations(String context) {
         try {
             Instant start = Instant.now();
@@ -33,8 +29,7 @@ public class BedrockApiClient {
                     properties.getTemperature()
             );
 
-            log.info("Calling Bedrock API at {} with context: {}", url,
-                    context.substring(0, Math.min(50, context.length())));
+            log.info("bedrock_request_started");
 
             MitigationSuggestion.Batch response = bedrockRestTemplate.postForObject(
                     url,
@@ -43,7 +38,7 @@ public class BedrockApiClient {
             );
 
             Duration elapsed = Duration.between(start, Instant.now());
-            log.info("Bedrock API call completed in {}ms, received {} suggestions",
+            log.info("bedrock_request_completed duration_ms={} suggestion_count={}",
                     elapsed.toMillis(),
                     response != null ? response.mitigations().size() : 0);
 
@@ -51,25 +46,25 @@ public class BedrockApiClient {
 
         } catch (ResourceAccessException e) {
             if (e.getCause() instanceof SocketTimeoutException) {
-                log.error("Bedrock API timeout after {}ms", properties.getBedrockTimeoutMs());
+                log.error("bedrock_request_timeout timeout_ms={}", properties.getBedrockTimeoutMs());
                 throw new BedrockTimeoutException(
                         "Bedrock API timeout after " + properties.getBedrockTimeoutMs() + "ms",
                         e
                 );
             }
-            log.error("Bedrock API connection error", e);
-            throw new BedrockAccessError("Failed to connect to Bedrock API: " + e.getMessage(), e);
+            log.error("bedrock_connection_failed");
+            throw new BedrockAccessError("Failed to connect to Bedrock API", e);
 
         } catch (Exception e) {
-            log.error("Bedrock API call failed", e);
-            throw new BedrockException("Bedrock API call failed: " + e.getMessage(), e);
+            log.error("bedrock_request_failed");
+            throw new BedrockException("Bedrock API call failed", e);
         }
     }
 
     public BedrockAccessStatus checkBedrockAccess() {
         try {
             String url = properties.getBedrockApiUrl() + "/bedrock/access";
-            log.info("Checking Bedrock access at {}", url);
+            log.info("bedrock_access_check_started");
 
             BedrockAccessResponse response = bedrockRestTemplate.getForObject(
                     url,
@@ -77,26 +72,26 @@ public class BedrockApiClient {
             );
 
             if (response != null && "ok".equals(response.status())) {
-                log.info("Bedrock access verified: {}", response.message());
+                log.info("bedrock_access_verified");
                 return new BedrockAccessStatus(true, response.message(), response.region());
             } else {
                 String msg = response != null ? response.message() : "Unknown error";
                 String region = response != null ? response.region() : "unknown";
-                log.warn("Bedrock access check failed: {}", msg);
+                log.warn("bedrock_access_check_failed");
                 return new BedrockAccessStatus(false, msg, region);
             }
 
         } catch (ResourceAccessException e) {
             if (e.getCause() instanceof SocketTimeoutException) {
-                log.error("Bedrock access check timeout");
+                log.error("bedrock_access_timeout");
                 throw new BedrockTimeoutException("Bedrock access check timed out", e);
             }
-            log.error("Cannot reach Bedrock API", e);
-            throw new BedrockAccessError("Cannot reach Bedrock API: " + e.getMessage(), e);
+            log.error("bedrock_access_connection_failed");
+            throw new BedrockAccessError("Cannot reach Bedrock API", e);
 
         } catch (Exception e) {
-            log.error("Bedrock access check failed", e);
-            throw new BedrockException("Bedrock access check failed: " + e.getMessage(), e);
+            log.error("bedrock_access_check_failed");
+            throw new BedrockException("Bedrock access check failed", e);
         }
     }
 
