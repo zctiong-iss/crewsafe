@@ -148,7 +148,10 @@ jobs:
   dast-staging:
     name: Authenticated staging DAST
     needs: deploy-staging
-    if: needs.deploy-staging.result == 'success'
+    # always() matches backend-ci.yml's dast-staging trigger: deploy-staging
+    # currently has no skipped-branch ancestors here, so this is precautionary,
+    # not a fix for an active bug in this file.
+    if: always() && needs.deploy-staging.result == 'success'
     uses: ./.github/workflows/dast-staging.yml
     permissions:
       contents: read
