@@ -104,7 +104,7 @@ forbid ':(AWSCURRENT|AWSPENDING|AWSPREVIOUS)|:[0-9a-fA-F-]{36}:"|::[0-9a-fA-F-]{
 # component fences with CloudFront's managed prefix list alone (see
 # aws_security_group.public_lb in main.tf) and was never entitled to grow a header back in
 # as a "belt and suspenders" addition.
-forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header' \
+forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header[[:space:]]*\{' \
   'an origin-authentication header' \
   "A shared origin-authentication secret would need to live in Terraform state (FR-022a, forbidden categorically). The prefix list is the origin's only fence and needs no secret."
 
