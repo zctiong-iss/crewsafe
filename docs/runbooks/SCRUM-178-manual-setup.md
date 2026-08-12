@@ -89,6 +89,15 @@ fails there, `SONAR_TOKEN` is missing or misnamed.
 > a passing coverage condition to work around this — that is scope creep beyond SCRUM-178,
 > and the resolution below removes the need for it. **2.1–2.4 below are what to do once the
 > trial (or a subscription) is active; do not attempt them on the free plan.**
+>
+> **SCRUM-250 update**: once the trial (or subscription) is active, Steps 2.1–2.3 below no
+> longer need to be done by hand in the SonarQube Cloud UI. Run
+> `.github/scripts/security/configure-sonar-gate.sh --dry-run` to preview the change, then
+> without the flag to apply it — see
+> [`specs/019-sonar-quality-gate-automation/quickstart.md`](../../specs/019-sonar-quality-gate-automation/quickstart.md).
+> It creates/converges the gate and its three conditions and assigns it to the project. The
+> manual steps below remain the documented fallback and are still how to do 2.0.2's trial
+> activation itself, which the script does not and cannot perform.
 
 ### 2.0 Why "Sonar way" is a real problem here, not just an inconvenience
 
@@ -170,6 +179,13 @@ Confirm the project's overview shows **`CrewSafe Security Gate`** as its Quality
 > custom gate (i.e. after the trial starts and the security-only gate is created and
 > assigned). Turning this on while the project runs on Sonar way would make coverage —
 > not security — the thing blocking every merge. See the note at the top of Step 2.
+>
+> **SCRUM-250 update**: once Step 2 is actually complete, this step is also scriptable —
+> the same `.github/scripts/security/configure-sonar-gate.sh` run adds `Secret Scan`,
+> `SAST (SonarQube)`, and `Gate Self-Tests` to `main`'s required status checks via a
+> targeted GitHub API PATCH (not the full-object `PUT` §3.2 below warns against), so
+> Section 3.1's manual UI steps are no longer the only way to do this. §3.2's verification
+> command still applies either way.
 
 **This is the step that makes the gates actually block.** Right now `main` has branch
 protection with an approval requirement but **zero required status checks** — the gates run

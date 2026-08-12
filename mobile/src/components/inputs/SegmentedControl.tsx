@@ -14,6 +14,17 @@ interface SegmentedControlProps<T extends string> {
   value: T | null;
   onChange: (next: T) => void;
   errorMessage?: string;
+  /**
+   * The fill for the selected segment, when the choice itself carries a colour (SCRUM-266).
+   *
+   * Optional and per-value rather than a single `selectedColor`, because the cases that want
+   * this want a *ramp* — work intensity runs green → amber → red — and a control that only
+   * accepted one colour would have had each caller re-implement the mapping.
+   *
+   * Whatever is returned must carry `onPrimary` (white) at AA. The label stays white in every
+   * case, so a light fill would make the selected option the one nobody can read.
+   */
+  selectedColorFor?: (value: T) => string;
 }
 
 /**
@@ -32,6 +43,7 @@ function SegmentedControl<T extends string>({
   value,
   onChange,
   errorMessage,
+  selectedColorFor,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
   const hasError = Boolean(errorMessage);
@@ -51,6 +63,9 @@ function SegmentedControl<T extends string>({
       >
         {options.map((option) => {
           const selected = option.value === value;
+          /* Falls back to `primary`, so a caller that does not care keeps the black fill the
+             rest of the app uses. */
+          const selectedFill = selectedColorFor?.(option.value) ?? theme.colors.primary;
           return (
             <TouchableOpacity
               key={option.value}
@@ -61,8 +76,15 @@ function SegmentedControl<T extends string>({
               style={[
                 styles.segment,
                 {
-                  backgroundColor: selected ? theme.colors.primary : theme.colors.surface,
-                  borderColor: hasError ? theme.colors.danger : theme.colors.borderStrong,
+                  backgroundColor: selected ? selectedFill : theme.colors.surface,
+                  /* The unselected border stays neutral. Tinting all three would show the
+                     ramp before a choice has been made, which reads as three states being
+                     active at once. */
+                  borderColor: hasError
+                    ? theme.colors.danger
+                    : selected
+                      ? selectedFill
+                      : theme.colors.borderStrong,
                   borderWidth: theme.metrics.borderWidth,
                   borderRadius: theme.metrics.radius,
                   minHeight: theme.metrics.minTouchTarget,

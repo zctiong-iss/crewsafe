@@ -17,7 +17,7 @@
  */
 import { ApiError } from "../errors";
 import { DEMO_SITES } from "@/auth/demoUsers";
-import type { Shift, ShiftAssignment, SiteWorker } from "@/types/domain";
+import type { Intensity, Shift, ShiftAssignment, SiteWorker } from "@/types/domain";
 
 /**
  * Dev switch for the cross-site 403 that SCRUM-161 names explicitly.
@@ -181,4 +181,96 @@ export function mockCreateShift(
   const created = seedShift(siteId, startsAt, endsAt, "PLANNED", assignments);
   shifts.push(created);
   return copyShift(created);
+}
+
+/**
+ * The same "is this shift still editable" rule the server enforces (SCRUM-266).
+ *
+ * Duplicated here on purpose. A mock that accepts an edit the real backend refuses teaches the
+ * wrong lesson in review and hides the failure until someone runs against a real deployment —
+ * which is the one place it costs something. `CLOSED` and a past `endsAt` are both checked
+ * because nothing moves a shift to `CLOSED` on a timer.
+ */
+function assertEditable(shift: Shift): void {
+  if (shift.status === "CLOSED") {
+    throw new ApiError("bad-request", "A closed shift cannot be edited.", 400, null);
+  }
+  if (new Date(shift.endsAt).getTime() <= Date.now()) {
+    throw new ApiError("bad-request", "A shift that has already ended cannot be edited.", 400, null);
+  }
+}
+
+function findEditable(siteId: string, shiftId: string): Shift {
+  assertAllowed();
+  const shift = shifts.find((s) => s.id === shiftId && s.siteId === siteId);
+  // Missing before uneditable: a shift that is not here must read as 404, never as "you may
+  // not edit that", which would confirm it exists.
+  if (!shift) throw new ApiError("not-found", "No such shift under this site", 404, null);
+  assertEditable(shift);
+  return shift;
+}
+
+/** `PATCH /shifts/{shiftId}` — corrects the window only, never the status. */
+export function mockUpdateShift(
+  siteId: string,
+  shiftId: string,
+  startsAt: string,
+  endsAt: string,
+): Shift {
+  const shift = findEditable(siteId, shiftId);
+  if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+    throw new ApiError("bad-request", "endsAt must be after startsAt", 400, null);
+  }
+  shift.startsAt = startsAt;
+  shift.endsAt = endsAt;
+  return copyShift(shift);
+}
+
+/** `PATCH /shifts/{shiftId}/assignments/{assignmentId}` — task, intensity, acclimatisation. */
+export function mockUpdateAssignment(
+  siteId: string,
+  shiftId: string,
+  assignmentId: string,
+  taskName: string | undefined,
+  intensity: Intensity,
+  acclimatisationDay: number | undefined,
+): Shift {
+  const shift = findEditable(siteId, shiftId);
+  const assignment = shift.assignments.find((a) => a.id === assignmentId);
+  if (!assignment) {
+    throw new ApiError("not-found", "No such assignment on this shift", 404, null);
+  }
+
+  // workerId is deliberately not settable, matching ShiftAssignment.correct on the server:
+  // moving an assignment to a different worker is a remove and an add, not a correction, and
+  // the audit trail should say so.
+  assignment.taskName = taskName ?? null;
+  assignment.intensity = intensity;
+  assignment.acclimatisationDay = acclimatisationDay ?? null;
+  return copyShift(shift);
+}
+
+/** `POST /shifts/{shiftId}/assignments` — staffs an existing shift. */
+export function mockAddAssignment(
+  siteId: string,
+  shiftId: string,
+  input: Omit<ShiftAssignment, "id">,
+): Shift {
+  const shift = findEditable(siteId, shiftId);
+  shift.assignments.push({ ...input, id: `assignment-${Date.now()}-${shift.assignments.length}` });
+  return copyShift(shift);
+}
+
+/** `DELETE /shifts/{shiftId}/assignments/{assignmentId}` — takes a worker off a shift. */
+export function mockRemoveAssignment(
+  siteId: string,
+  shiftId: string,
+  assignmentId: string,
+): void {
+  const shift = findEditable(siteId, shiftId);
+  const index = shift.assignments.findIndex((a) => a.id === assignmentId);
+  if (index === -1) {
+    throw new ApiError("not-found", "No such assignment on this shift", 404, null);
+  }
+  shift.assignments.splice(index, 1);
 }
