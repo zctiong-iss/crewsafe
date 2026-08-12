@@ -139,15 +139,28 @@ case "$url" in
   */api/v1/shifts/me)
     if [[ "${SMOKE_STUB_MODE:-healthy}" == critical-failure ]]; then
       status=500; body='{"error":"temporary"}'
-    elif [[ "${SMOKE_STUB_MODE:-healthy}" == missing-shift ]]; then
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == missing-shift || "${SMOKE_STUB_MODE:-healthy}" == weather-failure-no-shift ]]; then
       body='{"shift":null}'
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == no-task || "${SMOKE_STUB_MODE:-healthy}" == weather-failure-no-task ]]; then
+      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"taskName":null,"intensity":"LIGHT","acclimatisationDay":null},"latestReadiness":null}}'
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == no-task-blank ]]; then
+      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"taskName":"","intensity":"LIGHT","acclimatisationDay":null},"latestReadiness":null}}'
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == no-task-omitted ]]; then
+      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"intensity":"LIGHT"},"latestReadiness":null}}'
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == shift-no-id ]]; then
+      body='{"shift":{"shiftId":"","assignment":{"taskName":null,"intensity":"LIGHT","acclimatisationDay":null},"latestReadiness":null}}'
+    elif [[ "${SMOKE_STUB_MODE:-healthy}" == shift-bad-intensity ]]; then
+      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"taskName":null,"intensity":"UNKNOWN","acclimatisationDay":null},"latestReadiness":null}}'
     else
-      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"taskName":"Outdoor inspection"},"latestReadiness":null}}'
+      body='{"shift":{"shiftId":"33333333-3333-4333-8333-333333333333","assignment":{"taskName":"Outdoor inspection","intensity":"LIGHT","acclimatisationDay":null},"latestReadiness":null}}'
     fi
     ;;
   */api/v1/sites/*/weather/latest)
     weather_site="$SMOKE_SITE_ID"
     [[ "${SMOKE_STUB_MODE:-healthy}" == wrong-site ]] && weather_site="$OTHER_SITE_ID"
+    if [[ "${SMOKE_STUB_MODE:-healthy}" == weather-failure-no-shift || "${SMOKE_STUB_MODE:-healthy}" == weather-failure-no-task ]]; then
+      status=500
+    fi
     body="{\"id\":\"44444444-4444-4444-8444-444444444444\",\"siteId\":\"$weather_site\",\"wbgt\":28.4,\"temperature\":32.1,\"humidity\":72.0,\"windSpeed\":2.1,\"rainfall\":0.0,\"observedAt\":\"2026-08-12T08:00:00Z\",\"qualityStatus\":\"VALID\",\"band\":\"LOW\"}"
     ;;
   */)
@@ -291,6 +304,53 @@ if [[ -x "$RUNNER" ]]; then
     actual_calls="$(cat "$CALL_LOG")"
     if [[ "$actual_calls" == "$expected_calls" ]]; then pass "healthy checks run in order with GET only"; else fail "healthy checks run in order with GET only"; fi
   fi
+
+  # T023: schedule-independent worker context. No shift, no task, and null
+  # acclimatisation are valid business states; malformed identity/intensity and
+  # unavailable site weather remain release-gate failures.
+  run_runner_capture no-shift SMOKE_STUB_MODE=missing-shift
+  TESTS_RUN=$((TESTS_RUN + 1)); [[ "$RUNNER_STATUS" == 0 ]] && pass "no scheduled shift passes smoke run" || fail "no scheduled shift passes smoke run"
+  if [[ -f "$EVIDENCE" ]]; then
+    TESTS_RUN=$((TESTS_RUN + 1))
+    if jq -e '.checks[-1].category == "no_shift_scheduled" and .overall_result == "passed"' "$EVIDENCE" >/dev/null; then
+      pass "no scheduled shift is recorded as bounded passing context"
+    else
+      fail "no scheduled shift is recorded as bounded passing context"
+    fi
+  fi
+  TESTS_RUN=$((TESTS_RUN + 1)); grep -Fq '/api/v1/sites/11111111-1111-4111-8111-111111111111/weather/latest' "$CALL_LOG" && pass "no scheduled shift still checks site weather" || fail "no scheduled shift still checks site weather"
+
+  for no_task_mode in no-task no-task-blank no-task-omitted; do
+    run_runner_capture "$no_task_mode" SMOKE_STUB_MODE="$no_task_mode"
+    TESTS_RUN=$((TESTS_RUN + 1)); [[ "$RUNNER_STATUS" == 0 ]] && pass "$no_task_mode passes smoke run" || fail "$no_task_mode passes smoke run"
+    if [[ -f "$EVIDENCE" ]]; then
+      TESTS_RUN=$((TESTS_RUN + 1))
+      if jq -e '.checks[-1].category == "no_task_assigned" and .overall_result == "passed"' "$EVIDENCE" >/dev/null; then
+        pass "$no_task_mode is recorded as bounded passing context"
+      else
+        fail "$no_task_mode is recorded as bounded passing context"
+      fi
+    fi
+  done
+
+  for malformed_shift_mode in shift-no-id shift-bad-intensity; do
+    run_runner_capture "$malformed_shift_mode" SMOKE_STUB_MODE="$malformed_shift_mode"
+    TESTS_RUN=$((TESTS_RUN + 1)); [[ "$RUNNER_STATUS" != 0 ]] && pass "$malformed_shift_mode fails smoke run" || fail "$malformed_shift_mode fails smoke run"
+    if [[ -f "$EVIDENCE" ]]; then
+      TESTS_RUN=$((TESTS_RUN + 1))
+      if jq -e '.checks[-1].result == "failed" and .checks[-1].category == "invalid_shape"' "$EVIDENCE" >/dev/null; then
+        pass "$malformed_shift_mode is recorded as invalid_shape"
+      else
+        fail "$malformed_shift_mode is recorded as invalid_shape"
+      fi
+    fi
+  done
+
+  for weather_failure_mode in weather-failure-no-shift weather-failure-no-task; do
+    run_runner_capture "$weather_failure_mode" SMOKE_STUB_MODE="$weather_failure_mode"
+    TESTS_RUN=$((TESTS_RUN + 1)); [[ "$RUNNER_STATUS" != 0 ]] && pass "$weather_failure_mode fails smoke run" || fail "$weather_failure_mode fails smoke run"
+    TESTS_RUN=$((TESTS_RUN + 1)); grep -Fq '/api/v1/sites/11111111-1111-4111-8111-111111111111/weather/latest' "$CALL_LOG" && pass "$weather_failure_mode reaches site weather" || fail "$weather_failure_mode reaches site weather"
+  done
 
   run_runner_capture web-healthy TRIGGER_COMPONENT=web
   TESTS_RUN=$((TESTS_RUN + 1)); [[ "$RUNNER_STATUS" == 0 ]] && pass "healthy web smoke run passes" || fail "healthy web smoke run passes"

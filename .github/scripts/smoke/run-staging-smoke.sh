@@ -132,7 +132,7 @@ authenticate() {
 
 check_critical_workflow() {
   local shift_body="$TMP_DIR/critical_shift.body" weather_body="$TMP_DIR/critical_weather.body"
-  local started ended duration category=''
+  local started ended duration category='' shift_context_category=passed
   local shift_status='' shift_attempts=1 weather_status='' weather_attempts=1
   started="$(date +%s)"
 
@@ -140,7 +140,16 @@ check_critical_workflow() {
     category="${REQUEST_CATEGORY:-transport}"
     shift_status="${REQUEST_STATUS:-}"
     shift_attempts="${REQUEST_ATTEMPTS:-1}"
-  elif ! jq -e '.shift != null and (.shift.shiftId | strings | length > 0) and (.shift.assignment.taskName | strings | length > 0)' "$shift_body" >/dev/null 2>&1; then
+  elif ! jq -e '
+    .shift == null or (
+      (.shift.shiftId | type == "string" and length > 0)
+      and (.shift.assignment | type == "object")
+      and ((.shift.assignment.taskName == null) or (.shift.assignment.taskName | type == "string"))
+      and ((.shift.assignment.intensity == "LIGHT") or (.shift.assignment.intensity == "MODERATE") or (.shift.assignment.intensity == "HEAVY"))
+      and ((.shift.assignment.acclimatisationDay == null) or
+        (.shift.assignment.acclimatisationDay | type == "number" and floor == . and . >= 1 and . <= 7))
+    )
+  ' "$shift_body" >/dev/null 2>&1; then
     category=invalid_shape
     shift_status="$REQUEST_STATUS"
     shift_attempts="$REQUEST_ATTEMPTS"
@@ -154,11 +163,19 @@ check_critical_workflow() {
     category=invalid_shape
     weather_status="$REQUEST_STATUS"
     weather_attempts="$REQUEST_ATTEMPTS"
+  else
+    weather_status="$REQUEST_STATUS"
+    weather_attempts="$REQUEST_ATTEMPTS"
   fi
 
   ended="$(date +%s)"; duration=$(( (ended - started) * 1000 ))
   if [[ -z "$category" ]]; then
-    record_check critical_workflow passed passed "$REQUEST_STATUS" "$weather_attempts" "$duration"
+    if jq -e '.shift == null' "$shift_body" >/dev/null 2>&1; then
+      shift_context_category=no_shift_scheduled
+    elif jq -e '((.shift.assignment.taskName // "") | gsub("\\s"; "") | length) == 0' "$shift_body" >/dev/null 2>&1; then
+      shift_context_category=no_task_assigned
+    fi
+    record_check critical_workflow passed "$shift_context_category" "$weather_status" "$weather_attempts" "$duration"
     return 0
   fi
   [[ -n "$weather_status" ]] || weather_status="$shift_status"
