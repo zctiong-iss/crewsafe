@@ -10,9 +10,11 @@ exact revision emitted by the deployment job: the backend's selected immutable i
 The reusable workflow validates the approved HTTPS origins and authenticates a synthetic
 worker through the existing shared-dev Cognito CLI public client using unsigned
 `InitiateAuth`. It checks deployment surface availability, backend readiness, the
-protected `/api/v1/me` identity/site-membership path, and a seeded read-only
-current/next-shift plus stored-site-weather path. No application endpoint, migration,
-database entity, Terraform component, or AWS permission is added.
+protected `/api/v1/me` identity/site-membership path, and the seeded read-only
+worker-context plus stored-site-weather path. A current/next shift and assignment task
+are optional; when a shift is returned it must have a non-empty identifier, a supported
+intensity, and may have a null or omitted `acclimatisationDay`. No application endpoint,
+migration, database entity, Terraform component, or AWS permission is added.
 
 ## Workflow and security contract
 
@@ -44,7 +46,9 @@ stubs and runtime-generated synthetic values. Structural and mutation assertions
 workflow ordering, revision propagation, permissions, action pinning, and secret
 mapping. Runtime cases cover healthy verification, malformed configuration, redirects,
 unauthorized responses, malformed shapes, timeout, transient retry, critical-workflow
-failure, read-only request methods, redacted evidence, and runbook requirements.
+failure, schedule-independent no-shift/no-task context, nullable acclimatisation data,
+read-only request methods, redacted evidence, and runbook requirements. A valid
+no-shift or no-task response still requires the site-weather check.
 
 The local suite never contacts staging, runs Terraform, or uses a developer AWS session:
 
