@@ -9,6 +9,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/web-sync.yml"
+SYNC_SCRIPT="$ROOT/web/scripts/sync-static-site.sh"
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
@@ -95,8 +96,8 @@ workflow_policy_guard() {
   rg -q -F -- 'CREWSAFE_WEB_DISTRIBUTION_ID' "$path" || return 1
   rg -q -F -- '^[0-9a-f]{40}$' "$path" || return 1
   rg -q -F -- 'role/crewsafe-shared-dev-web-sync' "$path" || return 1
-  rg -q -F -- 'aws s3 sync' "$path" || return 1
-  rg -q -F -- '--delete' "$path" || return 1
+  rg -q -F -- 'verify-edge-contract.sh' "$path" || return 1
+  rg -q -F -- 'sync-static-site.sh' "$path" || return 1
   rg -q -F -- 'create-invalidation' "$path" || return 1
   rg -q -F -- 'GITHUB_STEP_SUMMARY' "$path" || return 1
 
@@ -112,6 +113,23 @@ workflow_policy_guard() {
     return 1
   fi
   return 0
+}
+
+# The workflow owns orchestration; this shared script owns the S3 and cache
+# contract used by both web deployment paths.
+sync_script_guard() {
+  local path="$1"
+  [[ -f "$path" ]] || return 1
+  rg -q -F -- '#!/usr/bin/env bash' "$path" || return 1
+  rg -q -F -- 'set -euo pipefail' "$path" || return 1
+  rg -q -F -- ': "${WEB_BUCKET:?WEB_BUCKET is required}"' "$path" || return 1
+  rg -q -F -- '[[ -f dist/index.html ]]' "$path" || return 1
+  rg -q -F -- 'aws s3 sync dist "s3://${WEB_BUCKET}"' "$path" || return 1
+  rg -q -F -- '--delete' "$path" || return 1
+  rg -q -F -- '--exclude "index.html"' "$path" || return 1
+  rg -q -F -- '--cache-control "public, max-age=31536000, immutable"' "$path" || return 1
+  rg -q -F -- 'aws s3 cp dist/index.html "s3://${WEB_BUCKET}/index.html"' "$path" || return 1
+  rg -q -F -- '--cache-control "no-store"' "$path" || return 1
 }
 
 replace_fixture_text() {
@@ -136,8 +154,11 @@ mutate_fixture() {
   missing-oidc)
     replace_fixture_text "$path" 'id-token: write' 'id-token: read'
     ;;
-  no-delete-flag)
-    replace_fixture_text "$path" ' --delete' ''
+  missing-edge-verifier)
+    replace_fixture_text "$path" './scripts/verify-edge-contract.sh' './scripts/noop-edge-check.sh'
+    ;;
+  missing-sync-script)
+    replace_fixture_text "$path" './scripts/sync-static-site.sh' './scripts/noop-static-sync.sh'
     ;;
   static-credentials)
     printf '\nAWS_ACCESS_KEY_ID: hardcoded\n' >>"$path"
@@ -161,6 +182,26 @@ mutate_fixture() {
   esac
 }
 
+mutate_sync_fixture() {
+  local path="$1" mutation="$2"
+  case "$mutation" in
+  no-delete-flag)
+    sed '/--delete/d' "$path" >"$path.next"
+    mv "$path.next" "$path"
+    ;;
+  missing-immutable-cache)
+    replace_fixture_text "$path" 'max-age=31536000, immutable' 'max-age=60'
+    ;;
+  missing-no-store-cache)
+    replace_fixture_text "$path" 'no-store' 'public, max-age=300'
+    ;;
+  *)
+    printf 'unknown sync fixture mutation: %s\n' "$mutation" >&2
+    return 1
+    ;;
+  esac
+}
+
 assert_rejected_fixture() {
   local label="$1" mutation="$2"
   local fixture
@@ -176,12 +217,34 @@ assert_rejected_fixture() {
   fi
 }
 
+assert_rejected_sync_fixture() {
+  local label="$1" mutation="$2"
+  local fixture
+  fixture="$(mktemp)"
+  TMP_DIRS+=("$fixture")
+  cp "$SYNC_SCRIPT" "$fixture"
+  mutate_sync_fixture "$fixture" "$mutation"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if ! sync_script_guard "$fixture"; then
+    pass "$label"
+  else
+    fail "$label" "sync script guard accepted mutation: $mutation"
+  fi
+}
+
 check_file "web sync workflow exists" "$WORKFLOW"
+check_file "shared static sync script exists" "$SYNC_SCRIPT"
 TESTS_RUN=$((TESTS_RUN + 1))
 if workflow_policy_guard "$WORKFLOW"; then
   pass "base workflow passes policy guard"
 else
   fail "base workflow passes policy guard"
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+if sync_script_guard "$SYNC_SCRIPT"; then
+  pass "base static sync script passes policy guard"
+else
+  fail "base static sync script passes policy guard"
 fi
 
 contains_in "workflow_dispatch trigger exists" "$WORKFLOW" 'workflow_dispatch:'
@@ -197,8 +260,8 @@ contains_in "reuses build-test's own npm steps" "$WORKFLOW" 'npm run build'
 contains_in "runs lint" "$WORKFLOW" 'npm run lint'
 contains_in "runs typecheck" "$WORKFLOW" 'npm run typecheck'
 contains_in "runs unit tests" "$WORKFLOW" 'npm test'
-contains_in "syncs to S3" "$WORKFLOW" 'aws s3 sync'
-contains_in "sync prunes stale objects" "$WORKFLOW" '--delete'
+contains_in "verifies the live edge contract" "$WORKFLOW" 'verify-edge-contract.sh'
+contains_in "uses the shared static sync script" "$WORKFLOW" 'sync-static-site.sh'
 contains_in "invalidates the distribution" "$WORKFLOW" 'create-invalidation'
 contains_in "invalidation targets the whole distribution" "$WORKFLOW" "'/*'"
 contains_in "writes a step summary" "$WORKFLOW" 'GITHUB_STEP_SUMMARY'
@@ -211,19 +274,32 @@ not_contains_in "no continue-on-error" "$WORKFLOW" 'continue-on-error:'
 not_contains_in "does not poll for invalidation completion" "$WORKFLOW" 'cloudfront:GetInvalidation'
 not_contains_in "does not wait for invalidation" "$WORKFLOW" 'wait invalidation-completed'
 
+contains_in "sync script uploads non-index assets" "$SYNC_SCRIPT" 'aws s3 sync dist'
+contains_in "sync script prunes stale objects" "$SYNC_SCRIPT" '--delete'
+contains_in "sync script excludes the SPA shell" "$SYNC_SCRIPT" '--exclude "index.html"'
+contains_in "sync script gives assets immutable caching" "$SYNC_SCRIPT" '--cache-control "public, max-age=31536000, immutable"'
+contains_in "sync script uploads the SPA shell separately" "$SYNC_SCRIPT" 'aws s3 cp dist/index.html'
+contains_in "sync script prevents SPA shell caching" "$SYNC_SCRIPT" '--cache-control "no-store"'
+
 assert_order "build precedes credential assumption" "$WORKFLOW" \
   'npm run build' 'configure-aws-credentials'
-assert_order "credentials precede sync, sync precedes invalidation" "$WORKFLOW" \
-  'configure-aws-credentials' 'aws s3 sync' 'create-invalidation'
+assert_order "credentials precede verification, sync, and invalidation" "$WORKFLOW" \
+  'configure-aws-credentials' 'verify-edge-contract.sh' 'sync-static-site.sh' 'create-invalidation'
+assert_order "asset sync precedes the separate SPA shell upload" "$SYNC_SCRIPT" \
+  'aws s3 sync dist' 'aws s3 cp dist/index.html'
 
 assert_rejected_fixture "negative push-trigger fixture is rejected" add-push-trigger
 assert_rejected_fixture "negative missing-OIDC fixture is rejected" missing-oidc
-assert_rejected_fixture "negative no-delete-flag fixture is rejected" no-delete-flag
+assert_rejected_fixture "negative missing-edge-verifier fixture is rejected" missing-edge-verifier
+assert_rejected_fixture "negative missing-sync-script fixture is rejected" missing-sync-script
 assert_rejected_fixture "negative static-credentials fixture is rejected" static-credentials
 assert_rejected_fixture "negative continue-on-error fixture is rejected" continue-on-error
 assert_rejected_fixture "negative mutable-action fixture is rejected" mutable-action
 assert_rejected_fixture "negative widened-permission fixture is rejected" widened-permission
 assert_rejected_fixture "negative polls-invalidation fixture is rejected" polls-invalidation
+assert_rejected_sync_fixture "negative no-delete-flag fixture is rejected" no-delete-flag
+assert_rejected_sync_fixture "negative missing-immutable-cache fixture is rejected" missing-immutable-cache
+assert_rejected_sync_fixture "negative missing-no-store-cache fixture is rejected" missing-no-store-cache
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

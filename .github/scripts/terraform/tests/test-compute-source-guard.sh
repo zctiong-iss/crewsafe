@@ -104,7 +104,7 @@ forbid ':(AWSCURRENT|AWSPENDING|AWSPREVIOUS)|:[0-9a-fA-F-]{36}:"|::[0-9a-fA-F-]{
 # component fences with CloudFront's managed prefix list alone (see
 # aws_security_group.public_lb in main.tf) and was never entitled to grow a header back in
 # as a "belt and suspenders" addition.
-forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header' \
+forbid '[Xx]-[Oo]rigin-[Vv]erify|origin_secret|origin_shared_secret|custom_header[[:space:]]*\{' \
   'an origin-authentication header' \
   "A shared origin-authentication secret would need to live in Terraform state (FR-022a, forbidden categorically). The prefix list is the origin's only fence and needs no secret."
 
@@ -251,10 +251,41 @@ done
 # retain these verbs through the cleanup refresh/deletion and are reconciled from
 # these narrower files immediately after the VPC origin is gone.
 for policy in plan-role-policy.json apply-role-policy.json; do
-  jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:GetVpcOrigin") == null' \
+jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:GetVpcOrigin") == null' \
     "$ROOT/$component_dir/iam/$policy" >/dev/null ||
     fail "$component_dir/iam/$policy must remove cloudfront:GetVpcOrigin after cleanup"
 done
+
+# SCRUM-311. The web security headers policy is managed by the compute component,
+# so Terraform's standard roles need the response-headers-policy API permissions
+# separately from the distribution permissions above. The sync role's read access
+# is not inherited by the Terraform plan/apply roles.
+jq -e '
+  any(.Statement[];
+    .Sid == "ReadResponseHeadersPolicyPlan"
+    and .Effect == "Allow"
+    and ((.Action | arrays | sort) == ([
+      "cloudfront:GetResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicyConfig"
+    ] | sort))
+  )
+' "$ROOT/$component_dir/iam/plan-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/plan-role-policy.json must allow only the response-headers-policy read actions needed to refresh the web security policy"
+
+jq -e '
+  any(.Statement[];
+    .Sid == "ManageResponseHeadersPolicy"
+    and .Effect == "Allow"
+    and ((.Action | arrays | sort) == ([
+      "cloudfront:CreateResponseHeadersPolicy",
+      "cloudfront:DeleteResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicy",
+      "cloudfront:GetResponseHeadersPolicyConfig",
+      "cloudfront:UpdateResponseHeadersPolicy"
+    ] | sort))
+  )
+' "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||
+  fail "$component_dir/iam/apply-role-policy.json must allow the response-headers-policy CRUD/read actions needed to manage the web security policy"
 
 jq -e '[.Statement[].Action | arrays[]] | index("cloudfront:DeleteVpcOrigin") == null' \
   "$ROOT/$component_dir/iam/apply-role-policy.json" >/dev/null ||

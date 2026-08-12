@@ -1,0 +1,33 @@
+/* web/src/auth/SessionTimeoutNotice.css */
+.session-warning {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(0 0 0 / 55%);
+}
+
+.session-warning__panel {
+  width: min(30rem, 100%);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.session-warning__panel h2 {
+  margin: 0 0 var(--space-3);
+}
+
+.session-warning__panel p {
+  margin: 0;
+}
+
+.session-warning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}

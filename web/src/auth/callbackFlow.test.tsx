@@ -24,13 +24,22 @@ function managerThatSignsIn() {
   let signedIn = false;
 
   return {
-    getUser: async () => (signedIn ? { access_token: "t", expired: false } : null),
+    getUser: async () =>
+      signedIn
+        ? {
+            access_token: "t",
+            refresh_token: "r",
+            expired: false,
+            profile: { auth_time: Math.floor(Date.now() / 1_000) },
+          }
+        : null,
     signinRedirect: async () => undefined,
     signinRedirectCallback: async () => {
       signedIn = true;
       return {} as never;
     },
     removeUser: async () => undefined,
+    revokeTokens: async () => undefined,
     events: {
       addAccessTokenExpired: () => undefined,
       removeAccessTokenExpired: () => undefined,
@@ -78,6 +87,7 @@ describe("returning from Cognito", () => {
         throw new Error("code already redeemed");
       },
       removeUser: async () => undefined,
+      revokeTokens: async () => undefined,
       events: {
         addAccessTokenExpired: () => undefined,
         removeAccessTokenExpired: () => undefined,
