@@ -1,0 +1,112 @@
+name: ML-service CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "ml-service/**"
+      - ".github/workflows/ml-service-ci.yml"
+      - ".github/scripts/ci/run-ml-service-smoke.sh"
+      - ".github/scripts/security/validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ml-service-smoke.sh"
+      - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-summarize-trivy-report.sh"
+      - ".github/security/ml-service-image.trivyignore.source"
+  push:
+    branches: [main]
+    paths:
+      - "ml-service/**"
+      - ".github/workflows/ml-service-ci.yml"
+      - ".github/scripts/ci/run-ml-service-smoke.sh"
+      - ".github/scripts/security/validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ml-service-smoke.sh"
+      - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-summarize-trivy-report.sh"
+      - ".github/security/ml-service-image.trivyignore.source"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-service-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-ml-service:
+    name: Verify ML-service
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: crewsafe-ml-service:${{ github.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Run ML-service CI self-tests
+        run: |
+          .github/scripts/tests/test-ml-service-ci-workflow.sh
+          .github/scripts/tests/test-ml-service-smoke.sh
+          .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
+          .github/scripts/tests/test-summarize-trivy-report.sh
+
+      - name: Install ML-service dependencies
+        working-directory: ml-service
+        run: python -m pip install --require-hashes -r requirements.txt
+
+      - name: Run ML-service tests
+        working-directory: ml-service
+        run: python -m pytest test_forecast.py
+
+      - name: Build ML-service image
+        run: docker build -t "$IMAGE" ml-service
+
+      - name: Run ML-service container smoke checks
+        run: .github/scripts/ci/run-ml-service-smoke.sh "$IMAGE"
+
+      - name: Validate ML-service Trivy exceptions
+        run: .github/scripts/security/validate-ml-service-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
+
+      - name: Prepare active ML-service Trivy ignorefile
+        run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
+
+      - name: Generate ML-service Trivy report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "$IMAGE"
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignorefile: .trivyignore-active-ml-service
+          format: json
+          output: trivy-ml-service-report.json
+          exit-code: '0'
+
+      - name: Summarize ML-service Trivy report
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}"
+
+      - name: Upload ML-service Trivy report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: trivy-ml-service-report
+          path: trivy-ml-service-report.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Block HIGH and CRITICAL ML-service vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "$IMAGE"
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignorefile: .trivyignore-active-ml-service
+          exit-code: '1'
