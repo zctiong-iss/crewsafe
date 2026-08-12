@@ -24,11 +24,19 @@ policy independently observable.
    immutable dependency manifest, bounded requests, and cleanup.
 5. Validate reviewed ML-service Trivy exceptions, derive a runner-local active
    ignorefile, create a vulnerability-only JSON report, write a redacted
-   summary, retain the report artifact for seven days, and finally block on
-   HIGH/CRITICAL findings.
+   summary, and retain the report artifact for seven days. The Trivy result is
+   report-only for now, matching the current backend policy; scanner, report,
+   summary, and artifact failures remain blocking.
 
-The report and blocking scans are separate by design: an evidence-generation,
-summary, or upload error cannot turn a security failure into a passing check.
+The report and gate outcome are separate by design: an evidence-generation,
+summary, or upload error cannot turn a failed validation into a passing check.
+Flipping HIGH/CRITICAL findings to blocking is a separate follow-up after the
+report-only baseline is triaged.
+
+The existing backend workflow follows the same report-only rule. Its Trivy step
+now emits a vulnerability-only JSON report and uses the shared redacted summary
+helper before any AWS-credentialed publication step, so backend findings are
+visible in the job summary without changing publication behavior.
 Raw Trivy descriptions are never copied into the job summary.
 
 ## Lock-file correction

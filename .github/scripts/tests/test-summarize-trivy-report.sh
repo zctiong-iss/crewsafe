@@ -43,6 +43,17 @@ else
   fail 'summary sanitizes unsafe package metadata'
 fi
 
+expect 0 'accepts the backend summary title' "$SCRIPT" "$report" "$summary" 'backend/image:sha' 'def456' 'Backend image vulnerability scan'
+content="$(cat "$summary" 2>/dev/null || true)"
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ "$content" == *'## Backend image vulnerability scan'* ]]; then
+  pass 'summary uses the backend title'
+else
+  fail 'summary uses the backend title'
+fi
+
+expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' 'revision' 'Untrusted title'
+
 printf '{not-json}\n' >"$report"
 expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' 'revision'
 

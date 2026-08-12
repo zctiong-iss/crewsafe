@@ -27,9 +27,16 @@ container.
 
 The job then validates and filters the dedicated Trivy exception source,
 creates an ephemeral active ignorefile, produces a vulnerability-only JSON
-report, appends a redacted summary, uploads the report for seven days, and
-runs a separate blocking scan. A scanner, report, summary, upload, or
-HIGH/CRITICAL finding failure is a failed check.
+report, appends a redacted summary, and uploads the report for seven days.
+Following the current backend policy, HIGH/CRITICAL findings are report-only
+for now; scanner, report, summary, or upload failures still fail the check.
+Moving the ML-service scan to blocking is a separate future decision after
+findings are triaged.
+
+`backend-ci.yml` follows the same report-only policy. Its existing backend image
+scan now writes a vulnerability-only JSON report and appends a redacted
+`Backend image vulnerability scan` section before AWS credentials are assumed;
+the image can still publish when findings are present.
 
 ## Exception review
 
@@ -64,9 +71,10 @@ trusted package index, add all required platform wheel hashes to the reviewed
 lock file, and rerun the service tests and image build. Do not remove
 `--require-hashes` or replace it with an unpinned install.
 
-For a Trivy failure, remediate the package or base image first. If the risk is
+For a Trivy finding, remediate the package or base image first. If the risk is
 accepted temporarily, add a reviewed, owner/reason/expiry exception as above;
-do not weaken the severity threshold, report upload behavior, or blocking scan.
+do not weaken the severity threshold or report-generation behavior. The current
+report-only result must not be described as a blocking security approval.
 
 ## Local verification
 

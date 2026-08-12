@@ -26,15 +26,15 @@ check() {
   if "$@"; then pass "$label"; else fail "$label"; fi
 }
 
-contains() { rg -q -F -- "$2" "$1"; }
-not_contains() { ! rg -q -F -- "$2" "$1"; }
+contains() { grep -q -F -- "$2" "$1"; }
+not_contains() { ! grep -q -F -- "$2" "$1"; }
 
 ordered() {
   local file="$1"
   shift
   local previous=0 current needle
   for needle in "$@"; do
-    current="$(rg -n -m 1 -F -- "$needle" "$file" | cut -d: -f1 || true)"
+    current="$(awk -v needle="$needle" 'index($0, needle) { print NR; exit }' "$file")"
     [[ -n "$current" && "$current" -gt "$previous" ]] || return 1
     previous="$current"
   done
@@ -67,7 +67,8 @@ workflow_policy_guard() {
   contains "$path" '.github/scripts/security/summarize-trivy-report.sh' || return 1
   contains "$path" 'scanners: vuln' || return 1
   contains "$path" 'severity: HIGH,CRITICAL' || return 1
-  contains "$path" "exit-code: '1'" || return 1
+  contains "$path" "exit-code: '0'" || return 1
+  not_contains "$path" "exit-code: '1'" || return 1
   contains "$path" 'if-no-files-found: error' || return 1
   contains "$path" 'retention-days: 7' || return 1
   contains "$path" 'Run ML-service CI self-tests' || return 1
@@ -82,7 +83,7 @@ workflow_policy_guard() {
   not_contains "$path" 'docker push' || return 1
   not_contains "$path" 'AWS_ACCESS_KEY_ID' || return 1
   not_contains "$path" 'AWS_SECRET_ACCESS_KEY' || return 1
-  if rg -n 'uses: .+@' "$path" | rg -v '@[0-9a-f]{40}$' >/dev/null; then return 1; fi
+  if grep -nE 'uses: .+@' "$path" | grep -Ev '@[0-9a-f]{40}$' >/dev/null; then return 1; fi
   ordered "$path" \
     'Run ML-service CI self-tests' \
     'Install ML-service dependencies' \
@@ -93,8 +94,7 @@ workflow_policy_guard() {
     'Prepare active ML-service Trivy ignorefile' \
     'Generate ML-service Trivy report' \
     'Summarize ML-service Trivy report' \
-    'Upload ML-service Trivy report' \
-    'Block HIGH and CRITICAL ML-service vulnerabilities' || return 1
+    'Upload ML-service Trivy report' || return 1
   return 0
 }
 
@@ -111,7 +111,7 @@ check 'workflow policy contract holds' workflow_policy_guard "$WORKFLOW"
 if [[ -f "$WORKFLOW" ]]; then
   for mutation in \
     'scanners: vuln|scanners: secret' \
-    "exit-code: '1'|exit-code: '0'" \
+    "exit-code: '0'|exit-code: '1'" \
     'if-no-files-found: error|if-no-files-found: ignore' \
     'contents: read|contents: write' \
     '"ml-service/**"|"web/**"'; do

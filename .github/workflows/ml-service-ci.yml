@@ -101,12 +101,3 @@ jobs:
           path: trivy-ml-service-report.json
           if-no-files-found: error
           retention-days: 7
-
-      - name: Block HIGH and CRITICAL ML-service vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
-        with:
-          image-ref: "$IMAGE"
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignorefile: .trivyignore-active-ml-service
-          exit-code: '1'

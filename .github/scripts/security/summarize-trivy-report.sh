@@ -8,11 +8,16 @@ fail() {
   exit 1
 }
 
-[[ $# -eq 4 ]] || fail "usage: summarize-trivy-report.sh <report.json> <summary.md> <image> <revision>"
+[[ $# -ge 4 && $# -le 5 ]] || fail "usage: summarize-trivy-report.sh <report.json> <summary.md> <image> <revision> [title]"
 REPORT="$1"
 SUMMARY="$2"
 IMAGE="$3"
 REVISION="$4"
+TITLE="${5:-ML-service container vulnerability scan}"
+case "$TITLE" in
+  'ML-service container vulnerability scan'|'Backend image vulnerability scan') ;;
+  *) fail "unsupported summary title" ;;
+esac
 
 [[ -s "$REPORT" ]] || fail "Trivy report is missing or empty"
 command -v jq >/dev/null 2>&1 || fail "jq is required to summarize the Trivy report"
@@ -32,7 +37,7 @@ safe_rows="$(jq -r '
 ' "$REPORT")"
 
 {
-  printf '%s\n' '## ML-service container vulnerability scan'
+  printf '## %s\n' "$TITLE"
   printf -- "- Revision: \`%s\`\n" "$REVISION"
   printf -- "- Image: \`%s\`\n" "$IMAGE"
   printf -- "- HIGH/CRITICAL findings: \`%s\`\n" "$high_critical_count"

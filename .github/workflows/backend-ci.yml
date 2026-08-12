@@ -3,10 +3,20 @@ name: Backend CI
 on:
   pull_request:
     branches: [main]
-    paths: ["backend/**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/security/backend-image.trivyignore.source"
   push:
     branches: [main]
-    paths: ["backend/**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/security/backend-image.trivyignore.source"
   workflow_dispatch:
     inputs:
       publish:
@@ -113,11 +123,17 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
-          format: table
+          scanners: vuln
+          format: json
+          output: trivy-backend-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: '0'
           trivyignores: .trivyignore-active-backend
+      - name: Summarize backend image scan
+        env:
+          IMAGE: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "Backend image vulnerability scan"
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
