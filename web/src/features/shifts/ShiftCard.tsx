@@ -40,12 +40,11 @@ export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewSc
 // Scoped to the rows actually rendered: a worker holds only their own name, so checking the
 // whole shift would raise a data-integrity alarm on every healthy colleague.
 useEffect(() => {
+  if (!import.meta.env.DEV) return;
   const missing = crew.filter((a) => !workerNames.has(a.workerId));
   if (missing.length > 0) {
-    console.warn(
-      `ShiftCard ${shift.id}: ${missing.length} assignment(s) has worker(s) that are missing from the roster`,
-      missing.map((a) => a.workerId),
-    );
+    console.warn(`ShiftCard ${shift.id}: ${missing.length} assignment(s) reference worker(s) missing from the roster`,
+      missing.map((a) => a.workerId));
   }
 }, [shift.id, crew, workerNames]);
 

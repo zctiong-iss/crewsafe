@@ -20,6 +20,9 @@ import ConcernsScreen from "@/screens/supervisor/ConcernsScreen";
 import RecommendationsScreen from "@/screens/supervisor/RecommendationsScreen";
 import RecommendationDetailScreen from "@/screens/supervisor/RecommendationDetailScreen";
 import SettingsScreen from "@/screens/settings/SettingsScreen";
+import PolicyVersionsScreen from "@/screens/policy/PolicyVersionsScreen";
+import PolicyVersionDetailScreen from "@/screens/policy/PolicyVersionDetailScreen";
+import NewPolicyVersionScreen from "@/screens/policy/NewPolicyVersionScreen";
 import { s } from "react-native-size-matters";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useReduceMotion } from "@/hooks/useReduceMotion";
@@ -210,6 +213,21 @@ export function ProfileStack() {
         name="Settings"
         component={SettingsScreen}
         options={{ title: t("tabs.settings") }}
+      />
+      <ProfileStackNavigator.Screen
+        name="PolicyVersions"
+        component={PolicyVersionsScreen}
+        options={{ title: t("policy.title") }}
+      />
+      <ProfileStackNavigator.Screen
+        name="PolicyVersionDetail"
+        component={PolicyVersionDetailScreen}
+        options={{ title: t("policy.title") }}
+      />
+      <ProfileStackNavigator.Screen
+        name="NewPolicyVersion"
+        component={NewPolicyVersionScreen}
+        options={{ title: t("policy.newVersionTitle") }}
       />
     </ProfileStackNavigator.Navigator>
   );

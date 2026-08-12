@@ -2,10 +2,36 @@
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { type subscribeToConditions } from "@/api/conditionsStream";
+import type { ConditionsRangeWarning } from "@/api/conditionsDecoder";
 import { useConditionsStream } from "./useConditionsStream";
 import { ConditionsTrendChart } from "./ConditionsTrendChart";
 import { StopWorkBanner } from "./StopWorkBanner";
 import "./ConditionsPanel.css";
+
+function rangeWarningMessage(
+  warning: ConditionsRangeWarning,
+): string {
+  if (warning.metric === "wbgt") {
+    const reading =
+      `Latest WBGT reading (${warning.value.toFixed(1)}°C)`;
+
+    if (warning.value > warning.maximum) {
+      return (
+        `${reading} is above ${warning.maximum.toFixed(1)}°C. ` +
+        `Take necessary heat-safety action and verify against official NEA data.`
+      );
+    }
+
+    return (
+      `${reading} is below ${warning.minimum.toFixed(1)}°C. ` +
+      `Verify against official NEA data.`
+    );
+  }
+
+  return (
+    `Latest humidity reading (${warning.value}%) is outside the expected range. Sensor data may be unreliable.`
+  );
+}
 
 export function ConditionsPanel({
   siteId,
@@ -14,7 +40,13 @@ export function ConditionsPanel({
   siteId: string;
   subscribe?: typeof subscribeToConditions;
 }) {
-  const { snapshot, connectionState, trend, stopWorkActive } = useConditionsStream(siteId, subscribe);
+  const {
+    snapshot,
+    connectionState,
+    trend,
+    stopWorkActive,
+    rangeWarnings,
+  } = useConditionsStream(siteId, subscribe);
 
   if (connectionState === "connecting" && snapshot === null)
     return (
@@ -51,6 +83,12 @@ export function ConditionsPanel({
         {connectionState === "degraded" && (
           <p className="conditions-panel__degraded" role="alert">
             Live feed interrupted — showing last known reading. Reconnecting...
+          </p>
+        )}
+
+        {rangeWarnings.length > 0 && (
+          <p className="conditions-panel__degraded" role="alert">
+            {rangeWarnings.map(rangeWarningMessage).join(" ")}
           </p>
         )}
 

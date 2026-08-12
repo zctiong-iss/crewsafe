@@ -89,7 +89,7 @@ web_build_config_guard() {
       assert_order_guard "$block" 'name: Validate web build configuration' 'run: npm run build' || return 1
     else
       assert_order_guard "$block" 'name: Validate web build configuration' 'npm ci && npm run build' || return 1
-      assert_order_guard "$block" 'name: Validate web build configuration' 'aws s3 sync dist' || return 1
+      assert_order_guard "$block" 'name: Validate web build configuration' 'run: ./scripts/sync-static-site.sh' || return 1
     fi
   done
 }
@@ -165,7 +165,7 @@ build_test_block="$(job_block "$WORKFLOW" build-test)"
 deploy_block="$(job_block "$WORKFLOW" deploy-staging)"
 assert_order "build-test validates before production build" "$build_test_block" 'name: Validate web build configuration' 'run: npm run build'
 assert_order "deploy validates before production build" "$deploy_block" 'name: Validate web build configuration' 'npm ci && npm run build'
-assert_order "deploy validates before S3 sync" "$deploy_block" 'name: Validate web build configuration' 'aws s3 sync dist'
+assert_order "deploy validates before S3 sync" "$deploy_block" 'name: Validate web build configuration' 'run: ./scripts/sync-static-site.sh'
 
 TESTS_RUN=$((TESTS_RUN + 1))
 if web_build_config_guard "$WORKFLOW"; then

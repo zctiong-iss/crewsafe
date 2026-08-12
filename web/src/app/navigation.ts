@@ -2,15 +2,15 @@
  * @author Jemilin Beulah
  */
 import type { Role } from "@/api/identity";
+import { rolesForRoute } from "./routeAccess";
 
 export interface NavItem {
   to: string;
   label: string;
-  roles: readonly Role[];
 }
 
 /**
- * The whole navigation, with the roles each item is for.
+ * The whole navigation, with route access derived from the canonical route-access table.
  *
  * Kept as data in one place so "who can see what" is reviewable at a glance rather than
  * scattered through conditional JSX. Routes are added here as features land.
@@ -20,16 +20,16 @@ export interface NavItem {
  * still typeable.
  */
 export const NAVIGATION: readonly NavItem[] = [
-  { to: "/", label: "Live Board", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
-  { to: "/shifts", label: "Shifts & Tasks", roles: ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
-  { to: "/approvals", label: "Approvals", roles: ["SUPERVISOR", "SAFETY_MANAGER"] },
-  { to: "/audit", label: "Audit Trail", roles: ["SAFETY_MANAGER", "ADMIN"] },
-  { to: "/settings", label: "Settings", roles: ["ADMIN"] },
-  { to: "/conditions", label: "Weather Conditions", roles: ["SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] },
+  { to: "/", label: "Live Board" },
+  { to: "/shifts", label: "Shifts & Tasks" },
+  { to: "/approvals", label: "Approvals" },
+  { to: "/audit", label: "Audit Trail" },
+  { to: "/settings", label: "Settings" },
+  { to: "/conditions", label: "Weather Conditions" },
 ];
 
 export function navigationFor(role: Role): NavItem[] {
-  return NAVIGATION.filter((item) => item.roles.includes(role));
+  return NAVIGATION.filter((item) => rolesForRoute(item.to).includes(role));
 }
 
 const ROLE_LABELS: Record<Role, string> = {

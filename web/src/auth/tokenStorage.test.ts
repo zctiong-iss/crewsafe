@@ -33,6 +33,19 @@ describe("token storage", () => {
     expect(authConfig.response_type).toBe("code");
   });
 
+  it("retains auth_time for the absolute session deadline", () => {
+    expect(authConfig.filterProtocolClaims).toEqual([
+      "nbf",
+      "jti",
+      "nonce",
+      "acr",
+      "amr",
+      "azp",
+      "at_hash",
+    ]);
+    expect(authConfig.filterProtocolClaims).not.toContain("auth_time");
+  });
+
   it("does not trust identity claims from the token", () => {
     // Role and site access come from GET /api/v1/me, so that a demotion takes effect on the
     // next request rather than whenever the token happens to expire.

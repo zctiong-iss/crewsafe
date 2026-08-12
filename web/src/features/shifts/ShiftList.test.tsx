@@ -1,5 +1,5 @@
-/** @author Tang Chee Seng (with assistance from Claude) */
-import { describe, it, expect, vi } from "vitest";
+/** @author Tang Chee Seng (with assistance from Claude & ChatGPT) */
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -18,6 +18,10 @@ const renderApp = () =>
       </AuthProvider>
     </MemoryRouter>,
   );
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("ShiftList", () => {
   it("renders the site's shifts", async () => {
@@ -71,18 +75,18 @@ it("lists shifts from every site the user belongs to", async () => {
 
   it("flags and logs an assignment whose worker is not in the roster", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const GHOST = "00000000-0000-4000-8000-0000000000ff"; // absent from the workers handler
+    const SAMPLE_MISSING_WORKER_ID = "00000000-0000-4000-8000-0000000000ff"; // absent from the workers handler
     server.use(
       http.get("*/api/v1/sites/:siteId/shifts", () =>
         HttpResponse.json([
           {
-            id: "shift-ghost",
+            id: "shift-sample-missing-worker",
             siteId: "site-1",
             startsAt: "2026-08-10T00:00:00Z",
             endsAt: "2026-08-10T08:00:00Z",
             status: "PLANNED",
             assignments: [
-              { id: "a-ghost", workerId: GHOST, intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
+              { id: "a-sample-missing-worker", workerId: SAMPLE_MISSING_WORKER_ID, intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
             ],
           },
         ]),
@@ -96,7 +100,37 @@ it("lists shifts from every site the user belongs to", async () => {
     const placeholder = screen.getByText("Worker not found");
     expect(placeholder).toBeInTheDocument();                         // surfaced, not hidden
     expect(placeholder).toHaveClass("shift-card__worker--missing");  // visible cue applied
-    expect(warn).toHaveBeenCalledWith(expect.anything(), expect.arrayContaining([GHOST]));
+    expect(warn).toHaveBeenCalledWith(expect.anything(), expect.arrayContaining([SAMPLE_MISSING_WORKER_ID]));
+
+    warn.mockRestore();
+  });
+
+  it("does not log a missing worker identifier outside development", async () => {
+    vi.stubEnv("DEV", false);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const SAMPLE_MISSING_WORKER_ID = "00000000-0000-4000-8000-0000000000ff";
+    server.use(
+      http.get("*/api/v1/sites/:siteId/shifts", () =>
+        HttpResponse.json([
+          {
+            id: "shift-production-sample-missing-worker",
+            siteId: "site-1",
+            startsAt: "2026-08-10T00:00:00Z",
+            endsAt: "2026-08-10T08:00:00Z",
+            status: "PLANNED",
+            assignments: [
+              { id: "a-production-sample-missing-worker", workerId: SAMPLE_MISSING_WORKER_ID, intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
+            ],
+          },
+        ]),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "Show crew" }));
+    expect(await screen.findByText("Worker not found")).toBeInTheDocument();
+    expect(warn).not.toHaveBeenCalled();
 
     warn.mockRestore();
   });
