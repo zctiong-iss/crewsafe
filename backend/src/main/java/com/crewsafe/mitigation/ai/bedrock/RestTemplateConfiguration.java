@@ -15,15 +15,15 @@ public class RestTemplateConfiguration {
 
     @Bean(name = "bedrockRestTemplate")
     public RestTemplate bedrockRestTemplate(BedrockProperties properties) {
+        // Configure timeouts on the factory itself
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         int timeoutMs = (int) Duration.ofMillis(properties.getBedrockTimeoutMs()).toMillis();
         factory.setConnectTimeout(timeoutMs);
         factory.setReadTimeout(timeoutMs);
 
+        // Wrap with buffering factory for error handling and response logging
         return new RestTemplateBuilder()
                 .requestFactory(() -> new BufferingClientHttpRequestFactory(factory))
-                .connectTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
-                .readTimeout(Duration.ofMillis(properties.getBedrockTimeoutMs()))
                 .build();
     }
 }

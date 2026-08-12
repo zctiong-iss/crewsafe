@@ -1,0 +1,155 @@
+name: Web Sync
+
+# SCRUM-298 FR-017 (Q2): the initial (and, until SCRUM-271 automates ongoing
+# deploys, every) web deployment is a manually-dispatched workflow_dispatch
+# run assuming the sync role via OIDC — never an operator's local AWS CLI
+# session. workflow_dispatch ONLY: this must never run automatically on push
+# or pull_request, unlike web-ci.yml's build-test job.
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: "Exact 40-character commit SHA on main to build and sync"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Build and sync to S3
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ap-southeast-1
+      WEB_BUCKET: ${{ vars.CREWSAFE_WEB_BUCKET_NAME }}
+      WEB_SYNC_ROLE_ARN: ${{ vars.CREWSAFE_WEB_SYNC_ROLE_ARN }}
+      WEB_DISTRIBUTION_ID: ${{ vars.CREWSAFE_WEB_DISTRIBUTION_ID }}
+      WEB_BASE_URL: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      COMMIT_SHA: ${{ inputs.commit_sha }}
+      # Vite bakes these in at build time (import.meta.env.VITE_*); authConfig.ts
+      # throws at module load if any is unset, which blanks the whole app before
+      # React ever renders. Cognito values come from the same repository variable
+      # ../run.sh uses for local .env.local; the redirect URIs are this deployed
+      # web origin's own routes, not localhost. Signing in still requires
+      # SCRUM-242 to add this origin to the Cognito app client's allowed callback
+      # and logout URLs (infra/terraform/cognito/variables.tf currently locks
+      # those to localhost:5173 only) — this fix only gets the app to render.
+      VITE_COGNITO_AUTHORITY: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.issuer_uri }}
+      VITE_COGNITO_CLIENT_ID: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.web_client_id }}
+      VITE_COGNITO_HOSTED_UI_DOMAIN: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.hosted_ui_url }}
+      VITE_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/callback
+      VITE_POST_LOGOUT_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/
+      VITE_API_BASE_URL: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+    steps:
+      - name: Validate sync contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "commit_sha must be a 40-character lowercase hex commit SHA" >&2; exit 1; }
+          [[ -n "$WEB_BUCKET" ]] || { echo "Missing CREWSAFE_WEB_BUCKET_NAME" >&2; exit 1; }
+          [[ -n "$WEB_SYNC_ROLE_ARN" ]] || { echo "Missing CREWSAFE_WEB_SYNC_ROLE_ARN" >&2; exit 1; }
+          [[ "$WEB_SYNC_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-web-sync$ ]] || { echo "Unexpected web sync role" >&2; exit 1; }
+          [[ -n "$WEB_DISTRIBUTION_ID" ]] || { echo "Missing CREWSAFE_WEB_DISTRIBUTION_ID" >&2; exit 1; }
+          [[ "$WEB_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_WEB_BASE_URL" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_AUTHORITY" ]] || { echo "Missing issuer_uri in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_CLIENT_ID" ]] || { echo "Missing web_client_id in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ -n "$VITE_COGNITO_HOSTED_UI_DOMAIN" ]] || { echo "Missing hosted_ui_url in CREWSAFE_SHARED_COGNITO_JSON" >&2; exit 1; }
+          [[ "$VITE_API_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]] || { echo "Missing or malformed CREWSAFE_BACKEND_BASE_URL" >&2; exit 1; }
+          printf 'Validated bucket=%s role=%s distribution=%s commit=%s webBaseUrl=%s apiBaseUrl=%s\n' \
+            "$WEB_BUCKET" "$WEB_SYNC_ROLE_ARN" "$WEB_DISTRIBUTION_ID" "$COMMIT_SHA" "$WEB_BASE_URL" "$VITE_API_BASE_URL"
+
+      # Same build steps web-ci.yml's build-test job already runs — not
+      # skipped or shortcut. That job is the required gate; this workflow
+      # consumes its own fresh build of the exact same commit rather than
+      # trusting an artifact from a separate, possibly-stale run.
+      - name: Check out exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Audit dependencies (whole tree, fail on moderate+)
+        working-directory: web
+        run: npm run audit
+
+      - name: Lint
+        working-directory: web
+        run: npm run lint
+
+      - name: Type-check
+        working-directory: web
+        run: npm run typecheck
+
+      - name: Unit tests
+        working-directory: web
+        run: npm test
+
+      - name: Production build
+        working-directory: web
+        run: npm run build
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ env.WEB_SYNC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: CrewSafeWebSync-${{ github.run_id }}
+          mask-aws-account-id: true
+
+      - name: Verify bundle-to-edge security contract
+        working-directory: web
+        run: ./scripts/verify-edge-contract.sh
+
+      # --delete removes objects no longer present in this build, so
+      # unreferenced hashed assets from prior builds do not accumulate in the
+      # bucket forever (research.md R-007).
+      - name: Sync hashed assets and SPA shell to S3
+        working-directory: web
+        run: ./scripts/sync-static-site.sh
+
+      # Issue and return — this workflow does not poll for completion.
+      # The sync role can verify the exact response-headers policy before it
+      # invalidates, but deliberately cannot poll invalidation completion.
+      - name: Invalidate CloudFront distribution
+        id: invalidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          invalidation_id="$(aws cloudfront create-invalidation \
+            --distribution-id "$WEB_DISTRIBUTION_ID" \
+            --paths '/*' \
+            --query 'Invalidation.Id' \
+            --output text)"
+          [[ -n "$invalidation_id" ]] || { echo "No invalidation id returned" >&2; exit 1; }
+          echo "invalidation_id=$invalidation_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record sync evidence
+        shell: bash
+        env:
+          INVALIDATION_ID: ${{ steps.invalidate.outputs.invalidation_id }}
+        run: |
+          {
+            echo '## Web sync'
+            echo "- Commit SHA: \`$COMMIT_SHA\`"
+            echo "- Bucket: \`$WEB_BUCKET\`"
+            echo "- Invalidation ID: \`$INVALIDATION_ID\`"
+            echo "- Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_STEP_SUMMARY"

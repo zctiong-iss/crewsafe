@@ -45,6 +45,15 @@
       "Resource": "*"
     },
     {
+      "Sid": "ReadResponseHeadersPolicyPlan",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicyConfig"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "ReadNetworkPlan",
       "Effect": "Allow",
       "Action": [

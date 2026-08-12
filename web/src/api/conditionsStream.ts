@@ -1,7 +1,12 @@
-/** @author Tang Chee Seng (with assistance from Claude) */
+/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { apiBaseUrl } from "@/auth/authConfig";
 import { currentAccessToken } from "./client";
+import {
+  decodeConditionsSnapshot,
+  InvalidConditionsPayloadError,
+  type ConditionsRangeWarning,
+} from "./conditionsDecoder";
 
 export type WeatherSource = "NEA" | "MANUAL" | "CACHED";
 export type WeatherFreshness = "LIVE" | "DELAYED" | "STALE" | "SIMULATED";
@@ -39,7 +44,10 @@ export interface ConditionsSnapshot {
 export type StreamStatus = "connecting" | "live" | "degraded" | "closed";
 
 export interface ConditionsStreamHandlers {
-  onSnapshot: (snapshot: ConditionsSnapshot) => void;
+  onSnapshot: (
+    snapshot: ConditionsSnapshot,
+    warnings: readonly ConditionsRangeWarning[],
+  ) => void;
   onStatus: (status: StreamStatus) => void;
 }
 
@@ -56,7 +64,7 @@ export function subscribeToConditions(
   const controller = new AbortController();
   let attempt = 0;
 
-  // ⟵ YOU: custom fetch so EVERY (re)connect carries a FRESH token.
+  // Custom fetch so EVERY (re)connect carries a FRESH token.
   const authedFetch: typeof fetch = async (input, init) => {
     const token = await currentAccessToken();
     const headers = new Headers(init?.headers);
@@ -84,10 +92,20 @@ export function subscribeToConditions(
     },
     onmessage(ev) {
       if (ev.event !== "conditions" || ev.data === "") return;
-      handlers.onSnapshot(JSON.parse(ev.data) as ConditionsSnapshot);
+      try {
+        const decoded = decodeConditionsSnapshot(ev.data);
+        handlers.onStatus("live");
+        handlers.onSnapshot(decoded.snapshot, decoded.warnings);
+      } catch (error) {
+        if (error instanceof InvalidConditionsPayloadError) {
+          handlers.onStatus("degraded");
+          return;
+        }
+        throw error;
+      }
     },
     onclose() {
-      // ⟵ YOU: server recycles every 5 min. The library STOPS on a clean close unless we throw.
+      // Server recycles every 5 min. The library STOPS on a clean close unless we throw.
       throw new RecycleSignal();
     },
     onerror(err) {

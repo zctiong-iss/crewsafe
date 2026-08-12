@@ -197,3 +197,209 @@ export interface MyShift {
   status: ShiftStatus;
   assignment: MyShiftAssignment;
 }
+
+/**
+ * The action codes a mitigation may carry — mirrors `mitigation/domain/ActionCatalogue.java`
+ * (SCRUM-119).
+ *
+ * Typed as a union rather than `string` so that adding a code server-side without adding the
+ * matching `actions.*` translation is a compile error here, not a worker reading English they
+ * may not understand. `ActionCatalogueTest` enforces the same thing from the other side.
+ */
+export type ActionCode =
+  | "STOP_WORK"
+  | "RESUME_WORK"
+  | "REST_10_MIN_HOURLY"
+  | "REST_15_MIN_HOURLY"
+  | "REST_10_MIN"
+  | "REST_15_MIN"
+  | "HYDRATE_HOURLY"
+  | "HYDRATE_REGULARLY"
+  | "HYDRATE"
+  | "SHADE_RECOVERY"
+  | "SEEK_SHADE"
+  | "RESCHEDULE_HEAVY_WORK"
+  | "ROTATE_TO_LIGHT_DUTY"
+  | "CLOSE_MONITORING";
+
+/** The topic a mitigation is grouped under. Mirrors `ActionCatalogue`'s category values. */
+export type MitigationCategory =
+  | "STOP_WORK"
+  | "REST"
+  | "HYDRATION"
+  | "SHADE_COOLING"
+  | "WORK_SCHEDULING"
+  | "MONITORING";
+
+/**
+ * Mirrors `mitigation/domain/MitigationSuggestion.java`.
+ *
+ * `actionCode` and `category` are nullable because plans drafted before SCRUM-119 do not carry
+ * them. Render from `actionCode` whenever it is present — `action` is server-authored English
+ * that this app cannot translate, and parsing it for numbers works in English and fails in the
+ * other six locales.
+ */
+export interface Mitigation {
+  priority: string | null;
+  action: string;
+  rationale: string | null;
+  estimatedImpact: string | null;
+  actionCode: ActionCode | null;
+  category: MitigationCategory | null;
+}
+
+/** Mirrors `Approval.ApprovalDecision`. */
+export type ApprovalDecision = "APPROVED" | "REJECTED" | "EDITED";
+
+/** Mirrors `RecommendationController.ApprovalResponse` (SCRUM-119). */
+export interface Approval {
+  id: string;
+  approverId: string;
+  decision: ApprovalDecision;
+  reason: string | null;
+  /** Present only for an EDITED decision — what the supervisor actually approved. */
+  editedMitigations: Mitigation[] | null;
+  decidedAt: string;
+}
+
+/** Mirrors `Recommendation.RecommendationStatus`. Server-controlled. */
+export type RecommendationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+
+/**
+ * Mirrors `RecommendationController.RecommendationResponse` (SCRUM-119).
+ *
+ * `mitigations` is always the agent's original draft — it is never overwritten by a decision,
+ * so "what did the supervisor change" stays renderable as a diff against
+ * `approval.editedMitigations`.
+ */
+export interface Recommendation {
+  id: string;
+  shiftId: string;
+  /** Which policy version produced this. Shown so the supervisor can judge it (US-08/FR-16). */
+  policyVersion: string | null;
+  status: RecommendationStatus;
+  rationale: string | null;
+  createdAt: string;
+  mitigations: Mitigation[];
+  /** Null while the recommendation is still awaiting a decision. */
+  approval: Approval | null;
+}
+
+/**
+ * What a worker reports about how they are coping (US-11).
+ *
+ * Mirrors `wellbeing/domain/WellbeingLog.java`. A log is a timestamp and a kind — deliberately
+ * nothing else, because the control that records it has to be usable in gloves, in the sun,
+ * mid-shift.
+ */
+export type WellbeingLogType = "REST" | "HYDRATION";
+
+/** SELF when the worker tapped the button; INSTRUCTED when a dispatched rest ran to completion. */
+export type WellbeingLogSource = "SELF" | "INSTRUCTED";
+
+export interface WellbeingLog {
+  id: string;
+  shiftId: string;
+  logType: WellbeingLogType;
+  source: WellbeingLogSource;
+  loggedAt: string;
+}
+
+/** Mirrors `shift/domain/SymptomFlag.java`. Every value has an `symptoms.*` translation. */
+export type SymptomFlag =
+  | "NONE"
+  | "DIZZINESS"
+  | "NAUSEA"
+  | "HEADACHE"
+  | "FATIGUE"
+  | "MUSCLE_CRAMPS"
+  | "OTHER";
+
+/**
+ * Mirrors `Concern.ConcernStatus`. There is no RESOLVED — the app can know a supervisor saw the
+ * report, not whether the worker is now all right.
+ */
+export type ConcernStatus = "OPEN" | "ACKNOWLEDGED";
+
+/** Mirrors `WorkerWellbeingController.ConcernResponse`. */
+export interface Concern {
+  id: string;
+  shiftId: string;
+  workerId: string;
+  symptoms: SymptomFlag[];
+  /** The worker's own words, in their own language. Null when they chose only chips. */
+  note: string | null;
+  status: ConcernStatus;
+  raisedAt: string;
+  acknowledgedAt: string | null;
+}
+
+/**
+ * Mirrors `SupervisorWellbeingController.CrewWellbeingRow` — one row per worker who has logged
+ * anything. A worker with no logs is absent, and the screen renders "nothing logged" from the
+ * shift's own roster rather than expecting an empty row here.
+ */
+export interface CrewWellbeingRow {
+  workerId: string;
+  lastRestAt: string | null;
+  lastRestSource: WellbeingLogSource | null;
+  lastHydrationAt: string | null;
+  restCount: number;
+  hydrationCount: number;
+}
+
+/**
+ * Heat policy versioning (SCRUM-120 / US-24).
+ *
+ * Mirrors `policy/api/PolicyVersionController.PolicyVersionResponse`. A version is the set of
+ * WBGT thresholds in force at a site, with the source it came from and the date it takes effect —
+ * so a recommendation can be traced to the exact rules that produced it rather than to a label
+ * somebody typed.
+ */
+export type PolicyVersionStatus = "DRAFT" | "ACTIVE" | "SUPERSEDED";
+
+/**
+ * The three acclimatisation levels a threshold set is indexed by, and the three intensities
+ * within each. Named here so the screens can iterate them rather than hardcoding nine field
+ * names in render order.
+ */
+export type AcclimatisationLevel = "UNACCLIMATISED" | "PARTIAL" | "FULL";
+
+export interface PolicyVersion {
+  id: string;
+  siteId: string;
+  /** Unique per site — the server answers 409 on a duplicate. */
+  versionLabel: string;
+  /** Where the rules came from, e.g. "MOM Work-Rest Guidelines 2026 rev 1". */
+  source: string;
+  /** ISO 8601 *date*, no time. The server stores a LocalDate. */
+  effectiveDate: string;
+  status: PolicyVersionStatus;
+
+  /*
+   * Numbers, not strings. The server's `BigDecimal` serialises as a JSON number (25.0), and
+   * typing these as strings made `TextInput value={25}` render blank — the create form opened
+   * with every threshold empty while claiming to have copied them. Whatever the merits of
+   * carrying decimals as strings, this is what the wire actually sends.
+   */
+  wbgtThresholdUnacclimatisedLight: number;
+  wbgtThresholdUnacclimatisedModerate: number;
+  wbgtThresholdUnacclimatisedHeavy: number;
+  wbgtThresholdPartialLight: number;
+  wbgtThresholdPartialModerate: number;
+  wbgtThresholdPartialHeavy: number;
+  wbgtThresholdFullLight: number;
+  wbgtThresholdFullModerate: number;
+  wbgtThresholdFullHeavy: number;
+  /** Stop work at or above this, whatever the acclimatisation. Server bounds it to 20..40. */
+  wbgtEmergencyStop: number;
+
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Null until activated. */
+  activatedAt: string | null;
+  /** Null unless a later version replaced this one. */
+  supersededAt: string | null;
+}

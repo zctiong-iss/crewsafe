@@ -1,4 +1,4 @@
-# CrewSafe Terraform state backend
+# CrewSafe Terraform state backend (SCRUM-155)
 
 This root provisions one isolated S3 backend per registered AWS account. It is
 executed only by GitHub Actions; developers do not run Terraform locally and do
@@ -12,6 +12,11 @@ bucket:
 crewsafe-terraform-state-<account-id>-ap-southeast-1
 ```
 
+The bucket is versioned, uses SSE-S3 (`AES256`), enforces bucket-owner ownership,
+blocks all public access, denies non-TLS requests, and has
+`prevent_destroy = true`. These controls are created by `main.tf`; they are not
+optional console settings.
+
 The first bootstrap plan and apply use Terraform's default local backend only
 inside ephemeral GitHub-hosted runners. After the apply creates the bucket, the
 workflow preserves a recovery copy, generates the partial S3 backend
@@ -23,14 +28,24 @@ encrypt      = true
 use_lockfile = true
 ```
 
-No DynamoDB lock table is used. Future roots use independent keys in the same
-selected account:
+No DynamoDB lock table is used. Terraform's native S3 lockfile is stored next to
+each state object. The registered remote roots currently use these independent
+keys in the same selected account:
 
 ```text
-crewsafe/cognito/test.tfstate
-crewsafe/cognito/staging.tfstate
-crewsafe/<component>/<environment>.tfstate
+crewsafe/cognito/shared-dev.tfstate
+crewsafe/compute/shared-dev.tfstate
+crewsafe/database/shared-dev.tfstate
+crewsafe/ecr/shared-dev.tfstate
+crewsafe/iam-policy-management/shared-dev.tfstate
+crewsafe/network/shared-dev.tfstate
+crewsafe/securityhub-import/shared-dev.tfstate
+crewsafe/secrets/shared-dev.tfstate
 ```
+
+The authoritative component catalogue is
+[`.github/terraform/components.json`](../../../../.github/terraform/components.json).
+Do not invent a state key or share state between account aliases.
 
 Canonical copy-ready policies for the GitHub OIDC roles are in
 [`iam/plan-role-policy.json`](iam/plan-role-policy.json) and

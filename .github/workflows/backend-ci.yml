@@ -3,16 +3,35 @@ name: Backend CI
 on:
   pull_request:
     branches: [main]
-    paths: ["backend/**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/security/backend-image.trivyignore.source"
   push:
     branches: [main]
-    paths: ["backend/**"]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/security/backend-image.trivyignore.source"
   workflow_dispatch:
     inputs:
       publish:
         description: "Also build and push the image to ECR (main only)"
         type: boolean
         default: false
+      redeploy:
+        description: "Redeploy an approved main-ancestor commit's existing immutable image without publishing"
+        type: boolean
+        default: false
+      redeploy_image_tag:
+        description: "Full approved commit SHA of an existing backend image that is reachable from main"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -44,7 +63,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (
         github.event_name == 'push' ||
-        (github.event_name == 'workflow_dispatch' && inputs.publish)
+        (github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.redeploy)
       ) &&
       vars.CREWSAFE_ECR_PUSH_ROLE_ARN != '' && vars.CREWSAFE_ECR_REPOSITORY_URL != ''
     runs-on: ubuntu-latest
@@ -104,11 +123,17 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
           image-ref: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
-          format: table
+          scanners: vuln
+          format: json
+          output: trivy-backend-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
           exit-code: '0'
           trivyignores: .trivyignore-active-backend
+      - name: Summarize backend image scan
+        env:
+          IMAGE: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "Backend image vulnerability scan"
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
@@ -149,3 +174,155 @@ jobs:
             echo "- Content digest: \`$image_digest\`"
             echo "- CI run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # SCRUM-242: a task-start SSM change must be followed by fresh tasks, but
+  # its previously approved backend release may predate the current workflow
+  # correction. ECR intentionally rejects a second push of that immutable SHA
+  # tag. This branch accepts a full approved commit SHA, proves it is reachable from the
+  # selected main ref, then resolves its image using the existing deploy role.
+  # It accepts no repository, image URI, or digest and never builds/pushes.
+  resolve-existing-image:
+    name: Resolve existing image
+    needs: build-test
+    if: >
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.redeploy && !inputs.publish &&
+      vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN != '' && vars.CREWSAFE_ECR_REPOSITORY_URL != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
+      image_digest: ${{ steps.resolve.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Validate existing-image redeploy contract
+        env:
+          REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+          DEPLOY_ROLE_ARN: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+          IMAGE_TAG: ${{ inputs.redeploy_image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REPO" =~ ^[0-9]{12}\.dkr\.ecr\.ap-southeast-1\.amazonaws\.com/crewsafe/backend$ ]] || { echo "Backend repository must be the regional ECR crewsafe/backend repository" >&2; exit 1; }
+          [[ "$DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-backend-deploy$ ]] || { echo "Unexpected backend deployment role" >&2; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "redeploy_image_tag must be a 40-character lowercase commit SHA" >&2; exit 1; }
+          git cat-file -e "$IMAGE_TAG^{commit}" || { echo "redeploy_image_tag is not a repository commit" >&2; exit 1; }
+          git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA" || { echo "redeploy_image_tag is not reachable from selected main" >&2; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeBackendRedeploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Resolve selected main image digest
+        id: resolve
+        env:
+          IMAGE_TAG: ${{ inputs.redeploy_image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_digest="$(aws ecr describe-images --repository-name crewsafe/backend --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "No immutable digest exists for approved commit" >&2; exit 1; }
+          {
+            echo "image_tag=$IMAGE_TAG"
+            echo "image_digest=$image_digest"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '## Existing backend image resolved'
+            echo "- Approved commit tag: \`$IMAGE_TAG\`"
+            echo "- Content digest: \`$image_digest\`"
+            echo '- Result: ready for deployment without publication'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy staging backend
+    needs: [build-test, publish-image, resolve-existing-image]
+    if: >
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      needs.build-test.result == 'success' &&
+      (needs.publish-image.result == 'success' || needs.resolve-existing-image.result == 'success') &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && ((inputs.publish && !inputs.redeploy) || (inputs.redeploy && !inputs.publish)))
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      deployed_revision: ${{ steps.deploy.outputs.deployed_revision }}
+    env:
+      REPOSITORY: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
+      IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag || needs.resolve-existing-image.outputs.image_tag }}
+      IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest || needs.resolve-existing-image.outputs.image_digest }}
+      CLUSTER: ${{ vars.CREWSAFE_BACKEND_ECS_CLUSTER_NAME }}
+      SERVICE: ${{ vars.CREWSAFE_BACKEND_ECS_SERVICE_NAME }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Validate backend deployment contract
+        env:
+          DEPLOY_ROLE_ARN: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-backend-deploy$ ]]
+          [[ "$CLUSTER" == crewsafe-shared-dev && "$SERVICE" == backend ]]
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeBackendDeploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Deploy immutable backend release
+        id: deploy
+        run: .github/scripts/deploy/deploy-backend-staging.sh
+
+  smoke-staging:
+    name: Staging smoke verification
+    needs: deploy-staging
+    if: always() && needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/staging-smoke.yml
+    permissions:
+      contents: read
+    with:
+      trigger_component: backend
+      trigger_sha: ${{ needs.deploy-staging.outputs.deployed_revision }}
+      web_base_url: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      backend_base_url: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+      approved_web_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_WEB_BASE_URL }}
+      approved_backend_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_BACKEND_BASE_URL }}
+      smoke_site_id: ${{ vars.CREWSAFE_SMOKE_SITE_ID }}
+      smoke_username: ${{ vars.CREWSAFE_SMOKE_SYNTHETIC_WORKER_USERNAME }}
+      cognito_config_json: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+    secrets:
+      SMOKE_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.SMOKE_SYNTHETIC_WORKER_PASSWORD }}
+
+  dast-staging:
+    name: Authenticated staging DAST
+    needs: deploy-staging
+    # always() is required here: deploy-staging needs both publish-image and
+    # resolve-existing-image, and exactly one of that pair is always skipped
+    # (the redeploy-vs-publish branch). GitHub's implicit success() gate on a
+    # job's `if:` propagates through that skipped grandparent even though
+    # deploy-staging's own result is success, so without always() this job
+    # was silently skipped on every ordinary push-triggered deployment.
+    if: always() && needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/dast-staging.yml
+    permissions:
+      contents: read
+    with:
+      trigger_component: backend
+      trigger_sha: ${{ github.sha }}
+      web_base_url: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      backend_base_url: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+      approved_web_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_WEB_BASE_URL }}
+      approved_backend_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_BACKEND_BASE_URL }}
+      hosted_ui_url: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.hosted_ui_url }}
+      dast_username: ${{ vars.CREWSAFE_DAST_SYNTHETIC_WORKER_USERNAME }}
+    secrets:
+      DAST_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}

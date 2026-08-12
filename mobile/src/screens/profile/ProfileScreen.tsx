@@ -39,6 +39,11 @@ export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
 
   const user = useAppSelector((state) => state.auth.user);
+
+  /* The policy read endpoint admits these three and refuses a WORKER, so the row appears for
+     exactly the roles that can open it. */
+  const canReadPolicy =
+    user?.role === "SUPERVISOR" || user?.role === "SAFETY_MANAGER" || user?.role === "ADMIN";
   const signingOut = useAppSelector((state) => state.auth.signingOut);
   const avatarUri = useAppSelector((state) =>
     user ? (state.profile.avatars[user.id] ?? null) : null,
@@ -138,6 +143,29 @@ export default function ProfileScreen() {
             </View>
           ))}
         </View>
+
+        {/*
+          Heat policy, for the roles the endpoint admits (SCRUM-120).
+
+          Hidden from workers entirely — the read endpoint refuses them, so the row would be a
+          door that opens onto a 403. Supervisors see it because their crew is judged against
+          these thresholds and they are entitled to know what they are; only a safety manager or
+          admin gets the controls that change them, which the screens decide for themselves.
+
+          Here rather than in a tab: configuration is rare and administrative, and a sixth
+          supervisor tab would appear for supervisors too. Settings sits here for the same reason.
+        */}
+        {canReadPolicy ? (
+          <AppButton
+            title={t("policy.entry")}
+            variant="secondary"
+            onPress={() => navigation.navigate("PolicyVersions")}
+            icon={
+              <Ionicons name="thermometer-outline" size={s(18)} color={theme.colors.textPrimary} />
+            }
+            style={styles.action}
+          />
+        ) : null}
 
         <AppButton
           title={t("tabs.settings")}

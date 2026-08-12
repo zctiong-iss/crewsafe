@@ -138,6 +138,16 @@ class ErrorContractTest extends AbstractIntegrationTest {
         assertThat(issued).isNotEqualTo(forged);
     }
 
+    @Test
+    void aHeaderInjectionAttemptGetsAFreshCanonicalRequestId() throws Exception {
+        String issued = mockMvc.perform(get("/api/v1/me")
+                        .header(RequestIdFilter.HEADER, "forged\nsecond-log-entry"))
+                .andReturn().getResponse().getHeader(RequestIdFilter.HEADER);
+
+        assertThat(issued).matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                .doesNotContain("\r", "\n");
+    }
+
     /**
      * SCRUM-263: every documented 404 must carry the same {@link ErrorResponse} body as
      * every other error, not an empty one. Hits a real domain endpoint (rather than

@@ -16,18 +16,27 @@ import { fakeUserManager } from "@/test/fakeUserManager";
  * the two worst outcomes in an authenticated app: an infinite spinner, or being logged out
  * for something that was not a session problem.
  */
-function renderApp(session: Parameters<typeof fakeUserManager>[0], fetchImpl: typeof fetch) {
+function renderApp(
+  session: Parameters<typeof fakeUserManager>[0],
+  fetchImpl: typeof fetch,
+  redirectTo = vi.fn(),
+) {
   vi.stubGlobal("fetch", fetchImpl);
-  return render(
+  const rendered = render(
     <MemoryRouter>
-      <AuthProvider userManager={fakeUserManager(session)}>
+      <AuthProvider userManager={fakeUserManager(session)} redirectTo={redirectTo}>
         <App />
       </AuthProvider>
     </MemoryRouter>,
   );
+  return { ...rendered, redirectTo };
 }
 
-const jsonResponse = (body: unknown, status = 200, requestId = "req-test-1") =>
+const jsonResponse = (
+  body: unknown,
+  status = 200,
+  requestId = "req-test-1",
+) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json", "X-Request-Id": requestId },
@@ -48,10 +57,12 @@ describe("auth states", () => {
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("treats an expired token as signed out rather than showing a spinner", async () => {
-    renderApp({ expired: true }, vi.fn());
+  it("ends an expired token session instead of leaving a spinner", async () => {
+    const { redirectTo } = renderApp({ expired: true }, vi.fn());
 
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(redirectTo).toHaveBeenCalledTimes(1);
+    expect(redirectTo.mock.calls[0]![0]).toContain("/logout");
   });
 
   it("renders the app once the backend resolves the user", async () => {

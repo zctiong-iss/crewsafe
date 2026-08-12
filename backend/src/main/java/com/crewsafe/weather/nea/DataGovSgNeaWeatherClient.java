@@ -71,8 +71,17 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
         return fetchStandardWeather(metric, endpointPath);
     }
 
+    @Override
+    public void checkReachability(int maxAttempts) {
+        fetchWbgt(Math.max(1, maxAttempts));
+    }
+
     private NeaObservation fetchWbgt() {
-        WbgtResponse response = execute("WBGT", () -> neaRestClient.get()
+        return fetchWbgt(properties.getMaxAttempts());
+    }
+
+    private NeaObservation fetchWbgt(int maxAttempts) {
+        WbgtResponse response = execute("WBGT", maxAttempts, () -> neaRestClient.get()
                 .uri(uriBuilder -> uriBuilder.path(WBGT_ENDPOINT_PATH)
                         .queryParam(DATASET_QUERY_PARAMETER, WBGT_DATASET_NAME)
                         .build())
@@ -115,7 +124,7 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     }
 
     private NeaObservation fetchStandardWeather(NeaMetric metric, String endpointPath) {
-        StandardResponse response = execute(metric.name(), () -> neaRestClient.get()
+        StandardResponse response = execute(metric.name(), properties.getMaxAttempts(), () -> neaRestClient.get()
                 .uri(endpointPath)
                 .retrieve()
                 .body(StandardResponse.class));
@@ -175,18 +184,23 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     }
 
     private <T> T execute(String operation, Supplier<T> request) {
+        return execute(operation, properties.getMaxAttempts(), request);
+    }
+
+    private <T> T execute(String operation, int maxAttempts, Supplier<T> request) {
         Duration backoff = properties.getInitialBackoff();
-        for (int attempt = 1; attempt <= properties.getMaxAttempts(); attempt++) {
+        int attempts = Math.max(1, maxAttempts);
+        for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
                 return request.get();
             } catch (RestClientException exception) {
                 NeaApiException failure = translateFailure(operation, exception);
-                if (!isRetryable(exception) || attempt == properties.getMaxAttempts()) {
+                if (!isRetryable(exception) || attempt == attempts) {
                     throw failure;
                 }
 
                 log.warn("data.gov.sg {} attempt {}/{} failed; retrying after {}",
-                        operation, attempt, properties.getMaxAttempts(), backoff);
+                        operation, attempt, attempts, backoff);
                 waitBeforeRetry(operation, backoff);
                 backoff = nextBackoff(backoff);
             }

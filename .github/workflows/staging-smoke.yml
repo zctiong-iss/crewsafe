@@ -1,0 +1,77 @@
+name: Staging smoke verification
+
+on:
+  workflow_call:
+    inputs:
+      trigger_component:
+        description: Component whose staging deployment just completed.
+        required: true
+        type: string
+      trigger_sha:
+        description: Exact 40-character revision emitted by the deployment job.
+        required: true
+        type: string
+      web_base_url:
+        required: true
+        type: string
+      backend_base_url:
+        required: true
+        type: string
+      approved_web_base_url:
+        required: true
+        type: string
+      approved_backend_base_url:
+        required: true
+        type: string
+      smoke_site_id:
+        required: true
+        type: string
+      smoke_username:
+        required: true
+        type: string
+      cognito_config_json:
+        required: true
+        type: string
+    secrets:
+      SMOKE_SYNTHETIC_WORKER_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Staging smoke verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      TRIGGER_COMPONENT: ${{ inputs.trigger_component }}
+      TRIGGER_SHA: ${{ inputs.trigger_sha }}
+      WEB_BASE_URL: ${{ inputs.web_base_url }}
+      BACKEND_BASE_URL: ${{ inputs.backend_base_url }}
+      APPROVED_WEB_BASE_URL: ${{ inputs.approved_web_base_url }}
+      APPROVED_BACKEND_BASE_URL: ${{ inputs.approved_backend_base_url }}
+      SMOKE_SITE_ID: ${{ inputs.smoke_site_id }}
+      SMOKE_USERNAME: ${{ inputs.smoke_username }}
+      COGNITO_CONFIG_JSON: ${{ inputs.cognito_config_json }}
+      SMOKE_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.SMOKE_SYNTHETIC_WORKER_PASSWORD }}
+      DEPLOYMENT_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SMOKE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Validate staging smoke contract
+        run: .github/scripts/smoke/validate-staging-smoke-contract.sh
+      - name: Run staging smoke verifier
+        env:
+          SMOKE_EVIDENCE_FILE: ${{ runner.temp }}/crewsafe-staging-smoke/evidence.json
+        run: .github/scripts/smoke/run-staging-smoke.sh
+      - name: Upload sanitized smoke evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: staging-smoke-evidence-${{ inputs.trigger_component }}-${{ inputs.trigger_sha }}
+          path: ${{ runner.temp }}/crewsafe-staging-smoke/evidence.json
+          if-no-files-found: error
+          retention-days: 7

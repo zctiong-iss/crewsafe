@@ -2,41 +2,65 @@ package com.crewsafe.policy.domain;
 
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * JPA entity storing site-specific heat-rest policy thresholds.
+ * JPA entity for one version of a site's heat-rest policy (SCRUM-120).
  *
- * Each site may have different WBGT thresholds based on:
- * - MOM (Ministry of Manpower) guidelines
- * - Site risk assessment
- * - Industry standards
+ * <p>Replaces {@code HeatRestPolicy}, which stored exactly one mutable row per site: a
+ * threshold change overwrote the previous configuration with nothing kept of where it came
+ * from or when it applied. Every version a Safety Manager configures is kept here instead,
+ * each carrying its own {@link #source} and {@link #effectiveDate}; exactly one per site is
+ * ever {@link PolicyVersionStatus#ACTIVE} — enforced by {@code
+ * uq_policy_version_active_per_site} (V12), not just this class.
  *
- * Thresholds are stored per acclimatisation level + intensity combination.
+ * <p>Thresholds are stored per acclimatisation level + intensity combination, unchanged from
+ * {@code HeatRestPolicy}.
  *
- * Reference: ADR-002 (heat safety strategy), MOM work-rest guidelines.
+ * Reference: ADR-013 (UTC storage, SG display timezone), MOM work-rest guidelines.
+ *
+ * @author Jemilin Beulah
  */
 @Entity
-@Table(name = "heat_rest_policy")
+@Table(name = "policy_version")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class HeatRestPolicy {
+public class PolicyVersion {
 
     @Id
     private UUID id;
 
     @NotNull
     private UUID siteId;
+
+    /** Human-assigned, traceable identifier, e.g. {@code "MOM-WBGT-2026.2"}. Unique per site. */
+    @NotBlank
+    private String versionLabel;
+
+    /** Where this version's thresholds came from, e.g. a guideline document or risk assessment. */
+    @NotBlank
+    private String source;
+
+    /** The date this version's rule is/was in force — distinct from when it was created or activated. */
+    @NotNull
+    private LocalDate effectiveDate;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private PolicyVersionStatus status = PolicyVersionStatus.DRAFT;
 
     /**
      * WBGT threshold for unacclimatised workers, light intensity work (°C).
@@ -114,13 +138,20 @@ public class HeatRestPolicy {
     @Min(20)
     private BigDecimal wbgtEmergencyStop;
 
+    private String notes;
+
+    /** The Safety Manager who configured this version. Null for versions carried forward by V12. */
+    private UUID createdBy;
+
     @NotNull
     private Instant createdAt;
 
     @NotNull
     private Instant updatedAt;
 
-    private String notes;
+    private Instant activatedAt;
+
+    private Instant supersededAt;
 
     /**
      * Get WBGT threshold for given acclimatisation level and work intensity.
@@ -150,19 +181,13 @@ public class HeatRestPolicy {
         };
     }
 
-    /**
-     * Work intensity enum.
-     */
-    public enum WorkIntensity {
-        LIGHT,
-        MODERATE,
-        HEAVY
-    }
-
     @PrePersist
     protected void onCreate() {
         if (id == null) {
             id = UUID.randomUUID();
+        }
+        if (status == null) {
+            status = PolicyVersionStatus.DRAFT;
         }
         if (createdAt == null) {
             createdAt = Instant.now();

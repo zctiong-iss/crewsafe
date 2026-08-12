@@ -23,7 +23,9 @@ tying the pushed image to its source commit and CI run, available in two places:
   `image_digest`, `run_id`, `run_url`, also exposed as the job's own `outputs:` block
   (`publish-image.outputs.image_uri`, etc.) for any downstream workflow job.
 - **Job summary** (`GITHUB_STEP_SUMMARY`, human-reviewable): a "## Backend image
-  publication" block on the run's Summary page listing the same five values.
+  publication" block on the run's Summary page listing the same five values,
+  together with the report-only Trivy vulnerability summary when the image scan
+  runs.
 
 | Field | Meaning |
 | --- | --- |

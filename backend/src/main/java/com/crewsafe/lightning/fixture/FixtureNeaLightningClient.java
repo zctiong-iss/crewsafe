@@ -67,9 +67,7 @@ public class FixtureNeaLightningClient implements NeaLightningClient {
             FixtureDocument document = objectMapper.readValue(input, FixtureDocument.class);
             List<FrameTemplate> loadedFrames = validateAndMap(document);
 
-            log.info("Loaded lightning fixture '{}' captured at {} with {} frames from {}",
-                    document.description(), document.capturedAt(), loadedFrames.size(),
-                    resource.getDescription());
+            log.info("lightning_fixture_loaded frames={}", loadedFrames.size());
             return loadedFrames;
         } catch (IOException exception) {
             throw new IllegalStateException("Lightning fixture could not be loaded", exception);
