@@ -89,6 +89,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      deployed_revision: ${{ steps.record-revision.outputs.deployed_revision }}
     env:
       AWS_REGION: ap-southeast-1
       WEB_BUCKET: ${{ vars.CREWSAFE_WEB_BUCKET_NAME }}
@@ -137,13 +139,36 @@ jobs:
         working-directory: web
       - id: invalidate
         run: echo "invalidation_id=$(aws cloudfront create-invalidation --distribution-id "$WEB_DISTRIBUTION_ID" --paths '/*' --query 'Invalidation.Id' --output text)" >> "$GITHUB_OUTPUT"
-      - run: |
+      - name: Record deployed revision
+        id: record-revision
+        run: |
+          echo "deployed_revision=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           {
             echo '## Web staging deployment'
             echo "- Commit SHA: \`${GITHUB_SHA}\`"
             echo "- Bucket: \`${WEB_BUCKET}\`"
             echo "- Invalidation ID: \`${{ steps.invalidate.outputs.invalidation_id }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  smoke-staging:
+    name: Staging smoke verification
+    needs: deploy-staging
+    if: always() && needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/staging-smoke.yml
+    permissions:
+      contents: read
+    with:
+      trigger_component: web
+      trigger_sha: ${{ needs.deploy-staging.outputs.deployed_revision }}
+      web_base_url: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      backend_base_url: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+      approved_web_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_WEB_BASE_URL }}
+      approved_backend_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_BACKEND_BASE_URL }}
+      smoke_site_id: ${{ vars.CREWSAFE_SMOKE_SITE_ID }}
+      smoke_username: ${{ vars.CREWSAFE_SMOKE_SYNTHETIC_WORKER_USERNAME }}
+      cognito_config_json: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+    secrets:
+      SMOKE_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.SMOKE_SYNTHETIC_WORKER_PASSWORD }}
 
   dast-staging:
     name: Authenticated staging DAST
