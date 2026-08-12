@@ -262,3 +262,22 @@ jobs:
           mask-aws-account-id: true
       - name: Deploy immutable backend release
         run: .github/scripts/deploy/deploy-backend-staging.sh
+
+  dast-staging:
+    name: Authenticated staging DAST
+    needs: deploy-staging
+    if: needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/dast-staging.yml
+    permissions:
+      contents: read
+    with:
+      trigger_component: backend
+      trigger_sha: ${{ github.sha }}
+      web_base_url: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      backend_base_url: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+      approved_web_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_WEB_BASE_URL }}
+      approved_backend_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_BACKEND_BASE_URL }}
+      hosted_ui_url: ${{ fromJSON(vars.CREWSAFE_SHARED_COGNITO_JSON).accounts.dev.hosted_ui_url }}
+      dast_username: ${{ vars.CREWSAFE_DAST_SYNTHETIC_WORKER_USERNAME }}
+    secrets:
+      DAST_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
