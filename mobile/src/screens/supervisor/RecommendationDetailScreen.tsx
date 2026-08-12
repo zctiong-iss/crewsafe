@@ -20,9 +20,9 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useMemo, useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
-import { useRoute, type RouteProp } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
@@ -37,6 +37,7 @@ import RejectSheet from "@/components/recommendations/RejectSheet";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { decideRecommendation, loadRecommendations } from "@/store/reducers/recommendationsSlice";
+import { loadPolicyVersions } from "@/store/reducers/policySlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
@@ -66,6 +67,29 @@ export default function RecommendationDetailScreen() {
   );
   const decidingId = useAppSelector((state) => state.recommendations.decidingId);
   const user = useAppSelector((state) => state.auth.user);
+
+  const navigation = useNavigation();
+
+  /*
+   * The catalogue, so the cited label can be resolved to a version (SCRUM-120). Loaded here
+   * because a supervisor may reach this screen without ever opening the policy list, and an
+   * unresolved label would silently render as plain text rather than as the link it should be.
+   */
+  const policyVersions = useAppSelector((state) => state.policy.versions);
+  useEffect(() => {
+    void dispatch(loadPolicyVersions({ siteId }));
+  }, [dispatch, siteId]);
+
+  /* Matched on the label, which is what a recommendation stores. Unique per site server-side. */
+  const citedVersion = useMemo(
+    () =>
+      recommendation?.policyVersion
+        ? (policyVersions.find(
+            (version) => version.versionLabel === recommendation.policyVersion,
+          ) ?? null)
+        : null,
+    [policyVersions, recommendation?.policyVersion],
+  );
 
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -192,11 +216,38 @@ export default function RecommendationDetailScreen() {
           <AppText variant="caption" tone="secondary">
             {t("recommendations.policyVersion")}
           </AppText>
-          {/* FR-16: the supervisor must be able to see which rule set produced this. Saying
-              "not recorded" is honest; omitting the row would imply there was nothing to show. */}
-          <AppText variant="label">
-            {recommendation.policyVersion ?? t("recommendations.noPolicyVersion")}
-          </AppText>
+          {/*
+            FR-16: the supervisor must be able to see which rule set produced this. Saying
+            "not recorded" is honest; omitting the row would imply there was nothing to show.
+
+            Where the cited label resolves to a version we hold, it becomes a link (SCRUM-120) —
+            that is what turns "recommendations cite version" from a string in a database into
+            something a human can actually follow. Where it does not resolve — an older row, or a
+            label from before the catalogue existed — it stays plain text rather than becoming a
+            link that goes nowhere.
+          */}
+          {citedVersion ? (
+            <TouchableOpacity
+              accessibilityRole="link"
+              accessibilityLabel={`${t("recommendations.policyVersion")}: ${citedVersion.versionLabel}`}
+              onPress={() =>
+                navigation
+                  .getParent()
+                  ?.navigate("ProfileTab", {
+                    screen: "PolicyVersionDetail",
+                    params: { versionId: citedVersion.id },
+                  })
+              }
+            >
+              <AppText variant="label" style={styles.citedVersion}>
+                {citedVersion.versionLabel}
+              </AppText>
+            </TouchableOpacity>
+          ) : (
+            <AppText variant="label">
+              {recommendation.policyVersion ?? t("recommendations.noPolicyVersion")}
+            </AppText>
+          )}
         </View>
 
         {/* ── The draft ────────────────────────────────────────────────────── */}
@@ -330,6 +381,10 @@ const styles = StyleSheet.create({
   },
   groupTitle: {
     marginBottom: vs(4),
+  },
+  citedVersion: {
+    // Underlined so it reads as a link without relying on colour, which high contrast flattens.
+    textDecorationLine: "underline",
   },
   detailRow: {
     flexDirection: "row",

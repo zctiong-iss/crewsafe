@@ -60,3 +60,30 @@ export function secondsUntil(iso: string, now: number): number {
 export function hasElapsed(iso: string, now: number): boolean {
   return now >= new Date(iso).getTime();
 }
+
+/**
+ * `11 Aug 2026` — a calendar date with no time and no timezone conversion (SCRUM-120).
+ *
+ * Takes `YYYY-MM-DD`, not an instant. A policy version's effective date is a `LocalDate`: it is
+ * the 11th everywhere, not an instant that lands on the 10th or 12th depending on where the phone
+ * is. Every other formatter here deliberately converts to Singapore time; this one deliberately
+ * does not convert at all, because there is nothing to convert.
+ *
+ * The parts are split by hand rather than parsed, since `new Date("2026-08-11")` is UTC midnight
+ * and formatting that in a negative offset renders the previous day.
+ */
+export function formatDate(isoDate: string, locale: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  if (!year || !month || !day) return isoDate;
+
+  try {
+    return new Date(year, month - 1, day).toLocaleDateString(locale, {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    // Same reason as the others: a trimmed ICU must not blank a date on a safety screen.
+    return isoDate;
+  }
+}
