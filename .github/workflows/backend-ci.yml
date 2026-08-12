@@ -239,6 +239,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      deployed_revision: ${{ steps.deploy.outputs.deployed_revision }}
     env:
       REPOSITORY: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
       IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag || needs.resolve-existing-image.outputs.image_tag }}
@@ -261,7 +263,28 @@ jobs:
           role-session-name: CrewSafeBackendDeploy-${{ github.run_id }}
           mask-aws-account-id: true
       - name: Deploy immutable backend release
+        id: deploy
         run: .github/scripts/deploy/deploy-backend-staging.sh
+
+  smoke-staging:
+    name: Staging smoke verification
+    needs: deploy-staging
+    if: always() && needs.deploy-staging.result == 'success'
+    uses: ./.github/workflows/staging-smoke.yml
+    permissions:
+      contents: read
+    with:
+      trigger_component: backend
+      trigger_sha: ${{ needs.deploy-staging.outputs.deployed_revision }}
+      web_base_url: ${{ vars.CREWSAFE_WEB_BASE_URL }}
+      backend_base_url: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+      approved_web_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_WEB_BASE_URL }}
+      approved_backend_base_url: ${{ vars.CREWSAFE_DAST_APPROVED_BACKEND_BASE_URL }}
+      smoke_site_id: ${{ vars.CREWSAFE_SMOKE_SITE_ID }}
+      smoke_username: ${{ vars.CREWSAFE_SMOKE_SYNTHETIC_WORKER_USERNAME }}
+      cognito_config_json: ${{ vars.CREWSAFE_SHARED_COGNITO_JSON }}
+    secrets:
+      SMOKE_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.SMOKE_SYNTHETIC_WORKER_PASSWORD }}
 
   dast-staging:
     name: Authenticated staging DAST

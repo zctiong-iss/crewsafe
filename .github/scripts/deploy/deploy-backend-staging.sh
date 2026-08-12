@@ -31,5 +31,9 @@ for _ in $(seq 1 60); do
   sleep 10
 done
 [[ "${state:-}" == "COMPLETED" ]] || { echo "Deployment timed out" >&2; exit 1; }
-{ echo "task_definition=$task_definition"; echo "rollout_state=$state"; } >>"${GITHUB_OUTPUT:-/dev/null}"
+{
+  echo "task_definition=$task_definition"
+  echo "rollout_state=$state"
+  echo "deployed_revision=$IMAGE_TAG"
+} >>"${GITHUB_OUTPUT:-/dev/null}"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then printf '## Backend staging deployment\n- Commit SHA: `%s`\n- Image digest: `%s`\n- Task definition: `%s`\n- Result: promoted\n' "$IMAGE_TAG" "$IMAGE_DIGEST" "$task_definition" >>"$GITHUB_STEP_SUMMARY"; fi
