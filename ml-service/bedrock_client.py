@@ -41,12 +41,12 @@ class BedrockClient:
 
         try:
             # Initialize client
-            self.client = AnthropicBedrock(aws_region=self.region)
+            self.client = AnthropicBedrock(aws_region=self.region, max_retries=8)
 
             start = time.time()
             # one call — replaces client.invoke_model(modelId=..., body=json.dumps(...))
             response = self.client.messages.create(
-                model="apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+                model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
                 max_tokens=10,
                 messages=[{"role": "user", "content": "OK"}],
             )
@@ -85,10 +85,24 @@ class BedrockClient:
             self._access_verified = True
             raise BedrockAccessError(msg) from e
 
+        except Exception as e:
+            # Credential resolution (e.g. no AWS credentials at all) fails underneath the
+            # Anthropic SDK's own boto3 session handling, before any HTTP call is made, and
+            # surfaces as a plain RuntimeError rather than one of the anthropic.* types above
+            # — the old boto3-based client caught this via BotoCoreError; this replacement
+            # didn't, so an environment with no AWS credentials (e.g. the CI smoke container)
+            # crashed the app at startup instead of degrading gracefully like verify_access()
+            # is supposed to.
+            msg = f"Bedrock access error in region={self.region}: {e}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockAccessError(msg) from e
+
     def invoke(
         self,
         context: str,
-        model_id: str = "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
         max_tokens: int = 1024,
         temperature: float = 0.7,
     ) -> tuple[MitigationBatch, float, int, int]:
@@ -100,7 +114,7 @@ class BedrockClient:
             self.verify_access()
 
         if self.client is None:
-            self.client = AnthropicBedrock(aws_region=self.region)
+            self.client = AnthropicBedrock(aws_region=self.region, max_retries=8)
 
         prompt = self._build_prompt(context)
         schema = self._get_schema()
@@ -164,45 +178,41 @@ class BedrockClient:
             logger.error(msg)
             raise BedrockAccessError(msg) from e
 
+        except Exception as e:
+            # Same underlying gap as verify_access() — see its comment.
+            msg = f"Bedrock access error in region={self.region}: {e}"
+            logger.error(msg)
+            raise BedrockAccessError(msg) from e
+
     @staticmethod
     def _build_prompt(context: str) -> str:
         return f"""You are a heat stress safety advisor for outdoor crews in Singapore.
-Given the weather context below, generate practical mitigation actions to reduce heat-stress risk.
 
-Context: {context}
+The deterministic policy engine below has already decided what is REQUIRED. Your job is
+only to turn its output into a clear, prioritised, worker-targeted plan — you may not add,
+remove, or soften anything it marked mandatory, and you may only use action codes it has
+already given you. Never invent a new action code.
 
-Return a JSON response with this exact structure:
-{{
-  "mitigations": [
-    {{
-      "priority": "HIGH|MEDIUM|LOW",
-      "action": "Brief action",
-      "rationale": "Why recommended",
-      "estimatedImpact": "Expected reduction"
-    }}
-  ]
-}}
+Policy and shift context:
+{context}
 
-Return ONLY valid JSON, no other text."""
+For every mandatory and advisory action listed above, produce one mitigation with:
+- actionCode: copied exactly from the context, never invented
+- category: the topic group for that code (REST, HYDRATION, SHADE_COOLING, WORK_SCHEDULING,
+  MONITORING, or STOP_WORK)
+- origin: MANDATORY or ADVISORY, matching which list it came from above
+- ruleReference: copied exactly from the context
+- appliesTo: the worker IDs this applies to; omit the whole field if it applies to everyone
+  on the shift
+- timing: durationMinutes / everyMinutes / startByUtc, only if the action has a duration or
+  recurrence — omit the whole field otherwise
+- priority, action, rationale, estimatedImpact: your own concise, plain-language phrasing
+
+Every action marked MANDATORY above must appear in your output — do not omit one."""
 
     @staticmethod
     def _get_schema() -> dict:
-        return {
-            "type": "object",
-            "properties": {
-                "mitigations": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "priority": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]},
-                            "action": {"type": "string"},
-                            "rationale": {"type": "string"},
-                            "estimatedImpact": {"type": "string"},
-                        },
-                        "required": ["priority", "action", "rationale", "estimatedImpact"],
-                    },
-                }
-            },
-            "required": ["mitigations"],
-        }
+        """Derived from MitigationBatch itself, not hand-duplicated — a change to the
+        Pydantic model is automatically what Bedrock is asked to produce, so the two can
+        never silently drift apart the way the original hand-written copy did."""
+        return MitigationBatch.model_json_schema()
