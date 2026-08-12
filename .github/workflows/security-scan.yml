@@ -356,6 +356,13 @@ jobs:
       - name: Sonar Quality Gate configurator self-tests
         run: .github/scripts/tests/test-sonar-gate-configure.sh
 
+      # Added web tests for SCRUM-311 (Security enhancements for front-end)
+      - name: Web runtime configuration self-tests
+        run: .github/scripts/tests/test-web-ci-runtime-config.sh
+
+      - name: Manual web sync workflow self-tests
+        run: .github/scripts/tests/test-web-sync-workflow.sh
+
       # Pre-existing since specs/014 (SCRUM-257) but never wired into this
       # job until now -- closing that gap alongside the SCRUM-269 additions
       # below, since both structurally test a publish-image workflow.

@@ -124,7 +124,6 @@ describe("ConditionsPanel — degraded on staleness", () => {
         maximum: 36,
       }]);
     });
-    
     expect(screen.queryByText(/Live feed interrupted/i)).toBeNull();
     expect(screen.getByText(/37\.2 °C/)).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/take necessary heat-safety action/i);

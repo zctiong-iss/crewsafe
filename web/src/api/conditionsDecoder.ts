@@ -27,7 +27,7 @@ const WBGT_SANITY_RANGE = {
   maximum: 36,
 } as const;
 
-// Note: The range for humidity is set between 30 and 100 as it is closer in alignment to historical humidity metrics, and to flag the risk of inaccurate readings. 
+// Note: The range for humidity is set between 30 and 100 as it is closer in alignment to historical humidity metrics, and to flag the risk of inaccurate readings.
 const HUMIDITY_SANITY_RANGE = {
   minimum: 30,
   maximum: 100,
