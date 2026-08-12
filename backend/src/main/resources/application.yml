@@ -144,7 +144,10 @@ management:
 logging:
   level:
     com.crewsafe: DEBUG
-  pattern:
-    # [requestId] on every line. This is what makes the id we hand back in an error body
-    # useful — without it in the logs, the id identifies nothing. See RequestIdFilter.
-    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%X{requestId:-no-request}]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: ${spring.application.name}
+        environment: ${SPRING_PROFILES_ACTIVE:local}

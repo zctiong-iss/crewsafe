@@ -59,7 +59,7 @@ public class BedrockMitigationService {
 
     public MitigationSuggestion.Batch generateMitigations(String context) {
         try {
-            log.info("Invoking Bedrock with context: {}", context.substring(0, Math.min(100, context.length())));
+            log.info("bedrock_mitigation_generation_started");
 
             String prompt = buildPrompt(context);
             String requestBody = buildRequestBody(prompt);
@@ -80,7 +80,7 @@ public class BedrockMitigationService {
 
             return parseResponse(responseBody);
         } catch (Exception e) {
-            log.error("Failed to invoke Bedrock for mitigation generation", e);
+            log.error("bedrock_mitigation_generation_failed");
             throw new BedrockException("Failed to generate mitigations from Bedrock", e);
         }
     }
@@ -114,7 +114,7 @@ public class BedrockMitigationService {
         JsonNode content = root.path("content").get(0).path("text");
 
         if (content == null || content.isNull()) {
-            log.warn("No text content in Bedrock response: {}", responseBody);
+            log.warn("bedrock_response_missing_text_content");
             return new MitigationSuggestion.Batch(new ArrayList<>());
         }
 
@@ -122,7 +122,7 @@ public class BedrockMitigationService {
         JsonNode mitigationsNode = OBJECT_MAPPER.readTree(textContent).path("mitigations");
 
         if (!mitigationsNode.isArray()) {
-            log.warn("Mitigations not an array in response: {}", textContent);
+            log.warn("bedrock_response_mitigations_not_array");
             return new MitigationSuggestion.Batch(new ArrayList<>());
         }
 
@@ -137,7 +137,7 @@ public class BedrockMitigationService {
                 );
                 suggestions.add(suggestion);
             } catch (Exception e) {
-                log.warn("Failed to parse mitigation suggestion: {}", node, e);
+                log.warn("bedrock_mitigation_suggestion_parse_failed");
             }
         });
 

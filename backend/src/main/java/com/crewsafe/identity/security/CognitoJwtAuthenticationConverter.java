@@ -96,8 +96,7 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
             // write - a duplicate row, which is cheaper than a silently missing one.
             auditedTokens.add(jti);
         } catch (RuntimeException e) {
-            log.error("Failed to write {} audit event for user={} - will retry on the next request",
-                    AuditEventType.TOKEN_FIRST_SEEN, user.getId(), e);
+            log.error("audit_write_failed event_type={} retry=true", AuditEventType.TOKEN_FIRST_SEEN);
         }
     }
 
@@ -114,7 +113,7 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
      * table, which is evidence and never rolls.
      */
     private static OAuth2AuthenticationException unknownUser(Jwt jwt) {
-        log.warn("Rejected token for unknown or inactive user: sub={}", jwt.getSubject());
+        log.warn("token_rejected reason=unknown_or_inactive_user");
         return new OAuth2AuthenticationException(
                 new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "Unknown or inactive user", null));
     }

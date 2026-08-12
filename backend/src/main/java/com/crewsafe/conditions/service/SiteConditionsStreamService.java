@@ -51,7 +51,7 @@ public class SiteConditionsStreamService {
             emitter.send(SseEmitter.event().name(EVENT_NAME).data(snapshot, MediaType.APPLICATION_JSON));
         } catch (Exception exception) {
             // A closed tab surfaces here as an IOException from send() — routine, not a failure.
-            log.debug("Ending conditions stream for site {}: {}", siteId, exception.toString());
+            log.debug("conditions_stream_ended");
             emitter.completeWithError(exception);
         }
     }
