@@ -1,11 +1,9 @@
 """Bedrock client for spike verification."""
-import json
 import logging
 import time
 from typing import Optional
-
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+import anthropic
+from anthropic import AnthropicBedrock
 
 from models import MitigationBatch, MitigationSuggestion
 
@@ -43,21 +41,14 @@ class BedrockClient:
 
         try:
             # Initialize client
-            self.client = boto3.client("bedrock-runtime", region_name=self.region)
-
-            # Test with a minimal invocation
-            test_payload = {
-                "modelId": "anthropic.claude-3-5-sonnet-20241022-v2:0",
-                "max_tokens": 10,
-                "messages": [{"role": "user", "content": "OK"}],
-            }
+            self.client = AnthropicBedrock(aws_region=self.region)
 
             start = time.time()
-            self.client.invoke_model(
-                modelId="anthropic.claude-3-5-sonnet-20241022-v2:0",
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(test_payload),
+            # one call — replaces client.invoke_model(modelId=..., body=json.dumps(...))
+            response = self.client.messages.create(
+                model="apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+                max_tokens=10,
+                messages=[{"role": "user", "content": "OK"}],
             )
             latency = time.time() - start
 
@@ -66,100 +57,132 @@ class BedrockClient:
             self._access_verified = True
             return True, msg
 
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            if error_code == "AccessDenied":
-                msg = f"✗ Access denied to Bedrock in {self.region}. Check IAM permissions."
-                self._access_error = msg
-                self._access_verified = True
-                logger.error(msg)
-                raise BedrockAccessError(msg) from e
-            elif error_code == "ModelNotFound":
-                msg = f"✗ Model not available in {self.region}. Try us-east-1 as fallback."
-                self._access_error = msg
-                self._access_verified = True
-                logger.error(msg)
-                raise BedrockModelAccessError(msg) from e
-            else:
-                msg = f"✗ Bedrock error ({error_code}): {e}"
-                logger.error(msg)
-                raise BedrockAccessError(msg) from e
-
-        except BotoCoreError as e:
-            msg = f"✗ AWS SDK error: {e}"
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
+            msg = f"Bedrock access denied in region={self.region}: {e}"
             logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockAccessError(msg) from e
+
+        except anthropic.NotFoundError as e:
+            msg = f"Bedrock model not available, try US-east-1: {e}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockModelAccessError(msg) from e
+
+        except anthropic.APIConnectionError as e:
+            msg = f"Bedrock API connection error: {e}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockAccessError(msg) from e
+
+        except anthropic.APIStatusError as e:
+            msg = f"Bedrock API status error: {e.status_code}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockAccessError(msg) from e
+
+        except Exception as e:
+            # Credential resolution (e.g. no AWS credentials at all) fails underneath the
+            # Anthropic SDK's own boto3 session handling, before any HTTP call is made, and
+            # surfaces as a plain RuntimeError rather than one of the anthropic.* types above
+            # — the old boto3-based client caught this via BotoCoreError; this replacement
+            # didn't, so an environment with no AWS credentials (e.g. the CI smoke container)
+            # crashed the app at startup instead of degrading gracefully like verify_access()
+            # is supposed to.
+            msg = f"Bedrock access error in region={self.region}: {e}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
             raise BedrockAccessError(msg) from e
 
     def invoke(
         self,
         context: str,
-        model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id: str = "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
         max_tokens: int = 1024,
         temperature: float = 0.7,
-    ) -> tuple[MitigationBatch, float, int]:
+    ) -> tuple[MitigationBatch, float, int, int]:
         """
         Invoke Bedrock with structured output constraint.
-        Returns (batch, latency_ms, input_tokens)
+        Returns (batch, latency_ms, input_tokens, output_tokens)
         """
         if not self._access_verified:
             self.verify_access()
 
         if self.client is None:
-            self.client = boto3.client("bedrock-runtime", region_name=self.region)
+            self.client = AnthropicBedrock(aws_region=self.region)
 
         prompt = self._build_prompt(context)
         schema = self._get_schema()
 
-        payload = {
-            "modelId": model_id,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "system": "You are a heat stress safety expert. Return only valid JSON matching the schema.",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-        }
-
         try:
             start = time.time()
-            response = self.client.invoke_model(
-                modelId=model_id,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(payload),
+            response = self.client.messages.create(
+                model=model_id,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}],
+                tools = [
+                    {
+                        "name": "MitigationSchema",
+                        "description": "Schema for mitigation suggestions",
+                        "input_schema": schema
+                    }
+                ],
+                tool_choice = {
+                    "type": "tool",
+                    "name": "MitigationSchema"
+                }
             )
             latency_ms = (time.time() - start) * 1000
 
-            # Parse response
-            response_body = json.loads(response["body"].read().decode())
-            text_content = response_body["content"][0]["text"]
-
             # Parse structured output
-            structured = json.loads(text_content)
+            tool_use_block = next(b for b in response.content if b.type == "tool_use")
+            structured = tool_use_block.input
             batch = MitigationBatch(**structured)
 
-            # Estimate input tokens
-            input_tokens = len(prompt.split()) * 1.3  # Rough estimate
+            # Input tokens
+            input_tokens = response.usage.input_tokens
+
+            # Output tokens
+            output_tokens = response.usage.output_tokens
 
             logger.info(
                 f"Bedrock invocation: latency={latency_ms:.0f}ms, "
-                f"suggestions={len(batch.mitigations)}, tokens≈{int(input_tokens)}"
+                f"suggestions={len(batch.mitigations)}, tokens={input_tokens} + {output_tokens}"
             )
 
-            return batch, latency_ms, int(input_tokens)
+            return batch, latency_ms, input_tokens, output_tokens
 
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            msg = f"Bedrock invocation failed ({error_code}): {e}"
+        except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
+            msg = f"Bedrock access denied in region={self.region}: {e}"
             logger.error(msg)
             raise BedrockAccessError(msg) from e
-        except (json.JSONDecodeError, KeyError, ValueError) as e:
-            msg = f"Failed to parse Bedrock response: {e}"
+
+        except anthropic.NotFoundError as e:
+            msg = f"Bedrock model not available, try US-east-1: {e}"
             logger.error(msg)
-            raise ValueError(msg) from e
+            raise BedrockModelAccessError(msg) from e
+
+        except anthropic.APIConnectionError as e:
+            msg = f"Bedrock API connection error: {e}"
+            logger.error(msg)
+            raise BedrockAccessError(msg) from e
+
+        except anthropic.APIStatusError as e:
+            msg = f"Bedrock API status error: {e.status_code}"
+            logger.error(msg)
+            raise BedrockAccessError(msg) from e
+
+        except Exception as e:
+            # Same underlying gap as verify_access() — see its comment.
+            msg = f"Bedrock access error in region={self.region}: {e}"
+            logger.error(msg)
+            raise BedrockAccessError(msg) from e
 
     @staticmethod
     def _build_prompt(context: str) -> str:
