@@ -184,6 +184,48 @@ class TestForecastEndpoint:
         )
         assert response.status_code == 422
 
+    def test_forecast_endpoint_invalid_current_value(self):
+        """Endpoint should reject a value outside the declared forecast range."""
+        response = client.post(
+            "/forecast",
+            json={
+                "metric": "wbgt",
+                "horizon_minutes": 30,
+                "current_value": 61.0,
+            },
+        )
+        assert response.status_code == 422
+
+    def test_forecast_endpoint_rejects_malformed_request(self):
+        """Endpoint should reject a request missing the required current value."""
+        response = client.post(
+            "/forecast",
+            json={
+                "metric": "wbgt",
+                "horizon_minutes": 30,
+            },
+        )
+        assert response.status_code == 422
+
+    def test_forecast_endpoint_returns_safe_error_when_service_fails(self, monkeypatch):
+        """An unexpected forecast failure must not expose the original exception."""
+        def fail_forecast(*_args, **_kwargs):
+            raise RuntimeError("synthetic forecast failure")
+
+        monkeypatch.setattr(ForecastService, "forecast", fail_forecast)
+
+        response = client.post(
+            "/forecast",
+            json={
+                "metric": "wbgt",
+                "horizon_minutes": 30,
+                "current_value": 35.5,
+            },
+        )
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Internal server error"}
+
     def test_forecast_endpoint_response_schema(self):
         """Response should match ForecastPrediction schema."""
         response = client.post(
