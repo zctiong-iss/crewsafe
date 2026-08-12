@@ -32,19 +32,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * The message is logged, not returned — this file's rule is no exception message ever
-     * reaches the caller, and {@link BadRequestException} is a general-purpose type any
-     * future call site could construct from data that isn't actually safe to echo back.
+     * Keep the event generic. Exception messages are untrusted request or persistence data
+     * and must not be copied into the centralized log sink.
      */
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException e) {
-        log.debug("Bad request: {}", e.getMessage());
+        log.debug("bad_request_handled");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
     }
 
     /**
-     * The message is logged, not returned, same reasoning as {@link #handleBadRequest}.
      * A controller throws this in place of building a bare {@code notFound()} directly,
      * so every documented 404 carries the same JSON {@link ErrorResponse} body as every
      * other error (SCRUM-263) — reusing the "Not Found"/"No such resource" pair {@link
@@ -53,18 +51,17 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException e) {
-        log.debug("Resource not found: {}", e.getMessage());
+        log.debug("resource_not_found_handled");
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of("Not Found", "No such resource"));
     }
 
     /**
-     * The message is logged, not returned — same rule and same reason as
-     * {@link #handleBadRequest}.
+     * Keep the event generic for the same reason as {@link #handleBadRequest}.
      */
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
-        log.debug("Conflict: {}", e.getMessage());
+        log.debug("conflict_handled");
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("Conflict", "Request conflicts with the current state of the resource"));
     }
@@ -76,7 +73,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
-        log.debug("Invalid argument: {}", e.getMessage());
+        log.debug("invalid_argument_handled");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
     }
@@ -124,9 +121,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
-        // Logged in full for us, generic for the caller. The log line carries the same
-        // requestId the caller is handed, which is what ties the two together.
-        log.error("Unhandled exception", e);
+        // Keep the record generic. The requestId ties it to the caller without exposing
+        // exception messages, request data, or stack traces to the centralized sink.
+        log.error("unhandled_exception");
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ErrorResponse.of("Internal Server Error", "An unexpected error occurred"));
     }

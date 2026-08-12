@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Unit tests for RequestIdFilter (SCRUM-180).
@@ -65,6 +66,7 @@ class RequestIdFilterTest {
         assertNotNull(returned);
         assertNotEquals("not-a-uuid; DROP everything\nforged log line", returned);
         assertDoesNotThrow_isUuid(returned);
+        assertTrue(!returned.contains("\n") && !returned.contains("\r"));
     }
 
     @Test
@@ -73,6 +75,20 @@ class RequestIdFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request, response, (req, res) -> { });
+
+        assertNull(MDC.get("requestId"));
+    }
+
+    @Test
+    void clearsMdcWhenTheRequestFails() {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        assertThrows(IllegalStateException.class, () ->
+                filter.doFilter(request, response, (req, res) -> {
+                    assertNotNull(MDC.get("requestId"));
+                    throw new IllegalStateException("synthetic failure");
+                }));
 
         assertNull(MDC.get("requestId"));
     }

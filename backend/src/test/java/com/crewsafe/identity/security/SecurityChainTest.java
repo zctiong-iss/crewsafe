@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Behaviour of the filter chain itself, independent of any particular endpoint.
@@ -40,6 +41,19 @@ class SecurityChainTest extends AbstractIntegrationTest {
     void healthEndpointStaysPublic() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void livenessAndReadinessProbesArePublicWithoutRedirects() throws Exception {
+        mockMvc.perform(get("/actuator/health/liveness"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isIn(200, 503))
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
+
+        mockMvc.perform(get("/actuator/health/readiness"))
+                .andExpect(result -> assertThat(result.getResponse().getStatus()).isIn(200, 503))
+                .andExpect(header().doesNotExist("Location"))
+                .andExpect(header().doesNotExist("Set-Cookie"));
     }
 
     @Test

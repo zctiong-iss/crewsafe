@@ -80,7 +80,7 @@ public class ActionDispatchService {
         auditService.record(principal.getId(), AuditEventType.ACTION_DISPATCHED,
                 AUDIT_TARGET_TYPE, saved.getId(),
                 "Action dispatched: " + actionCode + " to worker: " + workerId);
-        log.info("Action dispatched: {} to worker: {}", actionCode, workerId);
+        log.info("action_dispatched");
 
         return saved;
     }
@@ -97,7 +97,7 @@ public class ActionDispatchService {
 
         // Idempotent: if already acknowledged, return existing state
         if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED) {
-            log.info("Action dispatch already acknowledged: {}", dispatchId);
+            log.info("action_dispatch_already_acknowledged");
             return dispatch;
         }
 
@@ -106,7 +106,7 @@ public class ActionDispatchService {
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
         auditService.record(principal.getId(), AuditEventType.ACTION_ACKNOWLEDGED,
                 AUDIT_TARGET_TYPE, saved.getId(), "Action acknowledged: " + dispatchId);
-        log.info("Action dispatch acknowledged: {}", dispatchId);
+        log.info("action_dispatch_acknowledged");
 
         return saved;
     }
@@ -123,7 +123,7 @@ public class ActionDispatchService {
 
         // Idempotent: if already completed, return existing state
         if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.COMPLETED) {
-            log.info("Action dispatch already completed: {}", dispatchId);
+            log.info("action_dispatch_already_completed");
             return dispatch;
         }
 
@@ -132,7 +132,7 @@ public class ActionDispatchService {
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
         auditService.record(principal.getId(), AuditEventType.ACTION_COMPLETED,
                 AUDIT_TARGET_TYPE, saved.getId(), "Action completed: " + dispatchId);
-        log.info("Action dispatch completed: {}", dispatchId);
+        log.info("action_dispatch_completed");
 
         recordRestIfThisWasOne(saved);
 
@@ -164,7 +164,7 @@ public class ActionDispatchService {
             UUID shiftId = dispatch.getApproval().getRecommendation().getShiftId();
             wellbeingService.recordInstructedRest(shiftId, dispatch.getWorker().getId(), dispatch.getId());
         } catch (RuntimeException e) {
-            log.warn("Could not record an instructed rest for dispatch {}: {}", dispatch.getId(), e.toString());
+            log.warn("instructed_rest_derivation_failed");
         }
     }
 

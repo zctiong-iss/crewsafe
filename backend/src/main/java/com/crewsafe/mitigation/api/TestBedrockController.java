@@ -27,13 +27,13 @@ public class TestBedrockController {
             var status = bedrockApiClient.checkBedrockAccess();
             return ResponseEntity.ok(status);
         } catch (BedrockTimeoutException e) {
-            log.error("Bedrock access check timed out", e);
+            log.error("bedrock_access_timeout");
             return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
                     .body(new ErrorResponse("Bedrock API timeout", "access_timeout"));
         } catch (BedrockException e) {
-            log.error("Bedrock access check failed", e);
+            log.error("bedrock_access_failure");
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new ErrorResponse(e.getMessage(), "bedrock_error"));
+                    .body(new ErrorResponse("Bedrock service unavailable", "bedrock_error"));
         }
     }
 
@@ -43,18 +43,18 @@ public class TestBedrockController {
             MitigationSuggestion.Batch batch = bedrockApiClient.generateMitigations(request.context());
             return ResponseEntity.ok(batch);
         } catch (BedrockTimeoutException e) {
-            log.error("Bedrock mitigation request timed out after {}ms", request.context().length(), e);
+            log.error("bedrock_mitigation_timeout");
             return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT)
                     .body(new ErrorResponse(
                             "Bedrock API timeout - request took too long",
                             "bedrock_timeout"
                     ));
         } catch (BedrockException e) {
-            log.error("Bedrock mitigation request failed", e);
+            log.error("bedrock_mitigation_failure");
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new ErrorResponse(e.getMessage(), "bedrock_error"));
+                    .body(new ErrorResponse("Bedrock service unavailable", "bedrock_error"));
         } catch (Exception e) {
-            log.error("Unexpected error generating mitigations", e);
+            log.error("bedrock_mitigation_unexpected_failure");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorResponse("Internal server error", "internal_error"));
         }
