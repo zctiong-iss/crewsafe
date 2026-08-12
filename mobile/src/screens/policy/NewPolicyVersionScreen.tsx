@@ -78,7 +78,7 @@ export default function NewPolicyVersionScreen() {
   const [thresholds, setThresholds] = useState<Record<ThresholdKey, string>>(() =>
     active ? thresholdsOf(active) : EMPTY_THRESHOLDS,
   );
-  const [emergencyStop, setEmergencyStop] = useState(active?.wbgtEmergencyStop ?? "");
+  const [emergencyStop, setEmergencyStop] = useState(active ? String(active.wbgtEmergencyStop) : "");
 
   // The label is never copied — a new version needs its own, and the server rejects a duplicate.
   const [label, setLabel] = useState("");

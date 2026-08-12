@@ -376,17 +376,23 @@ export interface PolicyVersion {
   effectiveDate: string;
   status: PolicyVersionStatus;
 
-  wbgtThresholdUnacclimatisedLight: string;
-  wbgtThresholdUnacclimatisedModerate: string;
-  wbgtThresholdUnacclimatisedHeavy: string;
-  wbgtThresholdPartialLight: string;
-  wbgtThresholdPartialModerate: string;
-  wbgtThresholdPartialHeavy: string;
-  wbgtThresholdFullLight: string;
-  wbgtThresholdFullModerate: string;
-  wbgtThresholdFullHeavy: string;
+  /*
+   * Numbers, not strings. The server's `BigDecimal` serialises as a JSON number (25.0), and
+   * typing these as strings made `TextInput value={25}` render blank — the create form opened
+   * with every threshold empty while claiming to have copied them. Whatever the merits of
+   * carrying decimals as strings, this is what the wire actually sends.
+   */
+  wbgtThresholdUnacclimatisedLight: number;
+  wbgtThresholdUnacclimatisedModerate: number;
+  wbgtThresholdUnacclimatisedHeavy: number;
+  wbgtThresholdPartialLight: number;
+  wbgtThresholdPartialModerate: number;
+  wbgtThresholdPartialHeavy: number;
+  wbgtThresholdFullLight: number;
+  wbgtThresholdFullModerate: number;
+  wbgtThresholdFullHeavy: number;
   /** Stop work at or above this, whatever the acclimatisation. Server bounds it to 20..40. */
-  wbgtEmergencyStop: string;
+  wbgtEmergencyStop: number;
 
   notes: string | null;
   createdBy: string;

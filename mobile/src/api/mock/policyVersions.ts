@@ -25,9 +25,15 @@ const nextId = () => {
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 const dateAgo = (n: number) => daysAgo(n).slice(0, 10);
 
-/** MOM's default ladder: light ≥ moderate ≥ heavy within each acclimatisation level. */
+/**
+ * MOM's default ladder: light ≥ moderate ≥ heavy within each acclimatisation level.
+ *
+ * Numbers, matching what the server actually sends. An earlier version of this mock returned
+ * strings, which made mock mode look correct while the live path rendered every threshold blank —
+ * the exact failure a fixture is supposed to catch rather than cause.
+ */
 function thresholds(offset: number) {
-  const at = (base: number) => (base + offset).toFixed(2);
+  const at = (base: number) => Number((base + offset).toFixed(2));
   return {
     wbgtThresholdUnacclimatisedLight: at(25),
     wbgtThresholdUnacclimatisedModerate: at(23),
@@ -51,7 +57,7 @@ function seed(): PolicyVersion[] {
       effectiveDate: dateAgo(0),
       status: "DRAFT",
       ...thresholds(0),
-      wbgtEmergencyStop: "33.00",
+      wbgtEmergencyStop: 33,
       // A draft awaiting activation: the state the activate flow exists for, and the one a
       // one-version fixture could never show.
       notes: "Tightens the unacclimatised heavy threshold ahead of the June revision.",
@@ -69,7 +75,7 @@ function seed(): PolicyVersion[] {
       effectiveDate: dateAgo(45),
       status: "ACTIVE",
       ...thresholds(0),
-      wbgtEmergencyStop: "33.00",
+      wbgtEmergencyStop: 33,
       notes: null,
       createdBy: AUTHOR,
       createdAt: daysAgo(46),
@@ -87,7 +93,7 @@ function seed(): PolicyVersion[] {
       // Half a degree slacker throughout — so a supervisor comparing an old recommendation
       // against today's rules can see that the rules themselves moved.
       ...thresholds(0.5),
-      wbgtEmergencyStop: "33.50",
+      wbgtEmergencyStop: 33.5,
       notes: null,
       createdBy: AUTHOR,
       createdAt: daysAgo(401),
@@ -132,16 +138,16 @@ export function mockCreatePolicyVersion(input: PolicyVersionInput): PolicyVersio
     // DRAFT unless this is the site's first version, which the server activates immediately —
     // a site whose rules nobody activated has no rules at all.
     status: all().length === 0 ? "ACTIVE" : "DRAFT",
-    wbgtThresholdUnacclimatisedLight: input.wbgtThresholdUnacclimatisedLight,
-    wbgtThresholdUnacclimatisedModerate: input.wbgtThresholdUnacclimatisedModerate,
-    wbgtThresholdUnacclimatisedHeavy: input.wbgtThresholdUnacclimatisedHeavy,
-    wbgtThresholdPartialLight: input.wbgtThresholdPartialLight,
-    wbgtThresholdPartialModerate: input.wbgtThresholdPartialModerate,
-    wbgtThresholdPartialHeavy: input.wbgtThresholdPartialHeavy,
-    wbgtThresholdFullLight: input.wbgtThresholdFullLight,
-    wbgtThresholdFullModerate: input.wbgtThresholdFullModerate,
-    wbgtThresholdFullHeavy: input.wbgtThresholdFullHeavy,
-    wbgtEmergencyStop: input.wbgtEmergencyStop,
+    wbgtThresholdUnacclimatisedLight: Number(input.wbgtThresholdUnacclimatisedLight),
+    wbgtThresholdUnacclimatisedModerate: Number(input.wbgtThresholdUnacclimatisedModerate),
+    wbgtThresholdUnacclimatisedHeavy: Number(input.wbgtThresholdUnacclimatisedHeavy),
+    wbgtThresholdPartialLight: Number(input.wbgtThresholdPartialLight),
+    wbgtThresholdPartialModerate: Number(input.wbgtThresholdPartialModerate),
+    wbgtThresholdPartialHeavy: Number(input.wbgtThresholdPartialHeavy),
+    wbgtThresholdFullLight: Number(input.wbgtThresholdFullLight),
+    wbgtThresholdFullModerate: Number(input.wbgtThresholdFullModerate),
+    wbgtThresholdFullHeavy: Number(input.wbgtThresholdFullHeavy),
+    wbgtEmergencyStop: Number(input.wbgtEmergencyStop),
     notes: input.notes?.trim() ? input.notes.trim() : null,
     createdBy: AUTHOR,
     createdAt: now,

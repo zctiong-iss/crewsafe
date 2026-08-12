@@ -80,14 +80,16 @@ export const MAX_SOURCE = 255;
 /**
  * Every threshold from an existing version, as the form's string fields.
  *
- * The wire carries `BigDecimal` as a string and the form edits strings, so nothing is parsed on
- * the way through — a float round-trip here would be a change to a safety threshold that nobody
- * authored and nobody would notice.
+ * The wire carries `BigDecimal` as a JSON number and the form edits strings, so each value is
+ * stringified once, here. Nothing is re-parsed on the way back out: what the safety manager typed
+ * is what is sent, so no rounding can alter a threshold they never touched.
  */
 export function thresholdsOf(version: PolicyVersion): Record<ThresholdKey, string> {
   return ALL_THRESHOLD_KEYS.reduce(
     (acc, key) => {
-      acc[key] = version[key];
+      // Stringified here, at the one place the wire meets the form. The response carries
+      // numbers; a TextInput needs a string, and `value={25}` renders as nothing at all.
+      acc[key] = String(version[key]);
       return acc;
     },
     {} as Record<ThresholdKey, string>,

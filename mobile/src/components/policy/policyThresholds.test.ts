@@ -79,14 +79,23 @@ it("leaves an incomplete set to the required-ness check", () => {
 
 it("copies every threshold off an existing version as strings", () => {
   const version = {
-    ...values(),
+    // Numbers, as the server sends them — the whole point of the assertion below.
+    wbgtThresholdUnacclimatisedLight: 25,
+    wbgtThresholdUnacclimatisedModerate: 23,
+    wbgtThresholdUnacclimatisedHeavy: 21,
+    wbgtThresholdPartialLight: 26,
+    wbgtThresholdPartialModerate: 24,
+    wbgtThresholdPartialHeavy: 22,
+    wbgtThresholdFullLight: 28,
+    wbgtThresholdFullModerate: 26,
+    wbgtThresholdFullHeavy: 24,
     id: "v1",
     siteId: "s1",
     versionLabel: "MOM-WBGT-2026.1",
     source: "MOM",
     effectiveDate: "2026-08-01",
     status: "ACTIVE",
-    wbgtEmergencyStop: "33.00",
+    wbgtEmergencyStop: 33,
     notes: null,
     createdBy: "u1",
     createdAt: "2026-08-01T00:00:00Z",
@@ -101,5 +110,6 @@ it("copies every threshold off an existing version as strings", () => {
   // Strings all the way through: the wire carries BigDecimal as a string, and a float round-trip
   // here would silently alter a safety threshold nobody authored.
   expect(Object.values(copied).every((value) => typeof value === "string")).toBe(true);
-  expect(copied.wbgtThresholdFullLight).toBe("28.00");
+  // Stringified on the way into the form, which is what a TextInput can render.
+  expect(copied.wbgtThresholdFullLight).toBe("28");
 });
