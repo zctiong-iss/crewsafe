@@ -213,12 +213,47 @@ components:
       type: string
       enum: [APPROVED, REJECTED, EDITED]
 
+    Timing:
+      type: object
+      description: >
+        Duration, recurrence and deadline for a mitigation that has them. Absent entirely on
+        actions with no duration (e.g. CLOSE_MONITORING). Clients must read these fields
+        rather than parsing them out of `action`, which is server-authored English and works
+        in one of the seven shipped locales.
+      properties:
+        durationMinutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          example: 15
+        everyMinutes:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Recurrence interval. 60 on the hourly rest/hydration codes.
+          example: 60
+        startByUtc:
+          type: string
+          format: date-time
+          nullable: true
+          description: Deadline to start by, when the action has one.
+
     MitigationSuggestion:
       type: object
       required: [priority, action, rationale, estimatedImpact]
       description: >
-        The same structured shape Amazon Bedrock returns (SCRUM-187) — no free text field
-        the model (or a supervisor's edit) could put an unconstrained instruction into.
+        The structured shape a recommendation's mitigations take — no free text field the
+        model (or a supervisor's edit) could put an unconstrained instruction into.
+
+        Everything beyond the original four fields is nullable, and for one reason:
+        recommendation.draft_plan holds serialised plans written before these fields existed,
+        and those rows must keep deserialising. actionCode and category were added by
+        SCRUM-119; origin, ruleReference, appliesTo and timing by SCRUM-288.
+
+        Clients must render from actionCode, never from action: action is server-authored
+        English prose that no client can translate, while actionCode resolves through
+        actions.* in all seven shipped locales. Parsing numbers out of action works in
+        English and fails in the other six.
       properties:
         priority:
           type: string
@@ -232,6 +267,71 @@ components:
         estimatedImpact:
           type: string
           maxLength: 200
+        actionCode:
+          type: string
+          nullable: true
+          description: >
+            From the server-side allowlist (ActionCatalogue). A plan carrying a code outside
+            it is rejected wholesale with 400 — the server-side half of §8.5, enforced for
+            every client, not just the supervisor app. Null on plans drafted before SCRUM-119.
+          enum:
+            - STOP_WORK
+            - RESUME_WORK
+            - REST_10_MIN_HOURLY
+            - REST_15_MIN_HOURLY
+            - REST_10_MIN
+            - REST_15_MIN
+            - HYDRATE_HOURLY
+            - HYDRATE_REGULARLY
+            - HYDRATE
+            - SHADE_RECOVERY
+            - SEEK_SHADE
+            - RESCHEDULE_HEAVY_WORK
+            - ROTATE_TO_LIGHT_DUTY
+            - CLOSE_MONITORING
+        category:
+          type: string
+          nullable: true
+          description: >
+            The topic a client groups this under. Derivable from actionCode; carried so
+            clients need no mapping table of their own. Null on plans drafted before SCRUM-119.
+          enum:
+            - STOP_WORK
+            - REST
+            - HYDRATION
+            - SHADE_COOLING
+            - WORK_SCHEDULING
+            - MONITORING
+        origin:
+          type: string
+          nullable: true
+          enum: [MANDATORY, ADVISORY]
+          description: >
+            Whether the deterministic policy engine required this action or merely advised it.
+            MANDATORY actions are what a supervisor may not remove when editing a plan.
+            Null on plans drafted before SCRUM-288.
+        ruleReference:
+          type: string
+          nullable: true
+          description: >
+            The policy rule that justified this action (FR-16), e.g. HEAT_STRESS_REST_RULE.
+            Null on plans drafted before SCRUM-288.
+        appliesTo:
+          type: array
+          nullable: true
+          description: >
+            Worker UUIDs this action applies to. Absent, null or empty means the whole shift —
+            not "unknown". On approval, fan-out dispatches only to the named workers,
+            intersected with the shift's current assignments, so an id no longer on the shift
+            cannot receive a dispatch.
+          items:
+            type: string
+            format: uuid
+        timing:
+          allOf:
+            - $ref: "#/components/schemas/Timing"
+          nullable: true
+          description: Null on actions with no duration or recurrence, and on pre-SCRUM-288 plans.
 
     Approval:
       type: object
