@@ -61,7 +61,9 @@ contains "workflow is reusable" "$WORKFLOW" "workflow_call:"
 contains "workflow is read-only" "$WORKFLOW" "contents: read"
 not_contains "workflow has no AWS identity permission" "$WORKFLOW" "id-token: write"
 not_contains "workflow never inherits every secret" "$WORKFLOW" "secrets: inherit"
-not_contains "workflow does not upload raw artifacts" "$WORKFLOW" "upload-artifact"
+contains "workflow uploads the DAST report artifact" "$WORKFLOW" "actions/upload-artifact"
+contains "workflow skips the upload when no report was produced" "$WORKFLOW" "if-no-files-found: ignore"
+contains "workflow retains the DAST report only briefly" "$WORKFLOW" "retention-days: 14"
 not_contains "workflow does not create GitHub issues" "$WORKFLOW" "issues: write"
 contains "workflow maps only DAST password" "$WORKFLOW" "DAST_SYNTHETIC_WORKER_PASSWORD"
 contains "workflow requires web allowlist entry" "$WORKFLOW" "approved_web_base_url"
@@ -107,6 +109,12 @@ contains "runner counts scanned sites" "$RUNNER" 'sites_scanned="$(jq'
 contains "runner counts scanned endpoints" "$RUNNER" 'endpoints_scanned="$(jq'
 contains "runner fails on zero scanned endpoints" "$RUNNER" "endpoints_scanned == 0"
 contains "runner surfaces endpoint coverage in the summary" "$RUNNER" "Endpoint coverage:"
+contains "runner builds a per-alert findings table" "$RUNNER" 'findings_table="$(jq -r'
+not_contains "runner findings table excludes raw evidence fields" "$RUNNER" ".evidence"
+not_contains "runner findings table excludes raw otherinfo fields" "$RUNNER" ".otherinfo"
+contains "runner strips query strings from findings table URLs" "$RUNNER" 'sub("\\?.*$"; "")'
+contains "runner escapes pipes before rendering markdown table cells" "$RUNNER" 'gsub("\\|"; "\\|")'
+contains "runner copies the report for artifact upload" "$RUNNER" 'report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report.json"'
 not_contains "runner does not classify the expected report filename as an error" "$RUNNER" "dast-report\\.json'"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"

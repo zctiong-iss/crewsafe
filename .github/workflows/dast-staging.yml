@@ -62,3 +62,16 @@ jobs:
         run: .github/scripts/security/validate-dast-staging-contract.sh
       - name: Run authenticated staging DAST
         run: .github/scripts/security/run-authenticated-dast.sh
+      - name: Upload DAST report
+        # Only written by the wrapper once the scan reaches at least an advisory
+        # result (real coverage, past its zero-endpoint check); a failed scan
+        # leaves nothing here and this step no-ops via if-no-files-found.
+        # Short retention: this is evidence for near-term triage, not a durable
+        # record — durable findings belong in Jira/the runbook, not the artifact.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dast-report
+          path: ${{ runner.temp }}/dast-report.json
+          if-no-files-found: ignore
+          retention-days: 14

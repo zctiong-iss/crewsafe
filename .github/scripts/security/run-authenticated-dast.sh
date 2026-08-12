@@ -189,6 +189,35 @@ low="$(severity_count LOW)"
 informational="$(severity_count INFORMATIONAL)"
 duration_seconds="$(( $(date +%s) - started_at ))"
 
+# Per-alert name, risk, and affected host+path only — never evidence, otherinfo,
+# attack, or param, which can echo raw request/response fragments. Query strings
+# are stripped from every URL before it reaches the summary.
+findings_table="$(jq -r '
+  [.site[]?.alerts[]?]
+  | sort_by(-(.riskcode | tonumber? // 0))
+  | .[]
+  | {
+      name: (.alert // .name // "Unknown" | gsub("\\|"; "\\|")),
+      risk: (.riskdesc // "Unknown" | gsub("\\|"; "\\|")),
+      count: ((.instances // []) | length),
+      paths: ([(.instances // [])[].uri? // empty]
+        | map(sub("\\?.*$"; ""))
+        | unique
+        | .[0:3]
+        | join("<br>")
+        | gsub("\\|"; "\\|"))
+    }
+  | "| \(.name) | \(.risk) | \(.count) | \(.paths) |"
+' "$report")"
+
+# The report is deleted with the rest of $tmp_dir when this script exits; copy
+# it to the job-scoped RUNNER_TEMP directory so a later workflow step can
+# upload it as a short-retention artifact. Only reached once the scan is at
+# least advisory (real coverage, past the zero-endpoint check above).
+report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report.json"
+cp "$report" "$report_copy"
+chmod 644 "$report_copy"
+
 {
   printf '%s\n' '## Authenticated staging DAST (advisory)'
   printf -- '- Trigger: `%s` deployment at commit `%s`\n' "$TRIGGER_COMPONENT" "$TRIGGER_SHA"
@@ -200,5 +229,11 @@ duration_seconds="$(( $(date +%s) - started_at ))"
   printf -- '- Endpoint coverage: sites=%s, endpoints=%s\n' "$sites_scanned" "$endpoints_scanned"
   printf -- '- Finding counts: high=%s, medium=%s, low=%s, informational=%s\n' \
     "$high" "$medium" "$low" "$informational"
-  printf '%s\n' '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
+  if [[ -n "$findings_table" ]]; then
+    printf '\n%s\n' '| Alert | Risk | Instances | Affected paths (query strings stripped) |'
+    printf '%s\n' '|---|---|---|---|'
+    printf '%s\n' "$findings_table"
+  fi
+  printf '\n%s\n' '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
+  printf '%s\n' '- Full report: see the `dast-report` workflow artifact on this run for evidence-level detail.'
 } >>"$summary"
