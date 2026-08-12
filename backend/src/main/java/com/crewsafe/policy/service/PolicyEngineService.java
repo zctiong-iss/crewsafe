@@ -1,7 +1,7 @@
 package com.crewsafe.policy.service;
 
 import com.crewsafe.policy.domain.*;
-import com.crewsafe.policy.repository.PolicyConfigRepository;
+import com.crewsafe.policy.repository.PolicyVersionRepository;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.weather.domain.WbgtBand;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +31,8 @@ import java.math.BigDecimal;
  * stop-work outranks every heat rule and is evaluated upstream by the caller (the SCRUM-118
  * agent graph), which short-circuits to a fixed stop-work plan before this service — or the
  * LLM — is ever reached.
+ *
+ * @author Jemilin Beulah
  */
 @Service
 @RequiredArgsConstructor
@@ -38,7 +40,7 @@ import java.math.BigDecimal;
 @Slf4j
 public class PolicyEngineService {
 
-    private final PolicyConfigRepository policyConfigRepository;
+    private final PolicyVersionRepository policyVersionRepository;
     private final AcclimatisationCalculator acclimatisationCalculator;
 
     /**
@@ -59,12 +61,12 @@ public class PolicyEngineService {
             UUID siteId,
             UUID workerId,
             Double currentWbgt,
-            HeatRestPolicy.WorkIntensity workIntensity,
+            WorkIntensity workIntensity,
             int acclimatisationDay
     ) {
         validateInputs(workerId, currentWbgt, workIntensity, acclimatisationDay);
 
-        HeatRestPolicy policy = policyConfigRepository.findBySiteId(siteId)
+        PolicyVersion policy = policyVersionRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE)
                 .orElseThrow(() -> new NoSuchElementException(
                         "No policy configured for site " + siteId
                 ));
@@ -122,11 +124,10 @@ public class PolicyEngineService {
             validateWbgt(currentWbgt);
             // Still require a configured policy for the site, matching evaluate()'s
             // behaviour, even though an empty assignment list needs nothing else from it.
-            if (!policyConfigRepository.existsBySiteId(siteId)) {
-                throw new NoSuchElementException("No policy configured for site " + siteId);
-            }
+            PolicyVersion policy = policyVersionRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE)
+                    .orElseThrow(() -> new NoSuchElementException("No policy configured for site " + siteId));
             WbgtBand band = WbgtBand.classify(BigDecimal.valueOf(currentWbgt));
-            return new PolicyDecision("MOM-WBGT-2026.1", band, band, List.of(), List.of());
+            return new PolicyDecision(policy.getVersionLabel(), band, band, List.of(), List.of());
         }
 
         List<PolicyDecision> perWorker = assignments.stream()
@@ -134,7 +135,7 @@ public class PolicyEngineService {
                         siteId,
                         assignment.getWorkerId(),
                         currentWbgt,
-                        toHeatRestPolicyIntensity(assignment.getIntensity()),
+                        toWorkIntensity(assignment.getIntensity()),
                         assignment.getAcclimatisationDay() != null ? assignment.getAcclimatisationDay() : 1
                 ))
                 .toList();
@@ -142,13 +143,13 @@ public class PolicyEngineService {
         return mergeByActionCode(perWorker);
     }
 
-    private static HeatRestPolicy.WorkIntensity toHeatRestPolicyIntensity(
+    private static WorkIntensity toWorkIntensity(
             com.crewsafe.shift.domain.Intensity intensity
     ) {
         return switch (intensity) {
-            case LIGHT -> HeatRestPolicy.WorkIntensity.LIGHT;
-            case MODERATE -> HeatRestPolicy.WorkIntensity.MODERATE;
-            case HEAVY -> HeatRestPolicy.WorkIntensity.HEAVY;
+            case LIGHT -> WorkIntensity.LIGHT;
+            case MODERATE -> WorkIntensity.MODERATE;
+            case HEAVY -> WorkIntensity.HEAVY;
         };
     }
 
@@ -208,7 +209,7 @@ public class PolicyEngineService {
      * server-authoritative classification the weather module exposes over HTTP — not a
      * separate scale derived from this site's configured rest thresholds. The two are
      * deliberately independent: the band is a shared, site-agnostic reading of how hot it
-     * is; the site's {@link HeatRestPolicy} thresholds are what actually decide whether an
+     * is; the site's {@link PolicyVersion} thresholds are what actually decide whether an
      * action is required, and can legitimately differ per site per §7.1 ("thresholds are
      * configuration records, not hard-coded").
      *
@@ -219,10 +220,10 @@ public class PolicyEngineService {
             Double wbgt,
             BigDecimal threshold,
             AcclimatisationLevel level,
-            HeatRestPolicy.WorkIntensity intensity,
-            HeatRestPolicy policy
+            WorkIntensity intensity,
+            PolicyVersion policy
     ) {
-        String policyVersion = "MOM-WBGT-2026.1";
+        String policyVersion = policy.getVersionLabel();
         WbgtBand currentBand = WbgtBand.classify(BigDecimal.valueOf(wbgt));
         WbgtBand forecastBand = currentBand; // TODO: integrate SCRUM-188 forecast service; null if unavailable
 
@@ -248,8 +249,8 @@ public class PolicyEngineService {
         // WBGT exceeds site threshold: rest and hydration required
         if (BigDecimal.valueOf(wbgt).compareTo(threshold) >= 0) {
             boolean severe = level == AcclimatisationLevel.UNACCLIMATISED
-                    && (intensity == HeatRestPolicy.WorkIntensity.MODERATE
-                        || intensity == HeatRestPolicy.WorkIntensity.HEAVY);
+                    && (intensity == WorkIntensity.MODERATE
+                        || intensity == WorkIntensity.HEAVY);
 
             String restCode = severe ? PolicyActionCode.REST_15_MIN_HOURLY : PolicyActionCode.REST_10_MIN_HOURLY;
             String ruleRef = severe ? "UNACCLIMATISED_HEAVY_WORK_RULE" : "HEAT_STRESS_REST_RULE";
@@ -265,7 +266,7 @@ public class PolicyEngineService {
             advisoryActions.add(new PolicyDecision.PolicyAction(
                     PolicyActionCode.CLOSE_MONITORING, ruleRef, workerIds, reasoning));
 
-            if (intensity == HeatRestPolicy.WorkIntensity.HEAVY) {
+            if (intensity == WorkIntensity.HEAVY) {
                 advisoryActions.add(new PolicyDecision.PolicyAction(
                         PolicyActionCode.RESCHEDULE_HEAVY_WORK, ruleRef, workerIds, reasoning));
 
@@ -295,7 +296,7 @@ public class PolicyEngineService {
     }
 
     private void validateInputs(
-            UUID workerId, Double wbgt, HeatRestPolicy.WorkIntensity intensity, int acclimatisationDay
+            UUID workerId, Double wbgt, WorkIntensity intensity, int acclimatisationDay
     ) {
         if (workerId == null) {
             throw new IllegalArgumentException("workerId must not be null");

@@ -1,7 +1,7 @@
 package com.crewsafe.policy.service;
 
 import com.crewsafe.policy.domain.*;
-import com.crewsafe.policy.repository.PolicyConfigRepository;
+import com.crewsafe.policy.repository.PolicyVersionRepository;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.weather.domain.WbgtBand;
@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -39,6 +40,8 @@ import static org.mockito.Mockito.when;
  * - Granular, translated action codes (SCRUM-118 delta 2)
  * - WbgtBand-typed current/forecast bands (SCRUM-118 delta 3)
  * - Hydration/shade/reschedule/rotate producers (SCRUM-118 delta 4)
+ *
+ * @author Jemilin Beulah
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -50,13 +53,13 @@ class PolicyEngineServiceTest {
     }
 
     @Mock
-    private PolicyConfigRepository policyRepository;
+    private PolicyVersionRepository policyRepository;
 
     @Mock
     private AcclimatisationCalculator acclimatisationCalculator;
 
     private PolicyEngineService policyEngine;
-    private HeatRestPolicy testPolicy;
+    private PolicyVersion testPolicy;
     private UUID siteId;
     private UUID workerId;
 
@@ -67,9 +70,13 @@ class PolicyEngineServiceTest {
         workerId = UUID.randomUUID();
 
         // Create standard test policy (MOM defaults)
-        testPolicy = HeatRestPolicy.builder()
+        testPolicy = PolicyVersion.builder()
                 .id(UUID.randomUUID())
                 .siteId(siteId)
+                .versionLabel("MOM-WBGT-2026.1")
+                .source("MOM Work-Rest Guidelines 2026")
+                .effectiveDate(LocalDate.now())
+                .status(PolicyVersionStatus.ACTIVE)
                 // Unacclimatised thresholds
                 .wbgtThresholdUnacclimatisedLight(bd(25.0))
                 .wbgtThresholdUnacclimatisedModerate(bd(23.0))
@@ -88,8 +95,8 @@ class PolicyEngineServiceTest {
                 .updatedAt(Instant.now())
                 .build();
 
-        when(policyRepository.findBySiteId(siteId)).thenReturn(Optional.of(testPolicy));
-        when(policyRepository.existsBySiteId(siteId)).thenReturn(true);
+        when(policyRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE))
+                .thenReturn(Optional.of(testPolicy));
     }
 
     @Nested
@@ -101,7 +108,7 @@ class PolicyEngineServiceTest {
         void wbgtBelowThreshold() {
             // Given: Unacclimatised worker, light work, WBGT 24°C (below 25°C)
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 24.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 24.0, WorkIntensity.LIGHT, 1
             );
 
             // Then: no mandatory actions, routine advisories only
@@ -117,7 +124,7 @@ class PolicyEngineServiceTest {
         void wbgtExceedsThresholdUnacclimatisedHeavy() {
             // Given: Unacclimatised worker, heavy work, WBGT 22°C (exceeds 21°C threshold)
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 22.0, HeatRestPolicy.WorkIntensity.HEAVY, 1  // Day 1 = unacclimatised
+                    siteId, workerId, 22.0, WorkIntensity.HEAVY, 1  // Day 1 = unacclimatised
             );
 
             // Then: the more severe rest tier, paired with mandatory hydration
@@ -136,7 +143,7 @@ class PolicyEngineServiceTest {
         void wbgtExceedsThresholdFullyAcclimatised() {
             // Given: Fully acclimatised worker, heavy work, WBGT 25°C (exceeds 24°C threshold)
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 7  // Day 7+ = fully acclimatised
+                    siteId, workerId, 25.0, WorkIntensity.HEAVY, 7  // Day 7+ = fully acclimatised
             );
 
             // Then: the standard rest tier
@@ -148,7 +155,7 @@ class PolicyEngineServiceTest {
         void wbgtAtExactThreshold() {
             // Given: WBGT exactly at threshold, light work (not severe)
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1  // Unacclimatised
+                    siteId, workerId, 25.0, WorkIntensity.LIGHT, 1  // Unacclimatised
             );
 
             // Then: At exact threshold triggers rest
@@ -164,7 +171,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Day 1-3: Unacclimatised")
         void unacclimatisedPhase() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.5, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 25.5, WorkIntensity.LIGHT, 1
             );
 
             assertThat(decision.mandatoryActions()).isNotEmpty();
@@ -177,7 +184,7 @@ class PolicyEngineServiceTest {
         void partialAcclimatisationPhase() {
             // WBGT 24°C exceeds partial threshold of 22 for heavy work
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 24.0, HeatRestPolicy.WorkIntensity.HEAVY, 4
+                    siteId, workerId, 24.0, WorkIntensity.HEAVY, 4
             );
 
             assertThat(decision.mandatoryActions()).isNotEmpty();
@@ -190,7 +197,7 @@ class PolicyEngineServiceTest {
         void fullAcclimatisationPhase() {
             // WBGT 27°C below full threshold of 28 for light work
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 27.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 27.0, WorkIntensity.LIGHT, 7
             );
 
             assertThat(decision.mandatoryActions()).isEmpty();
@@ -207,7 +214,7 @@ class PolicyEngineServiceTest {
         @DisplayName("WBGT >= 33°C → STOP_WORK (emergency, MOM Band 3)")
         void emergencyStopExactThreshold() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 33.0, WorkIntensity.LIGHT, 7
             );
 
             assertThat(decision.mandatoryActions())
@@ -220,7 +227,7 @@ class PolicyEngineServiceTest {
         @DisplayName("WBGT > 33°C → STOP_WORK (emergency, MOM Band 3)")
         void emergencyStopAboveThreshold() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 35.0, HeatRestPolicy.WorkIntensity.HEAVY, 1
+                    siteId, workerId, 35.0, WorkIntensity.HEAVY, 1
             );
 
             assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyActionCode.STOP_WORK);
@@ -236,7 +243,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Null worker id → IllegalArgumentException")
         void nullWorkerId() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, null, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1)
+                    policyEngine.evaluate(siteId, null, 25.0, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("workerId");
         }
@@ -245,7 +252,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Null WBGT → IllegalArgumentException")
         void nullWbgt() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, workerId, null, HeatRestPolicy.WorkIntensity.LIGHT, 1)
+                    policyEngine.evaluate(siteId, workerId, null, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("WBGT");
         }
@@ -254,7 +261,7 @@ class PolicyEngineServiceTest {
         @DisplayName("WBGT < 15°C → IllegalArgumentException")
         void wbgtBelowMinimum() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, workerId, 10.0, HeatRestPolicy.WorkIntensity.LIGHT, 1)
+                    policyEngine.evaluate(siteId, workerId, 10.0, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("15");
         }
@@ -263,7 +270,7 @@ class PolicyEngineServiceTest {
         @DisplayName("WBGT > 40°C → IllegalArgumentException")
         void wbgtAboveMaximum() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, workerId, 45.0, HeatRestPolicy.WorkIntensity.LIGHT, 1)
+                    policyEngine.evaluate(siteId, workerId, 45.0, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("40");
         }
@@ -281,7 +288,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Acclimatisation day < 1 → IllegalArgumentException")
         void acclimatisationDayBelowMinimum() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 0)
+                    policyEngine.evaluate(siteId, workerId, 25.0, WorkIntensity.LIGHT, 0)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("1");
         }
@@ -290,7 +297,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Acclimatisation day > 365 → IllegalArgumentException")
         void acclimatisationDayAboveMaximum() {
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 366)
+                    policyEngine.evaluate(siteId, workerId, 25.0, WorkIntensity.LIGHT, 366)
             ).isInstanceOf(IllegalArgumentException.class)
              .hasMessageContaining("365");
         }
@@ -304,10 +311,11 @@ class PolicyEngineServiceTest {
         @DisplayName("No policy for site → NoSuchElementException")
         void policyNotConfigured() {
             UUID unknownSite = UUID.randomUUID();
-            when(policyRepository.findBySiteId(unknownSite)).thenReturn(Optional.empty());
+            when(policyRepository.findBySiteIdAndStatus(unknownSite, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
-                    policyEngine.evaluate(unknownSite, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1)
+                    policyEngine.evaluate(unknownSite, workerId, 25.0, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(NoSuchElementException.class)
              .hasMessageContaining("No policy");
         }
@@ -321,12 +329,12 @@ class PolicyEngineServiceTest {
         @DisplayName("Decision.requiresRest() returns true when mandatory actions exist")
         void requiresRestProperty() {
             var continueDecision = policyEngine.evaluate(
-                    siteId, workerId, 20.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 20.0, WorkIntensity.LIGHT, 7
             );
             assertThat(continueDecision.requiresRest()).isFalse();
 
             var restDecision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 1
+                    siteId, workerId, 25.0, WorkIntensity.HEAVY, 1
             );
             assertThat(restDecision.requiresRest()).isTrue();
         }
@@ -335,12 +343,12 @@ class PolicyEngineServiceTest {
         @DisplayName("Decision.isEmergencyStop() returns true only for STOP_WORK")
         void isEmergencyStopProperty() {
             var emergency = policyEngine.evaluate(
-                    siteId, workerId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 33.0, WorkIntensity.LIGHT, 1
             );
             assertThat(emergency.isEmergencyStop()).isTrue();
 
             var normal = policyEngine.evaluate(
-                    siteId, workerId, 24.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 24.0, WorkIntensity.LIGHT, 1
             );
             assertThat(normal.isEmergencyStop()).isFalse();
         }
@@ -354,7 +362,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Decision includes policyVersion, currentBand, forecastBand")
         void decisionMetadata() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 25.0, WorkIntensity.LIGHT, 1
             );
 
             assertThat(decision.policyVersion()).isNotBlank();
@@ -366,7 +374,7 @@ class PolicyEngineServiceTest {
         @DisplayName("PolicyAction includes ruleReference and appliesTo[]")
         void policyActionStructure() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 25.0, WorkIntensity.LIGHT, 1
             );
 
             var action = decision.mandatoryActions().get(0);
@@ -379,7 +387,7 @@ class PolicyEngineServiceTest {
         @DisplayName("appliesTo[] carries the evaluated worker's id, not condition tags")
         void appliesToCarriesWorkerId() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 1
+                    siteId, workerId, 25.0, WorkIntensity.HEAVY, 1
             );
 
             assertThat(decision.mandatoryActions().get(0).appliesTo())
@@ -391,14 +399,14 @@ class PolicyEngineServiceTest {
         void ruleReferences() {
             // Emergency stop has specific rule
             var emergency = policyEngine.evaluate(
-                    siteId, workerId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 33.0, WorkIntensity.LIGHT, 1
             );
             assertThat(emergency.mandatoryActions().get(0).ruleReference())
                     .isEqualTo("EMERGENCY_STOP_RULE");
 
             // Regular rest has different rule
             var rest = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 25.0, WorkIntensity.LIGHT, 1
             );
             assertThat(rest.mandatoryActions().get(0).ruleReference())
                     .isNotEqualTo("EMERGENCY_STOP_RULE");
@@ -413,7 +421,7 @@ class PolicyEngineServiceTest {
         @DisplayName("30.9°C → BELOW_31")
         void belowThirtyOne() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 30.9, HeatRestPolicy.WorkIntensity.LIGHT, 200
+                    siteId, workerId, 30.9, WorkIntensity.LIGHT, 200
             );
             assertThat(decision.currentBand()).isEqualTo(WbgtBand.BELOW_31);
         }
@@ -422,7 +430,7 @@ class PolicyEngineServiceTest {
         @DisplayName("31.5°C → 31_TO_BELOW_32")
         void thirtyOneToBelowThirtyTwo() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 31.5, HeatRestPolicy.WorkIntensity.LIGHT, 200
+                    siteId, workerId, 31.5, WorkIntensity.LIGHT, 200
             );
             assertThat(decision.currentBand()).isEqualTo(WbgtBand.BAND_31_TO_BELOW_32);
         }
@@ -431,7 +439,7 @@ class PolicyEngineServiceTest {
         @DisplayName("32.5°C → 32_TO_BELOW_33")
         void thirtyTwoToBelowThirtyThree() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 32.5, HeatRestPolicy.WorkIntensity.LIGHT, 200
+                    siteId, workerId, 32.5, WorkIntensity.LIGHT, 200
             );
             assertThat(decision.currentBand()).isEqualTo(WbgtBand.BAND_32_TO_BELOW_33);
         }
@@ -440,7 +448,7 @@ class PolicyEngineServiceTest {
         @DisplayName("33.5°C → 33_AND_ABOVE (also trips this policy's emergency stop)")
         void thirtyThreeAndAbove() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 33.5, HeatRestPolicy.WorkIntensity.LIGHT, 200
+                    siteId, workerId, 33.5, WorkIntensity.LIGHT, 200
             );
             assertThat(decision.currentBand()).isEqualTo(WbgtBand.BAND_33_AND_ABOVE);
         }
@@ -451,7 +459,7 @@ class PolicyEngineServiceTest {
             // 28°C meets this site's FULL/LIGHT threshold (28°C, i.e. rest is due) but is
             // nowhere near the global 31°C band boundary — the two axes disagree, correctly.
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 28.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 28.0, WorkIntensity.LIGHT, 7
             );
             assertThat(decision.mandatoryActions()).isNotEmpty(); // site threshold says rest
             assertThat(decision.currentBand()).isEqualTo(WbgtBand.BELOW_31); // band disagrees, correctly
@@ -538,7 +546,8 @@ class PolicyEngineServiceTest {
         @DisplayName("Empty assignment list still requires a configured policy")
         void emptyAssignmentsStillRequiresPolicy() {
             UUID unknownSite = UUID.randomUUID();
-            when(policyRepository.existsBySiteId(unknownSite)).thenReturn(false);
+            when(policyRepository.findBySiteIdAndStatus(unknownSite, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> policyEngine.evaluateForShift(unknownSite, 20.0, List.of()))
                     .isInstanceOf(NoSuchElementException.class)
@@ -554,7 +563,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Rest-required branch always pairs with mandatory hydration")
         void restAlwaysPairsWithHydration() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 7
+                    siteId, workerId, 25.0, WorkIntensity.HEAVY, 7
             );
             assertThat(decision.mandatoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
@@ -565,7 +574,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Heavy-intensity work above threshold gets an advisory reschedule")
         void heavyWorkGetsRescheduleAdvisory() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.HEAVY, 7
+                    siteId, workerId, 25.0, WorkIntensity.HEAVY, 7
             );
             assertThat(decision.advisoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
@@ -576,7 +585,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Light-intensity work above threshold does not get the reschedule advisory")
         void lightWorkDoesNotGetRescheduleAdvisory() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 25.0, HeatRestPolicy.WorkIntensity.LIGHT, 1
+                    siteId, workerId, 25.0, WorkIntensity.LIGHT, 1
             );
             // Assert the advisory list is non-empty (CLOSE_MONITORING still applies, since rest
             // is required) rather than just asserting an absence, so this test would fail loudly
@@ -590,7 +599,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Safe range gets both hydration and shade advisories")
         void safeRangeGetsHydrationAndShade() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 20.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 20.0, WorkIntensity.LIGHT, 7
             );
             assertThat(decision.advisoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
@@ -601,7 +610,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Emergency stop pairs with mandatory close monitoring")
         void emergencyStopPairsWithMonitoring() {
             var decision = policyEngine.evaluate(
-                    siteId, workerId, 33.0, HeatRestPolicy.WorkIntensity.LIGHT, 7
+                    siteId, workerId, 33.0, WorkIntensity.LIGHT, 7
             );
             assertThat(decision.mandatoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
