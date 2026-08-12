@@ -85,6 +85,20 @@ class BedrockClient:
             self._access_verified = True
             raise BedrockAccessError(msg) from e
 
+        except Exception as e:
+            # Credential resolution (e.g. no AWS credentials at all) fails underneath the
+            # Anthropic SDK's own boto3 session handling, before any HTTP call is made, and
+            # surfaces as a plain RuntimeError rather than one of the anthropic.* types above
+            # — the old boto3-based client caught this via BotoCoreError; this replacement
+            # didn't, so an environment with no AWS credentials (e.g. the CI smoke container)
+            # crashed the app at startup instead of degrading gracefully like verify_access()
+            # is supposed to.
+            msg = f"Bedrock access error in region={self.region}: {e}"
+            logger.error(msg)
+            self._access_error = msg
+            self._access_verified = True
+            raise BedrockAccessError(msg) from e
+
     def invoke(
         self,
         context: str,
@@ -161,6 +175,12 @@ class BedrockClient:
 
         except anthropic.APIStatusError as e:
             msg = f"Bedrock API status error: {e.status_code}"
+            logger.error(msg)
+            raise BedrockAccessError(msg) from e
+
+        except Exception as e:
+            # Same underlying gap as verify_access() — see its comment.
+            msg = f"Bedrock access error in region={self.region}: {e}"
             logger.error(msg)
             raise BedrockAccessError(msg) from e
 
