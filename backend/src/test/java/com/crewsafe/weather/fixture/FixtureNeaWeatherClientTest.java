@@ -56,6 +56,16 @@ class FixtureNeaWeatherClientTest {
     }
 
     @Test
+    void healthReachabilityIsDeterministicAndDoesNotAdvanceTheReplay() {
+        FixtureNeaWeatherClient client = client(false);
+
+        client.checkReachability(1);
+
+        assertThat(client.fetch(NeaMetric.WBGT).observedAt())
+                .isEqualTo(Instant.parse("2026-07-30T08:00:00Z"));
+    }
+
+    @Test
     void rejectsFixtureWithoutScenarioDescription() {
         String fixtureWithoutDescription = """
                 {
