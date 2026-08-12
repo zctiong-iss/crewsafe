@@ -137,6 +137,9 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        // Health monitoring starts immediately. Keep the shared integration context
+        // deterministic and offline so tests never call the public NEA service.
+        registry.add("app.weather.data.mode", () -> "fixture");
 
         registry.add("app.cognito.issuer-uri", () -> ISSUER_URI);
         registry.add("app.cognito.jwk-set-uri", () -> JWK_SET_URI);

@@ -71,8 +71,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             reconcileMemberships(user, mapping.siteCodes(), siteByCode);
         }
 
-        log.info("Reconciled {} reviewed application users across 2 sites ({}, {}).",
-                mappings.size(), bishan.getName(), campus.getName());
+        log.info("demo_data_reconciled users={} sites=2", mappings.size());
     }
 
     private Site findOrCreateSite(String name, BigDecimal latitude, BigDecimal longitude) {

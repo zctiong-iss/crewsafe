@@ -396,3 +396,6 @@ jobs:
 
       - name: SCA exception applier self-tests
         run: .github/scripts/tests/test-apply-sca-exceptions.sh
+
+      - name: Structured logging safety self-tests
+        run: .github/scripts/tests/test-log-safety-guards.sh

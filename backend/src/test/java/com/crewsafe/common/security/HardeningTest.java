@@ -5,6 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -23,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class HardeningTest extends AbstractIntegrationTest {
 
     @Autowired private MockMvc mockMvc;
+    @Autowired private ObjectMapper objectMapper;
 
     @Test
     void securityHeadersArePresent() throws Exception {
@@ -47,5 +51,21 @@ class HardeningTest extends AbstractIntegrationTest {
     void openApiSpecIsServedWithoutSettingACookie() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(header().doesNotExist("Set-Cookie"));
+    }
+
+    @Test
+    void healthResponsesContainStatusOnly() throws Exception {
+        for (String path : new String[]{
+                "/actuator/health",
+                "/actuator/health/liveness",
+                "/actuator/health/readiness"}) {
+            String body = mockMvc.perform(get(path))
+                    .andExpect(result -> assertThat(result.getResponse().getStatus()).isIn(200, 503))
+                    .andReturn().getResponse().getContentAsString();
+            JsonNode json = objectMapper.readTree(body);
+            org.assertj.core.api.Assertions.assertThat(json.fieldNames()).toIterable()
+                    .containsExactly("status");
+            org.assertj.core.api.Assertions.assertThat(json.get("status").isTextual()).isTrue();
+        }
     }
 }

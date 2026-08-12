@@ -522,6 +522,8 @@ resource "aws_ecs_task_definition" "backend" {
           "awslogs-group"         = aws_cloudwatch_log_group.backend.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = local.container_name
+          "mode"                  = "non-blocking"
+          "max-buffer-size"       = "25m"
         }
       }
     },
