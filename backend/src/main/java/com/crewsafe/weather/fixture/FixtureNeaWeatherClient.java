@@ -56,6 +56,11 @@ public class FixtureNeaWeatherClient implements NeaWeatherClient {
         return frames.get(currentFrame).get(metric);
     }
 
+    @Override
+    public synchronized void checkReachability(int maxAttempts) {
+        fetch(NeaMetric.WBGT);
+    }
+
     /** Returns one coherent frame for all metrics, then advances the replay cursor once. */
     @Override
     public synchronized List<NeaObservation> fetchAll() {

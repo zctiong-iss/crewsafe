@@ -190,6 +190,18 @@ class DataGovSgNeaWeatherClientTest {
         server.verify();
     }
 
+    @Test
+    void healthReachabilityUsesTheRequestedSingleAttempt() {
+        server.expect(once(), requestTo("https://data.gov.sg.test/weather?api=wbgt"))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.checkReachability(1))
+                .isInstanceOfSatisfying(NeaApiException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(
+                                NeaApiException.Reason.HTTP));
+        server.verify();
+    }
+
     private NeaApiProperties retryProperties() {
         NeaApiProperties properties = new NeaApiProperties();
         properties.setMaxAttempts(3);
