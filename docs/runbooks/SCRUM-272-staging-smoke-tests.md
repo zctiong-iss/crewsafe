@@ -17,8 +17,10 @@ Before enabling the gate, an authorized release maintainer must configure:
   deployed staging CloudFront origins.
 
 The synthetic worker must be active, have the worker role, and be assigned to the
-configured site with a current or upcoming seeded shift and stored weather. Never use
-a human, administrator, production, deployment, or local AWS identity.
+configured site with stored weather. A current or upcoming shift is optional. If
+`/api/v1/shifts/me` returns a shift, it must have a non-empty identifier and supported
+assignment intensity; its task and `acclimatisationDay` may be null or omitted. Never
+use a human, administrator, production, deployment, or local AWS identity.
 
 Do not record passwords, tokens, cookies, authorization headers, raw request or response
 bodies, Cognito subjects, personal data, or query strings in this runbook, Jira, a pull
@@ -33,8 +35,12 @@ The smoke summary and evidence use these textual check names:
 2. `service_readiness` — backend readiness returns HTTP 200 with status `UP`.
 3. `authenticated_access` — the synthetic worker authenticates and `/api/v1/me`
    returns a valid worker identity containing the configured site membership.
-4. `critical_workflow` — `/api/v1/shifts/me` returns a seeded current/next shift and
-   `/api/v1/sites/{siteId}/weather/latest` returns stored conditions for that site.
+4. `critical_workflow` — `/api/v1/shifts/me` returns HTTP 200 with either no scheduled
+   shift or a structurally valid shift, and `/api/v1/sites/{siteId}/weather/latest`
+   returns stored conditions for that site. A no-shift response is recorded as
+   `no_shift_scheduled`; a valid shift without a task is recorded as
+   `no_task_assigned`. Both are passing context, not failures. The weather check is
+   required in every case.
 
 Each request is read-only, has a 15-second bound, and can receive at most one
 transient transport/5xx retry. Redirects, unauthorized responses, malformed shapes,
