@@ -8,12 +8,16 @@ import java.util.UUID;
 /**
  * DTO for initiating a call to supervisor.
  *
- * Worker provides site ID and optional notes when calling a supervisor.
+ * Worker provides site ID and optional supervisor ID and notes when calling a supervisor.
  */
 public record InitiateCallRequest(
     @NotNull(message = "Site ID is required")
     UUID siteId,
 
     @Size(max = 500, message = "Notes must be 500 characters or less")
-    String notes
+    String notes,
+
+    // Optional supervisor ID - if not provided, will be looked up based on site
+    // TODO: Implement automatic supervisor lookup when this is null
+    UUID supervisorId
 ) {}
