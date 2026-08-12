@@ -266,7 +266,13 @@ jobs:
   dast-staging:
     name: Authenticated staging DAST
     needs: deploy-staging
-    if: needs.deploy-staging.result == 'success'
+    # always() is required here: deploy-staging needs both publish-image and
+    # resolve-existing-image, and exactly one of that pair is always skipped
+    # (the redeploy-vs-publish branch). GitHub's implicit success() gate on a
+    # job's `if:` propagates through that skipped grandparent even though
+    # deploy-staging's own result is success, so without always() this job
+    # was silently skipped on every ordinary push-triggered deployment.
+    if: always() && needs.deploy-staging.result == 'success'
     uses: ./.github/workflows/dast-staging.yml
     permissions:
       contents: read
