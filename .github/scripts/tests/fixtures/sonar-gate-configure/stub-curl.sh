@@ -58,6 +58,28 @@ case "$url" in
       respond "${MOCK_REQUIRED_CHECKS_GET_RESPONSE_FILE:?}" "${MOCK_GITHUB_HTTP_STATUS:-200}"
     fi
     ;;
+  *api/measures/component*)
+    # check-sca-active.sh (SCRUM-269, FR-003a): whether a DependencyRisks
+    # measure is present at all is how SCA-active is inferred.
+    respond "${MOCK_SCA_MEASURES_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api.sonarcloud.io/sca/issues-releases/change-status*)
+    # apply-sca-exceptions.sh (SCRUM-269, FR-007/FR-008): transitions a
+    # dependency-risk finding's status. Host/path verified live 2026-08-09
+    # against the official SwaggerHub SCA API docs and SonarSource's own
+    # open-source sonarqube-mcp-server (api.sonarcloud.io, no /api/v2
+    # prefix, flat POST with the key in the body) -- corrected from an
+    # earlier unverified /api/v2/sca/issues-releases/{key}/transition guess.
+    # The exact transitionKey enum value is still unverified; see
+    # specs/020-ci-vulnerability-scan-gates/tasks.md T036.
+    respond "${MOCK_DEPENDENCY_RISK_TRANSITION_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
+  *api.sonarcloud.io/sca/issues-releases*)
+    # report-sca-findings.sh (FR-005): search dependency risks for a project.
+    # FR-005a (a risk-reports download route) was REMOVED 2026-08-09 -- that
+    # endpoint requires a SonarCloud Enterprise-tier subscription (confirmed
+    # live: 403 "SCA feature is not enabled at Enterprise level", even with
+    # an org-Owner token), a plan gate no token here can satisfy. See
+    # docs/runbooks/SCRUM-269-ci-vulnerability-scan-gates.md #6.
+    respond "${MOCK_DEPENDENCY_RISK_SEARCH_RESPONSE_FILE:?}" "${MOCK_SONAR_HTTP_STATUS:-200}" ;;
   *)
     printf 'stub-curl: unrecognized URL: %s\n' "$url" >&2
     exit 1

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;

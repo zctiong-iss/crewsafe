@@ -10,10 +10,58 @@ mitigations that a supervisor approves. See
 [WBGT-CrewSafe-SG-AD-Project-Plan.md](WBGT-CrewSafe-SG-AD-Project-Plan.md) for the product
 and architecture source of truth, and [AGENTS.md](AGENTS.md) for the working agreement.
 
+## At a glance
+
+CrewSafe follows this safety-critical path:
+
+```text
+NEA weather/lightning data
+        ↓
+Backend ingestion, freshness and persistence
+        ↓
+Forecast + deterministic heat policy
+        ↓
+Agent-drafted mitigation (never self-authorising)
+        ↓
+Supervisor approve / edit / reject
+        ↓
+Worker dispatch, acknowledgement and audit evidence
+```
+
+Lightning is evaluated before heat rules. A lightning stop-work state visibly overrides the
+heat plan, while the deterministic policy engine remains authoritative for WBGT actions. The
+ML and agent layers can propose or explain a plan, but cannot bypass validation, authorization,
+allowlists, approval, or audit recording.
+
+The repository contains working backend, web, mobile, weather/lightning ingestion, and local
+forecast/Bedrock spike code. The internal ML runtime, agent runtime, and mobile deployment
+runtime are still product-plan targets rather than current Terraform resources; see the
+[declared infrastructure limitations](docs/architecture/terraform-architecture.md#deliberate-limitations-and-follow-ups).
+
+## Repository map
+
+| Directory | Purpose |
+| --- | --- |
+| `backend/` | Java 21 Spring Boot API, Cognito resource server, Flyway migrations, weather/lightning ingestion, shifts, policy, approvals, dispatch, and audit |
+| `web/` | React + TypeScript + Vite supervisor console |
+| `mobile/` | React Native + Expo worker and supervisor app; mock and Cognito development modes |
+| `ml-service/` | Python 3.11 FastAPI forecast baseline and Bedrock structured-output spike |
+| `local/` | Podman/Docker Compose definition, local seed helpers, and launcher support |
+| `infra/terraform/` | CI-only AWS Terraform roots for state, Cognito, networking, secrets, database, ECR, compute, and security integrations |
+| `.github/workflows/` | Backend/web/mobile CI, security scanning, Terraform validation/plan/apply, and Cognito workflows |
+| `docs/api/` | OpenAPI contracts for weather, shifts, recommendations, and action dispatch |
+| `docs/adr/` | Durable architecture decisions and security boundaries |
+| `docs/plans/` / `docs/runbooks/` | Jira-keyed implementation plans and operational procedures |
+
+The [component catalogue](.github/terraform/components.json) is the authoritative list of
+Terraform roots and remote state keys. The architecture diagrams describe what is declared in
+this repository, not an automatically discovered live AWS inventory.
+
 ## Prerequisites
 
 - `gh` (authenticated — `gh auth status` must succeed), `jq`, `ruby`, `curl`
 - Podman or Docker, with the matching `compose` plugin
+- Python 3.11+ if you want to run the ML service tests locally
 - GitHub repository variables `CREWSAFE_SHARED_COGNITO_JSON` and `CREWSAFE_AWS_ACCOUNTS_JSON`,
   containing the account alias you intend to use
 
@@ -35,8 +83,12 @@ PostgreSQL and the backend are healthy.
 Services:
 
 - PostgreSQL on `localhost:5434` (db/user `crewsafe`)
+- Adminer on `http://localhost:8081` (database browser; Compose server `postgres`)
 - Backend on `http://localhost:8080` (health at `/actuator/health`)
 - Web app on `http://localhost:5173`
+- Staging web frontend on [CloudFront](https://d3b75ru76gta2n.cloudfront.net)
+- Staging backend API on [CloudFront](https://d2owbak275wu7r.cloudfront.net) (health at
+  `/actuator/health`)
 
 ### Options
 
@@ -54,6 +106,22 @@ podman compose -f local/compose.yaml down        # add -v to drop the database v
 ```
 
 Use `docker` in place of `podman` if you started the stack with `run-docker.sh`.
+
+### Local data modes
+
+The launcher enables weather and lightning ingestion for the local backend. To avoid external
+calls and replay the bundled, clearly labelled scenario, start it with fixture data:
+
+```bash
+WEATHER_DATA_MODE=fixture ./run.sh --no-web
+```
+
+Useful overrides include `WEATHER_INGESTION_ENABLED`, `WEATHER_FIXTURE_LOOP`,
+`LIGHTNING_INGESTION_ENABLED`, `LIGHTNING_FIXTURE_LOOP`, and `NEA_API_KEY`. Fixture readings
+must remain visibly simulated; never use them as evidence that live NEA ingestion is healthy.
+
+For database inspection, open Adminer at `http://localhost:8081` with server `postgres`,
+database/user `crewsafe`, and the local Compose password documented in [local/README.md](local/README.md).
 
 ## Cognito
 
@@ -88,15 +156,71 @@ Terraform workflows ([ADR 0006](docs/adr/0006-shared-remote-cognito-for-developm
 - **`cognito-local` is test-only**, pinned for Testcontainers-based token and authorization
   tests. It is never started by `run.sh` or Compose.
 
+## API and authorization model
+
+The backend exposes versioned, bearer-token APIs under `/api/v1`. Site-scoped endpoints enforce
+both the caller's role and membership in the requested site; worker endpoints resolve the
+worker from the token instead of accepting a caller-supplied worker ID. A hidden web/mobile
+control is never treated as authorization — the server remains the enforcement point.
+
+Useful contracts and implemented surfaces:
+
+- `GET /api/v1/sites/{siteId}/weather/latest` — latest validated/stored weather snapshot
+- `GET /api/v1/sites/{siteId}/lightning` — site lightning risk and validity window
+- `GET /api/v1/shifts/me` — the authenticated worker's current or next shift
+- `POST /api/v1/shifts/{shiftId}/readiness` — append-only worker readiness submission
+- `GET /api/v1/sites/{siteId}/shifts` — site-scoped shift planning surface
+- `GET /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations` — draft recommendations
+- `POST /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/{recommendationId}/decision` —
+  supervisor approval, edit, or rejection
+- `POST /api/action-dispatch/{dispatchId}/acknowledge` — worker acknowledgement
+
+The matching OpenAPI files live in [`docs/api/`](docs/api/). The ML and Bedrock spike proxy
+under `/api/test/bedrock` is for integration testing, not a public supervisor API.
+
+## Security and data boundaries
+
+- No secrets, tokens, Terraform state, saved plans, or personal data belong in Git or logs.
+- Cognito authenticates users; PostgreSQL application records determine role, site scope, and
+  immediate revocation.
+- Weather and lightning credentials are server-side only. Clients consume validated snapshots
+  with source and freshness metadata.
+- AI output is an untrusted draft. Server-side action allowlists and supervisor approval sit
+  between a suggestion and any worker dispatch.
+- Audit events preserve recommendation, approval, dispatch, acknowledgement, and safety
+  decisions for later review.
+- AWS changes use GitHub OIDC and reviewed CI workflows. Do not run Terraform locally, use a
+  workstation AWS profile, or apply an unreviewed plan.
+
+See the [security ADRs](docs/adr/) and the [DevSecOps toolchain diagram](docs/architecture/devsecops-toolchain.puml)
+for the detailed control boundaries.
+
 ## Tests
 
 ```bash
-cd backend && ./mvnw verify         # backend compile + tests
+(cd backend && ./mvnw verify)              # backend compile + tests
 .github/scripts/tests/test-ci-guards.sh
+
+(cd web && npm test && npm run typecheck)
+(cd mobile && npm test && npm run typecheck)
+(cd ml-service && python3 -m pytest -q)
 ```
+
+The web, mobile, and ML commands require their local dependencies to be installed. The ML
+tests are forecast/contract tests and do not require Bedrock access. Terraform validation and
+deployment remain CI-only — never run Terraform locally.
 
 Terraform runs in CI only — never locally. See
 [docs/runbooks/](docs/runbooks/).
+
+The normal promotion path is:
+
+1. Open a focused branch and pull request linked to its Jira issue.
+2. Let backend, web, mobile, secret-scan, SAST/SCA, IaC, and guard self-tests run.
+3. Review the exact Terraform plan in CI when infrastructure is in scope.
+4. Apply only from `main` through the manual workflow with the required typed confirmation.
+5. Keep the plan, test output, scan results, and deployment evidence with the review.
+
 
 ## More details
 
@@ -104,7 +228,12 @@ Terraform runs in CI only — never locally. See
 - [mobile/README.md](mobile/README.md) — Expo app: the three sign-in modes, why Expo Go
   cannot use the Hosted UI, and every backend gap it works around
 - [local/README.md](local/README.md) — Compose stack layout and resolved environment
+- [docs/architecture/terraform-architecture.md](docs/architecture/terraform-architecture.md) —
+  Terraform component and runtime boundaries
+- [docs/architecture/devsecops-toolchain.puml](docs/architecture/devsecops-toolchain.puml) —
+  DevSecOps toolchain diagram (open with PlantUML or export for presentations)
 - [SCRUM-111 weather ingestion](docs/runbooks/SCRUM-111-weather-ingestion.md) — external
   data.gov.sg endpoints, live and fixture modes, scheduling, and troubleshooting
 - [docs/adr/](docs/adr/) — architecture decisions
 - [docs/plans/](docs/plans/) — Jira-keyed plans
+- [docs/demo/login-demo.gif](docs/demo/login-demo.gif) — sign-in and role-routing walkthrough

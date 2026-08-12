@@ -150,6 +150,9 @@ variables {
   expected_account_id = "123456789012"
   account_alias       = "crewsafe-dev"
   initial_image_tag   = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  # SCRUM-298: required, no default (FR-017, FR-022) — reuses the exact fixture
+  # value infra/terraform/ecr/tests/ecr.tftest.hcl already established.
+  github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
 }
 
 # ---------------------------------------------------------------------------
@@ -233,6 +236,35 @@ run "placement" {
       "sg-0app00000000000000"
     ])
     error_message = "Tasks must be attached to exactly the network component's application security group (FR-016)."
+  }
+}
+
+run "structured_log_shipping" {
+  command = apply
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.logDriver == "awslogs"
+    error_message = "The backend task must ship stdout and stderr through the ECS awslogs driver."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["awslogs-group"] == aws_cloudwatch_log_group.backend.name
+    error_message = "The backend task must use the component-owned CloudWatch log group."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["mode"] == "non-blocking"
+    error_message = "The ECS awslogs driver must use non-blocking mode."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["max-buffer-size"] == "25m"
+    error_message = "The non-blocking ECS log buffer must remain explicitly bounded."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].environment) == 0
+    error_message = "Plaintext container environment values must remain absent from the backend task definition."
   }
 }
 
@@ -604,6 +636,16 @@ run "cross_origin_entry" {
     error_message = "The origin list must be explicit, never a wildcard (FR-039, SC-019)."
   }
 
+  assert {
+    condition     = aws_ssm_parameter.cors_allowed_origins.value == "https://d3b75ru76gta2n.cloudfront.net"
+    error_message = "Staging must permit only the deployed web origin (SCRUM-242)."
+  }
+
+  assert {
+    condition     = !strcontains(aws_ssm_parameter.cors_allowed_origins.value, "http://localhost:5173") && !strcontains(aws_ssm_parameter.cors_allowed_origins.value, "http://localhost:8081")
+    error_message = "Staging must not retain localhost browser origins after SCRUM-242."
+  }
+
   # The synthetic-user mappings. This entry exists because the application requires the
   # property to be PRESENT: DemoDataSeeder runs under the staging profile and throws on a
   # null value rather than seeding nothing, 60 seconds into startup and after the port is
@@ -661,5 +703,275 @@ run "base_url_is_derived_not_literal" {
   assert {
     condition     = !startswith(aws_cloudfront_distribution.main.domain_name, "https://")
     error_message = "Sanity check on the assertion above: the scheme must come from the output expression, not from the domain name."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-298 — web static hosting runtime and staging origin
+#
+# This feature reads ZERO remote state (research.md R-011): no VPC, subnet,
+# security group, secret, or database value. It needs no new override_data
+# block for a producer — only for the resources it declares itself.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Foundational — the sync role's identity and permissions (research.md R-005, R-006)
+# ---------------------------------------------------------------------------
+
+run "web_sync_role_trust_policy" {
+  command = apply
+
+  # The role is assumed exclusively by a GitHub Actions workflow_dispatch run on
+  # main, via OIDC — never a human's local session (FR-017, Q2).
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.web_sync.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The sync role's trust policy must condition on the exact var.github_oidc_main_subject value (FR-017, research.md R-005)."
+  }
+
+  assert {
+    condition = length([
+      for stmt in jsondecode(aws_iam_role.web_sync.assume_role_policy).Statement :
+      stmt if stmt.Action == "sts:AssumeRole"
+    ]) == 0
+    error_message = "The sync role must be assumable only via AssumeRoleWithWebIdentity (OIDC), never a plain AssumeRole (FR-017)."
+  }
+}
+
+run "web_sync_role_permissions" {
+  command = apply
+
+  # Exactly two statements: one scoped to the web bucket, one to the web
+  # distribution. Nothing broader (research.md R-006, FR-015).
+  assert {
+    condition     = length(jsondecode(aws_iam_role_policy.web_sync.policy).Statement) == 2
+    error_message = "The sync role's permissions policy must declare exactly two statements — one for the bucket, one for the distribution (research.md R-006)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.web_sync.policy).Statement :
+      toset(stmt.Action) == toset(["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"])
+    ])
+    error_message = "The bucket statement must grant exactly ListBucket/GetObject/PutObject/DeleteObject — no broader S3 action (research.md R-006)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.web_sync.policy).Statement :
+      toset(stmt.Action) == toset(["cloudfront:CreateInvalidation"])
+    ])
+    error_message = "The distribution statement must grant exactly CreateInvalidation — no broader CloudFront action (research.md R-006)."
+  }
+
+  # research.md R-006: cloudfront:GetInvalidation is deliberately absent — the
+  # workflow issues an invalidation and returns, it does not poll for completion.
+  assert {
+    condition = length([
+      for stmt in jsondecode(aws_iam_role_policy.web_sync.policy).Statement :
+      stmt if contains(stmt.Action, "cloudfront:GetInvalidation")
+    ]) == 0
+    error_message = "cloudfront:GetInvalidation must be absent — the sync workflow does not wait for invalidation completion (research.md R-006)."
+  }
+}
+
+# SCRUM-303 — mapping publication is deliberately a separate OIDC identity from
+# ordinary backend deployment. The assertions hold the trust, exact write target,
+# and the intentionally absent identity/secret read permissions together.
+run "mapping_publication_role_boundary" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.cognito_mapping_publication.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The mapping-publication role must trust only the exact main-branch GitHub OIDC subject."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
+      contains(stmt.Action, "ssm:PutParameter") &&
+      try(toset(stmt.Resource), toset([])) == toset([aws_ssm_parameter.demo_users_json.arn])
+    ])
+    error_message = "The mapping-publication role may write only the fixed runtime mapping parameter."
+  }
+
+  assert {
+    condition = length(flatten([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement : [
+        for action in stmt.Action : action if can(regex("^(cognito-idp:|secretsmanager:|ssm:Get|ssm:Describe)", action))
+      ]
+    ])) == 0
+    error_message = "The mapping-publication role must not read mappings, access Cognito, or access Secrets Manager."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.cognito_mapping_publication.policy).Statement :
+      toset(stmt.Action) == toset(["iam:PassRole"]) &&
+      try(toset(stmt.Resource), toset([])) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
+    ])
+    error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# US1 — reach the deployed web app over a stable HTTPS origin, independent of
+# the backend's own domain
+# ---------------------------------------------------------------------------
+
+run "web_bucket_privacy" {
+  command = apply
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.web.block_public_acls &&
+      aws_s3_bucket_public_access_block.web.block_public_policy &&
+      aws_s3_bucket_public_access_block.web.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.web.restrict_public_buckets
+    )
+    error_message = "All four public-access-block flags must be true (FR-002)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.web.rule[0].object_ownership == "BucketOwnerEnforced"
+    error_message = "Object ownership must be BucketOwnerEnforced, disabling ACLs entirely (FR-002)."
+  }
+}
+
+run "web_bucket_versioning_and_lifecycle" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_versioning.web.versioning_configuration[0].status == "Enabled"
+    error_message = "Versioning must be enabled (FR-006)."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_server_side_encryption_configuration.web.rule) == 1
+    error_message = "Server-side encryption must be configured (FR-006)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.web.rule[0].noncurrent_version_expiration[0].noncurrent_days == var.web_bucket_noncurrent_version_expiration_days
+    error_message = "Noncurrent versions must expire after the configured number of days (research.md R-009)."
+  }
+}
+
+run "web_oac_and_bucket_policy" {
+  command = apply
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.web.signing_behavior == "always"
+    error_message = "OAC signing_behavior must be always (FR-004)."
+  }
+
+  assert {
+    condition     = aws_cloudfront_origin_access_control.web.origin_access_control_origin_type == "s3"
+    error_message = "OAC must be scoped to an s3 origin (FR-004)."
+  }
+
+  # The bucket policy must name this EXACT distribution — a reference, not a
+  # reconstructed string, so a distribution replacement cannot silently leave a
+  # stale ARN behind (FR-005).
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web.policy).Statement :
+      stmt.Principal.Service == "cloudfront.amazonaws.com" &&
+      try(stmt.Condition.StringEquals["AWS:SourceArn"], "") == aws_cloudfront_distribution.web.arn
+    ])
+    error_message = "The bucket policy must grant read access only to this exact distribution ARN, by reference (FR-005)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web.policy).Statement :
+      stmt.Principal != "*" && (try(stmt.Condition.StringEquals["AWS:SourceArn"], "no-wildcard") != "*")
+    ])
+    error_message = "No bucket policy statement may use a wildcard principal or SourceArn (FR-005)."
+  }
+}
+
+run "web_distribution_edge" {
+  command = apply
+
+  assert {
+    condition     = anytrue([for b in aws_cloudfront_distribution.web.default_cache_behavior : b.viewer_protocol_policy == "redirect-to-https"])
+    error_message = "Plaintext requests must be redirected to HTTPS, never served (FR-009)."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.web.viewer_certificate[0].minimum_protocol_version == "TLSv1"
+    error_message = "The minimum protocol version must be the honest value the default certificate actually enforces, not an unsatisfiable aspirational one (FR-013, research.md R-008)."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.web.viewer_certificate[0].cloudfront_default_certificate == true
+    error_message = "The distribution must use the provider default certificate — no custom domain exists (FR-008)."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.web.default_root_object == "index.html"
+    error_message = "default_root_object must be index.html so a request for / resolves through the same path OAC serves (research.md R-008)."
+  }
+
+  assert {
+    condition     = length(aws_cloudfront_distribution.web.custom_error_response) == 2
+    error_message = "Exactly two custom_error_response blocks must exist — one for 403, one for 404 (FR-010)."
+  }
+
+  assert {
+    condition     = toset([for er in aws_cloudfront_distribution.web.custom_error_response : er.error_code]) == toset([403, 404])
+    error_message = "The two custom_error_response blocks must cover exactly 403 and 404 (FR-010)."
+  }
+
+  assert {
+    condition = alltrue([
+      for er in aws_cloudfront_distribution.web.custom_error_response :
+      tostring(er.response_code) == "200" && er.response_page_path == "/index.html"
+    ])
+    error_message = "Both 403 and 404 must map to a 200 response serving /index.html — the SPA fallback (FR-010)."
+  }
+
+  # FR-007's actual hostname-distinctness guarantee is the two separate
+  # `aws_cloudfront_distribution` resource blocks in the configuration itself
+  # (.main and .web) — not something a mocked plan can prove, since
+  # mock_provider "aws" gives every instance of a resource TYPE the same
+  # default arn. Verified for real against the applied distributions in
+  # quickstart.md §4.
+}
+
+# ---------------------------------------------------------------------------
+# US3 — publish a stable contract for SCRUM-242 and SCRUM-271 to consume
+# ---------------------------------------------------------------------------
+
+run "web_published_contract" {
+  command = apply
+
+  assert {
+    condition     = output.web_staging_base_url == "https://${aws_cloudfront_distribution.web.domain_name}"
+    error_message = "web_staging_base_url must be derived from the web distribution's domain name, not hard-coded (contracts/terraform-outputs.md)."
+  }
+
+  assert {
+    condition     = !startswith(aws_cloudfront_distribution.web.domain_name, "https://")
+    error_message = "Sanity check on the assertion above: the scheme must come from the output expression, not from the domain name."
+  }
+
+  assert {
+    condition     = output.web_bucket_name == aws_s3_bucket.web.id
+    error_message = "web_bucket_name must equal the bucket's own id (contracts/terraform-outputs.md)."
+  }
+
+  assert {
+    condition     = output.web_sync_role_arn == aws_iam_role.web_sync.arn
+    error_message = "web_sync_role_arn must equal the sync role's own arn (contracts/terraform-outputs.md)."
   }
 }

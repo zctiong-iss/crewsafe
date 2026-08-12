@@ -236,6 +236,16 @@ assert_order "web validation remains before publication" "$WORKFLOW" \
 assert_order "image build and scan precede push" "$WORKFLOW" \
   'docker build' 'aquasecurity/trivy-action' 'docker push' 'RepoDigests'
 
+# --- SCRUM-269 (mirrored to web): reviewed, expiring exceptions ----------
+contains_in "ignorefile prep step references the source exceptions file" "$WORKFLOW" \
+  'web-image.trivyignore.source'
+contains_in "ignorefile prep step invokes filter-trivyignore.sh" "$WORKFLOW" \
+  'filter-trivyignore.sh'
+contains_in "scan step passes the active ignorefile via trivyignores" "$WORKFLOW" \
+  'trivyignores: .trivyignore-active-web'
+assert_order "ignorefile prep precedes the scan step" "$WORKFLOW" \
+  'filter-trivyignore.sh' 'aquasecurity/trivy-action'
+
 contains_in "Docker build stage uses Node 22" "$DOCKERFILE" 'FROM node:22'
 contains_in "Docker build stage is digest pinned" "$DOCKERFILE" '@sha256:'
 contains_in "Docker uses lockfile installation" "$DOCKERFILE" 'npm ci'

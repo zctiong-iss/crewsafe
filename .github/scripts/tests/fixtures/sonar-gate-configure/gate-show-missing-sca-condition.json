@@ -1,0 +1,1 @@
+{"id":"42","name":"CrewSafe Security Gate","conditions":[{"id":"c1","metric":"new_security_rating","op":"GT","error":"3"},{"id":"c2","metric":"new_security_hotspots_reviewed","op":"LT","error":"100"},{"id":"c3","metric":"new_reliability_rating","op":"GT","error":"3"}]}

@@ -12,6 +12,14 @@ public interface NeaWeatherClient {
 
     NeaObservation fetch(NeaMetric metric);
 
+    /**
+     * Performs one bounded reachability operation for health monitoring. The caller owns
+     * the wall-clock timeout; the adapter owns request and response validation.
+     */
+    default void checkReachability(int maxAttempts) {
+        fetch(NeaMetric.WBGT);
+    }
+
     default List<NeaObservation> fetchAll() {
         return List.of(
                 fetch(NeaMetric.WBGT),

@@ -40,7 +40,7 @@ assert_contains "$importer" 'crewsafe/sourceUpdatedAt'
 
 iam_main="infra/terraform/iam-policy-management/main.tf"
 assert_contains "$iam_main" '"securityhub-import"'
-assert_contains "$iam_main" 'length(local.policy_bindings) == 14'
+assert_contains "$iam_main" 'length(local.policy_bindings) == 16'
 for kind in plan apply; do
   template="infra/terraform/iam-policy-management/policies/securityhub-import/${kind}.json.tftpl"
   assert_file "$template"

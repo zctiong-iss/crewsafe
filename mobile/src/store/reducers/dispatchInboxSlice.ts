@@ -25,7 +25,7 @@
  */
 import { createAsyncThunk, createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import * as Crypto from "expo-crypto";
-import { acknowledgeDispatch, fetchPendingDispatches } from "@/api/endpoints/dispatch";
+import { acknowledgeDispatch, completeDispatch, fetchPendingDispatches } from "@/api/endpoints/dispatch";
 import { dismissAtFor, restDeadlineFor } from "@/helpers/restDuration";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { ActionDispatch } from "@/types/domain";
@@ -221,6 +221,29 @@ export const acknowledge = createAsyncThunk<
     return true;
   },
 });
+
+/**
+ * Tells the server a dispatched rest was actually served (US-11).
+ *
+ * Fired when a rest card's timer expires, alongside the local dismissal. The server derives a
+ * wellbeing log tagged `INSTRUCTED` from the completion, which is what puts an instructed rest in
+ * the same timeline as a self-logged one on the supervisor's view.
+ *
+ * Deliberately fire-and-forget from the worker's point of view: nothing on their screen depends
+ * on it, and a failure here must not stop the card disappearing when the rest is over. The server
+ * is idempotent and the log's `dispatch_id` is unique, so a retry on the next expiry cannot
+ * record a second rest.
+ */
+export const completeRest = createAsyncThunk<void, { dispatchId: string }>(
+  "dispatchInbox/completeRest",
+  async ({ dispatchId }) => {
+    try {
+      await completeDispatch(dispatchId);
+    } catch {
+      // Swallowed on purpose — see above. The rest happened whether or not we recorded it.
+    }
+  },
+);
 
 const dispatchInboxSlice = createSlice({
   name: "dispatchInbox",

@@ -10,6 +10,7 @@ package com.crewsafe.common.audit;
  * constant here before writing the new event type.
  *
  * @author Jemilin Beulah
+ * @author Justin Chua
  */
 public final class AuditEventType {
 
@@ -74,6 +75,23 @@ public final class AuditEventType {
      * original draft is retained on the recommendation; the edited version is retained on
      * the resulting approval. */
     public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
+
+    /** A worker logged a rest or a drink of water (US-11). */
+    public static final String WELLBEING_LOGGED = "WELLBEING_LOGGED";
+
+    /** A worker reported that they are struggling (US-11). */
+    public static final String CONCERN_RAISED = "CONCERN_RAISED";
+
+    /** A supervisor confirmed they have seen a worker's concern (US-11). */
+    public static final String CONCERN_ACKNOWLEDGED = "CONCERN_ACKNOWLEDGED";
+
+    /** A Safety Manager configured a new heat policy version for a site (SCRUM-120). Recorded
+     * whether the version was created as a DRAFT or auto-activated as the site's first version. */
+    public static final String POLICY_VERSION_CREATED = "POLICY_VERSION_CREATED";
+
+    /** A Safety Manager activated a heat policy version, superseding whichever version was
+     * previously active for that site (SCRUM-120). */
+    public static final String POLICY_VERSION_ACTIVATED = "POLICY_VERSION_ACTIVATED";
 
     private AuditEventType() {
     }

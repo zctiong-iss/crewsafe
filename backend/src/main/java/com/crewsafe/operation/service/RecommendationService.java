@@ -7,6 +7,7 @@ import com.crewsafe.common.error.ConflictException;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import com.crewsafe.mitigation.domain.ActionCatalogue;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
@@ -44,10 +45,13 @@ import java.util.UUID;
 public class RecommendationService {
 
     /**
-     * Placeholder {@code actionCode} for every dispatch created from an AI recommendation
-     * (SCRUM-193). A mitigation does not carry its own action code yet — see SCRUM-243 — so
-     * there is nothing more specific to use; the mitigation's own text goes in {@code
-     * instruction} instead.
+     * Fallback {@code actionCode} for a mitigation that carries none of its own (SCRUM-193).
+     *
+     * <p>Only reached by plans drafted before SCRUM-119 added {@link MitigationSuggestion
+     * #actionCode()}. It is a placeholder in the literal sense — no locale has a translation for
+     * it, so the mobile app humanises it into English for every worker regardless of their
+     * language. That is why a mitigation that <em>does</em> carry a code now dispatches under it
+     * instead; see {@link #fanOutDispatches}.
      */
     private static final String AI_MITIGATION_ACTION_CODE = "AI_RECOMMENDED_ACTION";
 
@@ -137,6 +141,9 @@ public class RecommendationService {
             if (decision == Approval.ApprovalDecision.REJECTED && (reason == null || reason.isBlank())) {
                 throw new BadRequestException("reason is required when decision is REJECTED");
             }
+            if (decision == Approval.ApprovalDecision.EDITED) {
+                assertActionCodesAreKnown(editedPlan);
+            }
 
             AppUser approver = users.findById(actorId)
                     .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + actorId));
@@ -192,6 +199,13 @@ public class RecommendationService {
      * mitigation in the approved plan is dispatched to every worker on the shift, not just the
      * ones it may actually be relevant to. A shift with no assignments dispatches nothing, and
      * that is not an error.
+     *
+     * <p><strong>The action code is the mitigation's own where it has one (SCRUM-119).</strong>
+     * Until now every AI-sourced dispatch went out under {@link #AI_MITIGATION_ACTION_CODE},
+     * which no locale translates — so a Tamil-speaking worker received "Ai recommended action"
+     * in English, and every mitigation on a plan rendered identically in their inbox. Mapping
+     * through {@link ActionCatalogue} makes each dispatch say what it actually is, in the
+     * worker's own language, using keys the app already ships.
      */
     private void fanOutDispatches(UUID shiftId, Approval approval, List<MitigationSuggestion> mitigations,
                                    AppUser actor) {
@@ -207,9 +221,35 @@ public class RecommendationService {
 
         for (UUID workerId : workerIds) {
             for (MitigationSuggestion mitigation : mitigations) {
-                actionDispatchService.dispatchAction(approval.getId(), workerId, AI_MITIGATION_ACTION_CODE,
+                String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
+                        .orElse(AI_MITIGATION_ACTION_CODE);
+                actionDispatchService.dispatchAction(approval.getId(), workerId, dispatchCode,
                         mitigation.action(), actingPrincipal);
             }
+        }
+    }
+
+    /**
+     * Refuses an edited plan carrying an action code no client can render (SCRUM-119).
+     *
+     * <p>The supervisor's app only offers codes from the draft, so this is not defending against
+     * that app — it is the server-side half of §8.5, and it holds for every client. A code outside
+     * {@link ActionCatalogue} has no translation in any locale, so approving one would send a
+     * worker an instruction humanised into English, which is exactly what the allowlist exists to
+     * prevent.
+     *
+     * <p>A null code is allowed through: those are plans drafted before SCRUM-119, and rejecting
+     * them would make old recommendations undecidable.
+     */
+    private void assertActionCodesAreKnown(List<MitigationSuggestion> plan) {
+        List<String> unknown = plan.stream()
+                .map(MitigationSuggestion::actionCode)
+                .filter(code -> code != null && !ActionCatalogue.isKnown(code))
+                .distinct()
+                .toList();
+
+        if (!unknown.isEmpty()) {
+            throw new BadRequestException("Unsupported action code(s): " + String.join(", ", unknown));
         }
     }
 

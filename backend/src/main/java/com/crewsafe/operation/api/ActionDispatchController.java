@@ -34,7 +34,7 @@ public class ActionDispatchController {
     public ResponseEntity<ActionDispatchResponse> dispatchAction(
             @Valid @RequestBody DispatchActionRequest request,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        log.info("Dispatching action: {} to worker: {}", request.getActionCode(), request.getWorkerId());
+        log.info("action_dispatch_requested");
 
         ActionDispatch dispatch = actionDispatchService.dispatchAction(
                 request.getApprovalId(),
@@ -53,7 +53,7 @@ public class ActionDispatchController {
     public ResponseEntity<ActionDispatchResponse> acknowledgeDispatch(
             @PathVariable UUID dispatchId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        log.info("Acknowledging action dispatch: {}", dispatchId);
+        log.info("action_dispatch_acknowledgement_requested");
 
         ActionDispatch dispatch = actionDispatchService.acknowledgeDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));
@@ -64,7 +64,7 @@ public class ActionDispatchController {
     public ResponseEntity<ActionDispatchResponse> completeDispatch(
             @PathVariable UUID dispatchId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        log.info("Completing action dispatch: {}", dispatchId);
+        log.info("action_dispatch_completion_requested");
 
         ActionDispatch dispatch = actionDispatchService.completeDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));
@@ -74,7 +74,7 @@ public class ActionDispatchController {
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER')")
     public ResponseEntity<List<ActionDispatchResponse>> getDispatchesForApproval(
             @PathVariable UUID approvalId) {
-        log.info("Fetching dispatches for approval: {}", approvalId);
+        log.info("action_dispatch_approval_list_requested");
 
         List<ActionDispatch> dispatches = actionDispatchService.getDispatchesForApproval(approvalId);
         List<ActionDispatchResponse> responses = dispatches.stream()
@@ -89,7 +89,7 @@ public class ActionDispatchController {
     public ResponseEntity<List<ActionDispatchResponse>> getPendingDispatchesForWorker(
             @PathVariable UUID workerId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        log.info("Fetching pending dispatches for worker: {}", workerId);
+        log.info("action_dispatch_pending_list_requested");
 
         List<ActionDispatch> dispatches = actionDispatchService.getPendingDispatchesForWorker(workerId, principal);
         List<ActionDispatchResponse> responses = dispatches.stream()
@@ -104,7 +104,7 @@ public class ActionDispatchController {
     public ResponseEntity<ActionDispatchResponse> getDispatch(
             @PathVariable UUID dispatchId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        log.info("Fetching action dispatch: {}", dispatchId);
+        log.info("action_dispatch_detail_requested");
 
         ActionDispatch dispatch = actionDispatchService.getDispatch(dispatchId, principal);
         return ResponseEntity.ok(ActionDispatchResponse.fromEntity(dispatch));

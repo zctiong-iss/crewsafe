@@ -1,0 +1,77 @@
+name: Authenticated Staging DAST
+
+on:
+  workflow_call:
+    inputs:
+      trigger_component:
+        description: Fixed caller identity for release correlation.
+        required: true
+        type: string
+      trigger_sha:
+        description: Immutable main-branch commit that triggered the deployment.
+        required: true
+        type: string
+      web_base_url:
+        required: true
+        type: string
+      backend_base_url:
+        required: true
+        type: string
+      approved_web_base_url:
+        description: Independently configured approved web-origin allowlist entry.
+        required: true
+        type: string
+      approved_backend_base_url:
+        description: Independently configured approved backend-origin allowlist entry.
+        required: true
+        type: string
+      hosted_ui_url:
+        required: true
+        type: string
+      dast_username:
+        required: true
+        type: string
+    secrets:
+      DAST_SYNTHETIC_WORKER_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: Authenticated staging DAST
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TRIGGER_COMPONENT: ${{ inputs.trigger_component }}
+      TRIGGER_SHA: ${{ inputs.trigger_sha }}
+      WEB_BASE_URL: ${{ inputs.web_base_url }}
+      BACKEND_BASE_URL: ${{ inputs.backend_base_url }}
+      APPROVED_WEB_BASE_URL: ${{ inputs.approved_web_base_url }}
+      APPROVED_BACKEND_BASE_URL: ${{ inputs.approved_backend_base_url }}
+      HOSTED_UI_URL: ${{ inputs.hosted_ui_url }}
+      DAST_USERNAME: ${{ inputs.dast_username }}
+      DAST_SYNTHETIC_WORKER_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
+      ZAP_IMAGE: ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Validate DAST boundary
+        run: .github/scripts/security/validate-dast-staging-contract.sh
+      - name: Run authenticated staging DAST
+        run: .github/scripts/security/run-authenticated-dast.sh
+      - name: Upload DAST report
+        # Only written by the wrapper once the scan reaches at least an advisory
+        # result (real coverage, past its zero-endpoint check); a failed scan
+        # leaves nothing here and this step no-ops via if-no-files-found.
+        # Short retention: this is evidence for near-term triage, not a durable
+        # record — durable findings belong in Jira/the runbook, not the artifact.
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dast-report
+          path: ${{ runner.temp }}/dast-report.json
+          if-no-files-found: ignore
+          retention-days: 14

@@ -58,18 +58,32 @@ case "${1:-} ${2:-}" in
         validity=15
         unit=minutes
         flows='["ALLOW_REFRESH_TOKEN_AUTH"]'
+        callback_urls='["http://localhost:5173/callback","https://d3b75ru76gta2n.cloudfront.net/callback"]'
+        logout_urls='["http://localhost:5173/","https://d3b75ru76gta2n.cloudfront.net/"]'
+        case "${MOCK_WEB_URI_MISMATCH:-}" in
+          "") ;;
+          callback-missing) callback_urls='["http://localhost:5173/callback"]' ;;
+          callback-extra) callback_urls='["http://localhost:5173/callback","https://d3b75ru76gta2n.cloudfront.net/callback","https://unapproved.example/callback"]' ;;
+          logout-missing) logout_urls='["http://localhost:5173/"]' ;;
+          logout-extra) logout_urls='["http://localhost:5173/","https://d3b75ru76gta2n.cloudfront.net/","https://unapproved.example/"]' ;;
+          *) echo "unexpected web URI mismatch fixture" >&2; exit 1 ;;
+        esac
         ;;
       mobile-client-id)
         name=crewsafe-mobile
         validity=1
         unit=hours
         flows='["ALLOW_REFRESH_TOKEN_AUTH"]'
+        callback_urls='["crewsafe://callback"]'
+        logout_urls='["crewsafe://"]'
         ;;
       cli-client-id)
         name=crewsafe-cli-integration
         validity=15
         unit=minutes
         flows='["ALLOW_USER_PASSWORD_AUTH","ALLOW_REFRESH_TOKEN_AUTH"]'
+        callback_urls='[]'
+        logout_urls='[]'
         ;;
       *)
         echo "unexpected mocked Cognito client: $client_id" >&2
@@ -80,8 +94,8 @@ case "${1:-} ${2:-}" in
     if [[ "${MOCK_CLIENT_SECRET:-false}" == true && "$client_id" == web-client-id ]]; then
       secret=',"ClientSecret":"must-not-appear-in-output"'
     fi
-    printf '{"UserPoolClient":{"ClientName":"%s"%s,"PreventUserExistenceErrors":"ENABLED","EnableTokenRevocation":true,"AccessTokenValidity":%s,"TokenValidityUnits":{"AccessToken":"%s"},"ExplicitAuthFlows":%s}}\n' \
-      "$name" "$secret" "$validity" "$unit" "$flows"
+    printf '{"UserPoolClient":{"ClientName":"%s"%s,"PreventUserExistenceErrors":"ENABLED","EnableTokenRevocation":true,"AccessTokenValidity":%s,"TokenValidityUnits":{"AccessToken":"%s"},"ExplicitAuthFlows":%s,"CallbackURLs":%s,"LogoutURLs":%s}}\n' \
+      "$name" "$secret" "$validity" "$unit" "$flows" "$callback_urls" "$logout_urls"
     ;;
   "cognito-idp describe-user-pool-domain")
     printf '%s\n' '{"DomainDescription":{"UserPoolId":"ap-southeast-1_TEST123","Status":"ACTIVE"}}'
@@ -145,6 +159,21 @@ for mismatch in subject audience provider; do
     exit 1
   fi
   grep -Fq 'administration role trust mismatch' "$negative_output"
+done
+
+for mismatch in callback-missing callback-extra logout-missing logout-extra; do
+  if PATH="$mock_bin:$PATH" MOCK_WEB_URI_MISMATCH="$mismatch" \
+    "$script" "$tf_root" 123456789012 ap-southeast-1 \
+      crewsafe/cognito/shared-dev.tfstate "$expected_oidc_subject" \
+      >"$negative_output" 2>&1; then
+    echo "Verifier accepted a web URI $mismatch mismatch." >&2
+    exit 1
+  fi
+  grep -Fq 'web URI allowlist mismatch' "$negative_output"
+  if grep -Fq 'must-not-appear-in-output' "$negative_output"; then
+    echo "Verifier exposed a Cognito client secret." >&2
+    exit 1
+  fi
 done
 
 echo "Cognito deployment verification test passed"

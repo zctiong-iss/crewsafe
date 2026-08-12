@@ -24,11 +24,11 @@ public class WeatherIngestionScheduler {
             WeatherIngestionResult result = ingestionService.ingestCurrentConditions();
             log.info("NEA weather ingestion completed: sites={}, inserted={}, duplicates={}",
                     result.sitesProcessed(), result.inserted(), result.duplicates());
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException failure) {
             // A scheduled task stops running forever if its exception escapes. Record the
             // failure and let Spring invoke the next interval, where the DB constraint
             // makes a retry safe.
-            log.error("NEA weather ingestion failed; the next scheduled run will retry", exception);
+            log.error("nea_weather_ingestion_failed_retry_scheduled");
         }
     }
 }
