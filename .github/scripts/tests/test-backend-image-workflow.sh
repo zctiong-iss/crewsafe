@@ -271,6 +271,9 @@ contains_in "redeploy resolves an existing image job" "$WORKFLOW" 'resolve-exist
 contains_in "publication builds backend image" "$WORKFLOW" 'docker build'
 contains_in "publication scans image" "$WORKFLOW" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25'
 contains_in "scan uses HIGH,CRITICAL severity" "$WORKFLOW" 'severity: HIGH,CRITICAL'
+contains_in "scan is vulnerability-only" "$WORKFLOW" 'scanners: vuln'
+contains_in "scan emits a JSON report" "$WORKFLOW" 'format: json'
+contains_in "scan writes the JSON report" "$WORKFLOW" 'output: trivy-backend-report.json'
 contains_in "scan does not ignore unfixed findings" "$WORKFLOW" 'ignore-unfixed: false'
 contains_in "scan is report-only (FR-001)" "$WORKFLOW" "exit-code: '0'"
 not_contains_in "scan is not blocking yet (FR-001a is a separate follow-up)" "$WORKFLOW" "exit-code: '1'"
@@ -282,8 +285,8 @@ not_contains_in_build_test "validation job has no OIDC permission" 'id-token: wr
 not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
 not_contains_in_build_test "validation job has no image push" 'docker push'
 
-assert_order "build -> scan -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
-  'docker build' 'aquasecurity/trivy-action' 'configure-aws-credentials' 'aws ecr get-login-password' 'docker push' 'RepoDigests'
+assert_order "build -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
+  'docker build' 'aquasecurity/trivy-action' 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' 'docker push' 'RepoDigests'
 
 # --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
 contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
@@ -317,6 +320,12 @@ assert_order "ignorefile prep precedes the scan step" "$WORKFLOW" \
   'filter-trivyignore.sh' 'aquasecurity/trivy-action'
 contains_in "scan step passes the active ignorefile via trivyignores" "$WORKFLOW" \
   'trivyignores: .trivyignore-active-backend'
+contains_in "scan summary uses the shared redacted helper" "$WORKFLOW" \
+  '.github/scripts/security/summarize-trivy-report.sh'
+contains_in "scan summary writes to the GitHub job summary" "$WORKFLOW" \
+  'GITHUB_STEP_SUMMARY'
+assert_order "scan precedes summary" "$WORKFLOW" \
+  'aquasecurity/trivy-action' 'Summarize backend image scan'
 
 TESTS_RUN=$((TESTS_RUN + 1))
 if workflow_policy_guard "$WORKFLOW"; then

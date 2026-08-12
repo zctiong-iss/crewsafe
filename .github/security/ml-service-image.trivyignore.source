@@ -1,0 +1,9 @@
+# Version-controlled exceptions for the ML-service image vulnerability gate.
+# Entries are reviewed through pull requests and validated before each CI run.
+# The validator requires: advisory ID, owner:, exp:YYYY-MM-DD, and reason:.
+# The shared expiry filter then writes only active IDs to a runtime-only file.
+#
+# Format:
+#   CVE-YYYY-NNNN  # owner:team-or-person exp:YYYY-MM-DD reason:time-bounded rationale
+#
+# No active exceptions.

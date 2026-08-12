@@ -78,7 +78,8 @@ crash.*.log
 
 # CI-generated active ignorefile (SCRUM-269) — filter-trivyignore.sh's
 # runtime-only output, never the reviewed source file
-# (.github/security/backend-image.trivyignore.source)
+# (.github/security/backend-image.trivyignore.source and
+# .github/security/ml-service-image.trivyignore.source)
 .trivyignore-active-*
 
 # Scratch state for local/seed-cognito-local.sh — the emulator rewrites its own config
