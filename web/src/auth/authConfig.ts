@@ -53,7 +53,8 @@ export const authConfig: UserManagerSettings = {
   automaticSilentRenew: true,
   // Cognito access tokens live 15 minutes; start renewing two minutes out.
   accessTokenExpiringNotificationTimeInSeconds: 120,
-
+  // Bounds discovery, token, refresh and revocation requests. A network stall must not postpone mandatory local sign-out indefinitely.
+  requestTimeoutInSeconds: 5,
   // The app reads identity from GET /api/v1/me — the database is the authority on role and
   // site access, not the token. Fetching the userinfo endpoint as well would add a network
   // round trip for claims we deliberately do not trust.

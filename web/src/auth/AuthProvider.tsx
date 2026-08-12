@@ -8,6 +8,9 @@ import { setTokenProvider } from "@/api/client";
 import { fetchCurrentUser } from "@/api/identity";
 import type { CurrentUser } from "@/api/identity";
 import { ApiError } from "@/api/errors";
+import { absoluteDeadlineFromAuthTime } from "./sessionPolicy";
+import { useSessionTimeout } from "./useSessionTimeout";
+import { SessionTimeoutNotice } from "./SessionTimeoutNotice";
 
 /**
  * Every state the app can be in before it can render anything useful.
@@ -45,12 +48,17 @@ export interface AuthContextValue {
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
 
+const defaultRedirectTo = (url: string) => {
+  window.location.href = url;
+};
+
 export function AuthProvider({
   children,
   userManager,
-  redirectTo = (url: string) => {
-    window.location.href = url;
-  },
+  redirectTo = defaultRedirectTo,
+  now = Date.now,
+  activityTarget = document,
+  sessionPolicyEnabled = true,
 }: {
   children: ReactNode;
   /** Injectable so tests can drive auth without a real Cognito. */
@@ -61,11 +69,39 @@ export function AuthProvider({
    * implement real navigation for tests to observe.
    */
   redirectTo?: (url: string) => void;
+  now?: () => number;
+  activityTarget?: Pick<Document, "addEventListener" | "removeEventListener">;
+  sessionPolicyEnabled?: boolean;
 }) {
   const managerRef = useRef<UserManager>(userManager ?? new UserManager(authConfig));
   const manager = managerRef.current;
 
   const [state, setState] = useState<AuthState>({ status: "starting" });
+  const [absoluteDeadline, setAbsoluteDeadline] = useState<number | null>(null);
+
+  const endSession = useCallback(async () => {
+    try {
+      await manager.revokeTokens(["refresh_token"]);
+    } catch {
+      // Remote revocation is best effort and is bounded by authConfig.requestTimeoutInSeconds.
+    }
+
+    try {
+      // Clear our own tokens first. The redirect below is a full-page navigation away
+      // from this origin and back, and sessionStorage survives that round trip — so if
+      // Cognito's own logout somehow failed, this app's session must not survive it.
+      await manager.removeUser();
+    } catch {
+      // A storage failure must not prevent the app state or Cognito cookie from being ended.
+    } finally {
+      setAbsoluteDeadline(null);
+      setState({ status: "signed-out" });
+      // Then end Cognito's session too. Without this, its session cookie outlives ours:
+      // the next "Sign in" click on this browser re-authenticates silently, no password,
+      // regardless of who is sitting at the machine now.
+      redirectTo(cognitoSignOutUrl());
+    }
+  }, [manager, redirectTo]);
 
   // Give the API client a way to read the current token without importing auth state.
   useEffect(() => {
@@ -80,10 +116,23 @@ export function AuthProvider({
   const resolveSession = useCallback(async () => {
     const user: User | null = await manager.getUser();
 
-    if (!user || user.expired) {
+    if (!user) {
+      setAbsoluteDeadline(null);
       setState({ status: "signed-out" });
       return;
     }
+
+    if (user.expired) {
+      await endSession();
+      return;
+    }
+
+    const deadline = absoluteDeadlineFromAuthTime(user.profile.auth_time, now());
+    if (deadline === null || deadline <= now()) {
+      await endSession();
+      return;
+    }
+    setAbsoluteDeadline(deadline);
 
     try {
       setState({ status: "signed-in", user: await fetchCurrentUser() });
@@ -115,7 +164,7 @@ export function AuthProvider({
         requestId: error.requestId,
       });
     }
-  }, [manager]);
+  }, [endSession, manager, now]);
 
   useEffect(() => {
     void resolveSession();
@@ -123,7 +172,7 @@ export function AuthProvider({
     // Silent renew swaps the token underneath us; nothing to re-resolve, but if renewal
     // fails the session is genuinely over and the user must be told rather than left
     // clicking a UI whose every request now 401s.
-    const onExpired = () => setState({ status: "signed-out" });
+    const onExpired = () => void endSession();
     manager.events.addAccessTokenExpired(onExpired);
     manager.events.addSilentRenewError(onExpired);
 
@@ -131,31 +180,39 @@ export function AuthProvider({
       manager.events.removeAccessTokenExpired(onExpired);
       manager.events.removeSilentRenewError(onExpired);
     };
-  }, [manager, resolveSession]);
+  }, [endSession, manager, resolveSession]);
+
+  const { warning, continueSession } = useSessionTimeout({
+    // A valid Cognito token also exists in not-provisioned and backend-failure states.
+    active: sessionPolicyEnabled && absoluteDeadline !== null,
+    absoluteDeadline,
+    onExpire: () => void endSession(),
+    now,
+    activityTarget,
+  });
 
   const value = useMemo<AuthContextValue>(
     () => ({
       state,
       signIn: () => manager.signinRedirect(),
-      signOut: async () => {
-        // Clear our own tokens first. The redirect below is a full-page navigation away
-        // from this origin and back, and sessionStorage survives that round trip — so if
-        // Cognito's own logout somehow failed, this app's session must not survive it.
-        await manager.removeUser();
-        setState({ status: "signed-out" });
-        // Then end Cognito's session too. Without this, its session cookie outlives ours:
-        // the next "Sign in" click on this browser re-authenticates silently, no password,
-        // regardless of who is sitting at the machine now.
-        redirectTo(cognitoSignOutUrl());
-      },
+      signOut: endSession,
       retry: resolveSession,
       completeSignIn: async () => {
         await manager.signinRedirectCallback();
         await resolveSession();
       },
     }),
-    [state, manager, resolveSession],
+    [state, manager, endSession, resolveSession],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <SessionTimeoutNotice
+        warning={warning}
+        onContinue={continueSession}
+        onSignOut={() => void endSession()}
+      />
+    </AuthContext.Provider>
+  );
 }

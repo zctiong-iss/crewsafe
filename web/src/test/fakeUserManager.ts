@@ -6,6 +6,7 @@ import type { UserManager } from "oidc-client-ts";
 export interface FakeSession {
   accessToken?: string;
   expired?: boolean;
+  authTime?: number;
 }
 
 /**
@@ -22,10 +23,18 @@ export function fakeUserManager(session: FakeSession | null): UserManager {
   return {
     getUser: async () =>
       session
-        ? { access_token: session.accessToken ?? "test-access-token", expired: session.expired ?? false }
+        ? {
+            access_token: session.accessToken ?? "test-access-token",
+            refresh_token: "test-refresh-token",
+            expired: session.expired ?? false,
+            profile: {
+              auth_time: session.authTime ?? Math.max(1, Math.floor(Date.now() / 1_000)),
+            },
+          }
         : null,
     signinRedirect: async () => undefined,
     removeUser: async () => undefined,
+    revokeTokens: async () => undefined,
     events: {
       addAccessTokenExpired: (cb: () => void) => listeners.expired.push(cb),
       removeAccessTokenExpired: () => undefined,

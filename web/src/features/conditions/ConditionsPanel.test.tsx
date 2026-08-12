@@ -59,7 +59,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
           validUntil: new Date(Date.now() + 60_000).toISOString(),
           freshness: "LIVE",
         },
-      });
+      }, []);
     });
 
     // Banner should appear
@@ -68,7 +68,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
 
     // Banner should be BEFORE WBGT in the DOM
     const alert = screen.getByRole("alert");
-    const wbgt = screen.getByText(/31/);
+    const wbgt = screen.getByText(/31 °C/);
     expect(alert.compareDocumentPosition(wbgt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     // Advance past validUntil — banner auto-clears
@@ -90,7 +90,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
 
     act(() => {
       handlers.onStatus("live");
-      handlers.onSnapshot(liveSnapshot(31, "2026-08-06T07:40:00Z"));
+      handlers.onSnapshot(liveSnapshot(31, "2026-08-06T07:40:00Z"), []);
     });
     expect(screen.getByText(/31/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -100,8 +100,39 @@ describe("ConditionsPanel — degraded on staleness", () => {
     expect(screen.getByText(/31/)).toBeInTheDocument();
 
     act(() => {
-      handlers.onSnapshot(liveSnapshot(30, "2026-08-06T07:55:00Z"));
+      handlers.onSnapshot(liveSnapshot(30, "2026-08-06T07:55:00Z"), []);
     });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows an unverified sensor warning and clears it after an in-range reading", async () => {
+    let handlers!: ConditionsStreamHandlers;
+    const fakeSubscribe = (_siteId: string, h: ConditionsStreamHandlers) => {
+      handlers = h;
+      return () => {};
+    };
+
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(37.2, "2026-08-06T07:40:00Z"), [{
+        metric: "wbgt",
+        value: 37.2,
+        minimum: 20,
+        maximum: 36,
+      }]);
+    });
+    expect(screen.queryByText(/Live feed interrupted/i)).toBeNull();
+    expect(screen.getByText(/37\.2 °C/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/take necessary heat-safety action/i);
+    expect(screen.getByRole("alert")).toHaveTextContent(/verify against official NEA data/i);
+
+    act(() => {
+      handlers.onSnapshot(liveSnapshot(35, "2026-08-06T07:55:00Z"), []);
+    });
+
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
