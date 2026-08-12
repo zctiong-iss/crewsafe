@@ -243,27 +243,27 @@ run "structured_log_shipping" {
   command = apply
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.logDriver == "awslogs"
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.logDriver == "awslogs"
     error_message = "The backend task must ship stdout and stderr through the ECS awslogs driver."
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["awslogs-group"] == aws_cloudwatch_log_group.backend.name
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["awslogs-group"] == aws_cloudwatch_log_group.backend.name
     error_message = "The backend task must use the component-owned CloudWatch log group."
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["mode"] == "non-blocking"
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["mode"] == "non-blocking"
     error_message = "The ECS awslogs driver must use non-blocking mode."
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["max-buffer-size"] == "25m"
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].logConfiguration.options["max-buffer-size"] == "25m"
     error_message = "The non-blocking ECS log buffer must remain explicitly bounded."
   }
 
   assert {
-    condition = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].environment) == 0
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].environment) == 0
     error_message = "Plaintext container environment values must remain absent from the backend task definition."
   }
 }
