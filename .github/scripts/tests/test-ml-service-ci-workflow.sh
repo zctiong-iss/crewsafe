@@ -65,6 +65,10 @@ workflow_policy_guard() {
   contains "$path" '.github/scripts/security/validate-ml-service-trivy-exceptions.sh' || return 1
   contains "$path" '.github/scripts/security/filter-trivyignore.sh' || return 1
   contains "$path" '.github/scripts/security/summarize-trivy-report.sh' || return 1
+  contains "$path" "image-ref: \"\${{ env.IMAGE }}\"" || return 1
+  contains "$path" 'trivyignores: .trivyignore-active-ml-service' || return 1
+  not_contains "$path" "image-ref: \"\$IMAGE\"" || return 1
+  not_contains "$path" 'ignorefile: .trivyignore-active-ml-service' || return 1
   contains "$path" 'scanners: vuln' || return 1
   contains "$path" 'severity: HIGH,CRITICAL' || return 1
   contains "$path" "exit-code: '0'" || return 1
