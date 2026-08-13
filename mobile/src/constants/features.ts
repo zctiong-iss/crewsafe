@@ -49,13 +49,19 @@ export const features = {
   /**
    * The supervisor's "Draft a plan" control on a shift (SCRUM-118 / US-08).
    *
-   * OFF because the endpoint it calls does not exist yet. SCRUM-289 adds
-   * `POST /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/generate`; until then every tap
-   * would be a 404, which in a demo build is worse than no control at all.
+   * ON since SCRUM-289 built `POST /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/generate`
+   * — the endpoint this control was written against, with the request and response shapes the
+   * SCRUM-118 design fixed. Nothing else needed changing, exactly as this comment predicted while
+   * the flag was off.
    *
-   * Built now rather than later so the client is written against the contract the SCRUM-118
-   * design fixed, while that decision is fresh — and so it stays compiled and typechecked instead
-   * of rotting in a branch. Flip to `true` when SCRUM-289 merges; nothing else needs to change.
+   * Two things a supervisor should expect from a tap, both by design rather than by accident:
+   *
+   *   • It is slow — roughly 10–20 s, because it makes a live model call. Hence `generating`
+   *     driving the button's loading state; there is no faster path that still asks a model.
+   *   • It always succeeds in producing a plan. Lightning, an unreachable ml-service, or a draft
+   *     the server's validation gate rejects all fall back to a plan built deterministically from
+   *     the policy decision, returned as a normal 201. A failure toast here means the *request*
+   *     was refused (shift closed, no WBGT reading for the site), never that the model misbehaved.
    */
-  draftPlanTrigger: false,
+  draftPlanTrigger: true,
 } as const;

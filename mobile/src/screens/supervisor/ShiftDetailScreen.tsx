@@ -420,8 +420,9 @@ export default function ShiftDetailScreen() {
           particular crew in particular conditions — and this screen is where a supervisor already
           has both in front of them.
 
-          Behind a flag: SCRUM-289 has not built the endpoint, so every tap would be a 404. See
-          `features.draftPlanTrigger` for why it is written now rather than later.
+          Live since SCRUM-289 built the endpoint. The call takes roughly 10–20 s (it makes a real
+          model call), which is what `generating` drives the loading state for. See
+          `features.draftPlanTrigger`.
         */}
         {features.draftPlanTrigger ? (
           <AppButton
