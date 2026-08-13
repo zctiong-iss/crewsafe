@@ -1,17 +1,10 @@
 package com.crewsafe.shift.api;
 
-import com.crewsafe.common.error.ResourceNotFoundException;
-import com.crewsafe.identity.security.CrewSafeUserPrincipal;
-import com.crewsafe.shift.domain.Intensity;
-import com.crewsafe.shift.domain.Shift;
-import com.crewsafe.shift.domain.ShiftAssignment;
-import com.crewsafe.shift.service.ShiftService;
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import lombok.RequiredArgsConstructor;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,10 +18,20 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import com.crewsafe.common.error.ResourceNotFoundException;
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import com.crewsafe.shift.domain.Intensity;
+import com.crewsafe.shift.domain.Shift;
+import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.service.ShiftService;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Shift endpoints (SCRUM-160, extended by SCRUM-159/160-fix), implementing
@@ -51,6 +54,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/shifts")
 @RequiredArgsConstructor
+
 public class ShiftController {
 
     private final ShiftService shiftService;
@@ -102,6 +106,10 @@ public class ShiftController {
             @Size(max = 120) String taskName,
             @NotNull Intensity intensity,
             @Min(1) @Max(7) Integer acclimatisationDay) {
+    }
+
+    public record CancelShiftRequest(
+        @NotBlank @Size(max = 500) String reason) {
     }
 
     @GetMapping
@@ -165,9 +173,10 @@ public class ShiftController {
     @PostMapping("/{shiftId}/cancel")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> cancelShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
-            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal,
+            @Valid @RequestBody CancelShiftRequest request) {
 
-        return shiftService.cancelShift(siteId, principal.getId(), shiftId)
+        return shiftService.cancelShift(siteId, principal.getId(), shiftId, request.reason())
                 .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());

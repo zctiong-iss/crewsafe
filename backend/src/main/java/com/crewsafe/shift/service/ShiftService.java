@@ -165,7 +165,7 @@ public class ShiftService {
      * one of the two that may become {@code CANCELLED}.
      */
     @Transactional
-    public Optional<Shift> cancelShift(UUID siteId, UUID actorId, UUID shiftId) {
+    public Optional<Shift> cancelShift(UUID siteId, UUID actorId, UUID shiftId, String reason) {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             if (shift.getStatus() != ShiftStatus.PLANNED && shift.getStatus() != ShiftStatus.ACTIVE) {
                 throw new BadRequestException(
@@ -173,8 +173,8 @@ public class ShiftService {
             }
 
             shift.cancel();
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, "SHIFT", shiftId,
-                    "Cancelled shift for site " + siteId));
+            String detail = "Cancelled shift for site " + siteId + " - Reason: " + reason;
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, "SHIFT", shiftId, detail));
             return shift;
         });
     }
