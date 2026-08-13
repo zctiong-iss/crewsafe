@@ -10,7 +10,14 @@
 const mockPost = jest.fn();
 jest.mock("axios", () => ({
   __esModule: true,
-  default: { post: (...args: unknown[]) => mockPost(...args), isAxiosError: () => false },
+  default: {
+    post: (...args: unknown[]) => mockPost(...args),
+    // Real axios.isAxiosError narrows on the AxiosError shape; a `response` property is
+    // enough for these tests, which only ever reject with either a bare Error (network) or
+    // an Error carrying `.response.data` (a Cognito error body).
+    isAxiosError: (error: unknown) =>
+      !!error && typeof error === "object" && "response" in (error as object),
+  },
 }));
 
 const mockConfig = {
@@ -118,4 +125,105 @@ it("ignores the override outside __DEV__", async () => {
   await signInWithPassword("worker1", "pw");
 
   expect(calledUrl()).toBe("https://cognito-idp.ap-southeast-1.amazonaws.com/");
+});
+
+it("throws a config error before ever calling out when no CLI client id is configured", async () => {
+  mockConfig.cognito.cliClientId = "";
+
+  await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+    messageKey: "errors.configMissing",
+  });
+  expect(mockPost).not.toHaveBeenCalled();
+
+  mockConfig.cognito.cliClientId = "cli-client";
+});
+
+describe("Cognito __type error mapping (SCRUM-352 / FR-002)", () => {
+  function rejectWith(type: string, message?: string) {
+    const error = Object.assign(new Error("request failed"), {
+      response: { data: { __type: type, message } },
+    });
+    mockPost.mockRejectedValue(error);
+  }
+
+  it("maps NotAuthorizedException to invalid credentials", async () => {
+    rejectWith("NotAuthorizedException", "Incorrect username or password.");
+    await expect(signInWithPassword("worker1", "wrong")).rejects.toMatchObject({
+      messageKey: "auth.cognito.invalidCredentials",
+    });
+  });
+
+  it("separates a disabled account from a wrong password", async () => {
+    rejectWith("NotAuthorizedException", "User is disabled.");
+    await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+      messageKey: "auth.cognito.userDisabled",
+    });
+  });
+
+  it("collapses an unknown username to the same invalid-credentials message", async () => {
+    // `prevent_user_existence_errors` is enabled pool-wide — telling this apart from a wrong
+    // password in the UI would undo that setting.
+    rejectWith("UserNotFoundException");
+    await expect(signInWithPassword("ghost", "pw")).rejects.toMatchObject({
+      messageKey: "auth.cognito.invalidCredentials",
+    });
+  });
+
+  it.each(["PasswordResetRequiredException", "NewPasswordRequiredException"])(
+    "maps %s to the new-password-required message",
+    async (type) => {
+      rejectWith(type);
+      await expect(signInWithPassword("worker1", "temp-pw")).rejects.toMatchObject({
+        messageKey: "auth.cognito.newPasswordRequired",
+      });
+    },
+  );
+
+  it.each(["TooManyRequestsException", "LimitExceededException", "TooManyFailedAttemptsException"])(
+    "maps %s to the too-many-attempts message",
+    async (type) => {
+      rejectWith(type);
+      await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+        messageKey: "auth.cognito.tooManyAttempts",
+      });
+    },
+  );
+
+  it.each(["ResourceNotFoundException", "InvalidParameterException"])(
+    "maps %s to a configuration error, not a credential error",
+    async (type) => {
+      rejectWith(type);
+      await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+        messageKey: "errors.configMissing",
+      });
+    },
+  );
+
+  it("falls back to a generic server error for an unrecognised type", async () => {
+    rejectWith("SomeFutureException");
+    await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+      messageKey: "errors.server",
+    });
+  });
+
+  it("reports a network error when the request never gets a response", async () => {
+    mockPost.mockRejectedValue(new Error("timeout"));
+    await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+      messageKey: "errors.network",
+    });
+  });
+
+  it("reports NEW_PASSWORD_REQUIRED as its own message when a challenge replaces the result", async () => {
+    mockPost.mockResolvedValue({ data: { ChallengeName: "NEW_PASSWORD_REQUIRED" } });
+    await expect(signInWithPassword("worker1", "temp-pw")).rejects.toMatchObject({
+      messageKey: "auth.cognito.newPasswordRequired",
+    });
+  });
+
+  it("reports a generic server error for an unrecognised challenge with no result", async () => {
+    mockPost.mockResolvedValue({ data: { ChallengeName: "SOME_OTHER_CHALLENGE" } });
+    await expect(signInWithPassword("worker1", "pw")).rejects.toMatchObject({
+      messageKey: "errors.server",
+    });
+  });
 });

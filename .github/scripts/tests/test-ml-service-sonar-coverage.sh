@@ -109,7 +109,7 @@ sonar_contract_holds() {
   grep -q '^sonar\.tests=.*ml-service' "$properties" || return 1
   grep -q '^sonar\.test\.inclusions=.*ml-service/test_\*\.py' "$properties" || return 1
   grep -q '^sonar\.coverage\.jacoco\.xmlReportPaths=backend/target/site/jacoco/jacoco\.xml$' "$properties" || return 1
-  grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$properties"
+  grep -q '^sonar\.javascript\.lcov\.reportPaths=.*mobile/coverage/sonar-lcov\.info' "$properties"
 }
 
 reject_workflow_contract() {
@@ -169,7 +169,7 @@ if [[ -f "$SONAR_PROPS" ]]; then
   check 'ML-service is a Sonar test root' grep -q '^sonar\.tests=.*ml-service' "$SONAR_PROPS"
   check 'ML-service test naming is classified as test code' grep -q '^sonar\.test\.inclusions=.*ml-service/test_\*\.py' "$SONAR_PROPS"
   check 'backend JaCoCo report remains configured' grep -q '^sonar\.coverage\.jacoco\.xmlReportPaths=backend/target/site/jacoco/jacoco\.xml$' "$SONAR_PROPS"
-  check 'mobile LCOV report remains configured' grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS"
+  check 'mobile LCOV report remains configured' grep -q '^sonar\.javascript\.lcov\.reportPaths=.*mobile/coverage/sonar-lcov\.info' "$SONAR_PROPS"
 fi
 
 check 'complete workflow coverage contract holds' workflow_contract_holds "$WORKFLOW"

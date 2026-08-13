@@ -7,14 +7,31 @@
  *
  * @author Justin Chua
  */
+const mockFetchPendingDispatches = jest.fn();
+const mockAcknowledgeDispatch = jest.fn();
+const mockCompleteDispatch = jest.fn();
+jest.mock("@/api/endpoints/dispatch", () => ({
+  fetchPendingDispatches: (...a: unknown[]) => mockFetchPendingDispatches(...a),
+  acknowledgeDispatch: (...a: unknown[]) => mockAcknowledgeDispatch(...a),
+  completeDispatch: (...a: unknown[]) => mockCompleteDispatch(...a),
+}));
+
+import { configureStore, type UnknownAction } from "@reduxjs/toolkit";
 import reducer, {
+  acknowledge,
   canSwipeDismiss,
+  completeRest,
   dismissed,
+  dismissFailure,
+  idempotencyKeyAssigned,
+  loadInbox,
+  resetAcknowledgements,
   selectAllAcknowledged,
   selectUnacknowledgedCount,
   selectVisibleDispatches,
   type DispatchInboxState,
 } from "./dispatchInboxSlice";
+import { ApiError } from "@/api/errors";
 import type { ActionDispatch } from "@/types/domain";
 import type { RootState } from "../store";
 
@@ -237,4 +254,229 @@ describe("canSwipeDismiss", () => {
     // clear it, so leaving it unswipeable would strand it on the list forever.
     expect(canSwipeDismiss(record({ hasRestTimer: true, dismissAt: null }), false, NOW)).toBe(true);
   });
+});
+
+describe("loadInbox (SCRUM-352 / FR-004, FR-005)", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("returns the worker's pending dispatches", async () => {
+    mockFetchPendingDispatches.mockResolvedValue([A]);
+    const action = await loadInbox({ workerId: "w1" })(jest.fn(), () => ({}), undefined);
+    expect(action.type).toBe(loadInbox.fulfilled.type);
+    expect((action.payload as ActionDispatch[])[0].id).toBe("a");
+  });
+
+  it("maps an ApiError to its message key and request id", async () => {
+    mockFetchPendingDispatches.mockRejectedValue(new ApiError("server", "HTTP 500", 500, "req-9"));
+    const action = await loadInbox({ workerId: "w1" })(jest.fn(), () => ({}), undefined);
+    expect(action.type).toBe(loadInbox.rejected.type);
+    expect(action.payload).toEqual({ errorKey: "errors.server", requestId: "req-9" });
+  });
+
+  it("falls back to an unknown error for a non-API failure", async () => {
+    mockFetchPendingDispatches.mockRejectedValue(new Error("boom"));
+    const action = await loadInbox({ workerId: "w1" })(jest.fn(), () => ({}), undefined);
+    expect(action.payload).toEqual({ errorKey: "errors.unknown", requestId: null });
+  });
+
+  it("shows loading, then ready with the fetched list", () => {
+    const pending = reducer(undefined, { type: loadInbox.pending.type, meta: { arg: { workerId: "w1" } } });
+    expect(pending.status).toBe("loading");
+
+    const ready = reducer(pending, { type: loadInbox.fulfilled.type, payload: [A] });
+    expect(ready.status).toBe("ready");
+    expect(ready.pending).toEqual([A]);
+  });
+
+  it("keeps existing data visible on a background refresh rather than blanking it", () => {
+    const ready = { ...reducer(undefined, { type: "@@INIT" }), status: "ready" as const, pending: [A] };
+    const next = reducer(ready, {
+      type: loadInbox.pending.type,
+      meta: { arg: { workerId: "w1", refreshing: true } },
+    });
+    expect(next.status).toBe("ready");
+    expect(next.refreshing).toBe(true);
+  });
+
+  it("surfaces the mapped error and request id when the load is rejected", () => {
+    const next = reducer(undefined, {
+      type: loadInbox.rejected.type,
+      payload: { errorKey: "errors.network", requestId: "req-1" },
+    });
+    expect(next.status).toBe("error");
+    expect(next.errorKey).toBe("errors.network");
+    expect(next.requestId).toBe("req-1");
+  });
+});
+
+describe("acknowledge (SCRUM-352 / FR-004, SCRUM-186)", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function store(preloaded: Partial<DispatchInboxState> = {}) {
+    const dispatchInboxState: DispatchInboxState = {
+      status: "ready",
+      pending: [],
+      acknowledged: {},
+      idempotencyKeys: {},
+      inFlight: [],
+      failures: {},
+      dismissedIds: [],
+      errorKey: null,
+      requestId: null,
+      refreshing: false,
+      ...preloaded,
+    };
+    return configureStore({
+      reducer: { dispatchInbox: reducer },
+      preloadedState: { dispatchInbox: dispatchInboxState },
+    });
+  }
+
+  // `acknowledge`'s thunk is generically typed against the full app RootState (it reads
+  // `inFlight`/`acknowledged` via its `condition` guard), which this minimal single-slice
+  // test store deliberately does not reproduce — cast at the one point that friction
+  // surfaces, rather than assembling every unrelated slice just to satisfy the type.
+  function dispatchAcknowledge(s: ReturnType<typeof store>, dispatchId: string) {
+    return s.dispatch(acknowledge({ dispatchId }) as unknown as UnknownAction);
+  }
+
+  it("mints a new idempotency key on the first attempt and sends it", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...A, status: "ACKNOWLEDGED", startTime: null });
+    const s = store({ pending: [A] });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(mockAcknowledgeDispatch).toHaveBeenCalledWith("a", expect.any(String));
+    expect(s.getState().dispatchInbox.idempotencyKeys.a).toBeTruthy();
+  });
+
+  it("reuses the same key on a retry rather than minting a second one", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...A, status: "ACKNOWLEDGED", startTime: null });
+    const s = store({ pending: [A], idempotencyKeys: { a: "existing-key-1" } });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(mockAcknowledgeDispatch).toHaveBeenCalledWith("a", "existing-key-1");
+  });
+
+  it("records the acknowledgement, with a rest timer, for a parseable rest code", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...C, status: "ACKNOWLEDGED", startTime: "2026-08-05T10:15:00.000Z" });
+    const s = store({ pending: [C] });
+
+    await dispatchAcknowledge(s, "c");
+
+    const record = s.getState().dispatchInbox.acknowledged.c;
+    expect(record.hasRestTimer).toBe(true);
+    expect(record.dismissAt).not.toBeNull();
+    // Dropped from pending immediately rather than waiting for a refetch.
+    expect(s.getState().dispatchInbox.pending).toHaveLength(0);
+  });
+
+  it("records the acknowledgement without a rest timer for a non-rest action", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...A, status: "ACKNOWLEDGED", startTime: null });
+    const s = store({ pending: [A] });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(s.getState().dispatchInbox.acknowledged.a.hasRestTimer).toBe(false);
+  });
+
+  it("refuses a second attempt while one is already in flight", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...A, status: "ACKNOWLEDGED", startTime: null });
+    const s = store({ pending: [A], inFlight: ["a"] });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(mockAcknowledgeDispatch).not.toHaveBeenCalled();
+  });
+
+  it("refuses to re-acknowledge something already acknowledged", async () => {
+    mockAcknowledgeDispatch.mockResolvedValue({ ...A, status: "ACKNOWLEDGED", startTime: null });
+    const s = store({
+      acknowledged: { a: { acknowledgedAt: "t", idempotencyKey: "k", dispatch: A, dismissAt: null, hasRestTimer: false } },
+    });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(mockAcknowledgeDispatch).not.toHaveBeenCalled();
+  });
+
+  it("records a per-card failure, keyed so one failure does not hide the others", async () => {
+    mockAcknowledgeDispatch.mockRejectedValue(new ApiError("network", "offline", null, null));
+    const s = store({ pending: [A] });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(s.getState().dispatchInbox.failures.a).toBe("errors.network");
+    expect(s.getState().dispatchInbox.inFlight).toEqual([]);
+  });
+
+  it("never lets a late rejection contradict an acknowledgement that already succeeded", () => {
+    // The interleaving the condition guard makes rare, not impossible: a rejection landing
+    // after a fulfilment must be dropped, or the card would read as both acknowledged and
+    // failed at once.
+    const already = {
+      ...reducer(undefined, { type: "@@INIT" }),
+      acknowledged: { a: { acknowledgedAt: "t", idempotencyKey: "k", dispatch: A, dismissAt: null, hasRestTimer: false } },
+    };
+
+    const next = reducer(already, {
+      type: acknowledge.rejected.type,
+      meta: { arg: { dispatchId: "a" } },
+      payload: { dispatchId: "a", errorKey: "errors.network" },
+    });
+
+    expect(next.failures.a).toBeUndefined();
+  });
+});
+
+describe("completeRest (SCRUM-352 / FR-005, US-11)", () => {
+  it("swallows a failure rather than letting it stop the card from clearing", async () => {
+    mockCompleteDispatch.mockRejectedValue(new Error("offline"));
+    await expect(completeRest({ dispatchId: "c" })(jest.fn(), () => ({}), undefined)).resolves.not.toThrow();
+  });
+});
+
+describe("other reducers", () => {
+  it("idempotencyKeyAssigned records the key for that dispatch only", () => {
+    const next = reducer(undefined, idempotencyKeyAssigned({ dispatchId: "a", idempotencyKey: "key-1" }));
+    expect(next.idempotencyKeys.a).toBe("key-1");
+  });
+
+  it("dismissFailure clears just that card's failure", () => {
+    const failed = { ...reducer(undefined, { type: "@@INIT" }), failures: { a: "errors.network", b: "errors.server" } };
+    const next = reducer(failed, dismissFailure("a"));
+    expect(next.failures).toEqual({ b: "errors.server" });
+  });
+
+  it("resetAcknowledgements clears the device-local acknowledgement state", () => {
+    const populated = {
+      ...reducer(undefined, { type: "@@INIT" }),
+      acknowledged: { a: { acknowledgedAt: "t", idempotencyKey: "k", dispatch: A, dismissAt: null, hasRestTimer: false } },
+      idempotencyKeys: { a: "k" },
+      failures: { b: "errors.network" },
+      dismissedIds: ["a"],
+    };
+    const next = reducer(populated, resetAcknowledgements());
+    expect(next.acknowledged).toEqual({});
+    expect(next.idempotencyKeys).toEqual({});
+    expect(next.failures).toEqual({});
+    expect(next.dismissedIds).toEqual([]);
+  });
+});
+
+describe("device-local acknowledgements clear on sign-out (SCRUM-186)", () => {
+  it.each(["auth/signOut/fulfilled", "auth/sessionExpired/fulfilled"])(
+    "resets to initial state on %s",
+    (actionType) => {
+      const populated = {
+        ...reducer(undefined, { type: "@@INIT" }),
+        acknowledged: { a: { acknowledgedAt: "t", idempotencyKey: "k", dispatch: A, dismissAt: null, hasRestTimer: false } },
+      };
+      const next = reducer(populated, { type: actionType });
+      // Belongs to the user who made it — leaving it would show the next worker on this
+      // device someone else's completed actions.
+      expect(next.acknowledged).toEqual({});
+    },
+  );
 });

@@ -103,7 +103,15 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
           {t("wbgt.noReading")}
         </AppText>
       ) : (
-        <View style={styles.readingRow}>
+        // `accessible` merges the two sibling Text nodes below into one stop for a screen
+        // reader — sighted layout still wants the value and its unit as separate nodes for
+        // independent sizing, but announced apart they read as two unrelated facts rather
+        // than one reading.
+        <View
+          style={styles.readingRow}
+          accessible
+          accessibilityLabel={`${conditions.wbgt.toFixed(1)}°C ${t("wbgt.reading")}`}
+        >
           <AppText variant="display">{conditions.wbgt.toFixed(1)}</AppText>
           <AppText variant="subtitle" tone="secondary" style={styles.unit}>
             °C {t("wbgt.reading")}

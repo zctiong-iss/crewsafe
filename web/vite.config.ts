@@ -34,5 +34,21 @@ export default defineConfig({
     // until someone closes it at the form boundary (needs the site's own `timezone`
     // field and a zone-aware parse, e.g. date-fns-tz `fromZonedTime`).
     env: { TZ: "Asia/Singapore" },
+    coverage: {
+      // v8 is Vitest's documented default provider: it reads V8's native coverage
+      // collection, so it needs no Babel/source-transform instrumentation step.
+      provider: "v8",
+      // lcov is what SonarQube reads (sonar.javascript.lcov.reportPaths); text-summary
+      // keeps the number visible in a CI log without opening an artifact.
+      reporter: ["text-summary", "lcov"],
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.d.ts",
+        // Bootstrap entry point: no branching of its own to cover.
+        "src/main.tsx",
+        // Test helpers and mocks, not application behaviour.
+        "src/test/**",
+      ],
+    },
   },
 });

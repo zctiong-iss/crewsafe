@@ -119,6 +119,17 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of("Forbidden", "Access denied"));
     }
 
+    /**
+     * Handles UnauthorizedException thrown by business logic when user lacks permission.
+     * Returns 403 Forbidden as specified by @ResponseStatus on the exception class.
+     */
+    @ExceptionHandler(UnauthorizedException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorized(UnauthorizedException e) {
+        log.debug("unauthorized_handled");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.of("Forbidden", "Access denied"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleUnexpected(Exception e) {
         // Keep the record generic. The requestId ties it to the caller without exposing
