@@ -93,7 +93,7 @@ workflow_contract_holds() {
   grep -A1 '^permissions:' "$workflow" | grep -q '^  contents: read$' || return 1
   sast_has_no_aws_credential_action "$sast" || return 1
   contains "$workflow" 'python -m pip install --require-hashes -r requirements.txt' || return 1
-  contains "$workflow" 'python -m coverage run -m pytest' || return 1
+  contains "$workflow" 'python -m coverage run -m pytest test_forecast.py' || return 1
   contains "$workflow" 'python -m coverage xml -o coverage.xml' || return 1
   ordered "$sast" \
     'Install ML-service dependencies for coverage' \
@@ -154,7 +154,7 @@ if [[ -f "$WORKFLOW" ]]; then
   check 'SAST keeps read-only repository permission' has_read_only_permission
   check 'SAST has no AWS credential action' sast_has_no_aws_credential_action "$sast"
   check 'SAST installs ML-service dependencies with hashes' contains "$WORKFLOW" 'python -m pip install --require-hashes -r requirements.txt'
-  check 'SAST runs the full ML-service test suite under coverage' contains "$WORKFLOW" 'python -m coverage run -m pytest'
+  check 'SAST runs deterministic ML-service endpoint tests under coverage' contains "$WORKFLOW" 'python -m coverage run -m pytest test_forecast.py'
   check 'SAST writes the declared coverage report' contains "$WORKFLOW" 'python -m coverage xml -o coverage.xml'
   check 'SAST validates coverage before SonarQube scan' ordered "$sast" \
     'Install ML-service dependencies for coverage' \

@@ -4,7 +4,7 @@
 
 The repository-root `SAST (SonarQube)` job is the sole owner of ML-service coverage ingestion.
 Before its scanner runs, it sets up Python 3.11, installs the existing hash-locked ML-service
-dependencies, runs the ML-service pytest suite under Coverage.py, writes `ml-service/coverage.xml`, and
+dependencies, runs the deterministic ML-service endpoint test suite under Coverage.py, writes `ml-service/coverage.xml`, and
 rejects a missing, empty, malformed, or source-path-invalid report.
 
 `sonar-project.properties` consumes that report through the Python coverage setting, retains
@@ -34,7 +34,7 @@ Completed on 2026-08-13:
   pre-existing `jiter` hash does not cover its macOS CPython 3.13 wheel. This does not affect the
   CI target: the target Linux CPython 3.11 lock passed. A temporary environment with the same
   pinned versions was used only to execute tests.
-- ML-service pytest suite: 23 passed; Coverage.py wrote parseable XML with ML-service source paths.
+- Deterministic ML-service endpoint tests: 23 passed; Coverage.py wrote parseable XML with ML-service source paths. The live `test_agent_eval.py` Bedrock benchmark is intentionally excluded because the SAST job has no AWS credentials.
 - `test-ml-service-sonar-coverage.sh`: passed, including negative report and mutation cases.
 - `test-sast-gate-config.sh`: 46 passed.
 
