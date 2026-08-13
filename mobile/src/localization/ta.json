@@ -433,7 +433,22 @@
     "sendEdited": "திருத்திய திட்டத்தை அனுப்பு",
     "alreadyDecided": "இந்தத் திட்டத்தில் ஏற்கனவே ஒருவர் முடிவு எடுத்துவிட்டார்.",
     "decisionFailedTitle": "முடிவு பதிவு செய்யப்படவில்லை",
-    "actionWording": "பதிவில் வைக்கப்படும் சொற்கள்"
+    "actionWording": "பதிவில் வைக்கப்படும் சொற்கள்",
+    "originMandatory": "கட்டாயம்",
+    "originAdvisory": "பரிந்துரை",
+    "ruleReference": "விதி",
+    "appliesTo": "யாருக்கு பொருந்தும்",
+    "appliesToAll": "இந்தப் பணியில் அனைவருக்கும்",
+    "timingDuration": "{{duration}} நிமிடம்",
+    "timingEveryMinutes": "ஒவ்வொரு {{every}} நிமிடமும்",
+    "timingEveryHour": "ஒவ்வொரு மணி நேரமும்",
+    "timingStartBy": "{{time}} க்குள் தொடங்கவும்",
+    "generateDraft": "திட்டம் வரையவும்",
+    "generating": "வரைகிறது",
+    "generateFailedTitle": "திட்டம் வரையப்படவில்லை",
+    "generatedToast": "திட்டம் வரையப்பட்டது.",
+    "statusDraft": "வரைவு",
+    "requiredCannotRemove": "வெப்ப விதிகளின்படி கட்டாயம் — இதை நீக்க முடியாது."
   },
   "mitigationCategory": {
     "STOP_WORK": "வேலை நிறுத்தம்",

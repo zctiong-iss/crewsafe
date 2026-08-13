@@ -19,6 +19,7 @@ import { request } from "../client";
 import { isMockApi } from "@/auth/authMode";
 import {
   mockDecideRecommendation,
+  mockGenerateRecommendation,
   mockListRecommendations,
 } from "../mock/recommendations";
 import type { ApprovalDecision, Mitigation, Recommendation } from "@/types/domain";
@@ -76,5 +77,23 @@ export function decideRecommendation(
     url: `/api/v1/sites/${siteId}/shifts/${shiftId}/recommendations/${recommendationId}/decision`,
     method: "POST",
     data: input,
+  });
+}
+
+/**
+ * `POST …/shifts/{shiftId}/recommendations/generate` — ask the agent for a plan (SCRUM-118).
+ *
+ * **This endpoint does not exist yet.** SCRUM-289 builds it, and until then the caller is hidden
+ * behind `features.draftPlanTrigger`. Written now against the contract the design fixes rather
+ * than later against whatever shape gets discovered: the alternative is a client written from
+ * memory weeks after the decision was made.
+ *
+ * Returns the created recommendation, `PENDING_APPROVAL`, exactly as the list endpoint would.
+ */
+export function generateRecommendation(siteId: string, shiftId: string): Promise<Recommendation> {
+  if (isMockApi()) return delay(() => mockGenerateRecommendation(shiftId));
+  return request<Recommendation>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/recommendations/generate`,
+    method: "POST",
   });
 }
