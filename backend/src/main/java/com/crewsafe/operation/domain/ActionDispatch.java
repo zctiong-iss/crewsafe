@@ -55,9 +55,30 @@ public class ActionDispatch {
     @Column(name = "dispatched_at", nullable = false)
     private Instant dispatchedAt;
 
+    /**
+     * Set the first time the ack-window sweep flips this dispatch to {@code LATE}
+     * (SCRUM-324). Stays set even after it's later acknowledged or completed — the only
+     * place that records it was ever late, since {@link ActionDispatchStatus} itself has
+     * no "acknowledged late" value.
+     */
+    @Column(name = "late_at")
+    private Instant lateAt;
+
+    /** Null until {@code COMPLETED}. See {@link CompletionSource}. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "completed_by")
+    private CompletionSource completedBy;
+
     public enum ActionDispatchStatus {
         PENDING,
+        LATE,
         ACKNOWLEDGED,
         COMPLETED
+    }
+
+    /** WORKER for a manual complete tap, SYSTEM for the auto-complete sweep (SCRUM-324). */
+    public enum CompletionSource {
+        WORKER,
+        SYSTEM
     }
 }
