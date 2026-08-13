@@ -9,6 +9,12 @@ Generated datasets and artifacts are intentionally ignored by Git. The commands
 below are reproducible; never commit API keys, raw downloads, or unverified
 model files.
 
+Offline training and backtesting paths are restricted to the current ML
+workspace. Local commands run from `ml-service`, so their `data/` and
+`artifacts/` paths stay inside that folder. SageMaker automatically provides
+`SM_MODEL_DIR`; jobs using its standard `/opt/ml` layout stay within that fixed
+AWS training boundary.
+
 ### 1. Download historical observations
 
 ```bash

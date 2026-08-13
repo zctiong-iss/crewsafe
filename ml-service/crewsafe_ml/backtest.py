@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -14,6 +11,14 @@ import pandas as pd
 
 from .backtesting import run_rolling_backtest
 from .features import FEATURE_VERSION, model_feature_columns
+from .safe_paths import (
+    configured_workspace_root,
+    confined_existing_file,
+    confined_output_path,
+    read_json_object,
+    sha256_file,
+    write_json_atomically,
+)
 
 
 def main(arguments: Sequence[str] | None = None) -> int:
@@ -23,14 +28,31 @@ def main(arguments: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--evaluation-end", required=True)
     options = parser.parse_args(arguments)
+    workspace_root = configured_workspace_root()
+    feature_path = confined_existing_file(
+        options.features,
+        workspace_root,
+        label="feature dataset",
+    )
+    feature_manifest_path = confined_existing_file(
+        options.feature_manifest,
+        workspace_root,
+        label="feature manifest",
+    )
+    output_path = confined_output_path(
+        options.output,
+        workspace_root,
+        label="backtest output",
+    )
 
-    if options.output.exists():
+    if output_path.exists():
         raise ValueError("backtest output already exists")
     dataset_manifest = _verified_feature_manifest(
-        options.feature_manifest,
-        options.features,
+        feature_manifest_path,
+        feature_path,
+        workspace_root,
     )
-    feature_frame = pd.read_csv(options.features, parse_dates=["observed_at"])
+    feature_frame = pd.read_csv(feature_path, parse_dates=["observed_at"])
     feature_frame["observed_at"] = pd.to_datetime(
         feature_frame["observed_at"],
         utc=True,
@@ -64,9 +86,13 @@ def main(arguments: Sequence[str] | None = None) -> int:
         ),
         "horizons": reports,
     }
-    options.output.parent.mkdir(parents=True, exist_ok=True)
-    _write_json_atomically(options.output, payload)
-    print(f"Rolling backtest: {options.output}")
+    write_json_atomically(
+        output_path,
+        payload,
+        workspace_root,
+        label="backtest output",
+    )
+    print(f"Rolling backtest: {output_path}")
     for horizon, report in reports.items():
         aggregate = report["aggregate"]
         print(
@@ -79,12 +105,26 @@ def main(arguments: Sequence[str] | None = None) -> int:
     return 0
 
 
-def _verified_feature_manifest(path: Path, feature_path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def _verified_feature_manifest(
+    path: Path,
+    feature_path: Path,
+    workspace_root: Path,
+) -> dict[str, Any]:
+    payload = dict(
+        read_json_object(
+            path,
+            workspace_root,
+            label="feature manifest",
+        )
+    )
     prepared = payload.get("prepared_15_minute_dataset")
     if not isinstance(prepared, dict):
         raise ValueError("feature manifest is missing prepared dataset details")
-    if prepared.get("sha256") != _sha256(feature_path):
+    if prepared.get("sha256") != sha256_file(
+        feature_path,
+        workspace_root,
+        label="feature dataset",
+    ):
         raise ValueError("feature dataset checksum does not match its manifest")
     # Downloader manifests keep this beside the prepared dataset. Combined
     # manifests may declare it at the top level, so support both documented
@@ -98,20 +138,6 @@ def _verified_feature_manifest(path: Path, feature_path: Path) -> dict[str, Any]
         if not isinstance(payload.get(field), str):
             raise ValueError(f"feature manifest is missing {field}")
     return payload
-
-
-def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(64 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 if __name__ == "__main__":

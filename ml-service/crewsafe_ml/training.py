@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import os
 import re
 import subprocess
@@ -33,6 +31,13 @@ from .features import (
     chronological_split,
     load_normalized_readings,
     model_feature_columns,
+)
+from .safe_paths import (
+    confined_existing_file,
+    confined_output_path,
+    read_json_object,
+    sha256_file,
+    write_json_atomically,
 )
 
 
@@ -65,19 +70,43 @@ def train_and_package(
     dataset_path: Path,
     dataset_manifest_path: Path,
     output_directory: Path,
+    workspace_root: Path,
     model_version: str | None = None,
     source_commit: str | None = None,
 ) -> Path:
     """Train both forecast horizons and return the checksum-pinned manifest path."""
 
-    dataset_manifest = _read_dataset_manifest(dataset_manifest_path, dataset_path)
-    readings = load_normalized_readings(dataset_path)
+    safe_dataset_path = confined_existing_file(
+        dataset_path,
+        workspace_root,
+        label="training dataset",
+    )
+    safe_manifest_path = confined_existing_file(
+        dataset_manifest_path,
+        workspace_root,
+        label="dataset manifest",
+    )
+    safe_output_directory = confined_output_path(
+        output_directory,
+        workspace_root,
+        label="model output directory",
+    )
+    dataset_manifest = _read_dataset_manifest(
+        safe_manifest_path,
+        safe_dataset_path,
+        workspace_root,
+    )
+    readings = load_normalized_readings(safe_dataset_path)
     feature_frame = build_feature_frame(readings)
     numeric_features, categorical_features = model_feature_columns(feature_frame)
     version = model_version or _default_model_version(dataset_manifest["normalized_sha256"])
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", version):
         raise ValueError("model_version contains unsupported characters")
-    destination = output_directory.resolve() / version
+    destination = confined_output_path(
+        safe_output_directory / version,
+        workspace_root,
+        label="versioned model output",
+    )
     destination.mkdir(parents=True, exist_ok=False)
 
     trained_horizons = [
@@ -85,6 +114,7 @@ def train_and_package(
             feature_frame,
             horizon_minutes=horizon,
             output_directory=destination,
+            workspace_root=workspace_root,
             numeric_features=numeric_features,
             categorical_features=categorical_features,
         )
@@ -108,12 +138,21 @@ def train_and_package(
         "numeric_features": numeric_features,
         "categorical_features": categorical_features,
         "horizons": {
-            str(result.horizon_minutes): _horizon_manifest(result, destination)
+            str(result.horizon_minutes): _horizon_manifest(
+                result,
+                destination,
+                workspace_root,
+            )
             for result in trained_horizons
         },
     }
     manifest_path = destination / "manifest.json"
-    _write_json_atomically(manifest_path, manifest)
+    write_json_atomically(
+        manifest_path,
+        manifest,
+        workspace_root,
+        label="model manifest",
+    )
     return manifest_path
 
 
@@ -122,6 +161,7 @@ def _train_horizon(
     *,
     horizon_minutes: int,
     output_directory: Path,
+    workspace_root: Path,
     numeric_features: list[str],
     categorical_features: list[str],
 ) -> TrainedHorizon:
@@ -264,7 +304,11 @@ def _train_horizon(
 
     artifact_path = None
     if selected_model is not None:
-        artifact_path = output_directory / f"forecast-{horizon_minutes}m.joblib"
+        artifact_path = confined_output_path(
+            output_directory / f"forecast-{horizon_minutes}m.joblib",
+            workspace_root,
+            label="model artifact",
+        )
         joblib.dump(selected_model, artifact_path, compress=3)
 
     validation_trials = (
@@ -282,7 +326,7 @@ def _train_horizon(
         "validation_rows": len(split.validation),
         "test_rows": len(split.test),
     }
-    _write_json_atomically(
+    write_json_atomically(
         output_directory / f"evaluation-{horizon_minutes}m.json",
         {
             "horizon_minutes": horizon_minutes,
@@ -309,6 +353,8 @@ def _train_horizon(
                 safety_floor.name: safety_floor_metrics.as_dict(),
             },
         },
+        workspace_root,
+        label="model evaluation report",
     )
     return TrainedHorizon(
         horizon_minutes=horizon_minutes,
@@ -492,10 +538,24 @@ def build_hist_gradient_pipeline(
     )
 
 
-def _read_dataset_manifest(path: Path, dataset_path: Path) -> dict[str, Any]:
-    payload = json.loads(path.read_text(encoding="utf-8"))
+def _read_dataset_manifest(
+    path: Path,
+    dataset_path: Path,
+    workspace_root: Path,
+) -> dict[str, Any]:
+    payload = dict(
+        read_json_object(
+            path,
+            workspace_root,
+            label="dataset manifest",
+        )
+    )
     expected_hash = payload.get("normalized_sha256")
-    if not isinstance(expected_hash, str) or expected_hash != _sha256(dataset_path):
+    if not isinstance(expected_hash, str) or expected_hash != sha256_file(
+        dataset_path,
+        workspace_root,
+        label="training dataset",
+    ):
         raise ValueError("dataset checksum does not match its manifest")
     for field in ("start_date", "end_date"):
         if not isinstance(payload.get(field), str):
@@ -503,12 +563,24 @@ def _read_dataset_manifest(path: Path, dataset_path: Path) -> dict[str, Any]:
     return payload
 
 
-def _horizon_manifest(result: TrainedHorizon, destination: Path) -> dict[str, Any]:
+def _horizon_manifest(
+    result: TrainedHorizon,
+    destination: Path,
+    workspace_root: Path,
+) -> dict[str, Any]:
     artifact_name = result.artifact_path.name if result.artifact_path else None
     return {
         "selected_model": result.selected_model,
         "artifact": artifact_name,
-        "artifact_sha256": _sha256(destination / artifact_name) if artifact_name else None,
+        "artifact_sha256": (
+            sha256_file(
+                destination / artifact_name,
+                workspace_root,
+                label="model artifact",
+            )
+            if artifact_name
+            else None
+        ),
         "interval_half_width": result.interval_half_width,
         "prediction_interval": {
             "method": "absolute validation residual quantile",
@@ -552,17 +624,3 @@ def _current_commit() -> str:
         timeout=5,
     ).stdout.strip()
     return f"{revision}-dirty" if tracked_changes else revision
-
-
-def _write_json_atomically(path: Path, payload: dict[str, Any]) -> None:
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    os.replace(temporary, path)
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(64 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()

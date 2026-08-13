@@ -52,6 +52,7 @@ class TrainingTest(unittest.TestCase):
                 dataset_path=dataset_path,
                 dataset_manifest_path=dataset_manifest_path,
                 output_directory=root / "artifacts",
+                workspace_root=root,
                 model_version="test-model-1",
                 source_commit="test-commit",
             )

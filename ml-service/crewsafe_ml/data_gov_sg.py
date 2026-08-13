@@ -451,66 +451,118 @@ def _parse_standard_readings(
     requested_date: date,
     page_number: int,
 ) -> tuple[list[WeatherReading], int, int, tuple[StationMetadataCorrection, ...]]:
-    stations = _require_list(data.get("stations"), f"{metric.slug} stations")
+    station_by_id, metadata_corrections = _parse_station_metadata(
+        metric,
+        data,
+        latest_stations,
+        requested_date=requested_date,
+        page_number=page_number,
+    )
+    unit = _optional_text(data.get("readingUnit")) or metric.default_unit
+    readings, skipped_count, reused_count = _parse_standard_batches(
+        metric,
+        data,
+        station_by_id,
+        known_stations,
+        unit,
+    )
+    # Remember metadata only after the entire page has passed validation.
+    known_stations.update(station_by_id)
+    latest_stations.update(station_by_id)
+    return readings, skipped_count, reused_count, tuple(metadata_corrections)
+
+
+def _parse_station_metadata(
+    metric: WeatherMetric,
+    data: Mapping[str, Any],
+    latest_stations: Mapping[str, StationMetadata],
+    *,
+    requested_date: date,
+    page_number: int,
+) -> tuple[dict[str, StationMetadata], list[StationMetadataCorrection]]:
     station_by_id: dict[str, StationMetadata] = {}
-    metadata_corrections: list[StationMetadataCorrection] = []
-    for station_value in stations:
+    corrections: list[StationMetadataCorrection] = []
+    for station_value in _require_list(data.get("stations"), f"{metric.slug} stations"):
         station = _require_mapping(station_value, f"{metric.slug} station")
         station_id = _required_text(station.get("id"), f"{metric.slug} station id")
         if station_id in station_by_id:
             raise UpstreamPayloadError(f"duplicate {metric.slug} station id {station_id}")
         location = _require_mapping(
-            station.get("location"), f"{metric.slug} station location"
+            station.get("location"),
+            f"{metric.slug} station location",
         )
         metadata = (station, location)
         previous_metadata = latest_stations.get(station_id)
         if previous_metadata is not None:
-            if _station_identity(previous_metadata) != _station_identity(metadata):
-                raise UpstreamPayloadError(
-                    f"conflicting {metric.slug} station metadata for {station_id}"
-                )
-            previous_station_name = _station_name(previous_metadata)
-            current_station_name = _station_name(metadata)
-            previous_latitude, previous_longitude = _station_coordinates(
-                previous_metadata
+            correction = _station_metadata_correction(
+                metric,
+                station_id,
+                previous_metadata,
+                metadata,
+                requested_date=requested_date,
+                page_number=page_number,
             )
-            current_latitude, current_longitude = _station_coordinates(metadata)
-            distance_metres = station_location_distance_metres(
-                previous_latitude,
-                previous_longitude,
-                current_latitude,
-                current_longitude,
-            )
-            if distance_metres > MAX_STATION_LOCATION_CORRECTION_METRES:
-                raise UpstreamPayloadError(
-                    f"conflicting {metric.slug} station metadata for {station_id}"
-                )
-            if (
-                previous_station_name != current_station_name
-                or distance_metres > 0
-            ):
-                metadata_corrections.append(
-                    StationMetadataCorrection(
-                        metric=metric.slug,
-                        requested_date=requested_date,
-                        page_number=page_number,
-                        station_id=station_id,
-                        previous_station_name=previous_station_name,
-                        corrected_station_name=current_station_name,
-                        previous_latitude=previous_latitude,
-                        previous_longitude=previous_longitude,
-                        corrected_latitude=current_latitude,
-                        corrected_longitude=current_longitude,
-                        distance_metres=distance_metres,
-                    )
-                )
+            if correction is not None:
+                corrections.append(correction)
         station_by_id[station_id] = metadata
+    return station_by_id, corrections
 
-    unit = _optional_text(data.get("readingUnit")) or metric.default_unit
-    batches = _require_list(data.get("readings"), f"{metric.slug} readings")
+
+def _station_metadata_correction(
+    metric: WeatherMetric,
+    station_id: str,
+    previous: StationMetadata,
+    current: StationMetadata,
+    *,
+    requested_date: date,
+    page_number: int,
+) -> StationMetadataCorrection | None:
+    if _station_identity(previous) != _station_identity(current):
+        raise UpstreamPayloadError(
+            f"conflicting {metric.slug} station metadata for {station_id}"
+        )
+    previous_name = _station_name(previous)
+    current_name = _station_name(current)
+    previous_latitude, previous_longitude = _station_coordinates(previous)
+    current_latitude, current_longitude = _station_coordinates(current)
+    distance_metres = station_location_distance_metres(
+        previous_latitude,
+        previous_longitude,
+        current_latitude,
+        current_longitude,
+    )
+    if distance_metres > MAX_STATION_LOCATION_CORRECTION_METRES:
+        raise UpstreamPayloadError(
+            f"conflicting {metric.slug} station metadata for {station_id}"
+        )
+    if previous_name == current_name and distance_metres == 0:
+        return None
+    return StationMetadataCorrection(
+        metric=metric.slug,
+        requested_date=requested_date,
+        page_number=page_number,
+        station_id=station_id,
+        previous_station_name=previous_name,
+        corrected_station_name=current_name,
+        previous_latitude=previous_latitude,
+        previous_longitude=previous_longitude,
+        corrected_latitude=current_latitude,
+        corrected_longitude=current_longitude,
+        distance_metres=distance_metres,
+    )
+
+
+def _parse_standard_batches(
+    metric: WeatherMetric,
+    data: Mapping[str, Any],
+    station_by_id: Mapping[str, StationMetadata],
+    known_stations: Mapping[str, StationMetadata],
+    unit: str,
+) -> tuple[list[WeatherReading], int, int]:
     normalized: list[WeatherReading] = []
-    skipped_missing_count = 0
-    reused_station_metadata_count = 0
+    skipped_count = 0
+    reused_count = 0
+    batches = _require_list(data.get("readings"), f"{metric.slug} readings")
     for batch_value in batches:
         batch = _require_mapping(batch_value, f"{metric.slug} reading batch")
         observed_at = _parse_timestamp(
@@ -530,10 +582,10 @@ def _parse_standard_readings(
                     raise UpstreamPayloadError(
                         f"{metric.slug} reading references unknown station {station_id}"
                     )
-                reused_station_metadata_count += 1
+                reused_count += 1
             value = reading.get("value")
             if _is_missing_measurement(value):
-                skipped_missing_count += 1
+                skipped_count += 1
                 continue
             station, location = station_metadata
             normalized.append(
@@ -546,15 +598,7 @@ def _parse_standard_readings(
                     unit=unit,
                 )
             )
-    # Remember metadata only after the entire page has passed validation.
-    known_stations.update(station_by_id)
-    latest_stations.update(station_by_id)
-    return (
-        normalized,
-        skipped_missing_count,
-        reused_station_metadata_count,
-        tuple(metadata_corrections),
-    )
+    return normalized, skipped_count, reused_count
 
 
 def _station_identity(metadata: StationMetadata) -> tuple[str, str]:

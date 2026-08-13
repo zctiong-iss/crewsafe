@@ -75,32 +75,14 @@ class ForecastModelRegistry:
         horizons: dict[int, Mapping[str, Any]] = {}
         models: dict[int, Any] = {}
         for horizon in (30, 60):
-            configuration = horizon_payload.get(str(horizon))
-            if not isinstance(configuration, Mapping):
-                raise ModelConfigurationError(f"model manifest is missing horizon {horizon}")
-            selected_model = _required_text(configuration, "selected_model")
-            interval_half_width = configuration.get("interval_half_width")
-            if not isinstance(interval_half_width, (int, float)) or interval_half_width < 0:
-                raise ModelConfigurationError("model interval is missing or invalid")
+            configuration, model = _load_horizon(
+                horizon_payload,
+                horizon,
+                manifest_path.parent,
+            )
             horizons[horizon] = configuration
-
-            artifact_name = configuration.get("artifact")
-            if selected_model == "persistence":
-                if artifact_name is not None:
-                    raise ModelConfigurationError("persistence must not reference an artifact")
-                continue
-            if not isinstance(artifact_name, str) or Path(artifact_name).name != artifact_name:
-                raise ModelConfigurationError("model artifact name is invalid")
-            artifact_path = (manifest_path.parent / artifact_name).resolve(strict=True)
-            if artifact_path.parent != manifest_path.parent:
-                raise ModelConfigurationError("model artifact escaped its bundle directory")
-            artifact_checksum = configuration.get("artifact_sha256")
-            if (
-                not isinstance(artifact_checksum, str)
-                or _sha256(artifact_path) != artifact_checksum
-            ):
-                raise ModelConfigurationError("model artifact checksum does not match")
-            models[horizon] = joblib.load(artifact_path)
+            if model is not None:
+                models[horizon] = model
 
         return cls(
             model_version=model_version,
@@ -143,6 +125,53 @@ class ForecastModelRegistry:
             model_version=f"{self._model_version}:{selected_model}",
             interval_half_width=float(configuration["interval_half_width"]),
         )
+
+
+def _load_horizon(
+    horizon_payload: Mapping[str, Any],
+    horizon: int,
+    bundle_directory: Path,
+) -> tuple[Mapping[str, Any], Any | None]:
+    configuration = horizon_payload.get(str(horizon))
+    if not isinstance(configuration, Mapping):
+        raise ModelConfigurationError(f"model manifest is missing horizon {horizon}")
+
+    _validated_interval(configuration)
+    selected_model = _required_text(configuration, "selected_model")
+    artifact_name = configuration.get("artifact")
+    if selected_model == "persistence":
+        if artifact_name is not None:
+            raise ModelConfigurationError("persistence must not reference an artifact")
+        return configuration, None
+
+    artifact_path = _verified_artifact_path(
+        bundle_directory,
+        artifact_name,
+        configuration.get("artifact_sha256"),
+    )
+    return configuration, joblib.load(artifact_path)
+
+
+def _validated_interval(configuration: Mapping[str, Any]) -> float:
+    interval_half_width = configuration.get("interval_half_width")
+    if not isinstance(interval_half_width, (int, float)) or interval_half_width < 0:
+        raise ModelConfigurationError("model interval is missing or invalid")
+    return float(interval_half_width)
+
+
+def _verified_artifact_path(
+    bundle_directory: Path,
+    artifact_name: object,
+    expected_checksum: object,
+) -> Path:
+    if not isinstance(artifact_name, str) or Path(artifact_name).name != artifact_name:
+        raise ModelConfigurationError("model artifact name is invalid")
+    artifact_path = (bundle_directory / artifact_name).resolve(strict=True)
+    if artifact_path.parent != bundle_directory:
+        raise ModelConfigurationError("model artifact escaped its bundle directory")
+    if not isinstance(expected_checksum, str) or _sha256(artifact_path) != expected_checksum:
+        raise ModelConfigurationError("model artifact checksum does not match")
+    return artifact_path
 
 
 def _inference_feature_row(

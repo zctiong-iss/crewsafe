@@ -37,7 +37,7 @@ class RollingWindowTest(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            manifest = _verified_feature_manifest(manifest_path, feature_path)
+            manifest = _verified_feature_manifest(manifest_path, feature_path, root)
 
             self.assertEqual(
                 FEATURE_VERSION,
