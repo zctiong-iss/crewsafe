@@ -224,6 +224,39 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Generate web coverage
+        working-directory: web
+        run: npm run test:coverage
+
+      # Vitest's V8 provider writes SF: entries relative to the process cwd (web/), e.g.
+      # `SF:src/auth/authConfig.ts`, not repository-relative. The standalone scanner
+      # resolves sonar.javascript.lcov.reportPaths from the repo root, so an unprefixed
+      # report would silently match nothing in sonar.sources -- the same failure mode the
+      # mobile step below already guards against. A report with any SF: line NOT
+      # web/src/-prefixed (e.g. one accidentally covering web/node_modules/...) is
+      # rejected: SEC-002 requires unexpected report content to fail closed, not just
+      # requires one matching line among possibly-unexpected others.
+      - name: Prepare web LCOV for SonarQube
+        shell: bash
+        run: |
+          test -s web/coverage/lcov.info
+          awk -v prefix="web/" '
+            /^SF:/ {
+              path = substr($0, 4)
+              sub(/^\.\//, "", path)
+              if (path !~ /^\// && index(path, prefix) != 1) {
+                $0 = "SF:" prefix path
+              }
+            }
+            { print }
+          ' web/coverage/lcov.info > web/coverage/sonar-lcov.info
+          test -s web/coverage/sonar-lcov.info
+          grep -q '^SF:web/src/' web/coverage/sonar-lcov.info
+          if grep '^SF:' web/coverage/sonar-lcov.info | grep -qv '^SF:web/src/'; then
+            echo "::error::web coverage report contains an SF: line outside web/src/" >&2
+            exit 1
+          fi
+
       - name: Install mobile dependencies for coverage
         working-directory: mobile
         run: npm ci
@@ -411,6 +444,12 @@ jobs:
 
       - name: Sonar Quality Gate configurator self-tests
         run: .github/scripts/tests/test-sonar-gate-configure.sh
+
+      # SCRUM-351: added here (unlike the ML-service coverage guard from SCRUM-346, which
+      # was written but never wired into this job) so a change that silently drops or
+      # weakens web coverage validation fails a test rather than passing unnoticed.
+      - name: Web Sonar coverage guard self-tests
+        run: .github/scripts/tests/test-web-sonar-coverage.sh
 
       # Added web tests for SCRUM-311 (Security enhancements for front-end)
       - name: Web runtime configuration self-tests
