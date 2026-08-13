@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,6 +18,10 @@ from .features import build_feature_frame
 
 class ModelConfigurationError(RuntimeError):
     """A configured model bundle is incomplete or cannot be trusted."""
+
+
+class ModelInferenceError(RuntimeError):
+    """A trusted model bundle could not produce a valid prediction."""
 
 
 @dataclass(frozen=True)
@@ -65,6 +70,12 @@ class ForecastModelRegistry:
             raise ModelConfigurationError("model manifest checksum does not match")
 
         manifest = _read_manifest(manifest_path)
+        if manifest.get("schema_version") != 2:
+            raise ModelConfigurationError("model manifest schema is unsupported")
+        if manifest.get("approved_for_inference") is not True:
+            raise ModelConfigurationError("model bundle is not approved for inference")
+        if manifest.get("approval_blocker"):
+            raise ModelConfigurationError("model bundle still has an approval blocker")
         model_version = _required_text(manifest, "model_version")
         numeric_features = _string_list(manifest, "numeric_features")
         categorical_features = _string_list(manifest, "categorical_features")
@@ -114,12 +125,19 @@ class ForecastModelRegistry:
         if selected_model == "persistence":
             predicted_value = float(feature_row["wbgt_t"].iloc[0])
         else:
-            model = self._models[horizon_minutes]
             columns = list(self._numeric_features + self._categorical_features)
             missing_columns = sorted(set(columns).difference(feature_row.columns))
             if missing_columns:
                 raise ValueError("forecast context is missing required feature fields")
-            predicted_value = float(model.predict(feature_row[columns])[0])
+            try:
+                model = self._models[horizon_minutes]
+                predicted_value = float(model.predict(feature_row[columns])[0])
+            except Exception as error:
+                # Estimator implementations may raise different exception types.
+                # Keep every artifact-specific failure behind one safe boundary.
+                raise ModelInferenceError("configured model inference failed") from error
+        if not math.isfinite(predicted_value) or not 0 <= predicted_value <= 60:
+            raise ModelInferenceError("configured model returned an invalid prediction")
         return ModelPrediction(
             predicted_value=predicted_value,
             model_version=f"{self._model_version}:{selected_model}",
@@ -149,12 +167,21 @@ def _load_horizon(
         artifact_name,
         configuration.get("artifact_sha256"),
     )
-    return configuration, joblib.load(artifact_path)
+    try:
+        return configuration, joblib.load(artifact_path)
+    except Exception as error:
+        # Deserializers and estimator versions fail in several ways. Never let a
+        # bundle-specific exception or local path escape this typed boundary.
+        raise ModelConfigurationError("model artifact could not be loaded") from error
 
 
 def _validated_interval(configuration: Mapping[str, Any]) -> float:
     interval_half_width = configuration.get("interval_half_width")
-    if not isinstance(interval_half_width, (int, float)) or interval_half_width < 0:
+    if (
+        not isinstance(interval_half_width, (int, float))
+        or not math.isfinite(interval_half_width)
+        or not 0 <= interval_half_width <= 60
+    ):
         raise ModelConfigurationError("model interval is missing or invalid")
     return float(interval_half_width)
 

@@ -61,6 +61,7 @@ class TrainingTest(unittest.TestCase):
             self.assertEqual("test-model-1", manifest["model_version"])
             self.assertEqual("test-commit", manifest["source_commit"])
             self.assertEqual(2, manifest["schema_version"])
+            self.assertIs(False, manifest["approved_for_inference"])
             self.assertEqual(RANDOM_SEED, manifest["training"]["random_seed"])
             self.assertEqual({"30", "60"}, set(manifest["horizons"]))
             self.assertTrue((manifest_path.parent / "evaluation-30m.json").is_file())
@@ -110,6 +111,10 @@ class TrainingTest(unittest.TestCase):
                         manifest["horizons"][horizon]["artifact_sha256"],
                     )
 
+            # Training packages a development candidate. This synthetic test
+            # represents the separate reviewed promotion step.
+            manifest["approved_for_inference"] = True
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
             registry = ForecastModelRegistry.load(manifest_path, sha256(manifest_path))
             prediction = registry.predict(
                 horizon_minutes=30,
