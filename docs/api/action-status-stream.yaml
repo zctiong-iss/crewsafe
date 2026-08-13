@@ -1,0 +1,213 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Action status + alert-count stream
+  version: "1.0"
+  contact:
+    name: Jemilin Beulah
+  description: >
+    Contract for SCRUM-317 (US-12 / SCRUM-133). Defines the states a supervisor watches
+    an action dispatch move through, the rule that flips a stalled one to LATE, and the
+    new rule where completion no longer needs a second tap from the worker. Alert counts
+    ride the same SSE connection as the per-dispatch updates.
+
+    This is a fresh design, not a write-up of existing behaviour — unlike
+    action-dispatch.yaml, nothing here is built yet. SCRUM-324 (BE) and SCRUM-318 (WEB)
+    build against this spec rather than the other way round.
+
+    State machine: PENDING moves to LATE if nobody acknowledges within the ack window.
+    PENDING or LATE moves to ACKNOWLEDGED when the worker taps. ACKNOWLEDGED moves to
+    COMPLETED either because the worker taps complete, or because the auto-complete
+    window runs out first — whichever happens first wins.
+
+    Both LATE and the auto-complete are driven by a backend timer, not a worker action.
+    Same pattern as the polling loop already in SiteConditionsStreamService (SCRUM-168):
+    one scheduled sweep over PENDING/ACKNOWLEDGED rows, not a timer per dispatch.
+    SCRUM-324 builds the sweep; this contract just pins down the rule it follows.
+
+    Late-derivation rule: a dispatch is LATE once it's been PENDING longer than
+    app.action-dispatch.ack-window (3 min default). It's a real persisted status, not
+    something computed on read, so it shows up in the audit log and every client on the
+    stream sees the change without recomputing anything itself. Acknowledging a LATE
+    dispatch just moves it to ACKNOWLEDGED like any other — there's no "acknowledged
+    late" status, only the lateAt timestamp as a record that it happened.
+
+    Resending a reminder once something goes LATE is a separate supervisor action and
+    isn't something this contract needs to model.
+
+    Auto-completion rule: an ACKNOWLEDGED dispatch completes on its own once
+    app.action-dispatch.auto-complete-window has passed since startTime. This is
+    deliberately the same fixed window for every actionCode rather than something parsed
+    out of REST_10_MIN / REST_15_MIN, so it also covers codes like STOP_WORK or HYDRATE
+    that have no duration baked into the name. If the worker taps complete first, that
+    wins and the timer firing afterwards is a no-op — same idempotency as today.
+
+    Open question this contract doesn't resolve: one fixed window for every actionCode
+    means a REST_10_MIN and a hypothetical REST_20_MIN dispatch would auto-complete at
+    the same offset from acknowledgement, which doesn't really match what the codes
+    imply. The 15-minute default below is a placeholder, not a number anyone's signed
+    off on yet.
+
+    Config, same shape as ConditionsStreamProperties:
+    app.action-dispatch.ack-window (default 3m), app.action-dispatch.auto-complete-window
+    (default 15m, placeholder).
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sites/{siteId}/actions/stream:
+    parameters:
+      - name: siteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: streamActionStatus
+      summary: SSE stream of action-status changes and alert counts for a site
+      description: >
+        Same auth as SiteConditionsController#stream — SUPERVISOR, SAFETY_MANAGER or
+        ADMIN, plus @siteAccess.canAccess(siteId). How a dispatch resolves to a siteId
+        (today it only has approval → recommendation → shiftId) is left for SCRUM-324
+        to work out.
+
+        Two event types share the connection: `action-status` on every dispatch
+        transition, and `alert-count` right after any action-status event that changes
+        the count, so clients don't have to sum events themselves to get a badge number.
+      responses:
+        "200":
+          description: >
+            text/event-stream. Frames are `event: <action-status|alert-count>` then
+            `data: <json>`, same framing the conditions stream already uses.
+          content:
+            text/event-stream:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ActionDispatch"
+                  - $ref: "#/components/schemas/AlertCount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller's role isn't permitted, or fails @siteAccess for this siteId.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+          nullable: true
+
+    ActionDispatchStatus:
+      type: string
+      enum: [PENDING, LATE, ACKNOWLEDGED, COMPLETED]
+      description: >
+        Adds LATE to the SCRUM-184 enum. Like the auto-complete transition, it's
+        timer-driven — not something a client requests.
+
+    CompletionSource:
+      type: string
+      enum: [WORKER, SYSTEM]
+      description: WORKER for a manual complete tap, SYSTEM for the auto-complete timer.
+
+    ActionDispatch:
+      type: object
+      required: [id, approvalId, workerId, actionCode, status, dispatchedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        approvalId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        actionCode:
+          type: string
+        instruction:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ActionDispatchStatus"
+        dispatchedAt:
+          type: string
+          format: date-time
+        lateAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            Set the first time the ack-window sweep flips this to LATE. Stays set even
+            after it's later acknowledged or completed — the only place that records it
+            was ever late, since status itself doesn't have an "acknowledged late" value.
+        startTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the worker acknowledges — unchanged from SCRUM-184.
+        endTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set on completion, whether manual or automatic.
+        completedBy:
+          allOf:
+            - $ref: "#/components/schemas/CompletionSource"
+          nullable: true
+          description: Null until COMPLETED.
+
+    AlertCount:
+      type: object
+      required: [siteId, pending, late, acknowledged, completed, asOf]
+      properties:
+        siteId:
+          type: string
+          format: uuid
+        pending:
+          type: integer
+          minimum: 0
+        late:
+          type: integer
+          minimum: 0
+          description: The number that needs supervisor attention right now — this is the dashboard badge count.
+        acknowledged:
+          type: integer
+          minimum: 0
+        completed:
+          type: integer
+          minimum: 0
+          description: Completed this shift, not all-time.
+        asOf:
+          type: string
+          format: date-time
