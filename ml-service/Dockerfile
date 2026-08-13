@@ -9,10 +9,12 @@ RUN pip install --no-cache-dir --require-hashes --only-binary :all: -r requireme
 
 # Copy application code as root
 COPY app.py models.py bedrock_client.py forecast_service.py test_forecast.py ./
+COPY agent ./agent
 
 # Create non-root user and set restrictive permissions on all files
 RUN useradd -m -u 1000 appuser && \
     chmod 444 app.py models.py bedrock_client.py forecast_service.py test_forecast.py && \
+    chmod -R a-w agent && \
     chown -R appuser:appuser /app
 
 # Health check (runs as root via Docker healthcheck mechanism)

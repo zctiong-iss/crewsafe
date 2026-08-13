@@ -8,9 +8,15 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import time
 
+from agent.contract import AgentDraftRequest, AgentDraftResponse
+from agent.graph import draft_plan, set_bedrock_client
 from bedrock_client import BedrockClient, BedrockAccessError, BedrockModelAccessError
 from models import MitigationRequest, MitigationBatch, ForecastRequest, ForecastPrediction
 from forecast_service import ForecastService
+
+# Selected in SCRUM-287 against the §8.6 evaluation set. Kept in sync with the backend's
+# app.bedrock.model-id, which is the same value with the same BEDROCK_MODEL_ID override.
+DEFAULT_MODEL_ID = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +39,12 @@ async def lifespan(app: FastAPI):
         logger.info(f"Bedrock startup: {message}")
     except BedrockAccessError as e:
         logger.warning(f"Bedrock not accessible at startup: {e}")
+
+    # The agent graph shares this client rather than building a second one, so it inherits the
+    # startup access check and its cached result. A client that failed verification is still
+    # handed over on purpose: the graph's fallback path is what turns that into a plan, and
+    # refusing to register it here would turn a recoverable outage into a 503.
+    set_bedrock_client(bedrock_client)
 
     yield
 
@@ -197,6 +209,44 @@ async def forecast(request: ForecastRequest):
     except Exception:
         logger.exception("Forecast error occurred")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post(
+    "/agent/draft",
+    response_model=AgentDraftResponse,
+    responses={
+        200: {"description": "A draft plan, from either the model or the deterministic fallback"},
+        422: {"description": "Malformed request (missing policy decision, bad band name, ...)"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def agent_draft(request: AgentDraftRequest):
+    """Turn a policy decision into an explainable draft plan (SCRUM-118 / SCRUM-289).
+
+    Deliberately has no 503. Bedrock being unavailable, throttled, or wrong is not an error
+    condition for this endpoint — the graph's fallback node turns every one of those into a
+    valid deterministic plan, and the caller reads `usedFallback` to find out which path ran.
+    A supervisor asking for a plan during a heat event gets a plan.
+
+    The one thing this endpoint will not do is invent a policy decision. `policyDecision` is a
+    required field, so a request that skipped policy evaluation fails validation at the door
+    with a 422 rather than reaching the model (§8.2).
+    """
+    model_id = os.getenv("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID)
+    start_time = time.time()
+
+    try:
+        response = draft_plan(request, model_id=model_id)
+    except Exception:
+        logger.exception("Agent draft failed outside the graph's own fallback path")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    logger.info(
+        "agent_draft_completed shift=%s mitigations=%d used_fallback=%s total_ms=%.0f tokens=%d+%d",
+        request.shiftId, len(response.mitigations), response.usedFallback,
+        (time.time() - start_time) * 1000, response.inputTokens, response.outputTokens,
+    )
+    return response
 
 
 @app.get("/openapi.json")
