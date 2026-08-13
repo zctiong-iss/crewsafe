@@ -127,3 +127,14 @@ it("says a missing reading is missing, rather than showing a dash", async () => 
   expect(queryByText("wbgt.noReading")).not.toBeNull();
   expect(queryByText("wbgt.stopWorkOverride")).not.toBeNull();
 });
+
+describe("accessibility (SCRUM-352 / FR-006, User Story 3)", () => {
+  it("exposes the reading as one composite accessible label, not two disjoint text nodes", async () => {
+    // The value and its unit render as sibling <Text> nodes for sighted layout — "31.4" and
+    // "°C wbgt.reading" — which a screen reader would otherwise announce as two unrelated
+    // stops rather than one reading.
+    const { getByLabelText } = await render(<WbgtCard conditions={conditions({ wbgt: 31.4 })} />);
+    const label = getByLabelText(/31\.4.*wbgt\.reading/);
+    expect(label).not.toBeNull();
+  });
+});
