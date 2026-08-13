@@ -29,7 +29,7 @@
 .shift-card.shift-card--planned { border-left: 8px solid var(--status-waiting); }
 .shift-card.shift-card--active  { border-left: 8px solid var(--status-ok); background: var(--status-ok-wash); }
 .shift-card.shift-card--closed  { border-left: 8px solid var(--status-none); }
-.shift-card.shift-card--cancelled { border-left: 8px dashed var(--status-none); }
+.shift-card.shift-card--cancelled { border-left: 8px solid var(--status-none); }
 
 .shift-card__summary {
   display: flex;
