@@ -91,7 +91,12 @@ def _forecast_node(state: DraftState) -> DraftState:
         return {"forecast_wbgt_30m": request.forecastWbgt30m, "forecast_model_version": None}
 
     try:
-        prediction = ForecastService.forecast(
+        # Called on an instance, not on the class. Today ForecastService.forecast is a
+        # @staticmethod and either form works; SCRUM-281 (PR #219) turns it into an instance
+        # method, at which point the class-level call raises and this node would quietly
+        # degrade the forecast to null for every draft. An instance call is correct under both,
+        # so this stays working when that lands instead of failing silently on merge day.
+        prediction = ForecastService().forecast(
             metric="wbgt", current_value=request.currentWbgt, horizon_minutes=30)
         request.forecastWbgt30m = prediction.predicted_value
         return {
