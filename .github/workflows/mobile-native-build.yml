@@ -1,0 +1,299 @@
+name: Mobile Native Build
+
+# SCRUM-348. Manual-only: builds non-store Android/iOS artifacts for internal security
+# testing (MobSF) and QA. Never triggered by a push or an opened/updated pull request -- see
+# docs/runbooks/SCRUM-348-mobile-native-security-artifacts.md for how/why.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ios_profile:
+        description: iOS output profile
+        type: choice
+        options:
+          - simulator
+          - adhoc
+        default: simulator
+      build_android_aab:
+        description: "Also build a debug-signed Android AAB (default: APK only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-native-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-build:
+    name: Android Build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Prebuild Android native project
+        run: npx expo prebuild --platform android --non-interactive
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug
+
+      - name: Build debug AAB
+        if: ${{ inputs.build_android_aab }}
+        run: cd android && ./gradlew bundleDebug
+
+      - name: Resolve app version
+        id: version
+        run: echo "value=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      - name: Stage and describe Android APK
+        env:
+          PLATFORM: android
+          ARTIFACT_TYPE: apk
+          BUILD_PROFILE: android-internal
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/android-apk/"
+          "$GITHUB_WORKSPACE/.github/scripts/mobile/write-artifact-metadata.sh" \
+            "$RUNNER_TEMP/android-apk/artifact-metadata.json" \
+            "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Android APK artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobile-android-apk-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/android-apk/app-debug.apk
+            ${{ runner.temp }}/android-apk/artifact-metadata.json
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Stage and describe Android AAB
+        if: ${{ inputs.build_android_aab }}
+        env:
+          PLATFORM: android
+          ARTIFACT_TYPE: aab
+          BUILD_PROFILE: android-internal
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/android-aab"
+          cp android/app/build/outputs/bundle/debug/app-debug.aab "$RUNNER_TEMP/android-aab/"
+          "$GITHUB_WORKSPACE/.github/scripts/mobile/write-artifact-metadata.sh" \
+            "$RUNNER_TEMP/android-aab/artifact-metadata.json" \
+            "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Android AAB artifact
+        if: ${{ inputs.build_android_aab }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobile-android-aab-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/android-aab/app-debug.aab
+            ${{ runner.temp }}/android-aab/artifact-metadata.json
+          retention-days: 14
+          if-no-files-found: error
+
+  ios-build:
+    name: iOS Build
+    runs-on: macos-latest
+    if: github.ref == 'refs/heads/main'
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.x"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prebuild iOS native project
+        run: npx expo prebuild --platform ios --non-interactive
+
+      - name: Resolve app version
+        id: version
+        run: echo "value=$(node -p "require('./app.json').expo.version")" >> "$GITHUB_OUTPUT"
+
+      # --- ios_profile: simulator (default) — never requires distribution signing (FR-008) ---
+
+      - name: Build iOS Simulator app
+        if: ${{ inputs.ios_profile == 'simulator' }}
+        run: |
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n1)"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme CrewSafe \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -derivedDataPath "$RUNNER_TEMP/ios-build" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Stage and describe iOS Simulator app
+        if: ${{ inputs.ios_profile == 'simulator' }}
+        env:
+          PLATFORM: ios
+          ARTIFACT_TYPE: simulator-app
+          BUILD_PROFILE: ios-simulator
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-simulator"
+          APP_PATH="$(find "$RUNNER_TEMP/ios-build/Build/Products" -maxdepth 2 -name '*.app' | head -n1)"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ios-simulator/"
+          "$GITHUB_WORKSPACE/.github/scripts/mobile/write-artifact-metadata.sh" \
+            "$RUNNER_TEMP/ios-simulator/artifact-metadata.json" \
+            "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload iOS Simulator artifact
+        if: ${{ inputs.ios_profile == 'simulator' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobile-ios-simulator-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-simulator
+          retention-days: 14
+          if-no-files-found: error
+
+      # --- ios_profile: adhoc — fails closed until Apple signing material is provisioned
+      # (Clarifications). No Apple Developer account or certificates exist for this project
+      # yet, so every real dispatch with this profile is expected to stop at the check below. ---
+
+      - name: Check Apple ad-hoc signing material
+        if: ${{ inputs.ios_profile == 'adhoc' }}
+        env:
+          APPLE_DIST_CERTIFICATE_P12: ${{ secrets.APPLE_DIST_CERTIFICATE_P12 }}
+          APPLE_DIST_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DIST_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_DIST_CERTIFICATE_P12" ] || [ -z "$APPLE_DIST_CERTIFICATE_PASSWORD" ] || \
+             [ -z "$APPLE_PROVISIONING_PROFILE" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::error::Apple ad-hoc signing material is not configured (APPLE_DIST_CERTIFICATE_P12, APPLE_DIST_CERTIFICATE_PASSWORD, APPLE_PROVISIONING_PROFILE, APPLE_TEAM_ID). The ad-hoc iOS profile cannot produce a signed IPA until this repository's Apple Developer signing material is provisioned in GitHub Secrets. See docs/runbooks/SCRUM-348-mobile-native-security-artifacts.md."
+            exit 1
+          fi
+
+      - name: Import Apple signing material
+        if: ${{ inputs.ios_profile == 'adhoc' }}
+        env:
+          APPLE_DIST_CERTIFICATE_P12: ${{ secrets.APPLE_DIST_CERTIFICATE_P12 }}
+          APPLE_DIST_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DIST_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/mobile-adhoc.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$APPLE_DIST_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/dist-cert.p12"
+          security import "$RUNNER_TEMP/dist-cert.p12" -k "$KEYCHAIN_PATH" -P "$APPLE_DIST_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" "$(security list-keychains -d user | tr -d '"')"
+          rm -f "$RUNNER_TEMP/dist-cert.p12"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo "$APPLE_PROVISIONING_PROFILE" | base64 --decode > \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/mobile-adhoc.mobileprovision"
+
+      - name: Archive and export ad-hoc IPA
+        if: ${{ inputs.ios_profile == 'adhoc' }}
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-adhoc"
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n1)"
+          xcodebuild archive \
+            -workspace "$WORKSPACE" \
+            -scheme CrewSafe \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/ios-adhoc/CrewSafe.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID"
+
+          cat > "$RUNNER_TEMP/ios-adhoc/exportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>ad-hoc</string>
+            <key>teamID</key>
+            <string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/ios-adhoc/CrewSafe.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ios-adhoc/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ios-adhoc/exportOptions.plist"
+
+      - name: Describe ad-hoc IPA
+        if: ${{ inputs.ios_profile == 'adhoc' }}
+        env:
+          PLATFORM: ios
+          ARTIFACT_TYPE: adhoc-ipa
+          BUILD_PROFILE: ios-adhoc
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          "$GITHUB_WORKSPACE/.github/scripts/mobile/write-artifact-metadata.sh" \
+            "$RUNNER_TEMP/ios-adhoc/export/artifact-metadata.json" \
+            "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload ad-hoc IPA artifact
+        if: ${{ inputs.ios_profile == 'adhoc' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobile-ios-adhoc-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-adhoc/export
+          retention-days: 14
+          if-no-files-found: error
