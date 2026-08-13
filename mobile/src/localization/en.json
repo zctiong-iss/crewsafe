@@ -446,7 +446,9 @@
     "generateDraft": "Draft a plan",
     "generating": "Drafting",
     "generateFailedTitle": "No plan drafted",
-    "generatedToast": "A plan has been drafted."
+    "generatedToast": "A plan has been drafted.",
+    "statusDraft": "Draft",
+    "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {
     "STOP_WORK": "Stop work",

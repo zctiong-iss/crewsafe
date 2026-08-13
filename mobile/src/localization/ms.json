@@ -446,7 +446,9 @@
     "generateDraft": "Draf satu pelan",
     "generating": "Mendraf",
     "generateFailedTitle": "Tiada pelan didraf",
-    "generatedToast": "Satu pelan telah didraf."
+    "generatedToast": "Satu pelan telah didraf.",
+    "statusDraft": "Draf",
+    "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {
     "STOP_WORK": "Henti kerja",

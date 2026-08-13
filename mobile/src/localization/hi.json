@@ -445,7 +445,9 @@
     "generateDraft": "योजना बनाएँ",
     "generating": "बनाई जा रही है",
     "generateFailedTitle": "योजना नहीं बनी",
-    "generatedToast": "योजना तैयार हो गई।"
+    "generatedToast": "योजना तैयार हो गई।",
+    "statusDraft": "मसौदा",
+    "requiredCannotRemove": "गर्मी नीति के अनुसार आवश्यक — इसे हटाया नहीं जा सकता।"
   },
   "mitigationCategory": {
     "STOP_WORK": "काम रोकें",

@@ -446,7 +446,9 @@
     "generateDraft": "திட்டம் வரையவும்",
     "generating": "வரைகிறது",
     "generateFailedTitle": "திட்டம் வரையப்படவில்லை",
-    "generatedToast": "திட்டம் வரையப்பட்டது."
+    "generatedToast": "திட்டம் வரையப்பட்டது.",
+    "statusDraft": "வரைவு",
+    "requiredCannotRemove": "வெப்ப விதிகளின்படி கட்டாயம் — இதை நீக்க முடியாது."
   },
   "mitigationCategory": {
     "STOP_WORK": "வேலை நிறுத்தம்",

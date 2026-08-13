@@ -304,7 +304,16 @@ export interface Approval {
 }
 
 /** Mirrors `Recommendation.RecommendationStatus`. Server-controlled. */
-export type RecommendationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+/**
+ * Mirrors `Recommendation.RecommendationStatus`. Server-controlled.
+ *
+ * `DRAFT` is in the backend enum and the contract, and was missing here — which mattered more than
+ * an unused union member usually does: the status pill's fall-through rendered any unrecognised
+ * value as green "Approved", so a contract-legal status could have shown a plan as approved that
+ * nobody had approved. Nothing writes DRAFT today; it is handled explicitly so that stays true by
+ * construction rather than by luck.
+ */
+export type RecommendationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 
 /**
  * Mirrors `RecommendationController.RecommendationResponse` (SCRUM-119).

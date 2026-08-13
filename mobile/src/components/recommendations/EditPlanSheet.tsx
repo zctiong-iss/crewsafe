@@ -8,6 +8,16 @@
  * server enforces the same boundary from the other side by rejecting any action code outside
  * `ActionCatalogue`.
  *
+ * ── A REQUIRED ACTION CANNOT BE STRUCK OUT ──────────────────────────────────────────────
+ * `origin: MANDATORY` means the policy engine requires the action — it is not the agent's
+ * suggestion, it is the rule the site is judged against. Letting a supervisor quietly drop one
+ * while narrowing a plan is the failure the SCRUM-118 design exists to prevent: the crew would
+ * then be working without a legally required control, and the record would show a plan somebody
+ * approved. So those rows carry a Required badge and have no remove control at all, with the
+ * reason said in words rather than left to a disabled button.
+ *
+ * Advisory actions remain removable. That is the whole distinction the field exists to draw.
+ *
  * ── REMOVED, NOT DELETED ────────────────────────────────────────────────────────────────
  * A removed row stays visible, struck through, and can be restored. A supervisor pruning a
  * six-action plan needs to see what they have taken out — a list that silently shrinks gives them
@@ -99,7 +109,10 @@ const EditPlanSheet: FC<EditPlanSheetProps> = ({
             {t("recommendations.editHint")}
           </AppText>
 
-          {draft.map((row, index) => (
+          {draft.map((row, index) => {
+            // Required by the policy engine, so not this supervisor's to drop.
+            const required = row.mitigation.origin === "MANDATORY";
+            return (
             <View
               key={`${row.mitigation.actionCode ?? "none"}-${index}`}
               style={[
@@ -139,15 +152,30 @@ const EditPlanSheet: FC<EditPlanSheetProps> = ({
                   onPress={() => move(index, 1)}
                   style={styles.control}
                 />
-                <AppButton
-                  title={row.removed ? t("recommendations.restoreAction") : t("recommendations.removeAction")}
-                  variant="secondary"
-                  onPress={() => toggleRemoved(index)}
-                  style={styles.control}
-                />
+                {required ? null : (
+                  <AppButton
+                    title={
+                      row.removed
+                        ? t("recommendations.restoreAction")
+                        : t("recommendations.removeAction")
+                    }
+                    variant="secondary"
+                    onPress={() => toggleRemoved(index)}
+                    style={styles.control}
+                  />
+                )}
               </View>
+
+              {/* Said plainly rather than shown as a disabled button: a supervisor is not being
+                  denied something they might otherwise do — this was never theirs to remove. */}
+              {required ? (
+                <AppText variant="caption" tone="secondary" style={styles.requiredNote}>
+                  {t("recommendations.requiredCannotRemove")}
+                </AppText>
+              ) : null}
             </View>
-          ))}
+            );
+          })}
 
           {/* Removing everything is not an edit, it is a rejection — and a rejection carries a
               reason on the record, which an empty plan would not. */}
@@ -205,6 +233,9 @@ const styles = StyleSheet.create({
   },
   block: {
     marginTop: vs(4),
+  },
+  requiredNote: {
+    marginTop: vs(6),
   },
   action: {
     marginTop: vs(8),

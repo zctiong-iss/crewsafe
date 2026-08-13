@@ -446,7 +446,9 @@
     "generateDraft": "পরিকল্পনা তৈরি করুন",
     "generating": "তৈরি হচ্ছে",
     "generateFailedTitle": "পরিকল্পনা তৈরি হয়নি",
-    "generatedToast": "একটি পরিকল্পনা তৈরি হয়েছে।"
+    "generatedToast": "একটি পরিকল্পনা তৈরি হয়েছে।",
+    "statusDraft": "খসড়া",
+    "requiredCannotRemove": "তাপ নীতির কারণে আবশ্যক — এটি সরানো যাবে না।"
   },
   "mitigationCategory": {
     "STOP_WORK": "কাজ বন্ধ",

@@ -447,7 +447,9 @@
     "generateDraft": "အစီအစဉ် ရေးဆွဲရန်",
     "generating": "ရေးဆွဲနေသည်",
     "generateFailedTitle": "အစီအစဉ် မရေးဆွဲနိုင်ပါ",
-    "generatedToast": "အစီအစဉ်တစ်ခု ရေးဆွဲပြီးပါပြီ။"
+    "generatedToast": "အစီအစဉ်တစ်ခု ရေးဆွဲပြီးပါပြီ။",
+    "statusDraft": "မူကြမ်း",
+    "requiredCannotRemove": "အပူစည်းမျဉ်းအရ မဖြစ်မနေလိုအပ် — ဖယ်၍မရပါ။"
   },
   "mitigationCategory": {
     "STOP_WORK": "အလုပ်ရပ်ရန်",
