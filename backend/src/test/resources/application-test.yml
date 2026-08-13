@@ -1,0 +1,33 @@
+# Spring Boot Test Configuration
+spring:
+  application:
+    name: crewsafe-backend
+
+  # Disable Flyway for integration tests - use JPA DDL auto instead
+  flyway:
+    enabled: false
+
+  datasource:
+    # Use PostgreSQL test database instead of H2
+    url: jdbc:postgresql://${TEST_DB_HOST:localhost}:${TEST_DB_PORT:5432}/crewsafe_test
+    driver-class-name: org.postgresql.Driver
+    username: ${TEST_DB_USER:crewsafe}
+    password: ${TEST_DB_PASSWORD:password}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+# Cognito Configuration (Test Stub)
+app:
+  cognito:
+    issuerUri: "${COGNITO_ISSUER_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_testPool}"
+    jwkSetUri: "${COGNITO_JWK_SET_URI:https://cognito-idp.us-east-1.amazonaws.com/us-east-1_testPool/.well-known/jwks.json}"
+    clientIds:
+      - "${COGNITO_CLIENT_ID_1:testClientId}"
+      - "${COGNITO_CLIENT_ID_2:testClientId2}"
