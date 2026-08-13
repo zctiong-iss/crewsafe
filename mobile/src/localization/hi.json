@@ -432,7 +432,20 @@
     "sendEdited": "संशोधित योजना भेजें",
     "alreadyDecided": "इस योजना पर पहले ही निर्णय लिया जा चुका है।",
     "decisionFailedTitle": "निर्णय दर्ज नहीं हुआ",
-    "actionWording": "रिकॉर्ड में रखा गया पाठ"
+    "actionWording": "रिकॉर्ड में रखा गया पाठ",
+    "originMandatory": "अनिवार्य",
+    "originAdvisory": "सुझाव",
+    "ruleReference": "नियम",
+    "appliesTo": "किन पर लागू",
+    "appliesToAll": "इस शिफ्ट के सभी",
+    "timingDuration": "{{duration}} मिनट",
+    "timingEveryMinutes": "हर {{every}} मिनट",
+    "timingEveryHour": "हर घंटे",
+    "timingStartBy": "{{time}} तक शुरू करें",
+    "generateDraft": "योजना बनाएँ",
+    "generating": "बनाई जा रही है",
+    "generateFailedTitle": "योजना नहीं बनी",
+    "generatedToast": "योजना तैयार हो गई।"
   },
   "mitigationCategory": {
     "STOP_WORK": "काम रोकें",

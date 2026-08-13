@@ -433,7 +433,20 @@
     "sendEdited": "সম্পাদিত পরিকল্পনা পাঠান",
     "alreadyDecided": "এই পরিকল্পনায় ইতিমধ্যেই কেউ সিদ্ধান্ত নিয়েছেন।",
     "decisionFailedTitle": "সিদ্ধান্ত নথিভুক্ত হয়নি",
-    "actionWording": "নথিতে রাখা বয়ান"
+    "actionWording": "নথিতে রাখা বয়ান",
+    "originMandatory": "বাধ্যতামূলক",
+    "originAdvisory": "পরামর্শ",
+    "ruleReference": "নিয়ম",
+    "appliesTo": "কাদের জন্য",
+    "appliesToAll": "এই শিফটের সবাই",
+    "timingDuration": "{{duration}} মিনিট",
+    "timingEveryMinutes": "প্রতি {{every}} মিনিটে",
+    "timingEveryHour": "প্রতি ঘণ্টায়",
+    "timingStartBy": "{{time}}-এর মধ্যে শুরু",
+    "generateDraft": "পরিকল্পনা তৈরি করুন",
+    "generating": "তৈরি হচ্ছে",
+    "generateFailedTitle": "পরিকল্পনা তৈরি হয়নি",
+    "generatedToast": "একটি পরিকল্পনা তৈরি হয়েছে।"
   },
   "mitigationCategory": {
     "STOP_WORK": "কাজ বন্ধ",

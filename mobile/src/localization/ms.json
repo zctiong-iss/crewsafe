@@ -433,7 +433,20 @@
     "sendEdited": "Hantar pelan disunting",
     "alreadyDecided": "Seseorang telah pun memutuskan pelan ini.",
     "decisionFailedTitle": "Keputusan tidak direkodkan",
-    "actionWording": "Perkataan yang disimpan dalam rekod"
+    "actionWording": "Perkataan yang disimpan dalam rekod",
+    "originMandatory": "Diwajibkan",
+    "originAdvisory": "Dicadangkan",
+    "ruleReference": "Peraturan",
+    "appliesTo": "Terpakai kepada",
+    "appliesToAll": "Semua pada syif ini",
+    "timingDuration": "{{duration}} min",
+    "timingEveryMinutes": "setiap {{every}} min",
+    "timingEveryHour": "setiap jam",
+    "timingStartBy": "mula sebelum {{time}}",
+    "generateDraft": "Draf satu pelan",
+    "generating": "Mendraf",
+    "generateFailedTitle": "Tiada pelan didraf",
+    "generatedToast": "Satu pelan telah didraf."
   },
   "mitigationCategory": {
     "STOP_WORK": "Henti kerja",
