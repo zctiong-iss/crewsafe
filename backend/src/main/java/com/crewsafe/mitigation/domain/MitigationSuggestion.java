@@ -7,7 +7,9 @@ import java.util.List;
 /**
  * One suggested mitigation on a recommendation.
  *
- * <p>{@code actionCode} and {@code category} were added by SCRUM-119 and are nullable on purpose.
+ * <p>{@code actionCode} and {@code category} were added by SCRUM-119; {@code origin},
+ * {@code ruleReference}, {@code appliesTo} and {@code timing} by SCRUM-288, completing the
+ * output contract the SCRUM-118 design doc specifies. All six are nullable on purpose.
  * The field the mobile app can act on is {@code actionCode}: it renders {@code t("actions." +
  * actionCode)} in the worker's own language, where {@code action} is server-authored English prose
  * that no client can translate. Clients must therefore prefer the code and treat {@code action} as
@@ -31,7 +33,20 @@ public record MitigationSuggestion(
     /** From {@link ActionCatalogue}. Null on plans drafted before SCRUM-119. */
     String actionCode,
     /** The topic a client groups this under. Derivable from the code; carried so clients need no table. */
-    String category
+    String category,
+    /** MANDATORY or ADVISORY — whether a supervisor may remove this. Null on plans drafted
+     * before SCRUM-288. */
+    String origin,
+    /** The policy rule that justified this action, e.g. {@code HS-33-HEAVY}. Null on plans
+     * drafted before SCRUM-288. */
+    String ruleReference,
+    /** Worker UUIDs (as strings) this applies to. Null/absent means the whole shift — the
+     * SCRUM-243/SCRUM-288 whole-shift convention, kept consistent with the ml-service Pydantic
+     * model and {@code docs/api/recommendation.yaml}. */
+    List<String> appliesTo,
+    /** Duration/recurrence/deadline, only when the action has one (e.g. not present on
+     * {@code CLOSE_MONITORING}). Null otherwise. */
+    Timing timing
 ) {
     /**
      * The shape before SCRUM-119, kept so existing callers and fixtures compile unchanged.
@@ -40,8 +55,11 @@ public record MitigationSuggestion(
      * placeholder and reaches the worker as untranslated prose. New callers should give a code.
      */
     public MitigationSuggestion(String priority, String action, String rationale, String estimatedImpact) {
-        this(priority, action, rationale, estimatedImpact, null, null);
+        this(priority, action, rationale, estimatedImpact, null, null, null, null, null, null);
     }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Timing(Integer durationMinutes, Integer everyMinutes, String startByUtc) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Batch(List<MitigationSuggestion> mitigations) {}

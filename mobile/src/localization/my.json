@@ -434,7 +434,22 @@
     "sendEdited": "ပြင်ဆင်ပြီး အစီအစဉ် ပို့ရန်",
     "alreadyDecided": "ဤအစီအစဉ်ကို အခြားသူတစ်ဦး ဆုံးဖြတ်ပြီးဖြစ်သည်။",
     "decisionFailedTitle": "ဆုံးဖြတ်ချက် မမှတ်တမ်းတင်နိုင်ပါ",
-    "actionWording": "မှတ်တမ်းတွင် ထားမည့် စာသား"
+    "actionWording": "မှတ်တမ်းတွင် ထားမည့် စာသား",
+    "originMandatory": "မဖြစ်မနေ",
+    "originAdvisory": "အကြံပြုချက်",
+    "ruleReference": "စည်းမျဉ်း",
+    "appliesTo": "မည်သူ့အတွက်",
+    "appliesToAll": "ဤအလုပ်ချိန်ရှိ အားလုံး",
+    "timingDuration": "{{duration}} မိနစ်",
+    "timingEveryMinutes": "{{every}} မိနစ်တိုင်း",
+    "timingEveryHour": "တစ်နာရီတိုင်း",
+    "timingStartBy": "{{time}} မတိုင်မီ စတင်ပါ",
+    "generateDraft": "အစီအစဉ် ရေးဆွဲရန်",
+    "generating": "ရေးဆွဲနေသည်",
+    "generateFailedTitle": "အစီအစဉ် မရေးဆွဲနိုင်ပါ",
+    "generatedToast": "အစီအစဉ်တစ်ခု ရေးဆွဲပြီးပါပြီ။",
+    "statusDraft": "မူကြမ်း",
+    "requiredCannotRemove": "အပူစည်းမျဉ်းအရ မဖြစ်မနေလိုအပ် — ဖယ်၍မရပါ။"
   },
   "mitigationCategory": {
     "STOP_WORK": "အလုပ်ရပ်ရန်",

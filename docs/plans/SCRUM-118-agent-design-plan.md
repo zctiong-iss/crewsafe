@@ -386,6 +386,31 @@ Note that Bedrock does not offer a hosted agent runtime, so the loop is self-hos
 block under `app.bedrock`. Nothing in that YAML is bound today; the class's hardcoded
 defaults win and environment overrides are silently ignored.
 
+**Why the Anthropic SDK and not Bedrock's cross-provider Converse API.** Bedrock's Converse
+API also supports forced tool choice for structured output, including for Anthropic models —
+that isn't the differentiator. The actual trade-off:
+
+- **Fidelity over portability.** Converse API is a lowest-common-denominator abstraction
+  across Anthropic, Nova, Llama, Cohere and Mistral; the Anthropic SDK exposes Claude's own
+  API surface directly, so new Claude-specific capabilities are available immediately rather
+  than waiting on Bedrock's abstraction layer to catch up.
+- **Typed, provider-specific error handling.** The SDK's distinct exception types
+  (`AuthenticationError`, `PermissionDeniedError`, `NotFoundError`, `APIStatusError`) map to
+  Anthropic's actual failure semantics, which is what lets `bedrock_client.py` branch cleanly
+  on "model not found, try another region" versus "access denied" versus "rate limited"
+  without hand-parsing a generic boto3 response. The cost of this is real and was found
+  in this project, not theoretical: those Anthropic-specific `except` clauses didn't catch a
+  total absence of AWS credentials, which fails one layer down in boto3's own session
+  handling and surfaced as a plain `RuntimeError` — it crashed the app at startup instead of
+  degrading gracefully. Fixed with a catch-all fallback in both `verify_access()` and
+  `invoke()`. A cross-provider client built directly on boto3 wouldn't have had this specific
+  gap, but it also wouldn't give the precise per-failure-type branching relied on everywhere
+  else.
+- **Portability between Anthropic's direct API and Bedrock.** The SDK exposes both
+  `Anthropic()` (direct) and `AnthropicBedrock()` (via Bedrock) behind the same interface, so
+  the same message/tool-schema code works against either backend unmodified — useful for
+  local development without AWS credentials at all.
+
 ### Model selection
 
 §8.6 already mandates a fixed evaluation set of at least 30 scenarios with six named
@@ -410,6 +435,75 @@ Candidate models are whatever `aws bedrock list-foundation-models --region ap-so
 
 The resulting model × metric table is committed here and is the stated justification for the
 model choice.
+
+**Result (2026-08-13).** `ml-service/eval_scenarios.py` holds 35 scenarios (§8.6 minimum: 30),
+`ml-service/eval_scoring.py` the six §8.6 metrics, `ml-service/test_agent_eval.py` the runner
+applying the decision rule above. Final run: **6 models × 31 ranked scenarios = 186 live
+Bedrock calls** (the 35 scenarios less the four special-cased `stale_data`/`lightning_override`
+cases, which are scored against a §7.1 override rather than the WBGT-derived list).
+
+Candidates were whatever `aws bedrock list-foundation-models --region ap-southeast-1
+--by-provider anthropic` reported, narrowed to what this account can actually invoke.
+`list-foundation-models` lists what the *region* offers, not what the *account* can call:
+`claude-sonnet-5`, `claude-opus-5`, `claude-opus-4-7`, `claude-opus-4-8` and `claude-fable-5`
+all appear as enabled but carry a **service quota of exactly 0** (confirmed in Service Quotas,
+after the 403s), and `claude-sonnet-4-20250514` 404s as a deactivated legacy model.
+
+| Model | Unsupported rate (gate) | Mandatory recall | Citation accuracy | Worker accuracy | Completed | Cost / run | p95 latency* |
+|---|---|---|---|---|---|---|---|
+| **`claude-haiku-4-5`** | **0.00** | **1.00** | **1.00** | **1.00** | **31/31** | **$0.0055** | 33,363ms* |
+| `claude-sonnet-4-5` | 0.00 | 1.00 | 1.00 | 1.00 | 31/31 | $0.0166 (3.0×) | 17,911ms* |
+| `claude-opus-4-5` | 0.00 | 1.00 | 1.00 | 1.00 | 31/31 | $0.0268 (4.8×) | 17,640ms* |
+| `claude-opus-4-6` | 0.00 | 1.00 | 1.00 | 1.00 | 30/31 | $0.0275 (5.0×) | 24,558ms* |
+| `claude-sonnet-4-6` | 0.00 | 1.00 | 1.00 | 1.00 | 28/31 | $0.0181 (3.3×) | 23,499ms* |
+| `claude-3-5-sonnet-v2` (prior default) | 0.00 | 1.00 | 1.00 | 1.00 | 19/31 | $0.0154 (2.8×) | 45,210ms* |
+
+Approval-classification accuracy and explanation completeness were also 1.00 for all six; the
+columns are omitted for width. Cost is computed from real measured token counts (SCRUM-286's
+work — the previous word-count estimator would have made this column meaningless) at
+first-party per-token list rates; Bedrock bills at its own rates, so the absolute figures are
+indicative and the **ratios** are the decision-relevant part.
+
+**Decision: `claude-haiku-4-5`.**
+
+Applying the rule in order: all six **pass the gate** (never invented an action code across 186
+calls). All six then **tie at 1.00 on every ranking metric** — mandatory recall, citation
+accuracy, worker accuracy. That tie is itself the most useful finding: repackaging a policy
+decision into structured JSON is comfortably within every candidate's capability, so the choice
+is an operational one, not a quality one.
+
+The rule's first tie-break is p95 latency, and **that measurement is not valid in this run** —
+see the asterisk below. Falling through to the rule's own next criterion, **measured cost per
+run, `claude-haiku-4-5` wins by 3–5×** over every alternative, while also being one of only
+three models to complete all 31 scenarios.
+
+***p95 latency is retry-contaminated and was not used.** `BedrockClient.invoke` times the call
+around `client.messages.create(...)`, and the Anthropic SDK's `max_retries=8` performs its
+backoff *inside* that call — so every 429 wait is billed to the latency measurement. The
+evidence this is noise, not signal: the same model (`claude-haiku-4-5`) measured p95 **7,223ms
+/ 10,407ms / 33,363ms** across three runs of identical scenarios (4.6× spread), and Opus-tier
+models "outrunning" Haiku by 2× is not credible on model speed. Measuring clean latency needs
+the timer moved inside the retry loop, or retries disabled; that is follow-up work and does not
+change the outcome here, since cost decided it.
+
+**Secondary finding — schema violations the six metrics do not capture.** `claude-sonnet-4-6`
+(3 scenarios) and `claude-opus-4-6` (1) returned an `action` field longer than the contract's
+200-character limit, so Pydantic rejected the whole response. The harness counts those as
+*failures* (excluded from scoring) rather than as a quality penalty, which flatters both models'
+otherwise-perfect metric rows. Worth fixing before this bench is reused: a schema violation is a
+real, contract-breaking defect and should be scored, not merely dropped.
+
+**Known limits, stated rather than glossed over:**
+- `claude-3-5-sonnet-v2` completed only 19/31 (the rest throttled). Its metrics are perfect on
+  what did complete, but it is measured on a smaller sample than the others.
+- p95 latency remains unmeasured in any trustworthy form (above).
+- One run per model per scenario — no repeat sampling, so per-scenario variance is unmeasured.
+- Cross-provider comparison (Amazon Nova, Meta Llama, Cohere) was **not** evaluated: this
+  ticket was scoped to Anthropic models per the design doc's existing architecture, and those
+  providers do not go through the Anthropic SDK's tool-use path this client is built on, so a
+  fair comparison would need a second client implementation (Bedrock's Converse API) plus
+  independent verification of its structured-output guarantee — materially more than a
+  model-ID swap. Recorded as considered and deferred.
 
 ### Triggers
 

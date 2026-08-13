@@ -239,6 +239,29 @@ export type MitigationCategory =
  * that this app cannot translate, and parsing it for numbers works in English and fails in the
  * other six locales.
  */
+/**
+ * Whether the policy engine requires this action or the agent suggested it (SCRUM-118 / #205).
+ *
+ * The field that changes a supervisor's decision: a MANDATORY action is not theirs to remove when
+ * they narrow a plan, and an ADVISORY one is.
+ */
+export type MitigationOrigin = "MANDATORY" | "ADVISORY";
+
+/**
+ * When an action applies, as typed fields (SCRUM-118 / #205).
+ *
+ * Composed into a phrase for display and never parsed back out of `action`, which is
+ * server-authored English — the trap SCRUM-206 documents for the rest timer.
+ */
+export interface MitigationTiming {
+  /** How long each occurrence lasts. */
+  durationMinutes: number | null;
+  /** How often it repeats — 60 for "every hour". */
+  everyMinutes: number | null;
+  /** ISO 8601 deadline for starting. */
+  startByUtc: string | null;
+}
+
 export interface Mitigation {
   priority: string | null;
   action: string;
@@ -246,6 +269,24 @@ export interface Mitigation {
   estimatedImpact: string | null;
   actionCode: ActionCode | null;
   category: MitigationCategory | null;
+
+  /*
+   * The four fields PR #205 adds. Every one is nullable here for the same reason it is nullable
+   * server-side: #205 keeps them optional so SCRUM-119's tests still pass with mitigations that
+   * omit them, which is also what lets this client render correctly both before and after that PR
+   * merges.
+   */
+  origin: MitigationOrigin | null;
+  /** The policy rule that justifies this, e.g. `HS-33-HEAVY` (FR-16). */
+  ruleReference: string | null;
+  /**
+   * Worker UUIDs this applies to.
+   *
+   * **Absent means the whole shift** — a distinction the screen must state in words, because
+   * blank space cannot carry the difference between "these two people" and "everyone".
+   */
+  appliesTo: string[] | null;
+  timing: MitigationTiming | null;
 }
 
 /** Mirrors `Approval.ApprovalDecision`. */
@@ -263,7 +304,16 @@ export interface Approval {
 }
 
 /** Mirrors `Recommendation.RecommendationStatus`. Server-controlled. */
-export type RecommendationStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+/**
+ * Mirrors `Recommendation.RecommendationStatus`. Server-controlled.
+ *
+ * `DRAFT` is in the backend enum and the contract, and was missing here — which mattered more than
+ * an unused union member usually does: the status pill's fall-through rendered any unrecognised
+ * value as green "Approved", so a contract-legal status could have shown a plan as approved that
+ * nobody had approved. Nothing writes DRAFT today; it is handled explicitly so that stays true by
+ * construction rather than by luck.
+ */
+export type RecommendationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
 
 /**
  * Mirrors `RecommendationController.RecommendationResponse` (SCRUM-119).

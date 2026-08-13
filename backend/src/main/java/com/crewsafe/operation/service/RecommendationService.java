@@ -195,10 +195,14 @@ public class RecommendationService {
      * the audit write): a dispatch failing to create for one worker must never undo a
      * supervisor's already-recorded decision on the recommendation.
      *
-     * <p>No per-worker targeting exists on a mitigation yet (SCRUM-243, not built) — every
-     * mitigation in the approved plan is dispatched to every worker on the shift, not just the
-     * ones it may actually be relevant to. A shift with no assignments dispatches nothing, and
-     * that is not an error.
+     * <p><strong>Per-worker targeting (SCRUM-288, closing SCRUM-243).</strong> A mitigation
+     * carrying {@code appliesTo} is dispatched only to the workers it names, intersected with
+     * the shift's current assignments — a plan drafted before someone left the shift must not
+     * dispatch to them, and a worker id not on this shift is ignored rather than trusted. A
+     * mitigation with no {@code appliesTo} (null or empty) still goes to every worker on the
+     * shift: absent means whole-shift, which is both the pre-SCRUM-288 behaviour for old plans
+     * and the documented convention for new ones. A shift with no assignments dispatches
+     * nothing, and that is not an error.
      *
      * <p><strong>The action code is the mitigation's own where it has one (SCRUM-119).</strong>
      * Until now every AI-sourced dispatch went out under {@link #AI_MITIGATION_ACTION_CODE},
@@ -214,18 +218,47 @@ public class RecommendationService {
         }
 
         CrewSafeUserPrincipal actingPrincipal = new CrewSafeUserPrincipal(actor);
-        List<UUID> workerIds = shiftAssignments.findByShiftId(shiftId).stream()
+        List<UUID> shiftWorkerIds = shiftAssignments.findByShiftId(shiftId).stream()
                 .map(ShiftAssignment::getWorkerId)
                 .distinct()
                 .toList();
 
-        for (UUID workerId : workerIds) {
-            for (MitigationSuggestion mitigation : mitigations) {
-                String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
-                        .orElse(AI_MITIGATION_ACTION_CODE);
+        for (MitigationSuggestion mitigation : mitigations) {
+            String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
+                    .orElse(AI_MITIGATION_ACTION_CODE);
+
+            for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
                 actionDispatchService.dispatchAction(approval.getId(), workerId, dispatchCode,
                         mitigation.action(), actingPrincipal);
             }
+        }
+    }
+
+    /**
+     * Which of the shift's workers this mitigation actually reaches. Absent or empty
+     * {@code appliesTo} means the whole shift; otherwise the named workers, intersected with
+     * the shift so a stale or unrecognised id in a stored plan can never dispatch to someone
+     * who is not on it. An unparseable id is skipped rather than failing the whole fan-out —
+     * losing one worker's dispatch is bad, losing the entire crew's is worse.
+     */
+    private List<UUID> targetsFor(MitigationSuggestion mitigation, List<UUID> shiftWorkerIds) {
+        List<String> appliesTo = mitigation.appliesTo();
+        if (appliesTo == null || appliesTo.isEmpty()) {
+            return shiftWorkerIds;
+        }
+        return appliesTo.stream()
+                .map(RecommendationService::parseUuidOrNull)
+                .filter(java.util.Objects::nonNull)
+                .filter(shiftWorkerIds::contains)
+                .distinct()
+                .toList();
+    }
+
+    private static UUID parseUuidOrNull(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

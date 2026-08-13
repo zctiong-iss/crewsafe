@@ -433,7 +433,22 @@
     "sendEdited": "Send edited plan",
     "alreadyDecided": "Someone has already decided this plan.",
     "decisionFailedTitle": "Decision not recorded",
-    "actionWording": "Wording kept on the record"
+    "actionWording": "Wording kept on the record",
+    "originMandatory": "Required",
+    "originAdvisory": "Suggested",
+    "ruleReference": "Rule",
+    "appliesTo": "Applies to",
+    "appliesToAll": "Everyone on this shift",
+    "timingDuration": "{{duration}} min",
+    "timingEveryMinutes": "every {{every}} min",
+    "timingEveryHour": "every hour",
+    "timingStartBy": "start by {{time}}",
+    "generateDraft": "Draft a plan",
+    "generating": "Drafting",
+    "generateFailedTitle": "No plan drafted",
+    "generatedToast": "A plan has been drafted.",
+    "statusDraft": "Draft",
+    "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {
     "STOP_WORK": "Stop work",

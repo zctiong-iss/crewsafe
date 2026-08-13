@@ -30,22 +30,35 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
 
   const pending = status === "PENDING_APPROVAL";
   const rejected = status === "REJECTED";
+  /*
+   * Handled by name rather than left to a fall-through.
+   *
+   * The previous chain ended in "otherwise, approved", so any status it did not recognise rendered
+   * green and said Approved — and DRAFT is a legal value in the backend enum and the contract.
+   * Nothing writes it today, but "a plan nobody approved shows as approved" is not a failure worth
+   * leaving to that.
+   */
+  const draft = status === "DRAFT";
 
-  // Filled only while pending: that is the one state asking someone to do something. A list of
-  // decided plans should recede rather than keep shouting.
+  // Filled only while pending: that is the one state asking someone to do something. A draft is
+  // not yet asking anything, and a list of decided plans should recede rather than keep shouting.
   const color = pending
     ? theme.colors.warningFill
     : rejected
       ? theme.colors.danger
-      : theme.colors.success;
+      : draft
+        ? theme.colors.textSecondary
+        : theme.colors.success;
 
   const label = pending
     ? t("recommendations.pending")
     : rejected
       ? t("recommendations.decidedRejected")
-      : decision === "EDITED"
-        ? t("recommendations.decidedEdited")
-        : t("recommendations.decidedApproved");
+      : draft
+        ? t("recommendations.statusDraft")
+        : decision === "EDITED"
+          ? t("recommendations.decidedEdited")
+          : t("recommendations.decidedApproved");
 
   return (
     <View
