@@ -152,12 +152,16 @@ check "SAST prepares backend dependency libraries before scanning" \
   "$([[ "$sast" == *"maven-dependency-plugin:3.8.1:copy-dependencies"* ]] && \
      [[ "$sast" == *"target/test-dependency"* ]] && echo true || echo false)"
 
-check "mobile LCOV import path is declared" \
-  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
+check "web and mobile LCOV import paths are both declared" \
+  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=web/coverage/sonar-lcov\.info,mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
 
 check "SAST generates and prepares mobile coverage before scanning" \
   "$([[ "$sast" == *"npm run test:coverage"* ]] && \
      [[ "$sast" == *"mobile/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
+
+check "SAST generates and prepares web coverage before scanning" \
+  "$([[ "$sast" == *"Generate web coverage"* ]] && \
+     [[ "$sast" == *"web/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
 
 check "web dependencies are installed for TypeScript analysis" \
   "$([[ "$sast" == *"Install web dependencies for analysis"* ]] && \
