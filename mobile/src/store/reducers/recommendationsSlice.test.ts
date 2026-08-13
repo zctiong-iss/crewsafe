@@ -12,14 +12,22 @@
 const mockFetchShifts = jest.fn();
 const mockFetchRecommendations = jest.fn();
 const mockDecideRequest = jest.fn();
+const mockGenerateRequest = jest.fn();
 
 jest.mock("@/api/endpoints/shifts", () => ({ fetchShifts: (...a: unknown[]) => mockFetchShifts(...a) }));
 jest.mock("@/api/endpoints/recommendations", () => ({
   fetchRecommendations: (...a: unknown[]) => mockFetchRecommendations(...a),
   decideRecommendation: (...a: unknown[]) => mockDecideRequest(...a),
+  generateRecommendation: (...a: unknown[]) => mockGenerateRequest(...a),
 }));
 
-import reducer, { decideRecommendation, loadRecommendations } from "./recommendationsSlice";
+import { configureStore } from "@reduxjs/toolkit";
+import reducer, {
+  decideRecommendation,
+  generateRecommendation,
+  loadRecommendations,
+} from "./recommendationsSlice";
+import { ApiError } from "@/api/errors";
 import type { Recommendation } from "@/types/domain";
 
 const SITE = "site-1";
@@ -84,6 +92,45 @@ describe("loading", () => {
 
     expect(action.type).toBe(loadRecommendations.rejected.type);
   });
+
+  it("shows loading, not a refresh spinner, on a first load", () => {
+    const next = reducer(undefined, {
+      type: loadRecommendations.pending.type,
+      meta: { arg: { siteId: SITE } },
+    });
+    expect(next.status).toBe("loading");
+    expect(next.refreshing).toBe(false);
+  });
+
+  it("shows a refresh spinner, not the loading state, on a pull-to-refresh", () => {
+    const ready = { ...reducer(undefined, { type: "@@INIT" }), status: "ready" as const };
+    const next = reducer(ready, {
+      type: loadRecommendations.pending.type,
+      meta: { arg: { siteId: SITE, refreshing: true } },
+    });
+    expect(next.status).toBe("ready");
+    expect(next.refreshing).toBe(true);
+  });
+
+  it("replaces the list and clears any error once loaded", () => {
+    const errored = { ...reducer(undefined, { type: "@@INIT" }), errorKey: "errors.network" };
+    const loaded = [recommendation("r-1", "2026-08-08T05:00:00Z")];
+
+    const next = reducer(errored, { type: loadRecommendations.fulfilled.type, payload: loaded });
+
+    expect(next.status).toBe("ready");
+    expect(next.items).toEqual(loaded);
+    expect(next.errorKey).toBeNull();
+  });
+
+  it("surfaces the mapped error key when the load itself is rejected", () => {
+    const next = reducer(undefined, {
+      type: loadRecommendations.rejected.type,
+      payload: { errorKey: "errors.network" },
+    });
+    expect(next.status).toBe("error");
+    expect(next.errorKey).toBe("errors.network");
+  });
 });
 
 describe("deciding", () => {
@@ -126,4 +173,112 @@ describe("deciding", () => {
     });
     expect(next.decidingId).toBeNull();
   });
+
+  it("maps an ApiError to its message key when the request itself fails", async () => {
+    // Exercises the real thunk body, not just the reducer cases above — this is what
+    // actually turns a rejected network call into the errorKey the screen reads.
+    mockDecideRequest.mockRejectedValue(new ApiError("conflict", "HTTP 409", 409, "req-1"));
+    const dispatch = jest.fn();
+
+    const action = await decideRecommendation({
+      siteId: SITE,
+      shiftId: "shift-1",
+      recommendationId: "r-1",
+      input: { decision: "APPROVED" },
+    })(dispatch, () => ({ recommendations: { decidingId: null } }), undefined);
+
+    expect(action.type).toBe(decideRecommendation.rejected.type);
+    expect((action.payload as { errorKey: string }).errorKey).toBe("errors.conflict");
+  });
+
+  it("refuses a second decision on the same recommendation while one is already in flight", async () => {
+    // The client-side half of "one write path" — the guard exists so the supervisor is not
+    // told their own second tap conflicted with itself.
+    const store = configureStore({ reducer: { recommendations: reducer } });
+    store.dispatch({
+      type: decideRecommendation.pending.type,
+      meta: { arg: { recommendationId: "r-1" } },
+    });
+    mockDecideRequest.mockResolvedValue({});
+
+    await store.dispatch(
+      decideRecommendation({
+        siteId: SITE,
+        shiftId: "shift-1",
+        recommendationId: "r-1",
+        input: { decision: "APPROVED" },
+      }),
+    );
+
+    expect(mockDecideRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("generating (SCRUM-118)", () => {
+  it("prepends a newly drafted plan so the supervisor lands on what they asked for", () => {
+    const drafted = recommendation("r-new", "2026-08-08T06:00:00Z");
+    const state = { ...reducer(undefined, { type: "@@INIT" }), generating: true };
+
+    const next = reducer(state, { type: generateRecommendation.fulfilled.type, payload: drafted });
+
+    expect(next.generating).toBe(false);
+    expect(next.items[0].id).toBe("r-new");
+  });
+
+  it("shows drafting in progress while pending", () => {
+    const next = reducer(undefined, { type: generateRecommendation.pending.type });
+    expect(next.generating).toBe(true);
+    expect(next.errorKey).toBeNull();
+  });
+
+  it("releases the button, without inventing a plan, when drafting fails", () => {
+    const busy = reducer(undefined, { type: generateRecommendation.pending.type });
+    const next = reducer(busy, { type: generateRecommendation.rejected.type });
+    expect(next.generating).toBe(false);
+    expect(next.items).toEqual([]);
+  });
+
+  it("maps an ApiError to its message key when drafting itself fails", async () => {
+    mockGenerateRequest.mockRejectedValue(new ApiError("server", "HTTP 500", 500, "req-1"));
+    const dispatch = jest.fn();
+
+    const action = await generateRecommendation({ siteId: SITE, shiftId: "shift-1" })(
+      dispatch,
+      () => ({ recommendations: { generating: false } }),
+      undefined,
+    );
+
+    expect(action.type).toBe(generateRecommendation.rejected.type);
+    expect((action.payload as { errorKey: string }).errorKey).toBe("errors.server");
+  });
+
+  it("refuses a second draft request while one is already generating", async () => {
+    const store = configureStore({ reducer: { recommendations: reducer } });
+    store.dispatch({ type: generateRecommendation.pending.type });
+    mockGenerateRequest.mockResolvedValue(recommendation("r-x", "2026-08-08T07:00:00Z"));
+
+    await store.dispatch(generateRecommendation({ siteId: SITE, shiftId: "shift-1" }));
+
+    expect(mockGenerateRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("site-scoped state clears on sign-out (SCRUM-119)", () => {
+  it.each(["auth/signOut/fulfilled", "auth/sessionExpired/fulfilled"])(
+    "resets to initial state on %s",
+    (actionType) => {
+      const populated = {
+        ...reducer(undefined, { type: "@@INIT" }),
+        items: [recommendation("r-1", "2026-08-08T05:00:00Z")],
+        decidingId: "r-1",
+      };
+
+      const next = reducer(populated, { type: actionType });
+
+      // Recommendations are per-site and sites are per-user; leaving them would show the
+      // next person on this device decisions belonging to a crew they may have no access to.
+      expect(next.items).toEqual([]);
+      expect(next.decidingId).toBeNull();
+    },
+  );
 });
