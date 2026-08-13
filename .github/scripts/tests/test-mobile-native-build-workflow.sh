@@ -24,7 +24,7 @@ assert_absent() {
 for needle in \
   'node-version: "22.x"' \
   'distribution: temurin' \
-  'java-version: "17"' \
+  'java-version: "21"' \
   'expo prebuild --platform android' \
   './gradlew assembleDebug' \
   './gradlew bundleDebug' \
