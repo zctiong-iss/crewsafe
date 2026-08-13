@@ -5,6 +5,7 @@ import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import com.crewsafe.operation.config.ActionDispatchProperties;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -42,6 +44,9 @@ public class ActionDispatchService {
     private final AuditService auditService;
     /** Derives a wellbeing rest log from a completed rest dispatch — see {@code recordRestIfThisWasOne}. */
     private final WellbeingService wellbeingService;
+    /** Ack-window / auto-complete-window for {@link #markLateDispatches} and {@link #autoCompleteDispatches} (SCRUM-324). */
+    private final ActionDispatchProperties properties;
+    private final Clock clock;
 
     /**
      * {@code REQUIRES_NEW} rather than the default propagation: SCRUM-193 calls this from
@@ -95,8 +100,11 @@ public class ActionDispatchService {
             throw new AccessDeniedException("Worker can only acknowledge their own dispatches");
         }
 
-        // Idempotent: if already acknowledged, return existing state
-        if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED) {
+        // Idempotent: if already acknowledged -- or already completed, which the SCRUM-324
+        // auto-complete sweep can now reach without a worker's second tap -- return existing
+        // state rather than dragging a COMPLETED dispatch back to ACKNOWLEDGED.
+        if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED
+                || dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.COMPLETED) {
             log.info("action_dispatch_already_acknowledged");
             return dispatch;
         }
@@ -129,6 +137,7 @@ public class ActionDispatchService {
 
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
         dispatch.setEndTime(Instant.now());
+        dispatch.setCompletedBy(ActionDispatch.CompletionSource.WORKER);
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
         auditService.record(principal.getId(), AuditEventType.ACTION_COMPLETED,
                 AUDIT_TARGET_TYPE, saved.getId(), "Action completed: " + dispatchId);
@@ -137,6 +146,59 @@ public class ActionDispatchService {
         recordRestIfThisWasOne(saved);
 
         return saved;
+    }
+
+    /**
+     * Flips PENDING dispatches to LATE once they've sat unacknowledged past
+     * {@code app.action-dispatch.ack-window} (SCRUM-317/324). Driven by {@link
+     * ActionDispatchSweepScheduler}, not a worker action -- {@code actorId} is null the
+     * way a failed-login {@code TOKEN_FIRST_SEEN} row has none.
+     */
+    @Transactional
+    public int markLateDispatches() {
+        Instant cutoff = Instant.now(clock).minus(properties.getAckWindow());
+        List<ActionDispatch> candidates = actionDispatchRepository.findPendingDispatchedBefore(cutoff);
+
+        for (ActionDispatch dispatch : candidates) {
+            dispatch.setStatus(ActionDispatch.ActionDispatchStatus.LATE);
+            dispatch.setLateAt(Instant.now(clock));
+            ActionDispatch saved = actionDispatchRepository.save(dispatch);
+            auditService.record(null, AuditEventType.ACTION_LATE,
+                    AUDIT_TARGET_TYPE, saved.getId(), "Action went late (unacknowledged past ack window): " + saved.getId());
+        }
+
+        if (!candidates.isEmpty()) {
+            log.info("action_dispatches_marked_late");
+        }
+        return candidates.size();
+    }
+
+    /**
+     * Completes ACKNOWLEDGED dispatches once {@code app.action-dispatch.auto-complete-window}
+     * has passed since {@code startTime} (SCRUM-317/324), whichever code the dispatch is --
+     * the window is fixed, not parsed from {@code actionCode}. A worker's manual complete tap
+     * always wins the race: it moves the row out of ACKNOWLEDGED, so the next sweep simply
+     * won't find it here.
+     */
+    @Transactional
+    public int autoCompleteDispatches() {
+        Instant cutoff = Instant.now(clock).minus(properties.getAutoCompleteWindow());
+        List<ActionDispatch> candidates = actionDispatchRepository.findAcknowledgedStartedBefore(cutoff);
+
+        for (ActionDispatch dispatch : candidates) {
+            dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
+            dispatch.setEndTime(Instant.now(clock));
+            dispatch.setCompletedBy(ActionDispatch.CompletionSource.SYSTEM);
+            ActionDispatch saved = actionDispatchRepository.save(dispatch);
+            auditService.record(null, AuditEventType.ACTION_AUTO_COMPLETED,
+                    AUDIT_TARGET_TYPE, saved.getId(), "Action auto-completed (auto-complete window elapsed): " + saved.getId());
+            recordRestIfThisWasOne(saved);
+        }
+
+        if (!candidates.isEmpty()) {
+            log.info("action_dispatches_auto_completed");
+        }
+        return candidates.size();
     }
 
     /**

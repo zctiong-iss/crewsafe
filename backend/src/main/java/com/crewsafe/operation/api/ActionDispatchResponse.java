@@ -28,6 +28,10 @@ public class ActionDispatchResponse {
     private Instant endTime;
     private String status;
     private Instant dispatchedAt;
+    /** Set the first time the ack-window sweep flips this to LATE (SCRUM-324). */
+    private Instant lateAt;
+    /** Null until COMPLETED: WORKER for a manual tap, SYSTEM for the auto-complete sweep. */
+    private String completedBy;
 
     public static ActionDispatchResponse fromEntity(ActionDispatch dispatch) {
         return ActionDispatchResponse.builder()
@@ -40,6 +44,8 @@ public class ActionDispatchResponse {
                 .endTime(dispatch.getEndTime())
                 .status(dispatch.getStatus().name())
                 .dispatchedAt(dispatch.getDispatchedAt())
+                .lateAt(dispatch.getLateAt())
+                .completedBy(dispatch.getCompletedBy() == null ? null : dispatch.getCompletedBy().name())
                 .build();
     }
 }
