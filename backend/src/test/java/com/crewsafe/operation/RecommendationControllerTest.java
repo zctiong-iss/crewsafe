@@ -414,6 +414,61 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
                 .allMatch(d -> d.getActionCode().equals("AI_RECOMMENDED_ACTION"));
     }
 
+    // --- SCRUM-288 (closing SCRUM-243): per-worker targeting via appliesTo ---
+
+    /** A plan whose one mitigation names a single worker — the other worker on the shift must
+     * not receive it. {@code %s} is that worker's id, filled in per test. */
+    private static final String TARGETED_PLAN_TEMPLATE = """
+            {"mitigations":[{"priority":"HIGH","action":"Rotate off heavy duty for the rest of the shift",\
+            "rationale":"Unacclimatised on heavy-intensity work","estimatedImpact":"Reduces exposure while acclimatising",\
+            "actionCode":"ROTATE_TO_LIGHT_DUTY","category":"WORK_SCHEDULING","origin":"ADVISORY",\
+            "ruleReference":"UNACCLIMATISED_HEAVY_WORK_RULE","appliesTo":["%s"]}]}""";
+
+    @Test
+    void aMitigationNamingOneWorkerDispatchesOnlyToThatWorker() throws Exception {
+        AppUser secondWorker = user(Role.WORKER, siteA);
+        assign(shiftA, workerA);
+        assign(shiftA, secondWorker);
+        Recommendation r = recommendation(shiftA, TARGETED_PLAN_TEMPLATE.formatted(workerA.getId()));
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        // Before SCRUM-288 this dispatched to both — the whole point of appliesTo is that an
+        // advisory aimed at one unacclimatised worker does not instruct their whole crew.
+        assertThat(actionDispatches.findByApprovalId(approvalId))
+                .extracting(d -> d.getWorker().getId())
+                .containsExactly(workerA.getId());
+    }
+
+    @Test
+    void aMitigationWithoutAppliesToStillReachesTheWholeShift() throws Exception {
+        AppUser secondWorker = user(Role.WORKER, siteA);
+        assign(shiftA, workerA);
+        assign(shiftA, secondWorker);
+        Recommendation r = recommendation(shiftA, CODED_DRAFT_PLAN);
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        // Absent means whole-shift, not "unknown" — two mitigations x two workers.
+        assertThat(actionDispatches.findByApprovalId(approvalId))
+                .extracting(d -> d.getWorker().getId())
+                .containsExactlyInAnyOrder(workerA.getId(), workerA.getId(),
+                        secondWorker.getId(), secondWorker.getId());
+    }
+
+    @Test
+    void aWorkerNamedInThePlanButNoLongerOnTheShiftIsNotDispatchedTo() throws Exception {
+        AppUser departedWorker = user(Role.WORKER, siteA);
+        assign(shiftA, workerA);
+        // departedWorker is deliberately never assigned: the plan was drafted when they were on
+        // the shift, and a stored plan must not be able to dispatch to someone who has since left.
+        Recommendation r = recommendation(shiftA, TARGETED_PLAN_TEMPLATE.formatted(departedWorker.getId()));
+
+        UUID approvalId = decideAndExtractApprovalId(r, "APPROVED", null, null);
+
+        assertThat(actionDispatches.findByApprovalId(approvalId)).isEmpty();
+    }
+
     @Test
     void anEditedPlanCarryingAnUnknownActionCodeIsRejected() throws Exception {
         Recommendation r = recommendation(shiftA, CODED_DRAFT_PLAN);
