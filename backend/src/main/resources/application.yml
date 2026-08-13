@@ -98,6 +98,22 @@ app:
       # How long an idle SSE connection is held open before the client must reconnect.
       emitter-timeout: ${CONDITIONS_STREAM_EMITTER_TIMEOUT:5m}
 
+  action-dispatch:
+    # SCRUM-317 late-derivation and auto-complete rules. The 15m auto-complete default is a
+    # placeholder -- see the contract's "open question" note, no one has signed off on it yet.
+    ack-window: ${ACTION_DISPATCH_ACK_WINDOW:3m}
+    auto-complete-window: ${ACTION_DISPATCH_AUTO_COMPLETE_WINDOW:15m}
+    sweep:
+      # Opt in per environment, same reasoning as app.weather.ingestion.enabled.
+      enabled: ${ACTION_DISPATCH_SWEEP_ENABLED:false}
+      initial-delay: ${ACTION_DISPATCH_SWEEP_INITIAL_DELAY:5s}
+      interval: ${ACTION_DISPATCH_SWEEP_INTERVAL:30s}
+    stream:
+      # How often a subscribed dashboard tab receives a fresh action-status/alert-count push.
+      push-interval: ${ACTION_DISPATCH_STREAM_PUSH_INTERVAL:10s}
+      # How long an idle SSE connection is held open before the client must reconnect.
+      emitter-timeout: ${ACTION_DISPATCH_STREAM_EMITTER_TIMEOUT:5m}
+
   # app.cognito.* is deliberately absent from this file. Every value is required (see the
   # @NotBlank/@NotEmpty constraints on CognitoProperties), so leaving them undefined here
   # means a deployment that forgets one fails at startup with a validation error naming the

@@ -65,6 +65,14 @@ public final class AuditEventType {
     /** A worker completed a dispatched safety action (SCRUM-185). */
     public static final String ACTION_COMPLETED = "ACTION_COMPLETED";
 
+    /** A dispatched action passed its ack-window unacknowledged; the sweep flipped it to
+     * LATE rather than a worker action (SCRUM-324). */
+    public static final String ACTION_LATE = "ACTION_LATE";
+
+    /** An acknowledged action passed its auto-complete window with no worker complete tap,
+     * so the sweep completed it instead (SCRUM-324). */
+    public static final String ACTION_AUTO_COMPLETED = "ACTION_AUTO_COMPLETED";
+
     /** A supervisor approved an AI-drafted recommendation as-is (SCRUM-119). */
     public static final String RECOMMENDATION_APPROVED = "RECOMMENDATION_APPROVED";
 

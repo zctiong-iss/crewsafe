@@ -6,6 +6,7 @@ import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
+import com.crewsafe.operation.config.ActionDispatchProperties;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
@@ -18,7 +19,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,6 +41,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class ActionDispatchServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-08-13T09:00:00Z");
 
     @Mock
     private ActionDispatchRepository actionDispatchRepository;
@@ -55,6 +62,7 @@ class ActionDispatchServiceTest {
     private WellbeingService wellbeingService;
 
     private ActionDispatchService service;
+    private ActionDispatchProperties properties;
     private UUID approvalId;
     private UUID workerId;
     private UUID dispatchId;
@@ -65,8 +73,12 @@ class ActionDispatchServiceTest {
 
     @BeforeEach
     void setUp() {
+        properties = new ActionDispatchProperties();
+        properties.setAckWindow(Duration.ofMinutes(3));
+        properties.setAutoCompleteWindow(Duration.ofMinutes(15));
+
         service = new ActionDispatchService(actionDispatchRepository, approvalRepository, appUserRepository,
-                auditService, wellbeingService);
+                auditService, wellbeingService, properties, Clock.fixed(NOW, ZoneOffset.UTC));
         approvalId = UUID.randomUUID();
         workerId = UUID.randomUUID();
         supervisorId = UUID.randomUUID();
@@ -173,6 +185,27 @@ class ActionDispatchServiceTest {
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
+    /**
+     * SCRUM-324: the auto-complete sweep can now move a dispatch to COMPLETED without a
+     * worker ever calling complete. If the worker's acknowledge tap lands after that (a
+     * stale UI, a retried request), it must not drag the dispatch back to ACKNOWLEDGED.
+     */
+    @Test
+    void testAcknowledgeDispatch_IdempotentWhenAlreadyCompleted() {
+        CrewSafeUserPrincipal workerPrincipal = mock(CrewSafeUserPrincipal.class);
+        when(workerPrincipal.getId()).thenReturn(workerId);
+
+        dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
+        dispatch.setCompletedBy(ActionDispatch.CompletionSource.SYSTEM);
+        when(actionDispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
+
+        ActionDispatch result = service.acknowledgeDispatch(dispatchId, workerPrincipal);
+
+        assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, result.getStatus());
+        verify(actionDispatchRepository, never()).save(any());
+        verify(auditService, never()).record(any(), eq(AuditEventType.ACTION_ACKNOWLEDGED), any(), any(), any());
+    }
+
     @Test
     void testCompleteDispatch_Idempotent() {
         // Create a worker principal
@@ -185,6 +218,7 @@ class ActionDispatchServiceTest {
         // First completion
         ActionDispatch first = service.completeDispatch(dispatchId, workerPrincipal);
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, first.getStatus());
+        assertEquals(ActionDispatch.CompletionSource.WORKER, first.getCompletedBy());
 
         // Second completion - should be idempotent
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
@@ -194,6 +228,58 @@ class ActionDispatchServiceTest {
         // Only one audit event should be recorded
         verify(auditService).record(eq(workerId), eq(AuditEventType.ACTION_COMPLETED),
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
+    }
+
+    @Test
+    void testMarkLateDispatches_FlipsPendingPastAckWindowAndSetsLateAt() {
+        dispatch.setStatus(ActionDispatch.ActionDispatchStatus.PENDING);
+        dispatch.setDispatchedAt(NOW.minus(Duration.ofMinutes(10)));
+        when(actionDispatchRepository.findPendingDispatchedBefore(NOW.minus(Duration.ofMinutes(3))))
+                .thenReturn(List.of(dispatch));
+        when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
+
+        int count = service.markLateDispatches();
+
+        assertEquals(1, count);
+        assertEquals(ActionDispatch.ActionDispatchStatus.LATE, dispatch.getStatus());
+        assertEquals(NOW, dispatch.getLateAt());
+        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_LATE),
+                eq("ACTION_DISPATCH"), eq(dispatchId), any());
+    }
+
+    @Test
+    void testMarkLateDispatches_NoCandidatesIsANoOp() {
+        when(actionDispatchRepository.findPendingDispatchedBefore(any())).thenReturn(List.of());
+
+        assertEquals(0, service.markLateDispatches());
+        verifyNoInteractions(auditService);
+    }
+
+    @Test
+    void testAutoCompleteDispatches_CompletesAcknowledgedPastWindowAsSystem() {
+        dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
+        dispatch.setStartTime(NOW.minus(Duration.ofMinutes(20)));
+        when(actionDispatchRepository.findAcknowledgedStartedBefore(NOW.minus(Duration.ofMinutes(15))))
+                .thenReturn(List.of(dispatch));
+        when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
+
+        int count = service.autoCompleteDispatches();
+
+        assertEquals(1, count);
+        assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, dispatch.getStatus());
+        assertEquals(ActionDispatch.CompletionSource.SYSTEM, dispatch.getCompletedBy());
+        assertEquals(NOW, dispatch.getEndTime());
+        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_AUTO_COMPLETED),
+                eq("ACTION_DISPATCH"), eq(dispatchId), any());
+    }
+
+    @Test
+    void testAutoCompleteDispatches_NoCandidatesIsANoOp() {
+        when(actionDispatchRepository.findAcknowledgedStartedBefore(any())).thenReturn(List.of());
+
+        assertEquals(0, service.autoCompleteDispatches());
+        verifyNoInteractions(auditService);
+        verifyNoInteractions(wellbeingService);
     }
 
     @Test
