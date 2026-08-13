@@ -38,6 +38,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -142,8 +143,7 @@ public class AgentDraftService {
         // Evaluated even on the lightning path. The plan itself will not come from it, but the
         // recommendation still has to record which policy version was in force and which band the
         // site was in — §12.2 requires both on every recommendation, not only on heat-driven ones.
-        PolicyDecision decision = observedWbgt == null ? null
-                : policyEngine.evaluateForShift(siteId, observedWbgt, assignments);
+        PolicyDecision decision = observedWbgt == null ? null : evaluatePolicy(siteId, observedWbgt, assignments);
 
         Draft draft = lightningState == LightningRiskState.STOP_WORK
                 ? lightningDraft(lightningState, assignments, observedWbgt)
@@ -176,6 +176,30 @@ public class AgentDraftService {
                 recommendationId, auditDetail(draft)));
 
         return Optional.of(saved);
+    }
+
+    /**
+     * A site with no ACTIVE heat policy is a configuration state, not a server fault.
+     *
+     * <p>{@link PolicyEngineService} signals it with {@link NoSuchElementException}, which no
+     * handler maps, so it would otherwise surface as a 500 — telling a supervisor the system is
+     * broken when the real answer is that nobody has configured this site's thresholds yet. It
+     * is a reachable state rather than a theoretical one: {@code V9}'s seeding INSERT is
+     * commented out and {@code V12} carried forward from that empty table, so a site created
+     * through the API has no policy version until a Safety Manager configures one (SCRUM-120).
+     *
+     * <p>Refused rather than defaulted. Falling back to built-in thresholds would mean deciding
+     * what a worker must do using numbers nobody at this site signed off on, and §7.1 is
+     * explicit that thresholds are configuration records rather than hard-coded values.
+     */
+    private PolicyDecision evaluatePolicy(UUID siteId, Double observedWbgt, List<ShiftAssignment> assignments) {
+        try {
+            return policyEngine.evaluateForShift(siteId, observedWbgt, assignments);
+        } catch (NoSuchElementException e) {
+            throw new ConflictException(
+                    "No active heat policy is configured for this site, so no plan can be drafted. "
+                            + "A Safety Manager must configure and activate a policy version first.");
+        }
     }
 
     /**

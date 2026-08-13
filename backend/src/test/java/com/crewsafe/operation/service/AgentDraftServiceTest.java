@@ -408,6 +408,36 @@ class AgentDraftServiceTest {
     }
 
     @Test
+    @DisplayName("A site with no configured heat policy is a 409, not a 500")
+    void missingPolicyVersionIsAConflictNotAServerError() {
+        // Reachable, not theoretical: V9's seeding INSERT is commented out and V12 carried
+        // forward from that empty table, so a site created through the API has no policy version
+        // until a Safety Manager configures one. PolicyEngineService signals it with
+        // NoSuchElementException, which no handler maps — so without this it reads as "the system
+        // is broken" rather than "nobody has configured this site yet".
+        when(policyEngine.evaluateForShift(any(), anyDouble(), anyList()))
+                .thenThrow(new java.util.NoSuchElementException("No policy configured for site"));
+
+        assertThatThrownBy(() -> service.generate(SITE_ID, SHIFT_ID, ACTOR_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No active heat policy");
+        verify(agentDraftClient, never()).draft(any());
+    }
+
+    @Test
+    @DisplayName("A missing policy is refused rather than defaulted to built-in thresholds")
+    void missingPolicyDoesNotFallBackToDefaults() {
+        when(policyEngine.evaluateForShift(any(), anyDouble(), anyList()))
+                .thenThrow(new java.util.NoSuchElementException("No policy configured for site"));
+
+        assertThatThrownBy(() -> service.generate(SITE_ID, SHIFT_ID, ACTOR_ID))
+                .isInstanceOf(ConflictException.class);
+        // Nothing persisted: deciding what a worker must do from numbers nobody at this site
+        // signed off on would be worse than refusing (§7.1 - thresholds are configuration).
+        verify(recommendations, never()).save(any());
+    }
+
+    @Test
     @DisplayName("Lightning still produces a stop-work plan when there is no weather reading at all")
     void lightningWorksWithoutAnyWeatherReading() {
         when(weather.findLatestForSite(SITE_ID)).thenReturn(Optional.empty());

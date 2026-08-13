@@ -1,0 +1,27 @@
+{
+  "shiftId": "3f1a5c88-1111-4a2b-9c3d-000000000001",
+  "siteId": "3f1a5c88-2222-4a2b-9c3d-000000000002",
+  "currentWbgt": 32.6,
+  "freshness": "LIVE",
+  "lightningState": "CLEAR",
+  "workers": [
+    {"workerId": "11111111-1111-1111-1111-111111111111", "intensity": "HEAVY", "acclimatisationDay": 2, "readinessSubmitted": true},
+    {"workerId": "22222222-2222-2222-2222-222222222222", "intensity": "MODERATE", "acclimatisationDay": 5, "readinessSubmitted": false},
+    {"workerId": "33333333-3333-3333-3333-333333333333", "intensity": "LIGHT", "acclimatisationDay": 12, "readinessSubmitted": true}
+  ],
+  "policyDecision": {
+    "policyVersion": "MOM-WBGT-2026.1",
+    "currentBand": "32_TO_BELOW_33",
+    "forecastBand": "32_TO_BELOW_33",
+    "mandatoryActions": [
+      {"code": "REST_15_MIN_HOURLY", "ruleReference": "UNACCLIMATISED_HEAVY_WORK_RULE", "appliesTo": ["11111111-1111-1111-1111-111111111111"], "reasoning": "WBGT 32.6C exceeds threshold 21.0C for UNACCLIMATISED worker on HEAVY intensity work"},
+      {"code": "REST_10_MIN_HOURLY", "ruleReference": "HEAT_STRESS_REST_RULE", "appliesTo": ["22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"], "reasoning": "WBGT 32.6C exceeds threshold 24.0C; heat stress detected"},
+      {"code": "HYDRATE_HOURLY", "ruleReference": "HEAT_STRESS_REST_RULE", "appliesTo": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"], "reasoning": "Fluid replacement required at this WBGT"}
+    ],
+    "advisoryActions": [
+      {"code": "CLOSE_MONITORING", "ruleReference": "HEAT_STRESS_REST_RULE", "appliesTo": ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222", "33333333-3333-3333-3333-333333333333"], "reasoning": "Watch for early signs of heat illness"},
+      {"code": "RESCHEDULE_HEAVY_WORK", "ruleReference": "UNACCLIMATISED_HEAVY_WORK_RULE", "appliesTo": ["11111111-1111-1111-1111-111111111111"], "reasoning": "Heavy tasks add metabolic heat load"},
+      {"code": "ROTATE_TO_LIGHT_DUTY", "ruleReference": "UNACCLIMATISED_HEAVY_WORK_RULE", "appliesTo": ["11111111-1111-1111-1111-111111111111"], "reasoning": "Unacclimatised worker on heavy work"}
+    ]
+  }
+}
