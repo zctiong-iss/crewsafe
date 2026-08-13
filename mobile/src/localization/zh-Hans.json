@@ -432,7 +432,22 @@
     "sendEdited": "发送修改后的方案",
     "alreadyDecided": "已有人对此方案作出决定。",
     "decisionFailedTitle": "决定未记录",
-    "actionWording": "存档所用措辞"
+    "actionWording": "存档所用措辞",
+    "originMandatory": "必须",
+    "originAdvisory": "建议",
+    "ruleReference": "规则",
+    "appliesTo": "适用于",
+    "appliesToAll": "此班次全体",
+    "timingDuration": "{{duration}} 分钟",
+    "timingEveryMinutes": "每 {{every}} 分钟",
+    "timingEveryHour": "每小时",
+    "timingStartBy": "须于 {{time}} 前开始",
+    "generateDraft": "生成方案",
+    "generating": "生成中",
+    "generateFailedTitle": "未生成方案",
+    "generatedToast": "方案已生成。",
+    "statusDraft": "草稿",
+    "requiredCannotRemove": "高温规则要求此项，无法删除。"
   },
   "mitigationCategory": {
     "STOP_WORK": "停止作业",

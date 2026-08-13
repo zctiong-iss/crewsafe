@@ -24,6 +24,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {
   decideRecommendation as decideRequest,
   fetchRecommendations,
+  generateRecommendation as generateRequest,
   type DecisionInput,
 } from "@/api/endpoints/recommendations";
 import { fetchShifts } from "@/api/endpoints/shifts";
@@ -40,6 +41,8 @@ export interface RecommendationsState {
   refreshing: boolean;
   /** Recommendation id currently being decided, so only that screen shows a spinner. */
   decidingId: string | null;
+  /** True while the agent is drafting a plan on request (SCRUM-118). */
+  generating: boolean;
 }
 
 const initialState: RecommendationsState = {
@@ -48,6 +51,7 @@ const initialState: RecommendationsState = {
   errorKey: null,
   refreshing: false,
   decidingId: null,
+  generating: false,
 };
 
 export const loadRecommendations = createAsyncThunk<
@@ -102,6 +106,29 @@ export const decideRecommendation = createAsyncThunk<
       !== recommendationId,
 });
 
+/**
+ * Asks the agent for a plan (SCRUM-118 / US-08).
+ *
+ * Guarded on `generating`, and the guard is not cosmetic: drafting is expensive on the server and
+ * a second request would produce a second recommendation for the same shift, leaving a supervisor
+ * with two plans to decide on where they asked for one.
+ */
+export const generateRecommendation = createAsyncThunk<
+  Recommendation,
+  { siteId: string; shiftId: string },
+  { rejectValue: { errorKey: string } }
+>("recommendations/generate", async ({ siteId, shiftId }, { rejectWithValue }) => {
+  try {
+    return await generateRequest(siteId, shiftId);
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) =>
+    !(getState() as { recommendations: RecommendationsState }).recommendations.generating,
+});
+
 const recommendationsSlice = createSlice({
   name: "recommendations",
   initialState,
@@ -123,6 +150,22 @@ const recommendationsSlice = createSlice({
         state.status = "error";
         state.refreshing = false;
         state.errorKey = action.payload?.errorKey ?? "errors.unknown";
+      })
+
+      .addCase(generateRecommendation.pending, (state) => {
+        state.generating = true;
+        state.errorKey = null;
+      })
+      .addCase(generateRecommendation.fulfilled, (state, action) => {
+        state.generating = false;
+        // Prepended: the plan just drafted is the newest, and the list is newest first. Inserting
+        // locally means the supervisor lands on a list already showing what they asked for.
+        state.items = [action.payload, ...state.items];
+      })
+      // Reported by the caller, which knows whether a failure means the agent timed out or the
+      // endpoint is not there yet. The slice only releases the button.
+      .addCase(generateRecommendation.rejected, (state) => {
+        state.generating = false;
       })
 
       .addCase(decideRecommendation.pending, (state, action) => {
