@@ -107,7 +107,7 @@ async def suggest_mitigations(request: MitigationRequest):
     start_time = time.time()
 
     try:
-        batch, latency_ms, tokens = bedrock_client.invoke(
+        batch, latency_ms, input_tokens, output_tokens = bedrock_client.invoke(
             context=request.context,
             model_id=request.model_id,
             max_tokens=request.max_tokens,
@@ -118,7 +118,7 @@ async def suggest_mitigations(request: MitigationRequest):
         total_ms = (time.time() - start_time) * 1000
         logger.info(
             f"Round-trip: {total_ms:.0f}ms (bedrock={latency_ms:.0f}ms), "
-            f"suggestions={len(batch.mitigations)}, tokens≈{tokens}"
+            f"suggestions={len(batch.mitigations)}, tokens={input_tokens}+{output_tokens}"
         )
 
         return batch

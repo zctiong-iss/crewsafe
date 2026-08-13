@@ -152,12 +152,16 @@ check "SAST prepares backend dependency libraries before scanning" \
   "$([[ "$sast" == *"maven-dependency-plugin:3.8.1:copy-dependencies"* ]] && \
      [[ "$sast" == *"target/test-dependency"* ]] && echo true || echo false)"
 
-check "mobile LCOV import path is declared" \
-  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
+check "web and mobile LCOV import paths are both declared" \
+  "$(grep -q '^sonar\.javascript\.lcov\.reportPaths=web/coverage/sonar-lcov\.info,mobile/coverage/sonar-lcov\.info$' "$SONAR_PROPS" && echo true || echo false)"
 
 check "SAST generates and prepares mobile coverage before scanning" \
   "$([[ "$sast" == *"npm run test:coverage"* ]] && \
      [[ "$sast" == *"mobile/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
+
+check "SAST generates and prepares web coverage before scanning" \
+  "$([[ "$sast" == *"Generate web coverage"* ]] && \
+     [[ "$sast" == *"web/coverage/sonar-lcov.info"* ]] && echo true || echo false)"
 
 check "web dependencies are installed for TypeScript analysis" \
   "$([[ "$sast" == *"Install web dependencies for analysis"* ]] && \
@@ -170,7 +174,17 @@ check "Java analysis version is declared" \
   "$(grep -q '^sonar\.java\.source=21$' "$SONAR_PROPS" && echo true || echo false)"
 
 check "Python analysis version is declared" \
-  "$(grep -q '^sonar\.python\.version=3\.9$' "$SONAR_PROPS" && echo true || echo false)"
+  "$(grep -q '^sonar\.python\.version=3\.11$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "ML-service Python coverage import path is declared" \
+  "$(grep -q '^sonar\.python\.coverage\.reportPaths=ml-service/coverage\.xml$' "$SONAR_PROPS" && echo true || echo false)"
+
+check "ML-service coverage is generated and validated before scanning" \
+  "$(python_step="$(printf '%s\n' "$sast" | grep -n 'Set up Python 3.11 for ML-service coverage' | cut -d: -f1)"; \
+     coverage_step="$(printf '%s\n' "$sast" | grep -n 'Generate ML-service coverage' | cut -d: -f1)"; \
+     validation_step="$(printf '%s\n' "$sast" | grep -n 'Validate ML-service coverage report' | cut -d: -f1)"; \
+     scan_step="$(printf '%s\n' "$sast" | grep -n 'Analyse with SonarQube Cloud' | cut -d: -f1)"; \
+     [[ -n "$python_step" && -n "$coverage_step" && -n "$validation_step" && -n "$scan_step" && "$python_step" -lt "$coverage_step" && "$coverage_step" -lt "$validation_step" && "$validation_step" -lt "$scan_step" ]] && echo true || echo false)"
 
 check "PostgreSQL SQL is not treated as Oracle PL/SQL" \
   "$(grep -q '^sonar\.plsql\.file\.suffixes=\.pls,\.plb,\.pck,\.pkb,\.pks$' "$SONAR_PROPS" && echo true || echo false)"
@@ -202,10 +216,18 @@ check "sonar.coverage.jacoco.xmlReportPaths is declared" \
 # FastAPI spike.
 
 sonar_sources="$(grep -E '^sonar\.sources=' "$SONAR_PROPS")"
+sonar_tests="$(grep -E '^sonar\.tests=' "$SONAR_PROPS")"
+sonar_test_inclusions="$(grep -E '^sonar\.test\.inclusions=' "$SONAR_PROPS")"
 
 check "web/ and mobile/ are in sonar.sources, not just mentioned in prose" \
   "$(printf '%s' "$sonar_sources" | grep -q 'web/' && \
      printf '%s' "$sonar_sources" | grep -q 'mobile/' && \
+     echo true || echo false)"
+
+check "ML-service remains a production source and test files are classified as tests" \
+  "$(printf '%s' "$sonar_sources" | grep -q 'ml-service' && \
+     printf '%s' "$sonar_tests" | grep -q 'ml-service' && \
+     printf '%s' "$sonar_test_inclusions" | grep -q 'ml-service/test_\*\.py' && \
      echo true || echo false)"
 
 check "infrastructure and deployment paths are in sonar.sources" \

@@ -52,6 +52,18 @@ const defaultRedirectTo = (url: string) => {
   window.location.href = url;
 };
 
+let productionUserManager: UserManager | null = null;
+
+/**
+ * The production manager owns silent-renew timers, so its lifetime must match the app rather
+ * than an individual render or StrictMode mount check. Keep this lazy so tests that inject a
+ * manager never start the real OIDC machinery.
+ */
+function getProductionUserManager(): UserManager {
+  productionUserManager ??= new UserManager(authConfig);
+  return productionUserManager;
+}
+
 export function AuthProvider({
   children,
   userManager,
@@ -73,7 +85,10 @@ export function AuthProvider({
   activityTarget?: Pick<Document, "addEventListener" | "removeEventListener">;
   sessionPolicyEnabled?: boolean;
 }) {
-  const managerRef = useRef<UserManager>(userManager ?? new UserManager(authConfig));
+  const managerRef = useRef<UserManager | null>(null);
+  if (managerRef.current === null) {
+    managerRef.current = userManager ?? getProductionUserManager();
+  }
   const manager = managerRef.current;
 
   const [state, setState] = useState<AuthState>({ status: "starting" });

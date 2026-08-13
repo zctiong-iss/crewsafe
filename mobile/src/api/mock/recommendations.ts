@@ -23,6 +23,11 @@ let sequence = 0;
 const nextId = (prefix: string) =>
   `${prefix}0000${(++sequence).toString(16)}-0000-4000-8000-00000000000${sequence.toString(16)}`;
 
+/**
+ * The four SCRUM-118 fields default to absent, so the base fixture is a mitigation drafted before
+ * PR #205 — the shape the screen must still render correctly. Callers opt into the richer fields
+ * one at a time, which is how the interesting cases get covered without a second factory.
+ */
 function mitigation(
   actionCode: Mitigation["actionCode"],
   category: Mitigation["category"],
@@ -30,8 +35,22 @@ function mitigation(
   action: string,
   rationale: string,
   estimatedImpact: string,
+  extras: Partial<Pick<Mitigation, "origin" | "ruleReference" | "appliesTo" | "timing">> = {},
 ): Mitigation {
-  return { priority, action, rationale, estimatedImpact, actionCode, category };
+  return {
+    priority,
+    action,
+    rationale,
+    estimatedImpact,
+    actionCode,
+    category,
+    origin: extras.origin ?? null,
+    ruleReference: extras.ruleReference ?? null,
+    // Null rather than [] — absent means the whole shift, and an empty array would say the
+    // opposite: an action that applies to nobody.
+    appliesTo: extras.appliesTo ?? null,
+    timing: extras.timing ?? null,
+  };
 }
 
 /**
@@ -68,6 +87,14 @@ function seed(): Recommendation[] {
           "Rest 15 minutes in shade every hour",
           "Forecast WBGT reaches 33.1 °C within 30 minutes on heavy tasks",
           "Keeps core temperature within MOM guidance",
+          {
+            // The case the screen has to get right: required by the policy engine, recurring,
+            // and aimed at two named people rather than the whole crew.
+            origin: "MANDATORY",
+            ruleReference: "HS-33-HEAVY",
+            appliesTo: running.assignments.slice(0, 2).map((a) => a.workerId),
+            timing: { durationMinutes: 15, everyMinutes: 60, startByUtc: null },
+          },
         ),
         mitigation(
           "HYDRATE_HOURLY",
@@ -76,6 +103,12 @@ function seed(): Recommendation[] {
           "Drink water at least once an hour",
           "Sustained sweat loss at this band and intensity",
           "Maintains hydration through the remainder of the shift",
+          {
+            // No appliesTo: this one is for everyone, and the screen must say so in words.
+            origin: "MANDATORY",
+            ruleReference: "HS-33-HYDRATE",
+            timing: { durationMinutes: null, everyMinutes: 60, startByUtc: null },
+          },
         ),
         mitigation(
           "RESCHEDULE_HEAVY_WORK",
@@ -84,6 +117,9 @@ function seed(): Recommendation[] {
           "Move remaining heavy work to after 16:00",
           "Band is forecast to fall back below 32 °C by late afternoon",
           "Removes roughly two hours of peak-band heavy exposure",
+          // ADVISORY and no rule reference: the agent's own suggestion on top of what the policy
+          // engine requires, and the one a supervisor may legitimately drop.
+          { origin: "ADVISORY" },
         ),
       ],
       approval: null,
@@ -198,4 +234,41 @@ export function mockDecideRecommendation(
 export function resetMockRecommendations(): void {
   store = null;
   sequence = 0;
+}
+
+/**
+ * Drafting a plan in mock mode (SCRUM-118).
+ *
+ * Deliberately produces a *mandatory* rest with timing and no `appliesTo` — the shape the real
+ * agent's no-LLM fallback assembles straight from policy output, which is the version most likely
+ * to reach a supervisor on a bad day and therefore the one worth being able to look at.
+ */
+export function mockGenerateRecommendation(shiftId: string): Recommendation {
+  const created: Recommendation = {
+    id: nextId("r"),
+    shiftId,
+    policyVersion: "MOM-WBGT-2026.1",
+    status: "PENDING_APPROVAL",
+    rationale:
+      "Drafted on request. Current band requires an hourly rest for anyone on heavy work.",
+    createdAt: new Date().toISOString(),
+    mitigations: [
+      mitigation(
+        "REST_10_MIN_HOURLY",
+        "REST",
+        "HIGH",
+        "Rest 10 minutes every hour",
+        "Current band with heavy tasks on the shift",
+        "Keeps core temperature within MOM guidance",
+        {
+          origin: "MANDATORY",
+          ruleReference: "HS-32-HEAVY",
+          timing: { durationMinutes: 10, everyMinutes: 60, startByUtc: null },
+        },
+      ),
+    ],
+    approval: null,
+  };
+  all().unshift(created);
+  return copy(created);
 }

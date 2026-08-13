@@ -1,23 +1,56 @@
 """Pydantic models for Bedrock mitigation spike and forecast service."""
 from pydantic import BaseModel, Field
-from typing import List, Literal
+from typing import List, Literal, Optional
 from datetime import datetime
 
 
+class Timing(BaseModel):
+    """Duration / recurrence / deadline for a mitigation that needs one.
+
+    Not every action needs this (e.g. CLOSE_MONITORING has no duration), so the whole
+    object is optional on MitigationSuggestion — but any field present on it must be
+    well-formed if given.
+    """
+    durationMinutes: Optional[int] = Field(None, ge=1, description="How long the action lasts, in minutes")
+    everyMinutes: Optional[int] = Field(None, ge=1, description="How often it recurs, in minutes")
+    startByUtc: Optional[str] = Field(None, description="ISO 8601 deadline to start by")
+
+
 class MitigationSuggestion(BaseModel):
-    """Single mitigation suggestion with structured constraints."""
+    """Single mitigation suggestion with structured constraints.
+
+    actionCode/category/origin/ruleReference are required: unlike the backend's Java
+    record (which made actionCode/category nullable to keep old database rows loading),
+    this model validates a live model response, and a candidate that fails to produce
+    one of these fields is exactly the failure §8.6 exists to catch.
+
+    appliesTo stays optional, matching the SCRUM-288 cross-schema agreement: absent
+    means "applies to the whole shift," not "unknown."
+    """
     priority: str = Field(..., pattern="^(HIGH|MEDIUM|LOW)$", description="Priority level")
     action: str = Field(..., min_length=1, max_length=200, description="Mitigation action")
     rationale: str = Field(..., min_length=1, max_length=500, description="Why this is recommended")
     estimatedImpact: str = Field(..., min_length=1, max_length=200, description="Expected impact")
+    actionCode: str = Field(..., min_length=1, description="Allowlist code, e.g. REST_15_MIN_HOURLY")
+    category: str = Field(..., min_length=1, description="Topic grouping, e.g. REST, HYDRATION")
+    origin: str = Field(..., pattern="^(MANDATORY|ADVISORY)$", description="Whether a supervisor may remove this")
+    ruleReference: str = Field(..., min_length=1, description="Policy rule that justified this action")
+    appliesTo: Optional[List[str]] = Field(None, description="Worker UUIDs; omitted means the whole shift")
+    timing: Optional[Timing] = Field(None, description="Duration/recurrence/deadline, when applicable")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "priority": "HIGH",
-                "action": "Reduce work hours to 20 min active / 10 min rest",
+                "action": "Rest 15 minutes in shade every hour",
                 "rationale": "WBGT at 35°C exceeds safe limits for continuous work",
-                "estimatedImpact": "10-15% reduction in heat stress risk"
+                "estimatedImpact": "10-15% reduction in heat stress risk",
+                "actionCode": "REST_15_MIN_HOURLY",
+                "category": "REST",
+                "origin": "MANDATORY",
+                "ruleReference": "HS-33-HEAVY",
+                "appliesTo": ["w-1", "w-3"],
+                "timing": {"durationMinutes": 15, "everyMinutes": 60}
             }
         }
 
@@ -32,9 +65,15 @@ class MitigationBatch(BaseModel):
                 "mitigations": [
                     {
                         "priority": "HIGH",
-                        "action": "Reduce work hours",
+                        "action": "Rest 15 minutes in shade every hour",
                         "rationale": "WBGT critical",
-                        "estimatedImpact": "15% reduction"
+                        "estimatedImpact": "15% reduction",
+                        "actionCode": "REST_15_MIN_HOURLY",
+                        "category": "REST",
+                        "origin": "MANDATORY",
+                        "ruleReference": "HS-33-HEAVY",
+                        "appliesTo": ["w-1"],
+                        "timing": {"durationMinutes": 15, "everyMinutes": 60}
                     }
                 ]
             }
