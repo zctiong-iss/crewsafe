@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +17,7 @@ from tests.test_features import synthetic_readings
 
 
 class TrainingTest(unittest.TestCase):
+    @patch.dict(os.environ, {"GITHUB_SHA": ""})
     @patch("crewsafe_ml.training.subprocess.run")
     def test_marks_an_uncommitted_training_source_as_dirty(self, run) -> None:
         run.side_effect = [
@@ -24,6 +26,10 @@ class TrainingTest(unittest.TestCase):
         ]
 
         self.assertEqual("abc123-dirty", _current_commit())
+
+    @patch.dict(os.environ, {"GITHUB_SHA": "github-commit"})
+    def test_uses_the_github_commit_during_ci(self) -> None:
+        self.assertEqual("github-commit", _current_commit())
 
     def test_packages_both_horizons_with_metrics_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
