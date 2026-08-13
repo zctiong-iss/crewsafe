@@ -63,7 +63,11 @@ def test_verify_invoke_succeeds():
         fake_tool_block.type = "tool_use"
         fake_tool_block.input = {
           "mitigations": [
-             {"priority": "HIGH", "action": "...", "rationale": "...", "estimatedImpact": "..."}
+             {
+               "priority": "HIGH", "action": "...", "rationale": "...", "estimatedImpact": "...",
+               "actionCode": "REST_15_MIN_HOURLY", "category": "REST", "origin": "MANDATORY",
+               "ruleReference": "HS-33-HEAVY", "appliesTo": ["w-1"]
+             }
             ]
           }
         
