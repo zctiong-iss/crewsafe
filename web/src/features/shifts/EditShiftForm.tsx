@@ -65,7 +65,7 @@ export function EditShiftForm({ shift: initial }: { shift: Shift }) {
   if (action.status === "saved") {
     return (
       <AppShell title="Edit Shift">
-        <EmptyState headline="Shift updated" body={`Shift ${action.shift.id} now runs the corrected times.`}
+        <EmptyState headline="Shift updated" body={`The schedule of Shift ${action.shift.id} is now updated.`}
           action={<Link to="/shifts">Back to Shifts</Link>} />
       </AppShell>
     );
