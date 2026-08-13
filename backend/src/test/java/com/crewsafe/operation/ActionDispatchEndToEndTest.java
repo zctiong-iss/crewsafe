@@ -41,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Runs the real thing, not a mock of it: a real Postgres database via Testcontainers, the
- * actual V13 migration, and the actual JPQL in {@code ActionDispatchRepository} -- none of
+ * actual V15 migration, and the actual JPQL in {@code ActionDispatchRepository} -- none of
  * which the mocked unit tests ever execute. If the {@code approval.recommendation.shiftId}
  * path traversal in {@code findByShiftId}, or the sweep's cutoff queries, don't translate
  * the way they do in a human's head, this is where it shows up.
