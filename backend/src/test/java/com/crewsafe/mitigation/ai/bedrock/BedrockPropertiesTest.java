@@ -28,15 +28,34 @@ class BedrockPropertiesTest {
         assertThat(properties.getRegion())
                 .isEqualTo("ap-southeast-1");
         assertThat(properties.getModelId())
-                .isEqualTo("anthropic.claude-3-5-sonnet-20241022-v2:0");
+                .isEqualTo("global.anthropic.claude-haiku-4-5-20251001-v1:0");
         assertThat(properties.getMaxTokens())
-                .isEqualTo(1024);
+                .isEqualTo(4096);
         assertThat(properties.getTemperature())
                 .isEqualTo(0.7);
         assertThat(properties.getBedrockApiUrl())
                 .isEqualTo("http://localhost:8000");
         assertThat(properties.getBedrockTimeoutMs())
-                .isEqualTo(5000);
+                .isEqualTo(30000);
+    }
+
+    @Test
+    @DisplayName("Default model ID carries an inference-profile prefix")
+    void defaultModelIdIsAnInferenceProfile() {
+        // Regression guard for the SCRUM-286 live-call bug: this AWS account has no
+        // on-demand throughput for Claude, so a bare "anthropic.*" model ID 400s.
+        // Only a cross-region inference profile ("global."/"apac."/"us."/"eu.") works.
+        assertThat(properties.getModelId())
+                .matches("^(global|apac|us|eu)\\.anthropic\\..+");
+    }
+
+    @Test
+    @DisplayName("Default timeout exceeds the measured p95 draft latency")
+    void defaultTimeoutExceedsMeasuredLatency() {
+        // SCRUM-287 measured a p95 of 10.4s for the selected model. The previous
+        // 5000ms default made every LLM draft time out into the fallback path.
+        assertThat(properties.getBedrockTimeoutMs())
+                .isGreaterThan(10_400);
     }
 
     @Test
