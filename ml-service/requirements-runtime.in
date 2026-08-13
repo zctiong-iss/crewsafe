@@ -1,0 +1,16 @@
+# Packages required by the running API and model inference container.
+fastapi==0.141.1
+uvicorn==0.32.1
+pydantic==2.9.2
+boto3==1.35.24
+anthropic[bedrock]==0.121.0
+python-dotenv==1.0.1
+certifi==2026.7.22
+
+# The same versions are used for offline training and online inference so a
+# packaged scikit-learn model is loaded by a compatible runtime.
+numpy==2.1.3
+pandas==2.2.3
+scikit-learn==1.5.2
+joblib==1.4.2
+scipy==1.14.1

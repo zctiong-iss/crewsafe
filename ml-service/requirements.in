@@ -1,0 +1,9 @@
+# Regenerate requirements.txt with:
+# pip-compile --generate-hashes --resolver=backtracking requirements.in
+-r requirements-runtime.in
+
+# Tests. Starlette 1.x uses the renamed HTTPX 2 package for TestClient.
+coverage==7.15.0
+httpx2==2.10.0
+pytest==8.3.5
+pytest-asyncio==0.24.0

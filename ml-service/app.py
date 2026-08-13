@@ -192,10 +192,10 @@ async def forecast(request: ForecastRequest):
         return prediction
 
     except ValueError:
-        logger.exception("Forecast validation failed")
+        logger.warning("Forecast request failed validation")
         raise HTTPException(status_code=422, detail="Invalid forecast request parameters")
     except Exception:
-        logger.exception("Forecast error occurred")
+        logger.error("Forecast inference failed")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
