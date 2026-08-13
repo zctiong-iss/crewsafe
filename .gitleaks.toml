@@ -40,6 +40,9 @@ paths = [
   '''^backend/target/''',
   '''(^|/)node_modules/''',
   '''\.terraform\.lock\.hcl$''',
+  # Test execution logs are generated at runtime and may contain JWT tokens from
+  # test fixtures and mock servers. Not authored code; not real credentials.
+  '''^backend/test-results\.log$''',
 
   # This file documents credential-shaped example patterns in its own comments.
   '''^\.gitleaks\.toml$''',
