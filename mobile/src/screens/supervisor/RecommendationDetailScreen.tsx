@@ -76,6 +76,20 @@ export default function RecommendationDetailScreen() {
    * unresolved label would silently render as plain text rather than as the link it should be.
    */
   const policyVersions = useAppSelector((state) => state.policy.versions);
+
+  /*
+   * The site roster, so `appliesTo` can name people rather than print UUIDs (SCRUM-118).
+   *
+   * `GET /workers` returns ACTIVE workers only, so a mitigation naming someone since offboarded
+   * resolves to no name — the row falls back to the raw id rather than dropping the person, which
+   * would understate who an action covers.
+   */
+  const workers = useAppSelector((state) => state.shifts.workers);
+  const workerNameFor = useCallback(
+    (workerId: string) =>
+      workers.find((worker) => worker.id === workerId)?.displayName ?? t("shifts.unknownWorker"),
+    [workers, t],
+  );
   useEffect(() => {
     void dispatch(loadPolicyVersions({ siteId }));
   }, [dispatch, siteId]);
@@ -270,7 +284,11 @@ export default function RecommendationDetailScreen() {
               </AppText>
             ) : null}
             {group.items.map((mitigation, index) => (
-              <MitigationRow key={`${mitigation.actionCode ?? "none"}-${index}`} mitigation={mitigation} />
+              <MitigationRow
+                key={`${mitigation.actionCode ?? "none"}-${index}`}
+                mitigation={mitigation}
+                workerNameFor={workerNameFor}
+              />
             ))}
           </View>
         ))}
@@ -292,7 +310,11 @@ export default function RecommendationDetailScreen() {
                 {t("recommendations.changedFromDraft")}
               </AppText>
               {approval.editedMitigations.map((mitigation, index) => (
-                <MitigationRow key={`edited-${index}`} mitigation={mitigation} />
+                <MitigationRow
+                  key={`edited-${index}`}
+                  mitigation={mitigation}
+                  workerNameFor={workerNameFor}
+                />
               ))}
             </View>
           </>

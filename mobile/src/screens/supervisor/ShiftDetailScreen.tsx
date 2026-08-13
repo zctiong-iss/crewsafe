@@ -40,6 +40,8 @@ import {
 } from "@/store/reducers/shiftsSlice";
 import { showToast } from "@/store/reducers/uiSlice";
 import { loadCrewWellbeing } from "@/store/reducers/wellbeingSlice";
+import { generateRecommendation } from "@/store/reducers/recommendationsSlice";
+import { features } from "@/constants/features";
 import { formatDateTime } from "@/helpers/dateTime";
 import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
@@ -66,6 +68,7 @@ export default function ShiftDetailScreen() {
 
   /* US-11: how the crew is coping, loaded alongside the shift itself. */
   const crew = useAppSelector((state) => state.wellbeing.crew);
+  const generating = useAppSelector((state) => state.recommendations.generating);
 
   useEffect(() => {
     void dispatch(loadCrewWellbeing({ siteId, shiftId }));
@@ -408,6 +411,34 @@ export default function ShiftDetailScreen() {
           <AppText variant="caption" tone="secondary" style={styles.block}>
             {t("shifts.notEditable")}
           </AppText>
+        ) : null}
+
+        {/*
+          US-08: ask the agent for a plan for this shift.
+
+          On the shift rather than on the Plans tab, because "draft a plan" is a question about a
+          particular crew in particular conditions — and this screen is where a supervisor already
+          has both in front of them.
+
+          Behind a flag: SCRUM-289 has not built the endpoint, so every tap would be a 404. See
+          `features.draftPlanTrigger` for why it is written now rather than later.
+        */}
+        {features.draftPlanTrigger ? (
+          <AppButton
+            title={generating ? t("recommendations.generating") : t("recommendations.generateDraft")}
+            loading={generating}
+            onPress={() => {
+              void (async () => {
+                const result = await dispatch(generateRecommendation({ siteId, shiftId }));
+                if (generateRecommendation.fulfilled.match(result)) {
+                  dispatch(showToast({ messageKey: "recommendations.generatedToast", tone: "success" }));
+                  return;
+                }
+                reportFailure("recommendations.generateFailedTitle", result.payload?.errorKey);
+              })();
+            }}
+            style={styles.block}
+          />
         ) : null}
 
         {/*
