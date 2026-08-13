@@ -495,3 +495,13 @@ jobs:
 
       - name: Structured logging safety self-tests
         run: .github/scripts/tests/test-log-safety-guards.sh
+
+      # SCRUM-348: wired in the same PR that adds these tests, not as a
+      # follow-up -- see research.md R4 in specs/035-mobile-security-test-
+      # artifacts for why that matters (this job's own history has two prior
+      # gaps where a guard test was written but never wired in until later).
+      - name: Mobile native build workflow self-tests
+        run: .github/scripts/tests/test-mobile-native-build-workflow.sh
+
+      - name: Mobile artifact metadata self-tests
+        run: .github/scripts/tests/test-mobile-artifact-metadata.sh
