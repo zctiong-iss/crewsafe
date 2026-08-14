@@ -1,4 +1,4 @@
-# SCRUM-114 / US-06 — 30- and 60-minute WBGT forecast on mobile
+# SCRUM-362 (US-06 / SCRUM-114) — 30- and 60-minute WBGT forecast on mobile
 
 **Scope: React Native only.** The React web frontend is not touched.
 
@@ -101,14 +101,20 @@ across two places.
 
 ## Subtasks
 
-1. Extend the mobile forecast contract and mock fixtures
-2. Add the forecast slice with `unavailable` as a first-class state
-3. Build `ForecastScreen` for 30 and 60 minutes
-4. Add the forecast entry point to `WeatherScreen`
-5. Ship the forecast strings across all seven locales
-6. Tests and the full mobile gate
-7. **Backend follow-up** — return the evaluated band with the forecast, and wire
-   `PolicyEngineService` to the real forecast
+Story: **SCRUM-362**.
+
+| Key | Subtask | State |
+| --- | --- | --- |
+| SCRUM-363 | Extend the mobile forecast contract and mock fixtures | done |
+| SCRUM-364 | Forecast slice with `unavailable` as a first-class state | done |
+| SCRUM-365 | `ForecastScreen` for 30 and 60 minutes | done |
+| SCRUM-366 | Forecast entry point on `WeatherScreen` | done |
+| SCRUM-367 | Forecast strings across all seven locales | done |
+| SCRUM-368 | Tests and the full mobile gate | done |
+| SCRUM-369 | **Backend** — return the evaluated band, wire `PolicyEngineService` | not started |
+
+SCRUM-369 is backend work and deliberately does not block 363–368. Until it lands the
+screen shows degrees and interval, which is the honest rendering rather than a degraded one.
 
 ---
 
