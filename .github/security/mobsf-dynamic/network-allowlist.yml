@@ -1,0 +1,20 @@
+# SCRUM-350. Declarative allowlist of destinations the MobSF dynamic-scan synthetic flow
+# (launch -> sign-in -> authenticated API call -> acknowledgement -> sign-out) may
+# legitimately contact, mirroring .github/security/dast/automation.yaml's declarative-policy
+# convention. Checked by .github/scripts/mobsf-dynamic/check-network-allowlist.sh.
+#
+# A connection outside this list is RECORDED in the run's network-findings.json, never
+# blocked (FR-008) -- see check-network-allowlist.sh's header for why blocking mid-flow would
+# be worse (a false "no coverage" failure indistinguishable from a genuinely broken scan).
+#
+# `*` matches any subdomain segment (bash glob matching, not a full DNS wildcard grammar).
+# Review and update this list in a reviewed PR whenever the synthetic flow legitimately needs
+# to reach a new destination -- see docs/runbooks/SCRUM-350-mobsf-dynamic-scanning.md.
+allowed_hosts:
+  # The staging backend the synthetic flow's authenticated API call targets
+  # (vars.CREWSAFE_BACKEND_BASE_URL). This literal placeholder is resolved by the workflow
+  # before check-network-allowlist.sh reads this file.
+  - "${CREWSAFE_BACKEND_HOST}"
+  # Cognito's Hosted UI / token endpoint domain, same shape already validated by
+  # validate-dast-staging-contract.sh for the HOSTED_UI_URL input.
+  - "*.auth.ap-southeast-1.amazoncognito.com"

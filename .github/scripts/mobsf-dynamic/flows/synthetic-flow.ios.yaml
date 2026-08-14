@@ -1,0 +1,33 @@
+# SCRUM-350. Maestro flow (ADR 0016, research.md R7) driving the synthetic dynamic-scan
+# session: launch -> sign-in -> one authenticated API call -> acknowledgement -> sign-out
+# (FR-005). iOS-equivalent of synthetic-flow.android.yaml -- same steps, same rendered
+# English label text (mobile/src/localization/en.json), since Maestro's element-matching
+# commands are cross-platform. See synthetic-flow.android.yaml's header for the full caveat
+# on text-based matching (no stable testID props on these elements today) and the
+# fail-closed rationale.
+#
+# Requires: the synthetic worker account (demo-worker, .github/cognito/synthetic-users.yml)
+# has at least one pending action-dispatch item seeded in staging for the Acknowledge step to
+# have something to tap -- see docs/runbooks/SCRUM-350-mobsf-dynamic-scanning.md. Credentials
+# are injected only via Maestro's -e flag at invocation time (MAESTRO_SYNTHETIC_USERNAME /
+# MAESTRO_SYNTHETIC_PASSWORD), never hardcoded here.
+appId: sg.crewsafe.mobile
+---
+- launchApp
+# Sign in (cognito-password mode -- the artifact this flow runs against was built with
+# auth_mode=cognito-password, mobile/README.md's phone-friendly, no-browser flow).
+- tapOn: "Username"
+- inputText: "${MAESTRO_SYNTHETIC_USERNAME}"
+- tapOn: "Password"
+- inputText: "${MAESTRO_SYNTHETIC_PASSWORD}"
+- tapOn: "Sign in"
+- assertVisible: "My shift"
+# Authenticated API call: the Alerts tab loads GET /api/action-dispatch/worker/{id}/pending
+# on mount (mobile/src/screens/worker/InboxScreen.tsx).
+- tapOn: "Alerts"
+# Acknowledgement action.
+- tapOn: "Acknowledge"
+- assertVisible: "Acknowledged"
+# Sign out (Profile tab -> Sign out).
+- tapOn: "Profile"
+- tapOn: "Sign out"

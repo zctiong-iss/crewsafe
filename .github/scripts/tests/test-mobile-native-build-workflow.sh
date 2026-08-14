@@ -112,4 +112,32 @@ do
   rg -q -i -F -- "$needle" "$runbook"
 done
 
+# --- SCRUM-350 auth_mode extension assertions (contracts/mobile-native-build-auth-mode-
+#     extension.md — additive input for the mobsf-dynamic-scan.yml consumer) ---
+
+rg -q -F -- 'auth_mode:' "$workflow"
+auth_mode_block="$(rg -A10 -F -- 'auth_mode:' "$workflow")"
+echo "$auth_mode_block" | rg -q -F -- 'type: choice'
+echo "$auth_mode_block" | rg -q -F -- 'default: mock'
+echo "$auth_mode_block" | rg -q -F -- 'cognito-password'
+
+# The conditional step must exist in both jobs, gated on cognito-password, and persist the
+# vars via $GITHUB_ENV (not a step-local `env:` block) so they remain visible through the
+# later Gradle/xcodebuild step where Metro actually inlines EXPO_PUBLIC_* at bundle time —
+# a step-local env: block would not reach that later step.
+env_block_count="$(rg -c -F -- "if: \${{ inputs.auth_mode == 'cognito-password' }}" "$workflow")"
+[[ "$env_block_count" -ge 2 ]] || { echo "expected >=2 auth_mode-gated blocks, found $env_block_count" >&2; exit 1; }
+rg -q -F -- 'EXPO_PUBLIC_AUTH_MODE=cognito-password' "$workflow"
+rg -q -F -- 'EXPO_PUBLIC_API_BASE_URL=${{ vars.CREWSAFE_BACKEND_BASE_URL }}' "$workflow"
+rg -q -F -- '>> "$GITHUB_ENV"' "$workflow"
+
+# The mock default path is structurally unchanged: every occurrence of the
+# EXPO_PUBLIC_AUTH_MODE assignment must be gated the same number of times as the
+# cognito-password `if:` condition appears — no bare/unconditional occurrence exists.
+auth_mode_env_lines="$(rg -c -F -- 'EXPO_PUBLIC_AUTH_MODE=cognito-password' "$workflow")"
+[[ "$auth_mode_env_lines" -eq "$env_block_count" ]] || {
+  echo "FAIL: EXPO_PUBLIC_AUTH_MODE assignment count ($auth_mode_env_lines) does not match auth_mode-gated block count ($env_block_count) -- an unconditional occurrence may exist" >&2
+  exit 1
+}
+
 echo "test-mobile-native-build-workflow.sh: all assertions passed"

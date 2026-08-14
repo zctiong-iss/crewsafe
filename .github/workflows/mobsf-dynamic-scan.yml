@@ -1,0 +1,596 @@
+name: MobSF Dynamic Scan
+
+# SCRUM-350. Manual-only: runs MobSF dynamic analysis against an already-built Android or iOS
+# artifact from mobile-native-build.yml (SCRUM-350 follows SCRUM-348). Never triggered by a
+# push, an opened/updated pull request, or a schedule -- see
+# docs/runbooks/SCRUM-350-mobsf-dynamic-scanning.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: >-
+          The mobile-native-build.yml run ID to retrieve the Android/iOS artifact from. Must
+          have been dispatched with auth_mode=cognito-password to produce a
+          staging-authenticated artifact this workflow can drive a real sign-in against.
+        type: string
+        required: true
+      ios_runner_label:
+        description: >-
+          Self-hosted runner label to target a provisioned physical signed iOS device. Leave
+          empty (default) to run ios-dynamic-scan on ubuntu-latest, which can only reach a
+          Corellium-based analyzer environment, not a physical device.
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobsf-dynamic-scan-${{ github.ref }}
+  cancel-in-progress: false
+
+# Shared by both jobs -- defined once here rather than duplicated per job (Principle I), so a
+# future MobSF/Maestro version bump can't update one job's pin and silently miss the other's.
+env:
+  MOBSF_IMAGE: opensecurity/mobile-security-framework-mobsf@sha256:dd1e194f5d7aec5c27c6feba8085bcfa5c56ae59f0e13b728d3a76ca354dd0ee
+  MAESTRO_VERSION: cli-2.8.0
+  MAESTRO_ZIP_SHA256: b3e561161904fb391875ca5834d5b22cf0b01c052dd1b408ad83e30d8f8951b3
+
+jobs:
+  android-dynamic-scan:
+    name: Android Dynamic Scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out scan tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      # Cross-run download (research.md R1): github-token + run-id reach a completed
+      # mobile-native-build.yml run, not only artifacts from this run.
+      - name: Download Android artifact from source run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: mobile-android-apk-*
+          path: ${{ runner.temp }}/android-artifact
+          merge-multiple: true
+
+      # commit_sha is read from the downloaded artifact's own metadata (SEC-002) -- never
+      # accepted as a separate dispatch input.
+      - name: Retrieve and verify artifact
+        id: artifact
+        run: .github/scripts/mobsf-dynamic/retrieve-and-verify-artifact.sh "$RUNNER_TEMP/android-artifact"
+
+      # FR-004: the emulator becoming ready is bounded to 10 minutes via this step's own
+      # timeout. `script:` is a no-op confirmation -- the emulator keeps running for the rest
+      # of this job's later steps (adb/MobSF/Maestro all target it directly).
+      - name: Boot Android emulator
+        id: emulator
+        timeout-minutes: 10
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          script: echo "Android emulator ready"
+
+      # ANALYZER_IDENTIFIER pins the exact ADB device MobSF targets (verified against
+      # mobsf.MobSF.utils.get_device(), which otherwise falls back to parsing `adb devices`
+      # output -- ambiguous if more than one device is ever visible). emulator-5554 is the
+      # standard first-emulator ADB identifier reactivecircus/android-emulator-runner boots.
+      - name: Start MobSF service
+        env:
+          ANALYZER_IDENTIFIER: emulator-5554
+        run: |
+          .github/scripts/mobsf-dynamic/start-mobsf-service.sh "$RUNNER_TEMP/mobsf.env"
+          cat "$RUNNER_TEMP/mobsf.env" >> "$GITHUB_ENV"
+
+      # Verified against MobSF's own source (mobsf/MobSF/views/scanning.py, api_static_
+      # analysis.py): upload returns MobSF's own MD5 checksum in a "hash" field -- distinct
+      # from this workflow's own artifact_sha256 (FR-007's provenance hash) -- and every
+      # later MobSF API call (start/stop_analysis, report_json) is keyed on that MD5, not on
+      # our SHA-256. X-Mobsf-Api-Key is the header name MobSF's own CORS policy documents
+      # (mobsf/MobSF/views/api/api_middleware.py accepts it or a raw Authorization header;
+      # X-Mobsf-Api-Key is used here since it is the more explicit, purpose-built one).
+      - name: Upload artifact to MobSF
+        id: mobsf_upload
+        env:
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/upload" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            -F "file=@${ARTIFACT_PATH};type=application/vnd.android.package-archive" \
+            -o "$RUNNER_TEMP/mobsf-upload.json"
+          mobsf_hash="$(jq -r '.hash // empty' "$RUNNER_TEMP/mobsf-upload.json")"
+          if [[ -z "$mobsf_hash" ]]; then
+            echo "::error::MobSF upload did not return a hash -- see mobsf-upload.json in the uploaded report."
+            exit 1
+          fi
+          echo "mobsf_hash=${mobsf_hash}" >>"$GITHUB_OUTPUT"
+
+      # Triggers MobSF's own environment setup (installs its Frida-based agent and MITM root
+      # CA on the emulator the first time, i.e. "MobSFying"), then installs and prepares the
+      # APK itself -- verified against mobsf/DynamicAnalyzer/views/android/dynamic_analyzer.py,
+      # which reads the APK back from its own upload storage, not from artifact_path. No
+      # separate `adb install` step is needed here.
+      - name: Start MobSF dynamic analysis
+        env:
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/start_analysis" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            -o "$RUNNER_TEMP/mobsf-start-analysis.json"
+          if jq -e 'has("error")' "$RUNNER_TEMP/mobsf-start-analysis.json" >/dev/null 2>&1; then
+            echo "::error::MobSF could not start dynamic analysis -- see mobsf-start-analysis.json in the uploaded report."
+            exit 1
+          fi
+
+      - name: Install Maestro CLI
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_ZIP_SHA256}  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
+          echo "$RUNNER_TEMP/maestro/maestro/bin" >> "$GITHUB_PATH"
+
+      # Synthetic identity reused from dast-staging.yml (research.md R3) -- no new secret.
+      # Credentials reach Maestro only via -e flags read from env, never interpolated into
+      # a logged command line (FR-006, SEC-003).
+      - name: Run synthetic flow (Maestro)
+        env:
+          MAESTRO_SYNTHETIC_USERNAME: ${{ vars.CREWSAFE_DAST_SYNTHETIC_WORKER_USERNAME }}
+          MAESTRO_SYNTHETIC_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
+        run: |
+          set +e
+          maestro test \
+            -e MAESTRO_SYNTHETIC_USERNAME="$MAESTRO_SYNTHETIC_USERNAME" \
+            -e MAESTRO_SYNTHETIC_PASSWORD="$MAESTRO_SYNTHETIC_PASSWORD" \
+            .github/scripts/mobsf-dynamic/flows/synthetic-flow.android.yaml \
+            >"$RUNNER_TEMP/maestro-run.log" 2>&1
+          maestro_exit=$?
+          set -e
+          if [[ "$maestro_exit" -eq 0 ]]; then
+            echo '{"all_steps_passed": true}' >"$RUNNER_TEMP/maestro-result.json"
+          else
+            echo '{"all_steps_passed": false}' >"$RUNNER_TEMP/maestro-result.json"
+          fi
+
+      # stop_analysis (verified: mobsf/MobSF/views/api/api_android_dynamic_analysis.py)
+      # collects device logs and downloads captured data server-side -- report_json then
+      # reads that already-collected data, so stop must run first.
+      - name: Pull MobSF dynamic report
+        env:
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/stop_analysis" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            >/dev/null
+          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/report_json" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            -o "$RUNNER_TEMP/mobsf-report.json"
+
+      # Verified against mobsf/DynamicAnalyzer/views/android/analysis.py +
+      # views/common/shared.py: the report's "domains" field is a dict KEYED BY HOSTNAME
+      # (MalwareDomainCheck().scan() output), not an array of traffic-event objects -- `keys`
+      # is the actual captured-host list. A missing/empty captured-hosts file still lets
+      # check-network-allowlist.sh run (zero hosts is a valid, if uninteresting, result), it
+      # never blocks the scan.
+      - name: Extract captured network hosts
+        run: |
+          jq -r '.domains | keys[]?' "$RUNNER_TEMP/mobsf-report.json" \
+            >"$RUNNER_TEMP/captured-hosts.txt" 2>/dev/null || : >"$RUNNER_TEMP/captured-hosts.txt"
+
+      - name: Evaluate coverage signal
+        id: coverage
+        run: |
+          set +e
+          .github/scripts/mobsf-dynamic/evaluate-coverage-signal.sh \
+            "$RUNNER_TEMP/maestro-result.json" "$RUNNER_TEMP/mobsf-report.json" "$RUNNER_TEMP/coverage-outcome.json"
+          echo "exit_code=$?" >>"$GITHUB_OUTPUT"
+          set -e
+
+      - name: Check network allowlist
+        env:
+          CREWSAFE_BACKEND_HOST: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+        run: |
+          # Strip the https:// scheme -- the allowlist compares bare hostnames.
+          export CREWSAFE_BACKEND_HOST="${CREWSAFE_BACKEND_HOST#https://}"
+          .github/scripts/mobsf-dynamic/check-network-allowlist.sh \
+            .github/security/mobsf-dynamic/network-allowlist.yml \
+            "$RUNNER_TEMP/captured-hosts.txt" \
+            "$RUNNER_TEMP/network-findings.json"
+
+      - name: Sanitize MobSF report
+        env:
+          MAESTRO_SYNTHETIC_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
+        run: |
+          .github/scripts/mobsf-dynamic/sanitize-mobsf-report.sh \
+            "$RUNNER_TEMP/mobsf-report.json" "$RUNNER_TEMP/sanitized/mobsf-report.json" \
+            "$MAESTRO_SYNTHETIC_PASSWORD"
+          .github/scripts/mobsf-dynamic/sanitize-mobsf-report.sh \
+            "$RUNNER_TEMP/maestro-run.log" "$RUNNER_TEMP/sanitized/maestro-run.log" \
+            "$MAESTRO_SYNTHETIC_PASSWORD"
+          cp "$RUNNER_TEMP/network-findings.json" "$RUNNER_TEMP/sanitized/network-findings.json"
+
+      # github/inputs context values reach the shell only through env vars, never through
+      # ${{ }} interpolation inside run: (SEC-002) -- matches security-scan.yml's own
+      # established convention; a run_id/actor/etc. value is attacker-influenced text that
+      # must never be parsed as shell.
+      - name: Write dynamic-scan metadata
+        env:
+          ARTIFACT_COMMIT_SHA: ${{ steps.artifact.outputs.commit_sha }}
+          ARTIFACT_SHA256: ${{ steps.artifact.outputs.artifact_sha256 }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sanitized"
+          outcome="$(jq -r '.outcome' "$RUNNER_TEMP/coverage-outcome.json")"
+          coverage_evidence="$(jq -r '.coverage_evidence' "$RUNNER_TEMP/coverage-outcome.json")"
+          jq -n \
+            --arg platform "android" \
+            --arg commit_sha "$ARTIFACT_COMMIT_SHA" \
+            --arg artifact_sha256 "$ARTIFACT_SHA256" \
+            --arg source_run_id "$SOURCE_RUN_ID" \
+            --arg analyzer_environment "android-emulator" \
+            --argjson coverage_evidence "$coverage_evidence" \
+            --arg outcome "$outcome" \
+            --arg run_id "$RUN_ID" \
+            --arg run_url "$RUN_URL" \
+            --arg triggered_by "$TRIGGERED_BY" \
+            '{platform: $platform, commit_sha: $commit_sha, artifact_sha256: $artifact_sha256,
+              source_run_id: $source_run_id, analyzer_environment: $analyzer_environment,
+              coverage_evidence: $coverage_evidence, outcome: $outcome, run_id: $run_id,
+              run_url: $run_url, triggered_by: $triggered_by}' \
+            >"$RUNNER_TEMP/sanitized/dynamic-scan-metadata.json"
+          {
+            echo "## MobSF Dynamic Scan — Android"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| platform | \`android\` |"
+            echo "| commit_sha | \`${ARTIFACT_COMMIT_SHA}\` |"
+            echo "| artifact_sha256 | \`${ARTIFACT_SHA256}\` |"
+            echo "| outcome | \`${outcome}\` |"
+            echo "| coverage_evidence | \`${coverage_evidence}\` |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # Only written once the scan reaches at least the sanitization step -- an early
+      # infrastructure failure (emulator boot timeout, MobSF never becoming ready, upload
+      # rejected) leaves nothing here and this step no-ops via if-no-files-found, matching
+      # dast-staging.yml's own established precedent for the same "failed scan leaves nothing
+      # to upload" shape, rather than emitting a second, less useful "no files found" error on
+      # top of whatever already-clear error caused the earlier step to fail.
+      - name: Upload sanitized Android dynamic-scan report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobsf-dynamic-android-${{ steps.artifact.outputs.commit_sha }}
+          path: ${{ runner.temp }}/sanitized
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # Non-blocking on findings alone (FR-010); fails only when evaluate-coverage-signal.sh
+      # itself reported a non-pass outcome (analyzer/tooling failure or no coverage evidence
+      # -- research.md R12).
+      - name: Enforce scan outcome
+        env:
+          COVERAGE_EXIT_CODE: ${{ steps.coverage.outputs.exit_code }}
+        run: |
+          if [[ "$COVERAGE_EXIT_CODE" != "0" ]]; then
+            echo "::error::MobSF dynamic scan did not produce a trustworthy pass (see coverage-outcome.json in the uploaded report)."
+            exit 1
+          fi
+
+  ios-dynamic-scan:
+    name: iOS Dynamic Scan
+    # research.md R5: a distinct self-hosted device runner can only be reached by this job
+    # actually landing there, not discovered mid-job -- ios_runner_label selects it; left
+    # empty (default), this runs on ubuntu-latest, which can only ever satisfy the Corellium
+    # branch of check-ios-analyzer-availability.sh below.
+    runs-on: ${{ inputs.ios_runner_label || 'ubuntu-latest' }}
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out scan tooling
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Download iOS artifact from source run
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+          pattern: mobile-ios-*
+          path: ${{ runner.temp }}/ios-artifact
+          merge-multiple: true
+
+      - name: Retrieve and verify artifact
+        id: artifact
+        run: .github/scripts/mobsf-dynamic/retrieve-and-verify-artifact.sh "$RUNNER_TEMP/ios-artifact"
+
+      # Fail closed here (FR-003/FR-004, research.md R5) -- no artifact-install, MobSF, or
+      # Maestro step below ever runs unless this succeeds. Bounded to the same 10-minute
+      # analyzer-availability window as the Android job's emulator boot. Env var names
+      # verified against MobSF's own source (mobsf/MobSF/settings.py) -- these are exactly
+      # what MobSF's own Corellium integration reads, not a Corellium API convention.
+      - name: Check iOS analyzer availability
+        id: availability
+        timeout-minutes: 10
+        env:
+          MOBSF_CORELLIUM_API_DOMAIN: ${{ vars.MOBSF_CORELLIUM_API_DOMAIN }}
+          MOBSF_CORELLIUM_API_KEY: ${{ secrets.MOBSF_CORELLIUM_API_KEY }}
+          IOS_DEVICE_UDID: ${{ vars.IOS_DEVICE_UDID }}
+        run: |
+          .github/scripts/mobsf-dynamic/check-ios-analyzer-availability.sh "$RUNNER_TEMP/availability.env"
+          cat "$RUNNER_TEMP/availability.env" >> "$GITHUB_ENV"
+          cat "$RUNNER_TEMP/availability.env" >> "$GITHUB_OUTPUT"
+
+      # MobSF's own Corellium integration lives inside MobSF itself (mobsf/DynamicAnalyzer/
+      # views/ios/corellium_instance.py) -- this workflow never calls Corellium's API
+      # directly, only MobSF's /api/v1/ios/corellium_* endpoints, so the three
+      # MOBSF_CORELLIUM_* vars are passed to the container here (start-mobsf-service.sh's
+      # documented passthrough), not used by this workflow's own steps.
+      - name: Start MobSF service
+        env:
+          MOBSF_CORELLIUM_API_DOMAIN: ${{ vars.MOBSF_CORELLIUM_API_DOMAIN }}
+          MOBSF_CORELLIUM_API_KEY: ${{ secrets.MOBSF_CORELLIUM_API_KEY }}
+          MOBSF_CORELLIUM_PROJECT_ID: ${{ vars.MOBSF_CORELLIUM_PROJECT_ID }}
+        run: |
+          .github/scripts/mobsf-dynamic/start-mobsf-service.sh "$RUNNER_TEMP/mobsf.env"
+          cat "$RUNNER_TEMP/mobsf.env" >> "$GITHUB_ENV"
+
+      - name: Upload artifact to MobSF
+        id: mobsf_upload
+        env:
+          ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/upload" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            -F "file=@${ARTIFACT_PATH};type=application/octet-stream" \
+            -o "$RUNNER_TEMP/mobsf-upload.json"
+          mobsf_hash="$(jq -r '.hash // empty' "$RUNNER_TEMP/mobsf-upload.json")"
+          if [[ -z "$mobsf_hash" ]]; then
+            echo "::error::MobSF upload did not return a hash -- see mobsf-upload.json in the uploaded report."
+            exit 1
+          fi
+          echo "mobsf_hash=${mobsf_hash}" >>"$GITHUB_OUTPUT"
+
+      # Corellium provisioning goes through MobSF's own API end to end (verified against
+      # mobsf/DynamicAnalyzer/views/ios/corellium_instance.py): create -> start -> enable
+      # traffic capture -> install (setup_environment) -> launch (run_app). flavor/version
+      # are configurable since the actual supported values are account-specific -- confirm
+      # against a live trial via /api/v1/ios/corellium_supported_models and
+      # corellium_ios_versions (quickstart.md / T041) and adjust the vars if needed.
+      #
+      # KNOWN GAP, not glossed over: MobSF itself only ever talks to a Corellium instance over
+      # SSH (corellium_instance.py's CorelliumInstanceAPI/CorelliumAgentAPI), never over
+      # idb/USB -- the same channel Maestro requires. That means Maestro cannot drive this
+      # path with today's design; the job fails explicitly below rather than silently
+      # attempting a scan that has no real target (FR-014's "never report false success"
+      # spirit applies here too, not only to MobSF's own outcome). Making Corellium's path
+      # fully automated needs either Corellium's own device-network-exposure feature (tier-
+      # dependent, unverified for Solo -- research.md's capability caveat) or re-driving the
+      # synthetic flow through MobSF's own SSH/tap primitives instead of Maestro; both are
+      # future work, not implemented in this iteration.
+      - name: Provision Corellium instance
+        if: env.analyzer_environment == 'ios-corellium'
+        id: corellium
+        env:
+          MOBSF_CORELLIUM_PROJECT_ID: ${{ vars.MOBSF_CORELLIUM_PROJECT_ID }}
+          CORELLIUM_IOS_FLAVOR: ${{ vars.CORELLIUM_IOS_FLAVOR || 'iphone14pro' }}
+          CORELLIUM_IOS_VERSION: ${{ vars.CORELLIUM_IOS_VERSION || '16.5' }}
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          create_resp="$RUNNER_TEMP/corellium-create.json"
+          curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "project_id=${MOBSF_CORELLIUM_PROJECT_ID}" \
+            --data-urlencode "flavor=${CORELLIUM_IOS_FLAVOR}" \
+            --data-urlencode "version=${CORELLIUM_IOS_VERSION}" \
+            --data-urlencode "name=MobSF Dynamic Scan ${RUN_ID}" \
+            -o "$create_resp"
+          # create_vm_instance's own response embeds the id in a message string
+          # ("Created a new instance with id: <id>"), not a dedicated JSON field --
+          # verified against corellium_instance.py's create_vm_instance.
+          instance_id="$(jq -r '.message // empty' "$create_resp" | grep -oE '[a-f0-9-]{8,}$' || true)"
+          if [[ -z "$instance_id" ]]; then
+            echo "::error::Could not parse a Corellium instance id from MobSF's response -- see corellium-create.json in the uploaded report."
+            exit 1
+          fi
+          echo "instance_id=${instance_id}" >>"$GITHUB_OUTPUT"
+
+          curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_start_instance" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "instance_id=${instance_id}" \
+            >/dev/null
+
+          curl -fsS -X POST "http://localhost:8000/api/v1/ios/setup_environment" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            --data-urlencode "instance_id=${instance_id}" \
+            -o "$RUNNER_TEMP/corellium-setup.json"
+          if jq -e 'has("error")' "$RUNNER_TEMP/corellium-setup.json" >/dev/null 2>&1; then
+            echo "::error::MobSF could not install the app on the Corellium instance -- see corellium-setup.json in the uploaded report."
+            exit 1
+          fi
+
+          echo "::error::Corellium path provisioned successfully, but no automated UI-driving mechanism is implemented for it in this iteration (see this step's header comment) -- failing explicitly rather than reporting a scan that never really ran."
+          exit 1
+
+      - name: Install artifact on physical device
+        if: env.analyzer_environment == 'ios-signed-device'
+        env:
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/ios/device_install_ipa" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
+            --data-urlencode "checksum=${MOBSF_HASH}" \
+            -o "$RUNNER_TEMP/device-install.json"
+          if jq -e 'has("error")' "$RUNNER_TEMP/device-install.json" >/dev/null 2>&1; then
+            echo "::error::MobSF could not install the app on the physical device -- see device-install.json in the uploaded report."
+            exit 1
+          fi
+
+      - name: Install Maestro CLI
+        if: env.analyzer_environment == 'ios-signed-device'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip"
+          echo "${MAESTRO_ZIP_SHA256}  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
+          echo "$RUNNER_TEMP/maestro/maestro/bin" >> "$GITHUB_PATH"
+
+      # Maestro reaches the physical device directly over USB/idb -- a channel independent of
+      # MobSF's own SSH-based device interaction above, so both can address the same device
+      # without conflicting.
+      - name: Run synthetic flow (Maestro)
+        if: env.analyzer_environment == 'ios-signed-device'
+        env:
+          MAESTRO_SYNTHETIC_USERNAME: ${{ vars.CREWSAFE_DAST_SYNTHETIC_WORKER_USERNAME }}
+          MAESTRO_SYNTHETIC_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
+        run: |
+          set +e
+          maestro test \
+            -e MAESTRO_SYNTHETIC_USERNAME="$MAESTRO_SYNTHETIC_USERNAME" \
+            -e MAESTRO_SYNTHETIC_PASSWORD="$MAESTRO_SYNTHETIC_PASSWORD" \
+            .github/scripts/mobsf-dynamic/flows/synthetic-flow.ios.yaml \
+            >"$RUNNER_TEMP/maestro-run.log" 2>&1
+          maestro_exit=$?
+          set -e
+          if [[ "$maestro_exit" -eq 0 ]]; then
+            echo '{"all_steps_passed": true}' >"$RUNNER_TEMP/maestro-result.json"
+          else
+            echo '{"all_steps_passed": false}' >"$RUNNER_TEMP/maestro-result.json"
+          fi
+
+      # iOS device dynamic-analysis reports are keyed by device_id + bundle_id (verified
+      # against mobsf/MobSF/views/api/api_ios_device_analysis.py), not the upload hash --
+      # a different shape from Android's hash-keyed report_json.
+      - name: Pull MobSF dynamic report
+        if: env.analyzer_environment == 'ios-signed-device'
+        env:
+          IOS_BUNDLE_ID: sg.crewsafe.mobile
+        run: |
+          curl -fsS -X POST "http://localhost:8000/api/v1/ios/device_report_json" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
+            --data-urlencode "bundle_id=${IOS_BUNDLE_ID}" \
+            -o "$RUNNER_TEMP/mobsf-report.json"
+
+      - name: Extract captured network hosts
+        if: env.analyzer_environment == 'ios-signed-device'
+        run: |
+          jq -r '.domains | keys[]?' "$RUNNER_TEMP/mobsf-report.json" \
+            >"$RUNNER_TEMP/captured-hosts.txt" 2>/dev/null || : >"$RUNNER_TEMP/captured-hosts.txt"
+
+      - name: Evaluate coverage signal
+        id: coverage
+        run: |
+          set +e
+          .github/scripts/mobsf-dynamic/evaluate-coverage-signal.sh \
+            "$RUNNER_TEMP/maestro-result.json" "$RUNNER_TEMP/mobsf-report.json" "$RUNNER_TEMP/coverage-outcome.json"
+          echo "exit_code=$?" >>"$GITHUB_OUTPUT"
+          set -e
+
+      - name: Check network allowlist
+        env:
+          CREWSAFE_BACKEND_HOST: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}
+        run: |
+          export CREWSAFE_BACKEND_HOST="${CREWSAFE_BACKEND_HOST#https://}"
+          .github/scripts/mobsf-dynamic/check-network-allowlist.sh \
+            .github/security/mobsf-dynamic/network-allowlist.yml \
+            "$RUNNER_TEMP/captured-hosts.txt" \
+            "$RUNNER_TEMP/network-findings.json"
+
+      - name: Sanitize MobSF report
+        env:
+          MAESTRO_SYNTHETIC_PASSWORD: ${{ secrets.DAST_SYNTHETIC_WORKER_PASSWORD }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sanitized"
+          .github/scripts/mobsf-dynamic/sanitize-mobsf-report.sh \
+            "$RUNNER_TEMP/mobsf-report.json" "$RUNNER_TEMP/sanitized/mobsf-report.json" \
+            "$MAESTRO_SYNTHETIC_PASSWORD"
+          .github/scripts/mobsf-dynamic/sanitize-mobsf-report.sh \
+            "$RUNNER_TEMP/maestro-run.log" "$RUNNER_TEMP/sanitized/maestro-run.log" \
+            "$MAESTRO_SYNTHETIC_PASSWORD"
+          cp "$RUNNER_TEMP/network-findings.json" "$RUNNER_TEMP/sanitized/network-findings.json"
+
+      - name: Write dynamic-scan metadata
+        env:
+          ARTIFACT_COMMIT_SHA: ${{ steps.artifact.outputs.commit_sha }}
+          ARTIFACT_SHA256: ${{ steps.artifact.outputs.artifact_sha256 }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/sanitized"
+          outcome="$(jq -r '.outcome' "$RUNNER_TEMP/coverage-outcome.json")"
+          coverage_evidence="$(jq -r '.coverage_evidence' "$RUNNER_TEMP/coverage-outcome.json")"
+          jq -n \
+            --arg platform "ios" \
+            --arg commit_sha "$ARTIFACT_COMMIT_SHA" \
+            --arg artifact_sha256 "$ARTIFACT_SHA256" \
+            --arg source_run_id "$SOURCE_RUN_ID" \
+            --arg analyzer_environment "$analyzer_environment" \
+            --argjson coverage_evidence "$coverage_evidence" \
+            --arg outcome "$outcome" \
+            --arg run_id "$RUN_ID" \
+            --arg run_url "$RUN_URL" \
+            --arg triggered_by "$TRIGGERED_BY" \
+            '{platform: $platform, commit_sha: $commit_sha, artifact_sha256: $artifact_sha256,
+              source_run_id: $source_run_id, analyzer_environment: $analyzer_environment,
+              coverage_evidence: $coverage_evidence, outcome: $outcome, run_id: $run_id,
+              run_url: $run_url, triggered_by: $triggered_by}' \
+            >"$RUNNER_TEMP/sanitized/dynamic-scan-metadata.json"
+          {
+            echo "## MobSF Dynamic Scan — iOS"
+            echo
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| platform | \`ios\` |"
+            echo "| commit_sha | \`${ARTIFACT_COMMIT_SHA}\` |"
+            echo "| artifact_sha256 | \`${ARTIFACT_SHA256}\` |"
+            echo "| analyzer_environment | \`${analyzer_environment}\` |"
+            echo "| outcome | \`${outcome}\` |"
+            echo "| coverage_evidence | \`${coverage_evidence}\` |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # Same reasoning as the Android job's upload step: nothing exists here yet for the
+      # ios-corellium branch's deliberate explicit stop, or for any earlier infrastructure
+      # failure -- if-no-files-found: ignore avoids a confusing second error on top of the
+      # real one already logged.
+      - name: Upload sanitized iOS dynamic-scan report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobsf-dynamic-ios-${{ steps.artifact.outputs.commit_sha }}
+          path: ${{ runner.temp }}/sanitized
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Enforce scan outcome
+        env:
+          COVERAGE_EXIT_CODE: ${{ steps.coverage.outputs.exit_code }}
+        run: |
+          if [[ "$COVERAGE_EXIT_CODE" != "0" ]]; then
+            echo "::error::MobSF dynamic scan did not produce a trustworthy pass (see coverage-outcome.json in the uploaded report)."
+            exit 1
+          fi
