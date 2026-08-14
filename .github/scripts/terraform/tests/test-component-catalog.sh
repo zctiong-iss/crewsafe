@@ -8,7 +8,7 @@ resolver="$ROOT/.github/scripts/terraform/resolve-component.sh"
 assert_file ".github/terraform/components.json"
 assert_file ".github/terraform/components.schema.json"
 assert_file ".github/scripts/terraform/resolve-component.sh"
-jq -e '.schema_version == 1 and (.components | keys | sort == ["cognito-shared-dev","compute-shared-dev","database-shared-dev","ecr-shared-dev","iam-policy-management-shared-dev","network-shared-dev","secrets-shared-dev","securityhub-import-shared-dev","state-backend"])' "$catalog" >/dev/null
+jq -e '.schema_version == 1 and (.components | keys | sort == ["cognito-shared-dev","compute-shared-dev","database-shared-dev","developer-access-shared-dev","ecr-shared-dev","iam-policy-management-shared-dev","network-shared-dev","secrets-shared-dev","securityhub-import-shared-dev","state-backend"])' "$catalog" >/dev/null
 jq -e '.components["iam-policy-management-shared-dev"].execution_role_family == "policy-management"' "$catalog" >/dev/null
 jq -e '.components["iam-policy-management-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 jq -e '.components["cognito-shared-dev"].state_key == "crewsafe/cognito/shared-dev.tfstate"' "$catalog" >/dev/null
@@ -43,6 +43,11 @@ jq -e '.components["ecr-shared-dev"].root == "infra/terraform/ecr" and .componen
 # accidental destroy dispatch must stay refused too.
 jq -e '.components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
 jq -e '.components["securityhub-import-shared-dev"].root == "infra/terraform/securityhub-import" and .components["securityhub-import-shared-dev"].state_key == "crewsafe/securityhub-import/shared-dev.tfstate" and .components["securityhub-import-shared-dev"].allow_destroy == false and .components["securityhub-import-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
+# The developer-access component creates standing IAM console/CLI identities; a destroy
+# dispatch must stay refused (SCRUM-372) — a roster shrinking to zero should never
+# silently tear down the group and policy alongside it. It reuses the shared "standard"
+# execution-role family rather than a dedicated one (research.md R-001).
+jq -e '.components["developer-access-shared-dev"].root == "infra/terraform/developer-access" and .components["developer-access-shared-dev"].state_key == "crewsafe/developer-access/shared-dev.tfstate" and .components["developer-access-shared-dev"].allow_destroy == false and .components["developer-access-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
 jq empty "$schema"
 "$resolver" state-backend >/dev/null
 "$resolver" iam-policy-management-shared-dev >/dev/null
@@ -74,6 +79,11 @@ fi
 if [[ -f "$ROOT/infra/terraform/securityhub-import/.terraform.lock.hcl" ]]; then
   "$resolver" securityhub-import-shared-dev >/dev/null
 elif "$resolver" securityhub-import-shared-dev >/dev/null 2>&1; then
+  fail "component with a missing lockfile was accepted"
+fi
+if [[ -f "$ROOT/infra/terraform/developer-access/.terraform.lock.hcl" ]]; then
+  "$resolver" developer-access-shared-dev >/dev/null
+elif "$resolver" developer-access-shared-dev >/dev/null 2>&1; then
   fail "component with a missing lockfile was accepted"
 fi
 if "$resolver" ../escape >/dev/null 2>&1; then fail "path traversal accepted"; fi

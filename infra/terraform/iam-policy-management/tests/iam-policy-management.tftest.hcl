@@ -17,7 +17,7 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_bindings) == 16
+    condition     = length(output.policy_bindings) == 18
     error_message = "The IAM policy-management root must expose exactly sixteen bindings."
   }
 
@@ -33,7 +33,7 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_arns) == 16 && length(output.attachment_keys) == 16
+    condition     = length(output.policy_arns) == 18 && length(output.attachment_keys) == 18
     error_message = "Every customer-managed policy must have one explicit attachment."
   }
 

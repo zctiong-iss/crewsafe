@@ -1,0 +1,28 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadDeveloperGroupPlan",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetGroup",
+        "iam:ListAttachedGroupPolicies",
+        "iam:ListGroupPolicies",
+        "iam:GetGroupPolicy"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
+    },
+    {
+      "Sid": "ReadDeveloperUsersPlan",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetUser",
+        "iam:GetLoginProfile",
+        "iam:ListAccessKeys",
+        "iam:ListGroupsForUser",
+        "iam:ListUserTags"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:user/crewsafe/developers/*"
+    }
+  ]
+}
