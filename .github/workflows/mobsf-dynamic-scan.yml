@@ -324,6 +324,16 @@ jobs:
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
 
+      # Some MobSF API failures return a generic message with no real detail (confirmed by a
+      # real run: start_analysis failing with just {"error": "Dynamic Analysis Failed."} after
+      # ~3 minutes of real work) -- the actual cause only ever appears in MobSF's own container
+      # logs, never in the HTTP response body. MOBSF_CONTAINER_ID is only set once "Start MobSF
+      # service" itself has already succeeded, so an earlier failure there just makes this a
+      # harmless no-op via `|| true`.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
+
       # Only written once the scan reaches at least the sanitization step -- an early
       # infrastructure failure (emulator boot timeout, MobSF never becoming ready, upload
       # rejected) leaves nothing here and this step no-ops via if-no-files-found, matching
@@ -679,6 +689,13 @@ jobs:
             echo "| outcome | \`${outcome}\` |"
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      # Same reasoning as the Android job's equivalent step: some MobSF API failures return a
+      # generic message with no real detail, and the actual cause only ever appears in MobSF's
+      # own container logs.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
 
       # Same reasoning as the Android job's upload step: nothing exists here yet for the
       # ios-corellium branch's deliberate explicit stop, or for any earlier infrastructure
