@@ -121,7 +121,7 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             -F "file=@${ARTIFACT_PATH};type=application/vnd.android.package-archive" \
             -o "$RUNNER_TEMP/mobsf-upload.json" || {
@@ -145,7 +145,7 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/start_analysis" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/start_analysis" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
             -o "$RUNNER_TEMP/mobsf-start-analysis.json" || {
@@ -195,7 +195,7 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/stop_analysis" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/stop_analysis" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
             -o "$RUNNER_TEMP/mobsf-stop-analysis.json" || {
@@ -203,7 +203,7 @@ jobs:
               cat "$RUNNER_TEMP/mobsf-stop-analysis.json" >&2 || true
               exit 1
             }
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/report_json" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/report_json" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
             -o "$RUNNER_TEMP/mobsf-report.json" || {
@@ -391,7 +391,7 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             -F "file=@${ARTIFACT_PATH};type=application/octet-stream" \
             -o "$RUNNER_TEMP/mobsf-upload.json" || {
@@ -459,7 +459,7 @@ jobs:
           trap cleanup EXIT
 
           create_resp="$RUNNER_TEMP/corellium-create.json"
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "project_id=${MOBSF_CORELLIUM_PROJECT_ID}" \
             --data-urlencode "flavor=${CORELLIUM_IOS_FLAVOR}" \
@@ -481,7 +481,7 @@ jobs:
           echo "instance_id=${instance_id}" >>"$GITHUB_OUTPUT"
 
           start_resp="$RUNNER_TEMP/corellium-start.json"
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_start_instance" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_start_instance" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "instance_id=${instance_id}" \
             -o "$start_resp" || {
@@ -490,7 +490,7 @@ jobs:
               exit 1
             }
 
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/setup_environment" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/setup_environment" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
             --data-urlencode "instance_id=${instance_id}" \
@@ -512,7 +512,7 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_install_ipa" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_install_ipa" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
             --data-urlencode "checksum=${MOBSF_HASH}" \
@@ -566,7 +566,7 @@ jobs:
         env:
           IOS_BUNDLE_ID: sg.crewsafe.mobile
         run: |
-          curl -fsS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_report_json" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_report_json" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
             --data-urlencode "bundle_id=${IOS_BUNDLE_ID}" \
