@@ -135,6 +135,17 @@ override_data {
   }
 }
 
+# SCRUM-371 — the crewsafe-developers group this component attaches its new
+# grant to, published by developer-access-shared-dev (SCRUM-372).
+override_data {
+  target = data.terraform_remote_state.developer_access
+  values = {
+    outputs = {
+      developer_group_name = "crewsafe-developers"
+    }
+  }
+}
+
 # AWS-published. Preparation assertions prove this managed identifier is the
 # public ALB's only ingress source rather than a caller-supplied CIDR.
 override_data {
@@ -591,6 +602,98 @@ run "health_drives_traffic" {
   assert {
     condition     = length(aws_lb_listener.public.default_action) == 1
     error_message = "Exactly one default action (FR-018)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-371 — ECS Exec access to shared-dev RDS
+# ---------------------------------------------------------------------------
+
+run "ecs_exec_enabled" {
+  command = apply
+
+  assert {
+    condition     = aws_ecs_service.backend.enable_execute_command == true
+    error_message = "The backend service must opt into ECS Exec so a developer's session can host through it (spec FR-001)."
+  }
+}
+
+# contracts/rds-troubleshooting-grant.md is the audit surface this run block
+# holds the resource to. Decodes the actual attached policy JSON, never the
+# input local (037's R-009 finding, reused): a mock fabricates a data source's
+# .json attribute, so asserting against the local is the only way to test the
+# real configuration rather than invented data.
+run "developer_rds_troubleshooting_grant" {
+  command = apply
+
+  assert {
+    condition     = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 3
+    error_message = "The grant must hold exactly three statements: ExecIntoBackendTask, StartSessionToBackendTask, and ReadRdsManagedCredentialForTunnel (spec FR-005, research.md R-005 amendment)."
+  }
+
+  assert {
+    condition = sort([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Sid
+    ]) == sort(["ExecIntoBackendTask", "StartSessionToBackendTask", "ReadRdsManagedCredentialForTunnel"])
+    error_message = "The grant's three statements must be exactly these, no others (contracts/rds-troubleshooting-grant.md)."
+  }
+
+  assert {
+    condition = sort(flatten([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Action
+    ])) == sort(["ecs:ExecuteCommand", "secretsmanager:GetSecretValue", "ssm:StartSession"])
+    error_message = "The grant must total exactly ecs:ExecuteCommand, ssm:StartSession, and secretsmanager:GetSecretValue — no restatement of ViewOnlyAccess's existing coverage (spec FR-005, FR-006)."
+  }
+
+  # Resource is a JSON string on two statements and a JSON array on
+  # StartSessionToBackendTask (it needs both the task ARN and the SSM document
+  # ARN); normalize to a list before checking for a wildcard so neither shape
+  # is missed.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      alltrue([for r in try(tolist(s.Resource), [s.Resource]) : r != "*"])
+    ])
+    error_message = "No statement may use a resource wildcard — every action here supports scoping and FR-007 requires it, unlike the one ssmmessages exception on the secrets side (spec FR-007)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      strcontains(s.Resource, local.name_prefix)
+      if s.Sid == "ExecIntoBackendTask"
+    ])
+    error_message = "ExecIntoBackendTask must be scoped to this project's own ECS cluster/task pattern, not every task in the account (spec FR-007, research.md R-005)."
+  }
+
+  # Amendment (live-tested 2026-08-14): ssm:StartSession for ECS Exec
+  # port-forwarding is authorized against BOTH the task target and the SSM
+  # document — confirmed by a live AccessDeniedException naming exactly this
+  # document ARN when only the task ARN was granted (research.md R-005).
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      (
+        strcontains(join(",", s.Resource), local.name_prefix)
+        && strcontains(join(",", s.Resource), "document/AWS-StartPortForwardingSessionToRemoteHost")
+      )
+      if s.Sid == "StartSessionToBackendTask"
+    ])
+    error_message = "StartSessionToBackendTask must grant ssm:StartSession on both the backend task ARN pattern and the AWS-StartPortForwardingSessionToRemoteHost document ARN (research.md R-005 amendment)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      strcontains(s.Resource, ":secret:rds!")
+      if s.Sid == "ReadRdsManagedCredentialForTunnel"
+    ])
+    error_message = "ReadRdsManagedCredentialForTunnel must be scoped to the RDS-managed secret's naming pattern, matching secrets/main.tf's own rds_managed_secret_arn_pattern (spec FR-007, Key Entities)."
+  }
+
+  assert {
+    condition     = aws_iam_group_policy.developers_rds_troubleshooting.group == "crewsafe-developers"
+    error_message = "Must attach to the group published by developer-access's remote state, never a hardcoded second group (contracts/developer-access-consumer-compliance.md rule 1)."
   }
 }
 
