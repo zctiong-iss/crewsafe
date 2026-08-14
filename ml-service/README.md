@@ -96,6 +96,26 @@ python -m crewsafe_ml.backtest \
 The rolling report is development evidence, not permission to activate a model.
 The evaluation end must precede the untouched approval period.
 
+After freezing a candidate, download a later period into a separate folder and
+evaluate that exact checksum-pinned bundle without retraining it:
+
+```bash
+python -m crewsafe_ml.evaluate_approval \
+  --model-manifest artifacts/wbgt-six-month-safety-floor-dev-v1/manifest.json \
+  --model-manifest-sha256 <64-character-manifest-sha256> \
+  --features data/approval-2026-08/weather_features_15min.csv \
+  --feature-manifest data/approval-2026-08/manifest.json \
+  --output artifacts/approval-2026-08.json
+```
+
+The default evidence window is at least 21 complete days. The report checks that
+the period begins after both the training data and the frozen candidate's creation,
+verifies model and data checksums, compares both horizons with persistence, and
+requires no loss of recall at 32°C
+or 33°C. It is evidence for a human review, not an automatic unlock. A report
+also stays blocked when the model was produced from an unreviewable `dirty`
+source commit or the new period contains no high-risk examples.
+
 The current six-month development evaluation, intended use, uncertainty,
 limitations, per-band errors, and retraining triggers are recorded in
 [MODEL_CARD.md](MODEL_CARD.md).
