@@ -627,7 +627,7 @@ run "developer_rds_troubleshooting_grant" {
   command = apply
 
   assert {
-    condition = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 2
+    condition     = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 2
     error_message = "The grant must hold exactly two statements: ExecIntoBackendTask and ReadRdsManagedCredentialForTunnel (spec FR-005)."
   }
 

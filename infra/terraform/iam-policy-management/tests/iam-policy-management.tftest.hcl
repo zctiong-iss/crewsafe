@@ -97,7 +97,7 @@ run "compute_ci_can_manage_developer_group_policy" {
   variables {
     expected_account_id      = "123456789012"
     account_alias            = "alice"
-    aws_region                = "ap-southeast-1"
+    aws_region               = "ap-southeast-1"
     terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
     terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
   }

@@ -316,14 +316,14 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : contains([
-        jsonencode(["ecr:GetAuthorizationToken"]),
-        jsonencode(sort([
-          "ssmmessages:CreateControlChannel",
-          "ssmmessages:CreateDataChannel",
-          "ssmmessages:OpenControlChannel",
-          "ssmmessages:OpenDataChannel",
-        ])),
+        ) : contains([
+          jsonencode(["ecr:GetAuthorizationToken"]),
+          jsonencode(sort([
+            "ssmmessages:CreateControlChannel",
+            "ssmmessages:CreateDataChannel",
+            "ssmmessages:OpenControlChannel",
+            "ssmmessages:OpenDataChannel",
+          ])),
       ], jsonencode(sort(s.Action)))
       if s.Resource == "*"
     ])
