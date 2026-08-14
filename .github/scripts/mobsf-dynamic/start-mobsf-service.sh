@@ -68,7 +68,15 @@ for passthrough_var in ANALYZER_IDENTIFIER MOBSF_CORELLIUM_API_DOMAIN MOBSF_CORE
   fi
 done
 
-container_id="$(docker run -d --rm --network host "${docker_env_args[@]}" "$MOBSF_IMAGE" 2>&1)" \
+# Pulled explicitly and separately from `docker run` -- on a fresh runner where the image
+# isn't already cached, `docker run` pulls it implicitly and its multi-line progress output
+# was previously captured (via `docker run ... 2>&1`) into container_id, corrupting the
+# $GITHUB_ENV write below ("Unable to process file command 'env' successfully", confirmed by
+# a real run). Pulling first means `docker run` only ever prints the container ID.
+docker pull "$MOBSF_IMAGE" >/dev/null \
+  || fail "failed to pull MOBSF_IMAGE (docker pull exited non-zero)"
+
+container_id="$(docker run -d --rm --network host "${docker_env_args[@]}" "$MOBSF_IMAGE")" \
   || fail "container failed to start (docker run exited non-zero)"
 
 # Poll the same root-path check MobSF's own official Dockerfile defines as its HEALTHCHECK
