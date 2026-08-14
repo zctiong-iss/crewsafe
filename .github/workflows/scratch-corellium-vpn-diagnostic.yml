@@ -57,13 +57,19 @@ jobs:
           fi
           printf '%s' "$VPN_OVPN_CONFIG" > "$RUNNER_TEMP/corellium.ovpn"
 
-      # Backgrounded via --daemon; polls for a tun interface to appear rather than a fixed
+      # Backgrounded via --daemon; polls for a tun/tap interface to appear rather than a fixed
       # sleep, bounded to 60s so a real connection failure doesn't just hang until the job
       # timeout. The log file is pre-created and world-readable BEFORE openvpn (root) writes
       # to it, and its content is printed inline here regardless of outcome -- a previous run
       # of this diagnostic lost the only evidence of a connection failure to a permission
       # mismatch (root-owned log, non-root upload-artifact step) and to relying solely on the
       # artifact instead of also surfacing it in the live log.
+      #
+      # Confirmed via a real run (2026-08-14): Corellium's .ovpn config uses `dev tap`, not
+      # `dev tun` -- the interface that comes up is tap0. An earlier version of this check only
+      # matched tun[0-9]*, which reported a false TUNNEL_UP=false even though OpenVPN's own log
+      # showed "Initialization Sequence Completed" (its actual success signal) in under a
+      # second. Match both prefixes so this doesn't happen again.
       - name: Connect to Corellium VPN
         run: |
           touch "$RUNNER_TEMP/openvpn.log"
@@ -71,16 +77,16 @@ jobs:
           sudo openvpn --config "$RUNNER_TEMP/corellium.ovpn" \
             --daemon --log "$RUNNER_TEMP/openvpn.log"
           elapsed=0
-          until ip -o link show | grep -q 'tun[0-9]*:' || [[ "$elapsed" -ge 60 ]]; do
+          until ip -o link show | grep -qE '(tun|tap)[0-9]*:' || [[ "$elapsed" -ge 60 ]]; do
             sleep 2
             elapsed=$((elapsed + 2))
           done
-          if ip -o link show | grep -q 'tun[0-9]*:'; then
+          if ip -o link show | grep -qE '(tun|tap)[0-9]*:'; then
             echo "TUNNEL_UP=true" >> "$GITHUB_ENV"
-            ip -o link show | grep 'tun[0-9]*:'
+            ip -o link show | grep -E '(tun|tap)[0-9]*:'
           else
             echo "TUNNEL_UP=false" >> "$GITHUB_ENV"
-            echo "::error::No tun interface appeared within 60s -- VPN connection likely failed."
+            echo "::error::No tun/tap interface appeared within 60s -- VPN connection likely failed."
           fi
           echo "--- openvpn.log ---"
           cat "$RUNNER_TEMP/openvpn.log"
