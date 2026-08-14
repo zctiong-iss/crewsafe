@@ -1,5 +1,6 @@
 package com.crewsafe.common.error;
 
+import com.crewsafe.forecast.service.ForecastUnavailableException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +65,14 @@ public class GlobalExceptionHandler {
         log.debug("conflict_handled");
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of("Conflict", "Request conflicts with the current state of the resource"));
+    }
+
+    /** Keeps ML failures typed while SCRUM-141 retains ownership of fallback policy. */
+    @ExceptionHandler(ForecastUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleForecastUnavailable(ForecastUnavailableException e) {
+        log.warn("forecast_dependency_unavailable");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of("Service Unavailable", "Forecast temporarily unavailable"));
     }
 
     /**

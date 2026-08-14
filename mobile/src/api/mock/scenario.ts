@@ -120,6 +120,32 @@ export function setNightOverride(enabled: boolean): void {
   nightOverride = enabled;
 }
 
+/*
+ * Forecast scenarios, for the same reason as the two above.
+ *
+ * `unavailable` is the one that matters. `SiteForecastService` declines on seven separate
+ * conditions — stale or simulated weather, a station change mid-window, any gap off the
+ * 15-minute cadence — so a 503 is an ordinary answer on a quiet site, not a fault. It has to
+ * be reviewable on demand, or the state real supervisors will meet most often is the one
+ * state nobody ever looks at.
+ *
+ * `wide` exists because a confident-looking point estimate is the failure mode this screen
+ * is built to avoid. A model that is unsure must *look* unsure, and that is only checkable
+ * against an interval wide enough to notice.
+ */
+export type ForecastScenario = "normal" | "wide" | "unavailable";
+
+let activeForecast: ForecastScenario = "normal";
+
+export function getForecastScenario(): ForecastScenario {
+  return activeForecast;
+}
+
+export function setForecastScenario(scenario: ForecastScenario): void {
+  if (!__DEV__) return;
+  activeForecast = scenario;
+}
+
 /**
  * How long a mocked stop-work warning stays valid.
  *

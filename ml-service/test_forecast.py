@@ -1,11 +1,29 @@
 """Test suite for forecast service and endpoints."""
 import logging
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
+import app as app_module
 from app import app
-from forecast_service import ForecastService, MODEL_VERSION
+from crewsafe_ml.inference import (
+    ForecastModelRegistry,
+    ModelConfigurationError,
+    ModelInferenceError,
+    ModelPrediction,
+)
+from forecast_service import (
+    ForecastInferenceError,
+    ForecastInputError,
+    ForecastModelUnavailableError,
+    ForecastService,
+    MODEL_VERSION,
+)
+from models import ForecastContext
 
 
 client = TestClient(app)
@@ -16,7 +34,7 @@ class TestForecastService:
 
     def test_forecast_wbgt_persistence(self):
         """Forecast should return current value for WBGT."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="wbgt",
             current_value=35.5,
             horizon_minutes=30,
@@ -28,7 +46,7 @@ class TestForecastService:
 
     def test_forecast_temperature_persistence(self):
         """Forecast should return current value for temperature."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="temperature",
             current_value=28.0,
             horizon_minutes=60,
@@ -39,7 +57,7 @@ class TestForecastService:
 
     def test_forecast_humidity_persistence(self):
         """Forecast should return current value for humidity."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="humidity",
             current_value=65.0,
             horizon_minutes=30,
@@ -49,7 +67,7 @@ class TestForecastService:
 
     def test_forecast_confidence_interval(self):
         """Confidence interval should be symmetric around prediction."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="wbgt",
             current_value=35.5,
             horizon_minutes=30,
@@ -61,7 +79,7 @@ class TestForecastService:
 
     def test_forecast_zero_value(self):
         """Confidence interval should handle zero current value."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="temperature",
             current_value=0.0,
             horizon_minutes=30,
@@ -72,7 +90,7 @@ class TestForecastService:
 
     def test_forecast_negative_value(self):
         """Forecast should handle negative values."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="temperature",
             current_value=-5.0,
             horizon_minutes=30,
@@ -84,7 +102,7 @@ class TestForecastService:
 
     def test_forecast_timestamp_present(self):
         """Forecast should include timestamp."""
-        prediction = ForecastService.forecast(
+        prediction = ForecastService().forecast(
             metric="wbgt",
             current_value=35.5,
             horizon_minutes=30,
@@ -94,11 +112,140 @@ class TestForecastService:
     def test_forecast_service_rejects_unsupported_horizon(self):
         """Internal callers receive the same 30-or-60 rule as HTTP callers."""
         with pytest.raises(ValueError, match="30 or 60"):
-            ForecastService.forecast(
+            ForecastService().forecast(
                 metric="wbgt",
                 current_value=35.5,
                 horizon_minutes=45,
             )
+
+
+class TestTrainedForecastService:
+    """Test trained inference without depending on a real binary model artifact."""
+
+    NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+
+    def test_uses_trained_model_for_valid_recent_wbgt_context(self):
+        registry = Mock()
+        registry.predict.return_value = ModelPrediction(
+            predicted_value=34.2,
+            model_version="wbgt-test-v1:hist-gradient",
+            interval_half_width=1.5,
+        )
+        service = ForecastService(registry, clock=lambda: self.NOW)
+
+        prediction = service.forecast(
+            metric="wbgt",
+            current_value=33.5,
+            horizon_minutes=60,
+            context=forecast_context(self.NOW, latest_wbgt=33.5),
+        )
+
+        assert prediction.predicted_value == 34.2
+        assert prediction.model_version == "wbgt-test-v1:hist-gradient"
+        assert prediction.confidence_interval_lower == pytest.approx(32.7)
+        assert prediction.confidence_interval_upper == pytest.approx(35.7)
+        registry.predict.assert_called_once()
+
+    def test_rejects_stale_context_before_calling_the_model(self):
+        registry = Mock()
+        service = ForecastService(registry, clock=lambda: self.NOW)
+
+        with pytest.raises(ForecastInputError) as caught:
+            service.forecast(
+                metric="wbgt",
+                current_value=33.5,
+                context=forecast_context(
+                    self.NOW - timedelta(minutes=60),
+                    latest_wbgt=33.5,
+                ),
+            )
+
+        assert caught.value.code == "FORECAST_INPUT_INVALID"
+        registry.predict.assert_not_called()
+
+    def test_rejects_context_that_disagrees_with_current_value(self):
+        service = ForecastService(Mock(), clock=lambda: self.NOW)
+
+        with pytest.raises(ForecastInputError) as caught:
+            service.forecast(
+                metric="wbgt",
+                current_value=33.5,
+                context=forecast_context(self.NOW, latest_wbgt=31.0),
+            )
+
+        assert caught.value.code == "FORECAST_INPUT_INVALID"
+
+    def test_returns_typed_failure_when_trained_model_is_not_configured(self):
+        service = ForecastService(clock=lambda: self.NOW)
+
+        with pytest.raises(ForecastModelUnavailableError) as caught:
+            service.forecast(
+                metric="wbgt",
+                current_value=33.5,
+                context=forecast_context(self.NOW, latest_wbgt=33.5),
+            )
+
+        assert caught.value.code == "FORECAST_MODEL_UNAVAILABLE"
+
+    def test_returns_typed_failure_when_configured_model_bundle_cannot_load(
+        self,
+        monkeypatch,
+    ):
+        """Bad model configuration is contained and never crashes service startup."""
+        monkeypatch.setenv("WBGT_MODEL_MANIFEST", "/private/missing/manifest.json")
+        monkeypatch.setenv("WBGT_MODEL_MANIFEST_SHA256", "0" * 64)
+
+        service = ForecastService.from_environment()
+
+        with pytest.raises(ForecastModelUnavailableError):
+            service.forecast(
+                metric="wbgt",
+                current_value=33.5,
+                context=forecast_context(self.NOW, latest_wbgt=33.5),
+            )
+
+    def test_returns_typed_failure_when_model_inference_fails(self):
+        registry = Mock()
+        registry.predict.side_effect = ModelInferenceError("private artifact detail")
+        service = ForecastService(registry, clock=lambda: self.NOW)
+
+        with pytest.raises(ForecastInferenceError) as caught:
+            service.forecast(
+                metric="wbgt",
+                current_value=33.5,
+                context=forecast_context(self.NOW, latest_wbgt=33.5),
+            )
+
+        assert caught.value.code == "FORECAST_INFERENCE_FAILED"
+
+    def test_registry_rejects_a_model_without_explicit_approval(self, tmp_path: Path):
+        """A development artifact cannot be activated by configuration alone."""
+        manifest = {
+            "schema_version": 2,
+            "approved_for_inference": False,
+            "model_version": "development-model",
+        }
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        checksum = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+
+        with pytest.raises(ModelConfigurationError, match="not approved"):
+            ForecastModelRegistry.load(manifest_path, checksum)
+
+    def test_registry_rejects_a_model_with_an_approval_blocker(self, tmp_path: Path):
+        """Approval cannot override a recorded unresolved blocker."""
+        manifest = {
+            "schema_version": 2,
+            "approved_for_inference": True,
+            "approval_blocker": "Untouched evaluation is incomplete.",
+            "model_version": "blocked-model",
+        }
+        manifest_path = tmp_path / "manifest.json"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        checksum = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+
+        with pytest.raises(ModelConfigurationError, match="approval blocker"):
+            ForecastModelRegistry.load(manifest_path, checksum)
 
 
 class TestForecastEndpoint:
@@ -236,7 +383,7 @@ class TestForecastEndpoint:
         def fail_forecast(*_args, **_kwargs):
             raise RuntimeError("synthetic forecast failure")
 
-        monkeypatch.setattr(ForecastService, "forecast", fail_forecast)
+        monkeypatch.setattr(app_module.forecast_service, "forecast", fail_forecast)
 
         response = client.post(
             "/forecast",
@@ -250,10 +397,62 @@ class TestForecastEndpoint:
         assert response.status_code == 500
         assert response.json() == {"detail": "Internal server error"}
 
+    def test_forecast_endpoint_returns_typed_model_unavailable_error(self, monkeypatch):
+        """The backend receives a stable code it can map to SCRUM-141 fallback."""
+        monkeypatch.setattr(
+            app_module,
+            "forecast_service",
+            ForecastService(clock=lambda: TestTrainedForecastService.NOW),
+        )
+
+        response = client.post(
+            "/forecast",
+            json=forecast_request(TestTrainedForecastService.NOW),
+        )
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": {
+                "code": "FORECAST_MODEL_UNAVAILABLE",
+                "message": "Trained forecast model is temporarily unavailable",
+            }
+        }
+
+    def test_forecast_endpoint_uses_model_without_changing_response_contract(self, monkeypatch):
+        """Optional context activates inference while the response shape stays stable."""
+        registry = Mock()
+        registry.predict.return_value = ModelPrediction(
+            predicted_value=34.2,
+            model_version="wbgt-test-v1:hist-gradient",
+            interval_half_width=1.5,
+        )
+        monkeypatch.setattr(
+            app_module,
+            "forecast_service",
+            ForecastService(registry, clock=lambda: TestTrainedForecastService.NOW),
+        )
+
+        response = client.post(
+            "/forecast",
+            json=forecast_request(TestTrainedForecastService.NOW),
+        )
+
+        assert response.status_code == 200
+        assert set(response.json()) == {
+            "metric",
+            "predicted_value",
+            "horizon_minutes",
+            "model_version",
+            "confidence_interval_lower",
+            "confidence_interval_upper",
+            "timestamp",
+        }
+        assert response.json()["model_version"] == "wbgt-test-v1:hist-gradient"
+
     def test_unexpected_forecast_error_does_not_leak_details(self, monkeypatch, caplog):
         """Clients and logs receive no model exception text or stack trace."""
         monkeypatch.setattr(
-            ForecastService,
+            app_module.forecast_service,
             "forecast",
             Mock(side_effect=RuntimeError("private-model-path")),
         )
@@ -342,3 +541,39 @@ class TestHealthAndIntegration:
         schema = response.json()
         assert "/forecast" in schema["paths"]
         assert "post" in schema["paths"]["/forecast"]
+
+
+def forecast_context(latest_time: datetime, *, latest_wbgt: float) -> ForecastContext:
+    """Build a small, ordered 15-minute context for service-boundary tests."""
+
+    observations = []
+    for offset in range(4, -1, -1):
+        observations.append(
+            {
+                "observed_at": latest_time - timedelta(minutes=15 * offset),
+                "wbgt": latest_wbgt - offset / 10,
+                "air_temperature": 31.0,
+                "relative_humidity": 70.0,
+                "wind_speed": 3.0,
+                "wind_direction": 180.0,
+                "rainfall": 0.0,
+            }
+        )
+    return ForecastContext(
+        station_id="S123",
+        latitude=1.3521,
+        longitude=103.8198,
+        observations=observations,
+    )
+
+
+def forecast_request(latest_time: datetime) -> dict[str, object]:
+    """Serialize a trained-model request as a real backend client would send it."""
+
+    context = forecast_context(latest_time, latest_wbgt=33.5)
+    return {
+        "metric": "wbgt",
+        "horizon_minutes": 30,
+        "current_value": 33.5,
+        "context": context.model_dump(mode="json"),
+    }
