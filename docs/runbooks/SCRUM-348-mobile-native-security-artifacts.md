@@ -23,8 +23,8 @@ gh workflow run mobile-native-build.yml \
   -f build_android_aab=false
 ```
 
-`ios_profile` is `simulator` (default) or `adhoc`. `build_android_aab` is `true`/`false`
-(default `false` — an APK is always produced regardless).
+`ios_profile` is `simulator` (default), `adhoc`, or `unsigned-device` (§5b). `build_android_aab`
+is `true`/`false` (default `false` — an APK is always produced regardless).
 
 Or use the Actions tab in the GitHub UI: **Actions → Mobile Native Build → Run workflow**,
 select `main`, and set the two inputs.
@@ -86,9 +86,40 @@ Once all four are set, the same `ios_profile=adhoc` dispatch imports the certifi
 temporary keychain, installs the provisioning profile, archives, and exports an ad-hoc IPA —
 no workflow changes are required.
 
+## 5b. The `unsigned-device` iOS profile — no Apple account needed
+
+Produces a real ARM64 device build (`-sdk iphoneos`, not the Simulator ABI) with code signing
+disabled entirely (`CODE_SIGNING_ALLOWED=NO`, `CODE_SIGNING_REQUIRED=NO`, empty
+`CODE_SIGN_IDENTITY`), packaged into a standard-structure `.ipa` (`Payload/CrewSafe.app/`
+zipped) — the only thing a real `.ipa` has that this one doesn't is a valid code signature.
+No Apple Developer account, certificate, or provisioning profile of any kind is used or
+needed; the `unsigned-device` code path never references any `APPLE_*` secret (enforced by a
+regression test in `test-mobile-native-build-workflow.sh`).
+
+This exists specifically to unblock [[scrum-350-mobsf-dynamic-scanning]]'s Corellium dynamic-
+scan path without paying for Apple Developer Program membership ($99/yr). It works because of
+how MobSF actually installs apps on a **jailbroken** device (verified against
+`mobsf/DynamicAnalyzer/views/ios/corellium_instance.py::setup_environment`/
+`appsync_ipa_install`): when Corellium's own installer rejects an IPA for a bad/missing
+signature ("Please re-sign."), MobSF falls back to installing it via **AppSync Unified** — a
+jailbreak tweak that disables iOS's code-signature enforcement on jailbroken devices. Corellium
+trial/paid devices are jailbroken by default, so this fallback is the normal path for this
+artifact type, not an edge case.
+
+**This artifact only installs on a jailbroken device.** It will be refused by any
+normal/managed iOS device or the App Store/TestFlight — it is scoped to the security-testing
+Corellium/jailbroken-device path only, never for distribution, and the workflow's existing
+FR-009 structural test (no store-submission step, ever) still applies to it.
+
+```bash
+gh workflow run mobile-native-build.yml --ref main -f ios_profile=unsigned-device
+gh run download <run-id> -n mobile-ios-unsigned-device-<commit-sha>
+```
+
 ## 6. Retention and access
 
-Every artifact (APK, AAB if built, Simulator `.app`, ad-hoc IPA) is uploaded with a 14-day
+Every artifact (APK, AAB if built, Simulator `.app`, ad-hoc IPA, unsigned-device IPA) is
+uploaded with a 14-day
 retention period and then automatically expires — there is no manual cleanup step. While an
 artifact exists, who can access it is governed by GitHub Actions' standard artifact-access
 model: repository collaborators with read access to this repository can download workflow
@@ -100,7 +131,7 @@ TestFlight internal testing, or similar) is used.
 | State | Safe response |
 |---|---|
 | Android/iOS native compile failure | Fix the source issue; no partial artifact is uploaded for the failed platform, the other platform's job is unaffected. |
-| `adhoc` profile fails at the signing-material check | Expected until §5's four secrets are provisioned; use `ios_profile=simulator` in the meantime. |
+| `adhoc` profile fails at the signing-material check | Expected until §5's four secrets are provisioned; use `ios_profile=simulator` or `ios_profile=unsigned-device` (§5b) in the meantime. |
 | Dispatch against a non-`main` ref | Both jobs no-op by design (the `main`-only ref guard); rerun against `main`. |
 | Artifact expired (past 14 days) | Re-trigger the workflow for the same commit; a new artifact carries the same `commit_sha` in its metadata. |
 | Runner/provider outage | Leave the failure visible, then retry after service recovery. |
