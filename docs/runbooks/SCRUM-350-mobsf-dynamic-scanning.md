@@ -143,19 +143,50 @@ and starts the instance and installs the app through MobSF's real API — confir
 above — but then fails **explicitly and on purpose** rather than attempting `maestro test`
 against a target it cannot reach via MobSF's own channel.
 
-**Possible fix, not yet confirmed**: Corellium's console offers a "Connect via VPN" flow with
-**USBFlux** — bridges the virtual device onto your machine as a local USB device, explicitly
-advertised as compatible with "Xcode or libimobiledevice." Since `idb` (Maestro's iOS driver)
-is built on libimobiledevice, this may let Maestro reach a Corellium instance the same way it
-reaches a real physical device — independent of MobSF's own SSH-only channel, which is what
-the gap above is actually about. Local verification of this stalled on a macOS-specific
-OpenVPN `utun` allocation failure, then a Tunnelblick system-extension approval gate; testing
-directly on a Linux runner (the actual CI target, which has no such extension-approval gate)
-is the likely faster path if the macOS route keeps stalling. If confirmed working, the
-`ios-corellium` branch could be rebuilt to run VPN-connect + USBFlux as a setup step and then
-reuse the `ios-signed-device` Maestro path as-is, rather than needing a wholly new driving
-mechanism. Until confirmed, only the `ios-signed-device` path (a real USB-attached jailbroken
-device) can complete the synthetic flow end to end on iOS.
+**Fix confirmed working, 2026-08-14**: Corellium's console offers a "Connect via VPN" flow with
+**USBFlux** — bridges the virtual device onto a Linux host as a local USB device, advertised as
+compatible with "Xcode or libimobiledevice." Since `idb` (Maestro's iOS driver) is built on
+libimobiledevice, this lets Maestro reach a Corellium instance the same way it reaches a real
+physical device — independent of MobSF's own SSH-only channel, which is what the gap above is
+actually about. Verified end to end on a GitHub-hosted `ubuntu-latest` runner (macOS
+verification had stalled earlier on an OpenVPN `utun` allocation failure and a Tunnelblick
+system-extension approval gate — Linux, the actual CI target, has neither obstacle):
+
+1. `sudo openvpn --config <project .ovpn from Corellium's "Download OVPN File"> --daemon` —
+   brings up a **`tap0`** interface (Corellium's config uses `dev tap`, not `dev tun` — a
+   readiness check that only greps for `tun[0-9]*` will report a false failure even though the
+   tunnel is genuinely up; match `(tun|tap)[0-9]*`).
+2. Once the tunnel is up, the device is reachable directly: `ping <device VPN IP>` and TCP 22
+   (SSH) both respond.
+3. Build `usbfluxd` from source (`github.com/corellium/usbfluxd`, linked from the same console
+   panel as "Download the Linux source") — `./autogen.sh --without-static-libplist` (Ubuntu's
+   `libplist-dev` ships no static archive, only shared; the default `--with-static-libplist=yes`
+   fails configure otherwise).
+4. **Do not stop the host's `usbmuxd`** — verified against usbfluxd's own README: it redirects
+   the *existing* `usbmuxd` socket, it does not replace it. Ensure `usbmuxd` is running, then:
+   `sudo usbfluxd -f -v -r <device VPN IP>:5000` (port `5000` is usbfluxd's own DIY-scenario
+   default in its README, not something Corellium documents explicitly, but it is confirmed to
+   be the correct port here too — `usbfluxd`'s own log shows `<ip>:5000 is open` and completes
+   the remote-usbmux handshake).
+5. `idevice_id -l` then returns a real device UDID over the bridge.
+
+**One important gotcha found along the way**: the very first attempt (device shown as running
+in Corellium's console) produced a *well-formed but empty* `ListDevices` response — the whole
+protocol chain worked (TCP connect, remote-usbmux handshake, valid reply), but zero devices
+came back. The device needed to be explicitly toggled fully "on" via an icon in the device's
+top action bar (next to the pause/refresh/power icons) — separate from the "Connect via VPN"
+panel's own state — before it appeared. If a future run of this diagnostic gets a clean but
+empty device list again, check that toggle before assuming the bridge itself is broken.
+
+**Not yet verified**: this only confirms usbmux-level device *discovery*
+(`idevice_id -l`/`ListDevices`), not the `lockdownd` pairing that `idb`/Maestro need to actually
+drive the UI (e.g. `ideviceinfo -u <udid>` succeeding). That is the next thing to check before
+treating the gap as fully closed. If it holds, the `ios-corellium` branch could be rebuilt to
+run VPN-connect + USBFlux as a setup step and then reuse the `ios-signed-device` Maestro path
+as-is, rather than needing a wholly new driving mechanism. Until pairing is verified, only the
+`ios-signed-device` path (a real USB-attached jailbroken device) is confirmed to complete the
+synthetic flow end to end on iOS. See the (throwaway, to-be-deleted)
+`.github/workflows/scratch-corellium-vpn-diagnostic.yml` for the exact reproducible steps.
 
 ## 7. Non-blocking today, and what changes later
 
