@@ -33,6 +33,43 @@ paths:
           description: The signed-in user cannot access this site.
         "404":
           description: Ingestion has not stored weather for this site yet.
+  /api/v1/sites/{siteId}/weather/forecast:
+    get:
+      summary: Get a private-model WBGT forecast for a site
+      operationId: getSiteWeatherForecast
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: horizonMinutes
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [30, 60]
+            default: 30
+      responses:
+        "200":
+          description: Versioned trained WBGT forecast and uncertainty interval.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SiteForecast"
+        "400":
+          description: Unsupported forecast horizon.
+        "401":
+          description: The request has no valid access token.
+        "403":
+          description: The signed-in user cannot access this site.
+        "404":
+          description: The site does not exist.
+        "503":
+          description: Recent context or the private model service is unavailable.
 components:
   securitySchemes:
     bearerAuth:
@@ -104,3 +141,34 @@ components:
         stationId:
           type: string
           nullable: true
+    SiteForecast:
+      type: object
+      required:
+        - metric
+        - predictedValue
+        - horizonMinutes
+        - modelVersion
+        - confidenceIntervalLower
+        - confidenceIntervalUpper
+        - generatedAt
+      properties:
+        metric:
+          type: string
+          enum: [wbgt]
+        predictedValue:
+          type: number
+          format: double
+        horizonMinutes:
+          type: integer
+          enum: [30, 60]
+        modelVersion:
+          type: string
+        confidenceIntervalLower:
+          type: number
+          format: double
+        confidenceIntervalUpper:
+          type: number
+          format: double
+        generatedAt:
+          type: string
+          format: date-time

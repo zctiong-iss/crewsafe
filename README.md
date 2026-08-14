@@ -166,6 +166,7 @@ control is never treated as authorization — the server remains the enforcement
 Useful contracts and implemented surfaces:
 
 - `GET /api/v1/sites/{siteId}/weather/latest` — latest validated/stored weather snapshot
+- `GET /api/v1/sites/{siteId}/weather/forecast?horizonMinutes=30` — authorized 30/60-minute WBGT forecast
 - `GET /api/v1/sites/{siteId}/lightning` — site lightning risk and validity window
 - `GET /api/v1/shifts/me` — the authenticated worker's current or next shift
 - `POST /api/v1/shifts/{shiftId}/readiness` — append-only worker readiness submission

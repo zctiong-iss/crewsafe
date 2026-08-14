@@ -120,13 +120,69 @@ The current six-month development evaluation, intended use, uncertainty,
 limitations, per-band errors, and retraining triggers are recorded in
 [MODEL_CARD.md](MODEL_CARD.md).
 
-### 3. Later integration (not part of this change)
+### 3. Trained forecast integration (SCRUM-281)
 
-This work packages checksum-pinned model files but does not activate them in the
-running service. The existing `/forecast` contract therefore remains on the
-versioned `baseline-1.0.0` persistence result. Model activation, stale-input
-handling, and the backend fallback boundary belong to SCRUM-281. No frontend code
-is included here.
+The `/forecast` response contract is unchanged. Existing clients may keep sending
+`metric`, `horizon_minutes`, and `current_value`; without recent context the service
+returns the labelled `baseline-1.0.0` persistence result.
+
+To activate a trained WBGT model, deploy a reviewed bundle outside the container
+image and configure both values below. The manifest and each referenced artifact
+are checksum-verified before use. Never activate the development-only bundle while
+its model card or manifest contains an approval blocker. Training always writes
+`"approved_for_inference": false`; a reviewed promotion must change it to `true`
+and publish the checksum of that exact promoted manifest.
+
+```bash
+WBGT_MODEL_MANIFEST=/run/crewsafe-model/manifest.json
+WBGT_MODEL_MANIFEST_SHA256=<64-character-manifest-sha256>
+```
+
+A trained request adds optional `context` containing 2–16 ordered observations at
+15-minute boundaries, the WBGT station identifier, and site coordinates. The
+newest observation must be at most 45 minutes old and its WBGT must match
+`current_value`. Trained inference is WBGT-only; the existing temperature and
+humidity persistence forecasts remain unchanged.
+
+```json
+{
+  "metric": "wbgt",
+  "horizon_minutes": 30,
+  "current_value": 33.5,
+  "context": {
+    "station_id": "S123",
+    "latitude": 1.3521,
+    "longitude": 103.8198,
+    "observations": [
+      {
+        "observed_at": "2026-08-14T11:45:00Z",
+        "wbgt": 33.3,
+        "air_temperature": 31.0,
+        "relative_humidity": 70.0,
+        "wind_speed": 3.0,
+        "wind_direction": 180.0,
+        "rainfall": 0.0
+      },
+      {
+        "observed_at": "2026-08-14T12:00:00Z",
+        "wbgt": 33.5,
+        "air_temperature": 31.1,
+        "relative_humidity": 69.0,
+        "wind_speed": 3.2,
+        "wind_direction": 180.0,
+        "rainfall": 0.0
+      }
+    ]
+  }
+}
+```
+
+Invalid or stale context returns `422` with `FORECAST_INPUT_INVALID`. Missing,
+untrusted, or unreadable model files return `503` with
+`FORECAST_MODEL_UNAVAILABLE`; inference failure returns `503` with
+`FORECAST_INFERENCE_FAILED`. These stable error codes preserve SCRUM-141's backend
+fallback boundary: the backend, not this service or the frontend, owns the labelled
+persistence fallback when a trained request fails. No frontend code is included.
 
 ## Security checks
 
@@ -176,8 +232,8 @@ curl http://localhost:8000/health
 ```
 Response: `{"status": "ok"}`
 
-### 2. Forecast (SCRUM-188: Baseline Stub)
-**Versioned baseline prediction for WBGT, temperature, or humidity.**
+### 2. Forecast (SCRUM-188 contract, SCRUM-281 trained integration)
+**Versioned trained WBGT or persistence prediction behind one response contract.**
 
 Implements the persistence baseline (naive: next value equals current) that SCRUM-114's trained model must beat. Every prediction is versioned for traceability.
 
@@ -208,10 +264,11 @@ curl -X POST http://localhost:8000/forecast \
 - `metric` (required): `wbgt`, `temperature`, or `humidity`
 - `horizon_minutes` (optional, default 30): 30 or 60 minutes
 - `current_value` (required): Current observed value
+- `context` (optional): recent readings; required to use the trained WBGT model
 
 **Response Contract (Acceptance Criteria):**
 - `predicted_value`: Forecast at horizon (persistence baseline returns current value)
-- `model_version`: Traced version for US-06 traceability (currently `baseline-1.0.0`)
+- `model_version`: traced baseline or trained model version for US-06
 - `confidence_interval_lower` and `confidence_interval_upper`: 95% confidence bounds
 - `timestamp`: Prediction creation time (ISO 8601)
 
@@ -341,34 +398,22 @@ export AWS_SECRET_ACCESS_KEY=...
 
 ### Unit and Integration Tests (Forecast Service)
 ```bash
-# Option 1: Run tests in Docker
-cd .. && docker-compose run --rm ml-service-test
-
-# Option 2: Run tests locally (requires Python 3.11+)
+# Python 3.11+ with the checksum-locked development dependencies
 pip install -r requirements.txt
-pytest test_forecast.py -v
-
-# Coverage: 20 tests covering:
-# - Persistence baseline forecasting for WBGT, temperature, humidity
-# - Request/response schema validation
-# - Confidence interval calculations
-# - Versioned predictions
-# - Edge cases (zero values, negative values, invalid requests)
-# - Integration with existing endpoints
+python -m pytest -q test_forecast.py tests
 ```
 
 ### Integration Test (via Spring Boot)
 ```bash
-# Terminal 1: Start FastAPI
+# Terminal 1: start FastAPI with a reviewed, checksum-pinned model bundle
 python app.py
 
-# Terminal 2: Start Spring Boot backend
-cd ../backend && ./run.sh
+# Terminal 2: start the backend with FORECAST_BASE_URL pointing to FastAPI
+cd ../backend && ./mvnw spring-boot:run
 
-# Terminal 3: Test the round-trip
-curl -X POST http://localhost:8080/api/test/bedrock/mitigations \
-  -H "Content-Type: application/json" \
-  -d '{"context": "WBGT 35C, 12 workers, no shade"}'
+# Terminal 3: call the site-authorized backend door with a valid bearer token
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:8080/api/v1/sites/<site-id>/weather/forecast?horizonMinutes=30"
 ```
 
 ## Production Deployment
