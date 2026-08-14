@@ -18,7 +18,7 @@ requires.
 | Resource | Count | Note |
 | --- | --- | --- |
 | IAM group | 1 | `crewsafe-developers` |
-| IAM group policy (inline) | 1 | Scoped read-only — `ecs:List*`/`Describe*`, `rds:DescribeDBInstances`, `ec2:Describe*`, `logs:DescribeLogGroups`, `logs:GetLogEvents`/`FilterLogEvents`, `secretsmanager:ListSecrets`/`DescribeSecret` — never a write action, never `secretsmanager:GetSecretValue` |
+| IAM group policy attachment | 1 | AWS-managed `job-function/ViewOnlyAccess` (as of 2026-08-14 — originally a hand-authored inline policy scoped to five services; widened after live testing kept surfacing missing ones. See `specs/037-developer-readonly-iam-users/spec.md` Amendments) — never a write action, never `secretsmanager:GetSecretValue`, per AWS's own curation of that policy |
 | IAM user | N | One per developer in `developers.auto.tfvars`, path `/crewsafe/developers/` |
 | IAM login profile | N | Console password, reset required at first sign-in |
 | IAM access key | N | CLI credential |
@@ -107,7 +107,53 @@ would otherwise fail on `AccessDenied`.
    profile, access key, and group membership — and zero changes to the group, the policy, or
    any existing developer.
 4. Review per §4, apply, and deliver the new developer's password and access-key secret out of
-   band.
+   band, together with the instructions below (§5.1).
+
+### 5.1 What to send the developer
+
+Send this alongside their password and access-key secret — never the credentials alone, and
+never both in the same message as this template if your delivery channel logs message history
+(e.g., paste the template in one message, the credentials in a second, ephemeral one).
+
+```text
+Subject: Your CrewSafe AWS access (read-only)
+
+You've been given individual, read-only access to the CrewSafe AWS account for
+troubleshooting and visibility — no more sharing the root login.
+
+CONSOLE ACCESS
+1. Sign in: https://669958787600.signin.aws.amazon.com/console
+   IAM user name: <username>
+   Temporary password: [sent separately]
+2. You'll be forced to set a new password on first sign-in. Pick one only you know —
+   nobody else has it, including whoever set this up.
+3. Once in, check out ECS, RDS, VPC, and CloudWatch Logs — you'll see this project's
+   crewsafe-shared-dev resources.
+
+CLI ACCESS
+1. Run: aws configure --profile crewsafe-shared-dev
+2. Enter the access key ID and secret access key [sent separately], region
+   ap-southeast-1, output format json.
+3. Try it: aws sts get-caller-identity --profile crewsafe-shared-dev
+   aws ecs list-services --cluster crewsafe-shared-dev --profile crewsafe-shared-dev
+
+WHAT YOU CAN AND CAN'T DO
+- Read-only. You can list and describe ECS, RDS, VPC, CloudWatch Logs, and
+  Secrets Manager metadata for this project.
+- You cannot create, change, or delete anything — every write attempt is denied.
+- You cannot read any secret value (e.g. the database password) — that's separate,
+  narrower access for a different purpose, not part of this grant.
+- No MFA is required for this account (a deliberate choice, not an oversight) — treat
+  your password and access key with the same care as any standing credential. Don't
+  commit the access key anywhere, don't share it, don't paste it into a chat log.
+
+IF SOMETHING'S WRONG
+- Forgot your password, or think your access key leaked: ping <admin>, don't try to
+  self-serve — both need an admin action.
+- Questions about what you're allowed to do or see: this is deliberately narrow scope;
+  if you need more (e.g. actually connecting to the database), that's a separate,
+  further-scoped request, not something to route around.
+```
 
 ## 6. Offboard a departing developer
 
