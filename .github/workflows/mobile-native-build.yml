@@ -18,6 +18,16 @@ on:
         description: "Also build a debug-signed Android AAB (default: APK only)"
         type: boolean
         default: false
+      auth_mode:
+        description: >-
+          Auth mode baked into this build. mock (default) matches today's behaviour exactly.
+          cognito-password produces a build that authenticates against the real staging
+          Cognito backend, for SCRUM-350's dynamic-scan workflow to consume.
+        type: choice
+        options:
+          - mock
+          - cognito-password
+        default: mock
 
 permissions:
   contents: read
@@ -55,6 +65,14 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+
+      - name: Set staging auth mode
+        if: ${{ inputs.auth_mode == 'cognito-password' }}
+        run: |
+          {
+            echo "EXPO_PUBLIC_AUTH_MODE=cognito-password"
+            echo "EXPO_PUBLIC_API_BASE_URL=${{ vars.CREWSAFE_BACKEND_BASE_URL }}"
+          } >> "$GITHUB_ENV"
 
       - name: Prebuild Android native project
         run: npx expo prebuild --platform android --non-interactive
@@ -148,6 +166,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Set staging auth mode
+        if: ${{ inputs.auth_mode == 'cognito-password' }}
+        run: |
+          {
+            echo "EXPO_PUBLIC_AUTH_MODE=cognito-password"
+            echo "EXPO_PUBLIC_API_BASE_URL=${{ vars.CREWSAFE_BACKEND_BASE_URL }}"
+          } >> "$GITHUB_ENV"
 
       - name: Prebuild iOS native project
         run: npx expo prebuild --platform ios --non-interactive
