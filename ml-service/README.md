@@ -1,6 +1,120 @@
-# CrewSafe Bedrock Spike - FastAPI Service
+# CrewSafe ML and Bedrock FastAPI Service
 
-Minimal FastAPI endpoint for SCRUM-187 spike: **Confirm Amazon Bedrock connectivity and structured-output contract**.
+FastAPI service for the Bedrock spike and SCRUM-114's versioned 30/60-minute
+WBGT forecasting pipeline.
+
+## WBGT training workflow (SCRUM-114)
+
+Generated datasets and artifacts are intentionally ignored by Git. The commands
+below are reproducible; never commit API keys, raw downloads, or unverified
+model files.
+
+Offline training and backtesting paths are restricted to the current ML
+workspace. Local commands run from `ml-service`, so their `data/` and
+`artifacts/` paths stay inside that folder. SageMaker automatically provides
+`SM_MODEL_DIR`; jobs using its standard `/opt/ml` layout stay within that fixed
+AWS training boundary.
+
+### 1. Download historical observations
+
+```bash
+python -m crewsafe_ml.download_dataset \
+  --start-date 2026-02-01 \
+  --end-date 2026-07-31 \
+  --output-directory data/historical
+```
+
+This downloads paginated WBGT, temperature, humidity, wind speed/direction, and
+rainfall data from allowlisted data.gov.sg endpoints. It stores raw pages
+separately, validates values and station references, and writes a normalized CSV
+plus SHA-256 manifest. Running the same command again safely reuses completed raw
+pages and continues after the last saved pagination token. A different date range
+or metric list must use a new output folder, preventing mixed dataset versions.
+
+The completed folder contains:
+
+- `weather_readings.csv`: all validated observations in a standard long format.
+- `weather_features_15min.csv`: the leakage-safe 15-minute ML training table.
+- `station_inventory.csv`: station names, locations, counts, and date coverage.
+- `station_metadata_corrections.csv`: official name or small coordinate corrections
+  that were accepted and recorded; identity changes or movements over 2 km stop the
+  build.
+- `missing_periods.csv`: internal gaps based on each feed's expected interval.
+- `manifest.json`: source licence, quality totals, filenames, and SHA-256 checksums.
+- `download_state.json` and `raw/`: the checkpoint and original source evidence.
+
+Official `NA` readings remain in the raw evidence, are excluded from numeric
+training rows, and are counted by metric in the manifest. The downloader allows
+at most 100 pages per metric and day by default. Use `--max-pages-per-day` only
+when an official response proves that a higher safety limit is required. This is
+an offline developer/training workflow; the live app never downloads this data
+when starting or making a prediction.
+
+Some historical pages contain a reading whose station details were omitted from
+that page. The downloader may reuse matching official station metadata from an
+earlier validated page for the same metric and day. It never invents station
+details, rejects unseen or conflicting station identities, preserves the raw
+response, and counts recovered readings in the quality manifest.
+
+For each WBGT timestamp, feature preparation uses the nearest supporting-weather
+station whose latest observation is no more than eight minutes old. It checks the
+next-nearest station when a closer station is silent and never uses a future
+observation.
+
+### 2. Train and compare models
+
+```bash
+python -m crewsafe_ml.train \
+  --dataset data/historical/weather_readings.csv \
+  --dataset-manifest data/historical/manifest.json \
+  --output-directory artifacts
+```
+
+The pipeline verifies the normalized dataset checksum, recreates the same
+leakage-safe 15-minute features, and makes chronological windows. It compares
+persistence, Ridge, `HistGradientBoostingRegressor`, and a conservative variant
+that never predicts below the current WBGT, separately for 30 and 60 minutes. It
+records MAE, RMSE, bias, band F1/recall, confusion matrices, data
+checksum, exact hyperparameters, random seed, runtime, source commit, and artifact
+checksums. Prediction intervals are calibrated on validation residuals; the final
+test window is used only for the untouched result report and acceptance gate. A
+trained model is selected only when it beats persistence MAE without reducing
+high-risk recall. The saved
+15-minute CSV is also convenient for inspection or a later SageMaker experiment.
+
+Use rolling historical windows to check whether a candidate's result is stable
+before evaluating it on a new untouched period:
+
+```bash
+python -m crewsafe_ml.backtest \
+  --features data/historical/weather_features_15min.csv \
+  --feature-manifest data/historical/manifest.json \
+  --evaluation-end 2026-07-01T00:00:00Z \
+  --output artifacts/rolling-backtest.json
+```
+
+The rolling report is development evidence, not permission to activate a model.
+The evaluation end must precede the untouched approval period.
+
+The current six-month development evaluation, intended use, uncertainty,
+limitations, per-band errors, and retraining triggers are recorded in
+[MODEL_CARD.md](MODEL_CARD.md).
+
+### 3. Later integration (not part of this change)
+
+This work packages checksum-pinned model files but does not activate them in the
+running service. The existing `/forecast` contract therefore remains on the
+versioned `baseline-1.0.0` persistence result. Model activation, stale-input
+handling, and the backend fallback boundary belong to SCRUM-281. No frontend code
+is included here.
+
+## Security checks
+
+ML CI installs only the checksum-locked Python dependencies, runs all unit and
+contract tests, verifies the container user is not root, and fails on high or
+critical Python-package vulnerabilities and fixable container vulnerabilities.
+Unfixed base-image findings remain visible for review when the pinned image
+digest is refreshed.
 
 ## Overview
 
@@ -14,7 +128,7 @@ The Spring Boot backend calls this service via HTTP, demonstrating timeout and e
 ## Quick Start
 
 ### Prerequisites
-- Python 3.9+
+- Python 3.11+
 - AWS credentials (via `~/.aws/credentials`, env vars, or IAM role)
 - Bedrock access enabled in your AWS account
 

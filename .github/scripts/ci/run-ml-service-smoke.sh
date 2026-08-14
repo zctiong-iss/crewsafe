@@ -64,7 +64,8 @@ jq -e '
 runtime_user="$(docker inspect --format '{{.Config.User}}' "$CONTAINER")"
 [[ -n "$runtime_user" && "$runtime_user" != 'root' && "$runtime_user" != '0' && "$runtime_user" != '0:0' ]] \
   || fail "container runtime user is privileged"
-docker exec "$CONTAINER" sh -c 'test ! -w /app/requirements.txt' \
-  || fail "runtime user can modify requirements.txt"
+docker exec "$CONTAINER" sh -c \
+  'test -r /app/requirements-runtime.txt && test ! -w /app/requirements-runtime.txt' \
+  || fail "locked runtime requirements are missing or writable"
 
 printf '%s\n' 'ML-service smoke: health, forecast, non-root runtime, and immutable dependency checks passed.'
