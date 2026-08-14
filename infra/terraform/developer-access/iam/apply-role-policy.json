@@ -38,6 +38,7 @@
         "iam:UpdateLoginProfile",
         "iam:DeleteLoginProfile",
         "iam:CreateAccessKey",
+        "iam:UpdateAccessKey",
         "iam:DeleteAccessKey"
       ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:user/crewsafe/developers/*"
