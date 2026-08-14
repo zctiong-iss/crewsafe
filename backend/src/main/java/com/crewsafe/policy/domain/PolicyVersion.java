@@ -42,7 +42,8 @@ public class PolicyVersion {
     @Id
     private UUID id;
 
-    @NotNull
+    /** Null identifies the one company-wide default row (V16) that a site with no ACTIVE
+     * version of its own falls back to — see {@link com.crewsafe.policy.service.PolicyEngineService}. */
     private UUID siteId;
 
     /** Human-assigned, traceable identifier, e.g. {@code "MOM-WBGT-2026.2"}. Unique per site. */

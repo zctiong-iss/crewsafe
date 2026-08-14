@@ -308,16 +308,100 @@ class PolicyEngineServiceTest {
     class PolicyNotFound {
 
         @Test
-        @DisplayName("No policy for site → NoSuchElementException")
+        @DisplayName("No policy for site and no company default → NoSuchElementException")
         void policyNotConfigured() {
             UUID unknownSite = UUID.randomUUID();
             when(policyRepository.findBySiteIdAndStatus(unknownSite, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
+            when(policyRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
                     policyEngine.evaluate(unknownSite, workerId, 25.0, WorkIntensity.LIGHT, 1)
             ).isInstanceOf(NoSuchElementException.class)
              .hasMessageContaining("No policy");
+        }
+    }
+
+    @Nested
+    @DisplayName("Company-wide default fallback (V16)")
+    class CompanyDefaultFallback {
+
+        private PolicyVersion defaultPolicy;
+
+        @BeforeEach
+        void setUpDefault() {
+            // Deliberately different thresholds from testPolicy, so a passing assertion
+            // proves which row was actually used rather than being true either way.
+            defaultPolicy = PolicyVersion.builder()
+                    .id(UUID.randomUUID())
+                    .siteId(null)
+                    .versionLabel("MOM-WBGT-2026-DEFAULT")
+                    .source("MOM Work-Rest Guidelines 2026 (company-wide default)")
+                    .effectiveDate(LocalDate.now())
+                    .status(PolicyVersionStatus.ACTIVE)
+                    .wbgtThresholdUnacclimatisedLight(bd(20.0))
+                    .wbgtThresholdUnacclimatisedModerate(bd(19.0))
+                    .wbgtThresholdUnacclimatisedHeavy(bd(18.0))
+                    .wbgtThresholdPartialLight(bd(21.0))
+                    .wbgtThresholdPartialModerate(bd(20.0))
+                    .wbgtThresholdPartialHeavy(bd(19.0))
+                    .wbgtThresholdFullLight(bd(22.0))
+                    .wbgtThresholdFullModerate(bd(21.0))
+                    .wbgtThresholdFullHeavy(bd(20.0))
+                    .wbgtEmergencyStop(bd(30.0))
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+        }
+
+        @Test
+        @DisplayName("Site with no version of its own falls back to the company default")
+        void fallsBackToDefaultWhenSiteHasNoPolicy() {
+            UUID siteWithNoPolicy = UUID.randomUUID();
+            when(policyRepository.findBySiteIdAndStatus(siteWithNoPolicy, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
+            when(policyRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.of(defaultPolicy));
+
+            // WBGT 20°C meets the default's UNACCLIMATISED/LIGHT threshold (20) — would not
+            // trigger rest under testPolicy's own threshold (25), so this also proves the
+            // default's thresholds, not testPolicy's, drove the decision.
+            var decision = policyEngine.evaluate(
+                    siteWithNoPolicy, workerId, 20.0, WorkIntensity.LIGHT, 1);
+
+            assertThat(decision.policyVersion()).isEqualTo("MOM-WBGT-2026-DEFAULT");
+            assertThat(decision.mandatoryActions())
+                    .extracting(PolicyDecision.PolicyAction::code)
+                    .contains(PolicyActionCode.REST_10_MIN_HOURLY);
+        }
+
+        @Test
+        @DisplayName("Site with its own ACTIVE version wins over the company default")
+        void siteOwnPolicyWinsOverDefault() {
+            // testPolicy (siteId) is already stubbed as ACTIVE in setUp(); the default is also
+            // present, as it always is once V16 has run.
+            when(policyRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.of(defaultPolicy));
+
+            var decision = policyEngine.evaluate(
+                    siteId, workerId, 24.0, WorkIntensity.LIGHT, 1);
+
+            assertThat(decision.policyVersion()).isEqualTo(testPolicy.getVersionLabel());
+        }
+
+        @Test
+        @DisplayName("evaluateForShift's empty-assignment branch also falls back to the default")
+        void emptyAssignmentsFallBackToDefault() {
+            UUID siteWithNoPolicy = UUID.randomUUID();
+            when(policyRepository.findBySiteIdAndStatus(siteWithNoPolicy, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
+            when(policyRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.of(defaultPolicy));
+
+            var decision = policyEngine.evaluateForShift(siteWithNoPolicy, 20.0, List.of());
+
+            assertThat(decision.policyVersion()).isEqualTo("MOM-WBGT-2026-DEFAULT");
         }
     }
 
