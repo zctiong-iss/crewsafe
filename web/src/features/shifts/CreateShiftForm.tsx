@@ -1,6 +1,6 @@
 /** @author Jemilin Beulah, Tang Chee Seng */
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type SyntheticEvent } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { AppShell } from "@/components/AppShell";
@@ -85,7 +85,7 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
     }),
   });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SyntheticEvent) => {
     event.preventDefault();
     const body = buildBody();
     const found = validateShift(body);
@@ -203,7 +203,7 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
               <input id={`task-${i}`} type="text" maxLength={120} value={row.taskName}
                 onChange={(e) => updateRow(i, { taskName: e.target.value })} />
 
-              <label htmlFor={`accl-${i}`}>Acclimatisation day (optional)</label>
+              <label htmlFor={`accl-${i}`}>Acclimatisation Days (if applicable)</label>
               <input id={`accl-${i}`} type="number" min={1} max={7} value={row.acclimatisationDay}
                 onChange={(e) => updateRow(i, { acclimatisationDay: e.target.value })} />
               {errors[`assignments.${i}.acclimatisationDay`] && (

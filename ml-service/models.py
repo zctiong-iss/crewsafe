@@ -102,10 +102,8 @@ class ForecastRequest(BaseModel):
         pattern="^(wbgt|temperature|humidity)$",
         description="Metric to forecast (wbgt, temperature, or humidity)"
     )
-    horizon_minutes: int = Field(
+    horizon_minutes: Literal[30, 60] = Field(
         default=30,
-        ge=30,
-        le=60,
         description="Forecast horizon in minutes (30 or 60)"
     )
     current_value: float = Field(

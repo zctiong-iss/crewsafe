@@ -2,9 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Shift, Intensity } from "@/api/shifts";
 import { formatShiftRange } from "./formatShiftRange";
+import { Link } from "react-router-dom";
+
 
 const STATUS_LABEL: Record<Shift["status"], string> = {
-  PLANNED: "Planned", ACTIVE: "Active", CLOSED: "Closed",
+  PLANNED: "Planned", ACTIVE: "Active", CLOSED: "Closed", CANCELLED: "Cancelled",
 };
 
 function StatusPill({ status }: { status: Shift["status"] }) {
@@ -16,18 +18,25 @@ function IntensityPill({ intensity }: { intensity: Intensity }) {
   return <span className={`pill pill--intensity pill--intensity-${intensity.toLowerCase()}`}>{label}</span>;
 }
 
-export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all" }: {
+export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: {
   shift: Shift;
   workerNames: Map<string, string>;
   siteNames: Map<string, string>;
   currentUserId?: string;
-  /** "self" scopes the crew table to the reader's own row — a worker may not read the roster. */
   crewScope?: "all" | "self";
+  /** Show the Edit entry point. Management-only; the route is MANAGEMENT_ROLES-guarded. */
+  canManage?: boolean;
 }) {
+
   const isAssigned = Boolean(currentUserId && shift.assignments.some((a) => a.workerId === currentUserId));
   const [open, setOpen] = useState(isAssigned);
   const count = shift.assignments.length;   // the headcount stays whole even when the table does not
   const siteName = siteNames.get(shift.siteId);
+  // Matches the backend's assertEditable (SCRUM-266): a CLOSED/CANCELLED shift, OR one whose end time
+  // has already passed, cannot be edited — so don't offer Edit for it (every mutation would 400).
+  const editable =
+    (shift.status === "PLANNED" || shift.status === "ACTIVE") && new Date(shift.endsAt) > new Date();
+
 
   const crew = useMemo(
     () => (crewScope === "self"
@@ -57,9 +66,14 @@ useEffect(() => {
           <p className="shift-card__range">{formatShiftRange(shift.startsAt, shift.endsAt)}</p>
           <p className="shift-card__count">{count} {count === 1 ? "worker" : "workers"}</p>
         </div>
-        <div className="shift-card__pills">
+            <div className="shift-card__pills">
             {isAssigned && <span className="pill pill--assigned">Your Shift</span>}
             <StatusPill status={shift.status} />
+            {canManage && editable && (
+              <Link className="shift-card__edit" to={`/shifts/${shift.id}/edit`} state={{ shift }}>
+                Edit
+              </Link>
+            )}
         </div>
       </header>
 

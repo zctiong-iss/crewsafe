@@ -68,6 +68,8 @@ crash.*.log
 *.pkl
 *.joblib
 *.parquet
+/ml-service/data/
+/ml-service/artifacts/
 
 # IDE
 .idea/

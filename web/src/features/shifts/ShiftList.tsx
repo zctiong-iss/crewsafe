@@ -79,14 +79,15 @@ export function ShiftList({ siteIds }: { siteIds: string[] }) {
       {load.status === "loaded" && load.shifts.length > 0 && (
         <section className="shift-list" aria-label="Shifts">
           {load.shifts.map((shift) => (
-            <ShiftCard
-              key={shift.id}
-              shift={shift}
-              workerNames={load.workerNames}
-              siteNames={load.siteNames}
-              currentUserId={user.id}
-              crewScope={isWorker ? "self" : "all"}
-            />
+             <ShiftCard
+                key={shift.id}
+                shift={shift}
+                workerNames={load.workerNames}
+                siteNames={load.siteNames}
+                currentUserId={user.id}
+                crewScope={isWorker ? "self" : "all"}
+                canManage={!isWorker}
+              />
           ))}
         </section>
       )}

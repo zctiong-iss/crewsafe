@@ -181,6 +181,7 @@ jobs:
           # Keep the SAST job deterministic and credential-free. test_agent_eval.py
           # is a live Bedrock benchmark and must run only in an AWS-enabled job.
           python -m coverage run -m pytest test_forecast.py
+          python -m coverage run --append -m pytest tests
           python -m coverage xml -o coverage.xml
 
       - name: Validate ML-service coverage report
@@ -494,3 +495,39 @@ jobs:
 
       - name: Structured logging safety self-tests
         run: .github/scripts/tests/test-log-safety-guards.sh
+
+      # SCRUM-348: wired in the same PR that adds these tests, not as a
+      # follow-up -- see research.md R4 in specs/035-mobile-security-test-
+      # artifacts for why that matters (this job's own history has two prior
+      # gaps where a guard test was written but never wired in until later).
+      - name: Mobile native build workflow self-tests
+        run: .github/scripts/tests/test-mobile-native-build-workflow.sh
+
+      - name: Mobile artifact metadata self-tests
+        run: .github/scripts/tests/test-mobile-artifact-metadata.sh
+
+      # SCRUM-350: wired in the same change that adds these tests, not as a follow-up -- see
+      # research.md R14 in specs/036-mobsf-dynamic-scanning for why that matters (this job's
+      # own history has repeated gaps where a guard test was written but never wired in until
+      # later: SCRUM-346, and test-web-deployment-workflow.sh/test-web-sync-workflow.sh before
+      # SCRUM-351).
+      - name: MobSF dynamic-scan workflow self-tests
+        run: .github/scripts/tests/test-mobsf-dynamic-scan-workflow.sh
+
+      - name: Artifact retrieval self-tests
+        run: .github/scripts/tests/test-retrieve-and-verify-artifact.sh
+
+      - name: Network allowlist self-tests
+        run: .github/scripts/tests/test-check-network-allowlist.sh
+
+      - name: Coverage-signal evaluator self-tests
+        run: .github/scripts/tests/test-evaluate-coverage-signal.sh
+
+      - name: MobSF report sanitization self-tests
+        run: .github/scripts/tests/test-sanitize-mobsf-report.sh
+
+      - name: MobSF service startup self-tests
+        run: .github/scripts/tests/test-start-mobsf-service.sh
+
+      - name: iOS analyzer availability self-tests
+        run: .github/scripts/tests/test-check-ios-analyzer-availability.sh

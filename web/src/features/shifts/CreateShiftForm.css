@@ -71,6 +71,92 @@
   background: var(--surface-sunken);
 }
 
+/* ---- Edit-shift roster + cancel reason (SCRUM-313) ------------------ */
+.shift-form__roster {
+  list-style: none;          
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.shift-form__roster-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.shift-form__roster-name { font-weight: var(--weight-medium); color: var(--ink); }
+.shift-form__roster-task { color: var(--ink-muted); }
+
+/* Labelled worker meta: stacked (folded) on small screens, a wrapping row on wide ones. */
+.shift-form__roster-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+@media (min-width: 768px) {
+  .shift-form__roster-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+  }
+}
+.shift-form__meta-label { font-weight: var(--weight-semibold); color: var(--ink); }
+
+.shift-form__add-worker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Keep row buttons vertically centred despite .shift-form button's align-self. */
+.shift-form__roster-row button,
+.shift-form__add-worker button { align-self: center; }
+
+/* textarea isn't covered by `.shift-form input, .shift-form select` — style it to match. */
+.shift-form__reason {
+  font: inherit;
+  font-size: var(--text-base);
+  width: 100%;
+  min-height: 4rem;
+  resize: vertical;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--ink);
+}
+.shift-form__reason:focus-visible { outline: 2px solid var(--action); outline-offset: 1px; }
+
+/* Cancel-confirm: stack the warning + label + textarea vertically, buttons in their own row. */
+.shift-form__cancel-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+/* Destructive action. Red outline + red text (AA-safe on surface), filling on hover. Reuses the
+   app's High-Risk red; no new token while tokens.css is under CVD review. Selector is
+   `.shift-form button.shift-form__danger` so it outranks the base `.shift-form button` rule. */
+.shift-form button.shift-form__danger {
+  background: var(--surface);
+  color: var(--band-high);
+  border-color: var(--band-high);
+}
+.shift-form button.shift-form__danger:hover:not(:disabled) {
+  background: var(--band-high);
+  color: var(--action-ink);
+}
+.shift-form button.shift-form__danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 
 /* Each worker row carries the .card utility (global.css) — add only layout + padding here. */
 .shift-form__row {

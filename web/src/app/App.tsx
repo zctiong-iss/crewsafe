@@ -14,6 +14,7 @@ import { rolesForRoute } from "./routeAccess";
 import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { ConditionsPage } from "@/features/conditions/ConditionsPage";
+import { EditShiftPage } from "@/features/shifts/EditShiftPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
 import { SiteProvider } from "@/site/SiteProvider";
@@ -130,6 +131,10 @@ export function App() {
             <Route
               path="/shifts"
               element={<RoleRoute roles={rolesForRoute("/shifts")}><ShiftsPage /></RoleRoute>}
+            />
+            <Route
+              path="/shifts/:shiftId/edit"
+              element={<RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}><EditShiftPage /></RoleRoute>}
             />
             <Route
               path="/conditions"
