@@ -12,7 +12,7 @@ assert_file "infra/terraform/iam-policy-management/.terraform.lock.hcl"
 assert_file ".github/scripts/terraform/select-execution-role.sh"
 assert_file ".github/scripts/terraform/preflight-iam-policy-account.sh"
 assert_file ".github/scripts/terraform/tests/fixtures/iam-policy-management/authorization-boundary.json"
-[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 16 ]] || fail "IAM policy-management root must contain exactly sixteen policy templates"
+[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 18 ]] || fail "IAM policy-management root must contain exactly eighteen policy templates"
 
 jq -e '
   .components["iam-policy-management-shared-dev"].root == "infra/terraform/iam-policy-management"
@@ -20,7 +20,7 @@ jq -e '
   and .components["iam-policy-management-shared-dev"].execution_role_family == "policy-management"
 ' "$catalog" >/dev/null
 
-for component in cognito compute database ecr network secrets; do
+for component in cognito compute database developer-access ecr network secrets; do
   for role_kind in plan apply; do
     policy="$tf_root/policies/$component/$role_kind.json.tftpl"
     assert_file "infra/terraform/iam-policy-management/policies/$component/$role_kind.json.tftpl"

@@ -12,6 +12,7 @@ on:
           - cognito-shared-dev
           - compute-shared-dev
           - database-shared-dev
+          - developer-access-shared-dev
           - ecr-shared-dev
           - iam-policy-management-shared-dev
           - network-shared-dev

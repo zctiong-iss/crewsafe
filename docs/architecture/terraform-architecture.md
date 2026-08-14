@@ -280,6 +280,7 @@ remediation or ticket-creation permission.
 | `ecr-shared-dev` | Backend/web repositories, Inspector scanning and Security Hub insight | — |
 | `compute-shared-dev` | Backend ECS/ALB/API edge and static web S3/CloudFront delivery | Network, secrets, database, ECR |
 | `iam-policy-management-shared-dev` | Centrally managed least-privilege Terraform CI policies and attachments | — |
+| `developer-access-shared-dev` | Individual read-only developer IAM console/CLI users and group policy | — |
 | `securityhub-import-shared-dev` | OIDC role restricted to controlled SonarCloud finding imports | — |
 
 ## Deliberate limitations and follow-ups

@@ -136,6 +136,31 @@ jobs:
           fi
           echo "mobsf_hash=${mobsf_hash}" >>"$GITHUB_OUTPUT"
 
+      # Required before start_analysis can resolve a package name: dynamic_analyzer() (the
+      # handler behind /api/v1/dynamic/start_analysis, mobsf/DynamicAnalyzer/views/android/
+      # dynamic_analyzer.py) calls get_package_name(checksum), which looks up
+      # StaticAnalyzerAndroid.objects.get(MD5=checksum) -- a row that only exists once static
+      # analysis has run. /api/v1/upload alone never populates it; only /api/v1/scan
+      # (mobsf/MobSF/views/api/api_static_analysis.py::api_scan) does, via a synchronous call
+      # to static_analyzer(). Skipping this produced a confirmed, real failure: start_analysis
+      # returned HTTP 500 with {"error": "Cannot get package name from checksum"}.
+      - name: Run MobSF static analysis
+        env:
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+        run: |
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/scan" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            -o "$RUNNER_TEMP/mobsf-scan.json" || {
+              echo "::error::MobSF static scan request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-scan.json" >&2 || true
+              exit 1
+            }
+          if jq -e 'has("error")' "$RUNNER_TEMP/mobsf-scan.json" >/dev/null 2>&1; then
+            echo "::error::MobSF could not complete static analysis -- see mobsf-scan.json in the uploaded report."
+            exit 1
+          fi
+
       # Triggers MobSF's own environment setup (installs its Frida-based agent and MITM root
       # CA on the emulator the first time, i.e. "MobSFying"), then installs and prepares the
       # APK itself -- verified against mobsf/DynamicAnalyzer/views/android/dynamic_analyzer.py,
@@ -298,6 +323,16 @@ jobs:
             echo "| outcome | \`${outcome}\` |"
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      # Some MobSF API failures return a generic message with no real detail (confirmed by a
+      # real run: start_analysis failing with just {"error": "Dynamic Analysis Failed."} after
+      # ~3 minutes of real work) -- the actual cause only ever appears in MobSF's own container
+      # logs, never in the HTTP response body. MOBSF_CONTAINER_ID is only set once "Start MobSF
+      # service" itself has already succeeded, so an earlier failure there just makes this a
+      # harmless no-op via `|| true`.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
 
       # Only written once the scan reaches at least the sanitization step -- an early
       # infrastructure failure (emulator boot timeout, MobSF never becoming ready, upload
@@ -654,6 +689,13 @@ jobs:
             echo "| outcome | \`${outcome}\` |"
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      # Same reasoning as the Android job's equivalent step: some MobSF API failures return a
+      # generic message with no real detail, and the actual cause only ever appears in MobSF's
+      # own container logs.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
 
       # Same reasoning as the Android job's upload step: nothing exists here yet for the
       # ios-corellium branch's deliberate explicit stop, or for any earlier infrastructure

@@ -57,6 +57,9 @@ plan-bundle/
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
+# developers.auto.tfvars holds only non-secret developer usernames (SCRUM-372) and must be
+# committed and reviewed like any other change — see specs/037-developer-readonly-iam-users/research.md R-003.
+!infra/terraform/developer-access/developers.auto.tfvars
 crash.log
 crash.*.log
 
