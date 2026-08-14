@@ -40,7 +40,7 @@ accounts:
       site_codes: [bishan]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub: null
+      cognito_sub: 89eac5fc-70e1-7042-25e7-8afbf2289805
     - key: demo-worker-4
       username: synthetic-worker-4@synthetic.crewsafe.invalid
       display_name: Synthetic Worker Priya Nair
@@ -48,7 +48,7 @@ accounts:
       site_codes: [campus]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub: null
+      cognito_sub: 895a65ec-e081-70c6-a488-255f0953e3cb
     - key: demo-worker-5
       username: synthetic-worker-5@synthetic.crewsafe.invalid
       display_name: Synthetic Worker Hafiz Rahman
@@ -56,4 +56,4 @@ accounts:
       site_codes: [bishan, campus]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub: null
+      cognito_sub: 091ab5fc-70b1-707b-5923-13d863b7ef21
