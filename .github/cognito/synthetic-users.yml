@@ -32,4 +32,4 @@ accounts:
       site_codes: [campus]
       group: synthetic-test-users
       desired_status: enabled
-      cognito_sub: null
+      cognito_sub: 895af5dc-a011-706e-cb12-8df145988c3d
