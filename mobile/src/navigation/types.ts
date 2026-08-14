@@ -71,6 +71,14 @@ export type SupervisorTabParamList = {
 
 export type WeatherStackParamList = {
   Weather: undefined;
+  /**
+   * The WBGT forecast for a site (SCRUM-365 / US-06).
+   *
+   * `siteId` is a route param rather than something the screen reads back out of the store,
+   * so the forecast can never be shown for a site other than the one the user tapped from —
+   * including in the window after they change site on the weather screen behind it.
+   */
+  Forecast: { siteId: string };
 };
 
 /**
