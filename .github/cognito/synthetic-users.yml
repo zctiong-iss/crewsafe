@@ -33,3 +33,27 @@ accounts:
       group: synthetic-test-users
       desired_status: enabled
       cognito_sub: 895af5dc-a011-706e-cb12-8df145988c3d
+    - key: demo-worker-3
+      username: synthetic-worker-3@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Wei Jie Lim
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: null
+    - key: demo-worker-4
+      username: synthetic-worker-4@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Priya Nair
+      role: WORKER
+      site_codes: [campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: null
+    - key: demo-worker-5
+      username: synthetic-worker-5@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Hafiz Rahman
+      role: WORKER
+      site_codes: [bishan, campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: null
