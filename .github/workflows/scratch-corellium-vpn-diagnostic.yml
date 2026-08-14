@@ -59,9 +59,15 @@ jobs:
 
       # Backgrounded via --daemon; polls for a tun interface to appear rather than a fixed
       # sleep, bounded to 60s so a real connection failure doesn't just hang until the job
-      # timeout.
+      # timeout. The log file is pre-created and world-readable BEFORE openvpn (root) writes
+      # to it, and its content is printed inline here regardless of outcome -- a previous run
+      # of this diagnostic lost the only evidence of a connection failure to a permission
+      # mismatch (root-owned log, non-root upload-artifact step) and to relying solely on the
+      # artifact instead of also surfacing it in the live log.
       - name: Connect to Corellium VPN
         run: |
+          touch "$RUNNER_TEMP/openvpn.log"
+          chmod 666 "$RUNNER_TEMP/openvpn.log"
           sudo openvpn --config "$RUNNER_TEMP/corellium.ovpn" \
             --daemon --log "$RUNNER_TEMP/openvpn.log"
           elapsed=0
@@ -74,8 +80,10 @@ jobs:
             ip -o link show | grep 'tun[0-9]*:'
           else
             echo "TUNNEL_UP=false" >> "$GITHUB_ENV"
-            echo "::error::No tun interface appeared within 60s -- VPN connection likely failed. See openvpn.log in the uploaded artifact."
+            echo "::error::No tun interface appeared within 60s -- VPN connection likely failed."
           fi
+          echo "--- openvpn.log ---"
+          cat "$RUNNER_TEMP/openvpn.log"
 
       - name: Check reachability to the device over the tunnel
         if: always()
@@ -101,12 +109,18 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Verified against usbfluxd's own configure.ac: --with-static-libplist defaults to
+      # "yes" and expects a .a archive at a path derived from pkg-config, which Ubuntu's
+      # libplist-dev package doesn't ship (shared .so only) -- confirmed by a real build
+      # failure in a previous run of this diagnostic ("configure: error: The file
+      # /libplist-2.0.a ... does not exist"). --without-static-libplist falls back to
+      # dynamic linking, which the installed dev package does provide.
       - name: Build usbfluxd from source
         if: always()
         run: |
           git clone --depth 1 https://github.com/corellium/usbfluxd.git "$RUNNER_TEMP/usbfluxd"
           cd "$RUNNER_TEMP/usbfluxd"
-          ./autogen.sh
+          ./autogen.sh --without-static-libplist
           make
           sudo make install
           echo "USBFLUXD_BUILT=true" >> "$GITHUB_ENV"
@@ -117,11 +131,15 @@ jobs:
         if: env.TUNNEL_UP == 'true' && env.USBFLUXD_BUILT == 'true'
         run: |
           sudo systemctl stop usbmuxd 2>/dev/null || true
+          touch "$RUNNER_TEMP/usbfluxd.log"
+          chmod 666 "$RUNNER_TEMP/usbfluxd.log"
           # shellcheck disable=SC2024 # the redirect target is $RUNNER_TEMP, writable by the
           # runner user regardless of sudo -- only usbfluxd itself needs root.
           sudo nohup usbfluxd -f -v -r "${DEVICE_VPN_IP}:${REMOTE_PORT}" \
             > "$RUNNER_TEMP/usbfluxd.log" 2>&1 &
           sleep 8
+          echo "--- usbfluxd.log ---"
+          cat "$RUNNER_TEMP/usbfluxd.log"
 
       - name: Check whether the device appears as locally attached
         if: always()
