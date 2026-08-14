@@ -13,7 +13,9 @@
         "iam:PutGroupPolicy",
         "iam:DeleteGroupPolicy",
         "iam:TagGroup",
-        "iam:UntagGroup"
+        "iam:UntagGroup",
+        "iam:AddUserToGroup",
+        "iam:RemoveUserFromGroup"
       ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
     },
@@ -34,9 +36,7 @@
         "iam:UpdateLoginProfile",
         "iam:DeleteLoginProfile",
         "iam:CreateAccessKey",
-        "iam:DeleteAccessKey",
-        "iam:AddUserToGroup",
-        "iam:RemoveUserFromGroup"
+        "iam:DeleteAccessKey"
       ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:user/crewsafe/developers/*"
     }
