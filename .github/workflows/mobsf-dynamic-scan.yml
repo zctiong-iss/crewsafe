@@ -406,8 +406,10 @@ jobs:
           # against corellium_instance.py: stop_instance suspends the VM (what
           # actually frees allocated device-time); destroy_instance removes it
           # entirely. Invoked indirectly via `trap cleanup EXIT` below -- shellcheck's
-          # invocation heuristic doesn't recognize trap-registered functions.
-          # shellcheck disable=SC2329
+          # invocation heuristic doesn't recognize trap-registered functions, so it
+          # flags both the function itself (SC2329) and every statement inside it
+          # (SC2317) as unreachable.
+          # shellcheck disable=SC2329,SC2317
           cleanup() {
             [[ -n "$instance_id" ]] || return 0
             echo "Stopping and destroying Corellium instance ${instance_id}..."
