@@ -4,7 +4,12 @@
     {
       "Sid": "ReadDeveloperGroupPlan",
       "Effect": "Allow",
-      "Action": ["iam:GetGroup", "iam:ListAttachedGroupPolicies"],
+      "Action": [
+        "iam:GetGroup",
+        "iam:ListAttachedGroupPolicies",
+        "iam:ListGroupPolicies",
+        "iam:GetGroupPolicy"
+      ],
       "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
     },
     {
