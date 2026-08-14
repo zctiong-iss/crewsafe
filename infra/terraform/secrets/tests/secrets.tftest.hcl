@@ -294,18 +294,21 @@ run "iam_boundary" {
     error_message = "A grant reaches outside this component's naming scope and is not the rds! service-managed credential path (SC-014, FR-029)."
   }
 
-  # SC-016 — the one unavoidable wildcard. ecr:GetAuthorizationToken does not
-  # support resource-level permissions; the service accepts only "*", which is
-  # why the platform's own managed policy is written that way. Constrained here
-  # to one statement holding one action so it cannot quietly acquire a sibling.
+  # SC-016 — exactly two unavoidable wildcards, named and closed (SCRUM-371,
+  # research.md R-004). ecr:GetAuthorizationToken does not support
+  # resource-level permissions; neither do the four ssmmessages channel actions
+  # ECS Exec's SSM sidecar needs on the task role. Both are the platform's own
+  # documented exceptions, not a gap in this component's scoping discipline.
+  # Constrained to exactly these two statements so a third cannot quietly
+  # acquire a wildcard alongside them.
   assert {
     condition = length([
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid if s.Resource == "*"
-    ]) == 1
-    error_message = "There must be exactly one statement using a full resource wildcard (SC-016, FR-032)."
+    ]) == 2
+    error_message = "There must be exactly two statements using a full resource wildcard (SC-016, FR-032, SCRUM-371 research.md R-004)."
   }
 
   assert {
@@ -313,10 +316,18 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : length(s.Action) == 1 && s.Action[0] == "ecr:GetAuthorizationToken"
+      ) : contains([
+        jsonencode(["ecr:GetAuthorizationToken"]),
+        jsonencode(sort([
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ])),
+      ], jsonencode(sort(s.Action)))
       if s.Resource == "*"
     ])
-    error_message = "The single wildcard statement must hold exactly one action, and it must be ecr:GetAuthorizationToken (SC-016, FR-032)."
+    error_message = "Every wildcard statement's action list must be exactly ecr:GetAuthorizationToken or exactly the four ssmmessages channel actions — no other wildcard statement is permitted (SC-016, FR-032, SCRUM-371 research.md R-004)."
   }
 
   # FR-013 — neither role may be assumable by anything but the container runtime.

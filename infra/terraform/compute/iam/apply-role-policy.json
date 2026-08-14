@@ -195,6 +195,17 @@
           "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
         }
       }
+    },
+    {
+      "Sid": "ManageDeveloperGroupExecGrant",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetGroupPolicy",
+        "iam:PutGroupPolicy",
+        "iam:DeleteGroupPolicy",
+        "iam:ListGroupPolicies"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
     }
   ]
 }

@@ -86,6 +86,66 @@ run "compute_web_policies_stay_least_privilege" {
   }
 }
 
+# SCRUM-371: compute's own apply role must be able to manage a policy on the
+# crewsafe-developers group (SCRUM-372) before it can create the
+# aws_iam_group_policy.developers_rds_troubleshooting resource. Written before
+# the templates changed, per this runbook's own "Policy changes" process
+# (docs/runbooks/SCRUM-265-terraform-iam-policy-management.md).
+run "compute_ci_can_manage_developer_group_policy" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region                = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
+      (
+        try(sort(stmt.Action), []) == sort([
+          "iam:GetGroupPolicy",
+          "iam:PutGroupPolicy",
+          "iam:DeleteGroupPolicy",
+          "iam:ListGroupPolicies",
+        ])
+        && stmt.Resource == "arn:aws:iam::123456789012:group/crewsafe-developers"
+      )
+    ])
+    error_message = "The compute apply policy must grant exactly iam:GetGroupPolicy, iam:PutGroupPolicy, iam:DeleteGroupPolicy, and iam:ListGroupPolicies, scoped to the crewsafe-developers group ARN and nothing else (research.md R-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-plan"].policy).Statement :
+      (
+        try(sort(stmt.Action), []) == sort([
+          "iam:GetGroupPolicy",
+          "iam:ListGroupPolicies",
+        ])
+        && stmt.Resource == "arn:aws:iam::123456789012:group/crewsafe-developers"
+      )
+    ])
+    error_message = "The compute plan policy must grant exactly iam:GetGroupPolicy and iam:ListGroupPolicies, scoped to the crewsafe-developers group ARN and nothing else (research.md R-002)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
+      alltrue([for action in stmt.Action : !can(regex(":\\*$", action))])
+    ])
+    error_message = "No statement in the compute apply policy may grant a wildcard action on any service, including this new group-policy grant."
+  }
+}
+
 run "reject_wrong_role_account" {
   command = plan
 
