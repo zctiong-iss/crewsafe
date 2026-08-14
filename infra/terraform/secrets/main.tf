@@ -237,9 +237,31 @@ locals {
   # credentials and nothing else: no parameter read, no image pull, no log write.
   # Those belong to the platform starting the task, not to the code inside it, and
   # granting them here would make the separation cosmetic.
+  #
+  # SCRUM-371 — the one addition since: this identity's own task is what a
+  # developer's ECS Exec session runs inside, so the task itself needs the four
+  # ssmmessages channel actions to host that session's SSM agent sidecar. These
+  # accept no resource-level scoping (AWS's ECS task IAM role documentation is
+  # explicit: "Using the aws:SourceArn condition key to specify a specific
+  # cluster is not currently supported, you should use the wildcard"), the same
+  # class of exception GetRegistryAuthorizationToken above already documents.
+  # secrets.tftest.hcl's iam_boundary run block holds this to exactly these four
+  # actions in exactly one statement, the same discipline applied there.
   task_policy = {
-    Version   = "2012-10-17"
-    Statement = local.secret_read_statements
+    Version = "2012-10-17"
+    Statement = concat(local.secret_read_statements, [
+      {
+        Sid    = "HostEcsExecSession"
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel",
+        ]
+        Resource = "*"
+      },
+    ])
   }
 
   # FR-013 — assumable by the container runtime and by nothing else. No wildcard

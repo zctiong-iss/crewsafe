@@ -57,6 +57,19 @@ data "terraform_remote_state" "ecr" {
   }
 }
 
+# SCRUM-371 — read-only. Never written by this component (contracts/
+# developer-access-consumer-compliance.md rule 4). The only output consumed is
+# developer_group_name, so the new grant below attaches to the group SCRUM-372
+# already created rather than a hardcoded name or a second group.
+data "terraform_remote_state" "developer_access" {
+  backend = "s3"
+  config = {
+    bucket = "crewsafe-terraform-state-${var.expected_account_id}-${var.aws_region}"
+    key    = "crewsafe/developer-access/shared-dev.tfstate"
+    region = var.aws_region
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Managed edge policies
 #
@@ -537,6 +550,14 @@ resource "aws_ecs_service" "backend" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
+  # SCRUM-371 — hosts the SSM Exec agent sidecar so a developer's session can
+  # run inside this task. Fargate's default platform version (unset here,
+  # LATEST) already satisfies ECS Exec's >= 1.4.0 minimum; no image or
+  # platform-version change is needed (research.md R-006). The task role's own
+  # ssmmessages grant (secrets/main.tf, HostEcsExecSession) is what lets the
+  # session actually open once this flag is set.
+  enable_execute_command = true
+
   network_configuration {
     subnets          = local.network.private_subnet_ids
     security_groups  = [local.network.app_security_group_id]
@@ -588,6 +609,45 @@ resource "aws_ecs_service" "backend" {
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-371 — narrow ECS Exec / RDS-secret grant on the existing developer group
+#
+# Attaches to crewsafe-developers (SCRUM-372), never a new or second identity
+# (contracts/developer-access-consumer-compliance.md rule 1). Exactly three
+# actions, each scoped — no restatement of what ViewOnlyAccess (SCRUM-372)
+# already grants that group (ecs:Describe*, ecs:List*, rds:DescribeDBInstances
+# are deliberately absent here; spec FR-006). See contracts/
+# rds-troubleshooting-grant.md for the audit-facing statement of this exact
+# policy and research.md R-005 for the ARN-pattern reasoning.
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_group_policy" "developers_rds_troubleshooting" {
+  name  = "crewsafe-developers-rds-troubleshooting"
+  group = data.terraform_remote_state.developer_access.outputs.developer_group_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ExecIntoBackendTask"
+        Effect   = "Allow"
+        Action   = ["ecs:ExecuteCommand", "ssm:StartSession"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*"
+      },
+      {
+        # Same rds!* wildcard pattern secrets/main.tf's
+        # rds_managed_secret_arn_pattern already uses, and for the identical
+        # reason: the managed service names this secret and it does not exist
+        # as a fixed value until the database does.
+        Sid      = "ReadRdsManagedCredentialForTunnel"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:rds!*"
+      },
+    ]
+  })
 }
 
 # ---------------------------------------------------------------------------
