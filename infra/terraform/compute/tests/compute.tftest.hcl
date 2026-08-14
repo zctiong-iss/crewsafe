@@ -627,15 +627,15 @@ run "developer_rds_troubleshooting_grant" {
   command = apply
 
   assert {
-    condition     = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 2
-    error_message = "The grant must hold exactly two statements: ExecIntoBackendTask and ReadRdsManagedCredentialForTunnel (spec FR-005)."
+    condition     = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 3
+    error_message = "The grant must hold exactly three statements: ExecIntoBackendTask, StartSessionToBackendTask, and ReadRdsManagedCredentialForTunnel (spec FR-005, research.md R-005 amendment)."
   }
 
   assert {
     condition = sort([
       for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Sid
-    ]) == sort(["ExecIntoBackendTask", "ReadRdsManagedCredentialForTunnel"])
-    error_message = "The grant's two statements must be exactly ExecIntoBackendTask and ReadRdsManagedCredentialForTunnel, no others (contracts/rds-troubleshooting-grant.md)."
+    ]) == sort(["ExecIntoBackendTask", "StartSessionToBackendTask", "ReadRdsManagedCredentialForTunnel"])
+    error_message = "The grant's three statements must be exactly these, no others (contracts/rds-troubleshooting-grant.md)."
   }
 
   assert {
@@ -645,11 +645,16 @@ run "developer_rds_troubleshooting_grant" {
     error_message = "The grant must total exactly ecs:ExecuteCommand, ssm:StartSession, and secretsmanager:GetSecretValue — no restatement of ViewOnlyAccess's existing coverage (spec FR-005, FR-006)."
   }
 
+  # Resource is a JSON string on two statements and a JSON array on
+  # StartSessionToBackendTask (it needs both the task ARN and the SSM document
+  # ARN); normalize to a list before checking for a wildcard so neither shape
+  # is missed.
   assert {
     condition = alltrue([
-      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Resource != "*"
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      alltrue([for r in try(tolist(s.Resource), [s.Resource]) : r != "*"])
     ])
-    error_message = "Neither statement may use a resource wildcard — both actions support scoping and FR-007 requires it here, unlike the one ssmmessages exception on the secrets side (spec FR-007)."
+    error_message = "No statement may use a resource wildcard — every action here supports scoping and FR-007 requires it, unlike the one ssmmessages exception on the secrets side (spec FR-007)."
   }
 
   assert {
@@ -659,6 +664,22 @@ run "developer_rds_troubleshooting_grant" {
       if s.Sid == "ExecIntoBackendTask"
     ])
     error_message = "ExecIntoBackendTask must be scoped to this project's own ECS cluster/task pattern, not every task in the account (spec FR-007, research.md R-005)."
+  }
+
+  # Amendment (live-tested 2026-08-14): ssm:StartSession for ECS Exec
+  # port-forwarding is authorized against BOTH the task target and the SSM
+  # document — confirmed by a live AccessDeniedException naming exactly this
+  # document ARN when only the task ARN was granted (research.md R-005).
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      (
+        strcontains(join(",", s.Resource), local.name_prefix)
+        && strcontains(join(",", s.Resource), "document/AWS-StartPortForwardingToRemoteHost")
+      )
+      if s.Sid == "StartSessionToBackendTask"
+    ])
+    error_message = "StartSessionToBackendTask must grant ssm:StartSession on both the backend task ARN pattern and the AWS-StartPortForwardingToRemoteHost document ARN (research.md R-005 amendment)."
   }
 
   assert {
