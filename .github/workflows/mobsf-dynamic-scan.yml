@@ -397,6 +397,29 @@ jobs:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
           RUN_ID: ${{ github.run_id }}
         run: |
+          instance_id=""
+          # Stop AND destroy on every exit path -- this step never reaches a
+          # successful exit today (see the deliberate failure at the bottom), and
+          # this also covers a create/start/install failure partway through, so a
+          # trial's limited device-hours (or a per-project instance-count limit)
+          # are never silently left consumed by an orphaned instance. Verified
+          # against corellium_instance.py: stop_instance suspends the VM (what
+          # actually frees allocated device-time); destroy_instance removes it
+          # entirely. Invoked indirectly via `trap cleanup EXIT` below -- shellcheck's
+          # invocation heuristic doesn't recognize trap-registered functions.
+          # shellcheck disable=SC2329
+          cleanup() {
+            [[ -n "$instance_id" ]] || return 0
+            echo "Stopping and destroying Corellium instance ${instance_id}..."
+            curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_stop_instance" \
+              -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+              --data-urlencode "instance_id=${instance_id}" >/dev/null 2>&1 || true
+            curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_destroy_instance" \
+              -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+              --data-urlencode "instance_id=${instance_id}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
           create_resp="$RUNNER_TEMP/corellium-create.json"
           curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
