@@ -31,6 +31,16 @@ public interface LightningObservationRepository extends JpaRepository<LightningO
             UUID siteId, Instant cutoff);
 
     /**
+     * Recent history for the lightning tab, newest first. Capped rather than windowed by time
+     * so a quiet site's endless run of no-strike ticks (ingestion runs every two minutes,
+     * strike or not) still returns a bounded page instead of growing without limit. 20 rows
+     * covers a bit more than one full {@code app.lightning.risk.validity-window} (30 min at
+     * the two-minute cadence) with slack for a delayed tick, so every reading behind the
+     * current risk card's "valid until" time is visible in the table beneath it.
+     */
+    List<LightningObservation> findTop20BySiteIdOrderByObservedAtDesc(UUID siteId);
+
+    /**
      * Atomically inserts one observation or reports that its logical identity already
      * exists, the same idempotency shape as {@code WeatherObservationRepository}.
      */

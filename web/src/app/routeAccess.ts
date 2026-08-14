@@ -11,6 +11,9 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/shifts/new": MANAGEMENT_ROLES,
   "/shifts/:shiftId/edit": MANAGEMENT_ROLES,
   "/conditions": MANAGEMENT_ROLES,
+  // Same audience as /conditions, which carries the derived stop-work banner this tab's
+  // history table backs — a worker already gets this state via the mobile shift screen.
+  "/lightning": MANAGEMENT_ROLES,
   "/approvals": ["SUPERVISOR", "SAFETY_MANAGER"],
   "/audit": ["SAFETY_MANAGER", "ADMIN"],
   "/settings": ["ADMIN"],

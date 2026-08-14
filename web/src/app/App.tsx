@@ -17,6 +17,7 @@ import { ConditionsPage } from "@/features/conditions/ConditionsPage";
 import { EditShiftPage } from "@/features/shifts/EditShiftPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
+import { LightningPage } from "@/features/lightning/LightningPage";
 import { SiteProvider } from "@/site/SiteProvider";
 
 /**
@@ -111,7 +112,8 @@ export function App() {
                 a page that says "not built yet" reads as a roadmap. */}
             {NAVIGATION.filter(
               (item) =>
-                item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" && item.to !== "/policy",
+                item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
+                item.to !== "/policy" && item.to !== "/lightning",
             ).map((item) => (
               <Route
                 key={item.to}
@@ -147,6 +149,10 @@ export function App() {
             <Route
               path="/policy"
               element={<RoleRoute roles={rolesForRoute("/policy")}><PolicyPage /></RoleRoute>}
+            />
+            <Route
+              path="/lightning"
+              element={<RoleRoute roles={rolesForRoute("/lightning")}><LightningPage /></RoleRoute>}
             />
 
             {/* Replace a placeholder only when its real guarded route lands in this same change. */}

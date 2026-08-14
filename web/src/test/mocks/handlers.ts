@@ -2,6 +2,7 @@
 
 import { http, HttpResponse } from "msw";
 import type { PolicyVersion } from "@/api/policy";
+import type { LightningObservation, LightningRisk } from "@/api/lightning";
 
 const BASE = "http://localhost:8080";   // matching VITE_API_BASE_URL stubbed in setup.ts
 
@@ -56,6 +57,35 @@ const SITE_2_ACTIVE_POLICY_VERSION: PolicyVersion = {
 const POLICY_VERSIONS_BY_SITE: Record<string, PolicyVersion[]> = {
   "site-1": [ACTIVE_POLICY_VERSION, DRAFT_POLICY_VERSION, SUPERSEDED_POLICY_VERSION],
   "site-2": [SITE_2_ACTIVE_POLICY_VERSION],
+};
+
+// site-1 is CLEAR with two ticks (one with a distant strike, one with none), so tests can
+// exercise both the "km away" and "no strikes" renderings without needing a stop-work fixture.
+const SITE_1_LIGHTNING_RISK: LightningRisk = {
+  siteId: "site-1", state: "CLEAR", nearestStrikeKm: null,
+  observedAt: "2026-08-14T05:20:00Z", validUntil: "2026-08-14T05:50:00Z", freshness: "LIVE",
+};
+
+const SITE_1_LIGHTNING_OBSERVATIONS: LightningObservation[] = [
+  {
+    id: "obs-2", siteId: "site-1", nearestStrikeKm: null, nearestStrikeAt: null,
+    observedAt: "2026-08-14T05:20:00Z", ingestedAt: "2026-08-14T05:21:31Z",
+    source: "NEA", qualityStatus: "LIVE",
+  },
+  {
+    id: "obs-1", siteId: "site-1", nearestStrikeKm: 32.5, nearestStrikeAt: "2026-08-14T05:17:40Z",
+    observedAt: "2026-08-14T05:18:00Z", ingestedAt: "2026-08-14T05:19:31Z",
+    source: "NEA", qualityStatus: "LIVE",
+  },
+];
+
+const LIGHTNING_RISK_BY_SITE: Record<string, LightningRisk> = {
+  "site-1": SITE_1_LIGHTNING_RISK,
+};
+
+const LIGHTNING_OBSERVATIONS_BY_SITE: Record<string, LightningObservation[]> = {
+  "site-1": SITE_1_LIGHTNING_OBSERVATIONS,
+  "site-2": [],
 };
 
 export const handlers = [
@@ -171,4 +201,15 @@ http.post(`${BASE}/api/v1/sites/:siteId/policy-versions/:versionId/activate`, ({
   }
   return HttpResponse.json({ ...version, status: "ACTIVE", activatedAt: "2026-08-13T00:00:00Z" });
 }),
+
+http.get(`${BASE}/api/v1/sites/:siteId/lightning`, ({ params }) => {
+  const risk = LIGHTNING_RISK_BY_SITE[params.siteId as string];
+  return risk
+    ? HttpResponse.json(risk)
+    : HttpResponse.json(errorBody("Not Found", "No lightning data ingested for this site."), { status: 404 });
+}),
+
+http.get(`${BASE}/api/v1/sites/:siteId/lightning/observations`, ({ params }) =>
+  HttpResponse.json(LIGHTNING_OBSERVATIONS_BY_SITE[params.siteId as string] ?? []),
+),
 ];

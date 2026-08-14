@@ -121,6 +121,41 @@ class LightningControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void listsObservationsNewestFirst() throws Exception {
+        Instant older = Instant.now().minusSeconds(240);
+        Instant newer = Instant.now().minusSeconds(60);
+        insertObservation(visibleSite.getId(), older, new BigDecimal("30.00"), WeatherQualityStatus.LIVE);
+        insertObservation(visibleSite.getId(), newer, null, WeatherQualityStatus.LIVE);
+
+        mockMvc.perform(authenticatedGetObservations(visibleSite.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].observedAt").value(newer.toString()))
+                // No strikes that tick is a valid outcome, not a missing value.
+                .andExpect(jsonPath("$[0].nearestStrikeKm").doesNotExist())
+                .andExpect(jsonPath("$[1].observedAt").value(older.toString()))
+                .andExpect(jsonPath("$[1].nearestStrikeKm").value(30.0));
+    }
+
+    @Test
+    void returnsAnEmptyListRatherThanNotFoundWhenNothingHasBeenIngested() throws Exception {
+        // Unlike the derived risk endpoint, this is a history view: "nothing ingested yet" and
+        // "nothing ingested recently" both just render as an empty table, not a 404.
+        mockMvc.perform(authenticatedGetObservations(visibleSite.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void excludesAnotherSitesObservationsFromTheList() throws Exception {
+        insertObservation(otherSite.getId(), Instant.now().minusSeconds(60),
+                new BigDecimal("2.00"), WeatherQualityStatus.LIVE);
+
+        mockMvc.perform(authenticatedGetObservations(otherSite.getId()))
+                .andExpect(status().isForbidden());
+    }
+
     private Site createSite(String label) {
         return sites.save(new Site("Lightning " + label + " " + UUID.randomUUID(),
                 new BigDecimal("1.300000"), new BigDecimal("103.800000")));
@@ -135,6 +170,10 @@ class LightningControllerTest extends AbstractIntegrationTest {
 
     private MockHttpServletRequestBuilder authenticatedGet(UUID siteId) {
         return get(endpoint(siteId)).header("Authorization", "Bearer " + workerToken);
+    }
+
+    private MockHttpServletRequestBuilder authenticatedGetObservations(UUID siteId) {
+        return get(endpoint(siteId) + "/observations").header("Authorization", "Bearer " + workerToken);
     }
 
     private String endpoint(UUID siteId) {
