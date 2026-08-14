@@ -59,9 +59,19 @@ Add `-f ios_runner_label=<label>` only if a self-hosted physical-device runner i
   `vars.MOBSF_CORELLIUM_PROJECT_ID` (optional). These are **MobSF's own** environment variable
   names (verified against `mobsf/MobSF/settings.py` in MobSF's source) — this workflow never
   calls Corellium's API directly, only MobSF's own `/api/v1/ios/corellium_*` endpoints, so
-  these three vars are passed straight into the MobSF container. See §6 for the Solo-tier
-  capability caveat, and the important architectural gap below it, before treating this path
-  as production-ready.
+  these three vars are passed straight into the MobSF container.
+
+  **`MOBSF_CORELLIUM_API_DOMAIN` gotcha, confirmed live**: use the **bare domain**,
+  `https://app.corellium.com` — not the value Corellium's own console shows under "API Info →
+  Server URL" (`https://app.corellium.com/api`), which is for their REST docs, not this env
+  var. MobSF's client appends `/api/v1` itself; setting the console's value produces a broken
+  doubled `.../api/api/v1/...` path and every Corellium call fails (`corellium_supported_
+  models` returns a generic `"Failed to obtain iOS models"`; `corellium_start_instance` fails
+  with a raw Python JSON-decode error message — that specific error is the tell that the HTTP
+  call itself broke, not a credentials problem).
+
+  See §6 for the Solo-tier capability caveat, and the important architectural gap below it,
+  before treating this path as production-ready.
 - **iOS — physical signed device**: register a self-hosted GitHub Actions runner attached to a
   provisioned, **jailbroken** device with SSH access (MobSF's own iOS-device dynamic-analysis
   module is documented as "iOS Jailbroken Device" — a merely signed, non-jailbroken device is
@@ -108,28 +118,44 @@ mid-flow network block would abort the scripted flow and produce a false
 a reviewed PR — `*` matches any subdomain segment (bash glob matching).
 
 **Corellium Solo capability caveat**: the Solo plan includes only the "Essential Testing
-Toolkit" and cloud-service deployment only. Once trial access is granted, verify before
-relying on the Corellium path in production: (a) API-driven non-interactive device
-boot/install/launch/teardown suitable for unattended CI, (b) Frida-capable dynamic
-instrumentation for MobSF to hook into, (c) a way to export captured network traffic for
-`check-network-allowlist.sh` to inspect. Record the outcome here (including any
-concurrency/session-time limits found, which could affect the 45-minute run bound in §7) once
-verified.
+Toolkit" and cloud-service deployment only. Verification status as of 2026-08-14, against an
+approved Solo trial:
+
+- ✅ **API-driven, non-interactive device control** — confirmed. MobSF (given only
+  `MOBSF_CORELLIUM_API_KEY`, no SSH key) successfully called `corellium_supported_models`
+  (full device catalog returned) and `corellium_start_instance` against the trial device
+  (`"Instance is already started"`). The `MOBSF_CORELLIUM_API_DOMAIN` gotcha above was the
+  only blocker — once fixed, this worked on the first real attempt.
+- ❓ **Frida-capable dynamic instrumentation** — not yet tested; needs a real `setup_environment`
+  (SSH-based IPA install) run, which needs a signed `.ipa` we don't have yet.
+- ❓ **Network traffic export** for `check-network-allowlist.sh` to inspect — not yet tested,
+  same blocker.
+- ❓ **Concurrency/session-time limits** — not yet observed.
+
+Record further outcomes here as they're confirmed.
 
 **Known architectural gap — Corellium's path cannot run the synthetic flow yet.** Verified
 against MobSF's own source (`mobsf/DynamicAnalyzer/views/ios/corellium_instance.py`): MobSF
-talks to a Corellium instance exclusively over **SSH** (`CorelliumInstanceAPI`/
+*itself* talks to a Corellium instance exclusively over **SSH** (`CorelliumInstanceAPI`/
 `CorelliumAgentAPI`), never over idb/USB — the channel Maestro requires. The workflow's
-`android-dynamic-scan`-equivalent Corellium branch (`ios-dynamic-scan`, `Provision Corellium
-instance` step) genuinely creates and starts the instance and installs the app through MobSF's
-real API — that part works — but then fails **explicitly and on purpose** rather than
-attempting `maestro test` against a target it cannot reach. Closing this gap needs one of:
-(a) Corellium's own device-network-exposure feature, if the account tier supports it
-(unverified for Solo), or (b) re-driving the five-step flow through MobSF's own SSH/tap
-primitives instead of Maestro. Neither is implemented in this iteration — this is scoped as
-future work, not a bug to chase. Until then, only the `ios-signed-device` path (a real
-USB-attached jailbroken device, which Maestro reaches directly and independently of MobSF's
-SSH channel) can complete the synthetic flow end to end on iOS.
+Corellium branch (`ios-dynamic-scan`, `Provision Corellium instance` step) genuinely creates
+and starts the instance and installs the app through MobSF's real API — confirmed working, see
+above — but then fails **explicitly and on purpose** rather than attempting `maestro test`
+against a target it cannot reach via MobSF's own channel.
+
+**Possible fix, not yet confirmed**: Corellium's console offers a "Connect via VPN" flow with
+**USBFlux** — bridges the virtual device onto your machine as a local USB device, explicitly
+advertised as compatible with "Xcode or libimobiledevice." Since `idb` (Maestro's iOS driver)
+is built on libimobiledevice, this may let Maestro reach a Corellium instance the same way it
+reaches a real physical device — independent of MobSF's own SSH-only channel, which is what
+the gap above is actually about. Local verification of this stalled on a macOS-specific
+OpenVPN `utun` allocation failure, then a Tunnelblick system-extension approval gate; testing
+directly on a Linux runner (the actual CI target, which has no such extension-approval gate)
+is the likely faster path if the macOS route keeps stalling. If confirmed working, the
+`ios-corellium` branch could be rebuilt to run VPN-connect + USBFlux as a setup step and then
+reuse the `ios-signed-device` Maestro path as-is, rather than needing a wholly new driving
+mechanism. Until confirmed, only the `ios-signed-device` path (a real USB-attached jailbroken
+device) can complete the synthetic flow end to end on iOS.
 
 ## 7. Non-blocking today, and what changes later
 
