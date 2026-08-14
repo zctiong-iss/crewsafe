@@ -181,6 +181,7 @@ jobs:
           # Keep the SAST job deterministic and credential-free. test_agent_eval.py
           # is a live Bedrock benchmark and must run only in an AWS-enabled job.
           python -m coverage run -m pytest test_forecast.py
+          python -m coverage run --append -m pytest tests
           python -m coverage xml -o coverage.xml
 
       - name: Validate ML-service coverage report

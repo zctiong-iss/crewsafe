@@ -66,7 +66,7 @@ printf 'test-ml-service-smoke\n'
 expect 0 'healthy image passes smoke contract' healthy
 expect 1 'container crash fails smoke' crash
 expect 1 'root runtime fails smoke' root
-expect 1 'writable requirements manifest fails smoke' writable
+expect 1 'writable runtime requirements manifest fails smoke' writable
 expect 1 'malformed forecast response fails smoke' malformed
 expect 1 'forecast timeout fails smoke' forecast-timeout
 expect 1 'health timeout fails smoke' health-bad

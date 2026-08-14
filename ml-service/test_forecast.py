@@ -1,4 +1,7 @@
 """Test suite for forecast service and endpoints."""
+import logging
+from unittest.mock import Mock
+
 import pytest
 from fastapi.testclient import TestClient
 from app import app
@@ -87,6 +90,15 @@ class TestForecastService:
             horizon_minutes=30,
         )
         assert prediction.timestamp is not None
+
+    def test_forecast_service_rejects_unsupported_horizon(self):
+        """Internal callers receive the same 30-or-60 rule as HTTP callers."""
+        with pytest.raises(ValueError, match="30 or 60"):
+            ForecastService.forecast(
+                metric="wbgt",
+                current_value=35.5,
+                horizon_minutes=45,
+            )
 
 
 class TestForecastEndpoint:
@@ -184,6 +196,18 @@ class TestForecastEndpoint:
         )
         assert response.status_code == 422
 
+    def test_forecast_endpoint_rejects_unsupported_45min_horizon(self):
+        """Only the trained 30-minute and 60-minute horizons are valid."""
+        response = client.post(
+            "/forecast",
+            json={
+                "metric": "wbgt",
+                "horizon_minutes": 45,
+                "current_value": 35.5,
+            },
+        )
+        assert response.status_code == 422
+
     def test_forecast_endpoint_invalid_current_value(self):
         """Endpoint should reject a value outside the declared forecast range."""
         response = client.post(
@@ -225,6 +249,25 @@ class TestForecastEndpoint:
 
         assert response.status_code == 500
         assert response.json() == {"detail": "Internal server error"}
+
+    def test_unexpected_forecast_error_does_not_leak_details(self, monkeypatch, caplog):
+        """Clients and logs receive no model exception text or stack trace."""
+        monkeypatch.setattr(
+            ForecastService,
+            "forecast",
+            Mock(side_effect=RuntimeError("private-model-path")),
+        )
+
+        with caplog.at_level(logging.ERROR):
+            response = client.post(
+                "/forecast",
+                json={"metric": "wbgt", "current_value": 35.5},
+            )
+
+        assert response.status_code == 500
+        assert response.json() == {"detail": "Internal server error"}
+        assert "private-model-path" not in caplog.text
+        assert "Traceback" not in caplog.text
 
     def test_forecast_endpoint_response_schema(self):
         """Response should match ForecastPrediction schema."""
