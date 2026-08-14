@@ -68,6 +68,18 @@ jobs:
         id: artifact
         run: .github/scripts/mobsf-dynamic/retrieve-and-verify-artifact.sh "$RUNNER_TEMP/android-artifact"
 
+      # Without this, /dev/kvm exists but the runner user has no group permission to use it
+      # (verified via a real run: "ProbeKVM: This user doesn't have permissions to use KVM"),
+      # so the emulator falls back to full software emulation (`-accel off`) and never boots
+      # within FR-004's 10-minute window. This is reactivecircus/android-emulator-runner's own
+      # documented prerequisite for Linux runners, not something specific to this workflow.
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       # FR-004: the emulator becoming ready is bounded to 10 minutes via this step's own
       # timeout. `script:` is a no-op confirmation -- the emulator keeps running for the rest
       # of this job's later steps (adb/MobSF/Maestro all target it directly).
