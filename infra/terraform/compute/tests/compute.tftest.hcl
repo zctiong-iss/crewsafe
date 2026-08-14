@@ -675,11 +675,11 @@ run "developer_rds_troubleshooting_grant" {
       for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
       (
         strcontains(join(",", s.Resource), local.name_prefix)
-        && strcontains(join(",", s.Resource), "document/AWS-StartPortForwardingToRemoteHost")
+        && strcontains(join(",", s.Resource), "document/AWS-StartPortForwardingSessionToRemoteHost")
       )
       if s.Sid == "StartSessionToBackendTask"
     ])
-    error_message = "StartSessionToBackendTask must grant ssm:StartSession on both the backend task ARN pattern and the AWS-StartPortForwardingToRemoteHost document ARN (research.md R-005 amendment)."
+    error_message = "StartSessionToBackendTask must grant ssm:StartSession on both the backend task ARN pattern and the AWS-StartPortForwardingSessionToRemoteHost document ARN (research.md R-005 amendment)."
   }
 
   assert {

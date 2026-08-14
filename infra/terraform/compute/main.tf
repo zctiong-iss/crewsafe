@@ -641,14 +641,14 @@ resource "aws_iam_group_policy" "developers_rds_troubleshooting" {
         # for the ECS Exec port-forwarding path is authorized against BOTH the
         # ECS task target AND the SSM document resource — confirmed by a live
         # AccessDeniedException naming exactly this document ARN when only the
-        # task ARN was granted. AWS-StartPortForwardingToRemoteHost is an
+        # task ARN was granted. AWS-StartPortForwardingSessionToRemoteHost is an
         # AWS-owned public document, hence the account-less "::document/" ARN.
         Sid    = "StartSessionToBackendTask"
         Effect = "Allow"
         Action = ["ssm:StartSession"]
         Resource = [
           "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*",
-          "arn:aws:ssm:${var.aws_region}::document/AWS-StartPortForwardingToRemoteHost",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-StartPortForwardingSessionToRemoteHost",
         ]
       },
       {
