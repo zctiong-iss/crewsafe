@@ -1,0 +1,151 @@
+name: SCRATCH - Corellium VPN Diagnostic
+
+# Throwaway diagnostic, NOT part of the SCRUM-350 production workflow. Tests whether a
+# GitHub-hosted ubuntu-latest runner can (a) connect to Corellium's VPN, (b) reach the trial
+# device over the tunnel, and (c) bridge it as a local USB device via usbfluxd
+# (github.com/corellium/usbfluxd) so idb/Maestro could potentially drive it -- the same
+# question that stalled locally on macOS's Tunnelblick system-extension approval gate. See
+# specs/036-mobsf-dynamic-scanning/research.md R7 and docs/runbooks/SCRUM-350-mobsf-dynamic-
+# scanning.md §6 for context. Delete this file once the question is answered either way.
+
+on:
+  workflow_dispatch:
+    inputs:
+      remote_usbmuxd_port:
+        description: >-
+          Port usbfluxd tries for the remote usbmuxd bridge on the device's VPN IP. 5000 is
+          usbfluxd's own README example (a DIY self-hosted scenario), not a confirmed
+          Corellium-specific value -- retry with a different port here if this fails.
+        type: string
+        required: false
+        default: "5000"
+      device_vpn_ip:
+        description: The device's internal IP once VPN-connected.
+        type: string
+        required: false
+        default: "10.11.1.1"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: VPN + USBFlux reachability diagnostic
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEVICE_VPN_IP: ${{ inputs.device_vpn_ip }}
+      REMOTE_PORT: ${{ inputs.remote_usbmuxd_port }}
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            openvpn \
+            git make autoconf automake libtool pkg-config gcc \
+            libplist-dev libavahi-client-dev \
+            usbmuxd libimobiledevice-utils \
+            iputils-ping netcat-openbsd
+
+      - name: Write VPN config from secret
+        env:
+          VPN_OVPN_CONFIG: ${{ secrets.VPN_OVPN_CONFIG }}
+        run: |
+          if [[ -z "$VPN_OVPN_CONFIG" ]]; then
+            echo "::error::VPN_OVPN_CONFIG secret is empty or not set."
+            exit 1
+          fi
+          printf '%s' "$VPN_OVPN_CONFIG" > "$RUNNER_TEMP/corellium.ovpn"
+
+      # Backgrounded via --daemon; polls for a tun interface to appear rather than a fixed
+      # sleep, bounded to 60s so a real connection failure doesn't just hang until the job
+      # timeout.
+      - name: Connect to Corellium VPN
+        run: |
+          sudo openvpn --config "$RUNNER_TEMP/corellium.ovpn" \
+            --daemon --log "$RUNNER_TEMP/openvpn.log"
+          elapsed=0
+          until ip -o link show | grep -q 'tun[0-9]*:' || [[ "$elapsed" -ge 60 ]]; do
+            sleep 2
+            elapsed=$((elapsed + 2))
+          done
+          if ip -o link show | grep -q 'tun[0-9]*:'; then
+            echo "TUNNEL_UP=true" >> "$GITHUB_ENV"
+            ip -o link show | grep 'tun[0-9]*:'
+          else
+            echo "TUNNEL_UP=false" >> "$GITHUB_ENV"
+            echo "::error::No tun interface appeared within 60s -- VPN connection likely failed. See openvpn.log in the uploaded artifact."
+          fi
+
+      - name: Check reachability to the device over the tunnel
+        if: always()
+        run: |
+          {
+            echo "## Reachability"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            if [[ "${TUNNEL_UP:-false}" == "true" ]]; then
+              if ping -c 3 -W 3 "$DEVICE_VPN_IP" >/dev/null 2>&1; then
+                echo "| ping ${DEVICE_VPN_IP} | ✅ reachable |"
+              else
+                echo "| ping ${DEVICE_VPN_IP} | ❌ no reply |"
+              fi
+              if nc -z -w 3 "$DEVICE_VPN_IP" 22 2>/dev/null; then
+                echo "| SSH port 22 | ✅ open |"
+              else
+                echo "| SSH port 22 | ❌ closed/unreachable |"
+              fi
+            else
+              echo "| (skipped -- tunnel never came up) | — |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build usbfluxd from source
+        if: always()
+        run: |
+          git clone --depth 1 https://github.com/corellium/usbfluxd.git "$RUNNER_TEMP/usbfluxd"
+          cd "$RUNNER_TEMP/usbfluxd"
+          ./autogen.sh
+          make
+          sudo make install
+          echo "USBFLUXD_BUILT=true" >> "$GITHUB_ENV"
+
+      # -f (foreground) run in the background via nohup/&, since this step just needs to
+      # start it and move on to the actual device-visibility check.
+      - name: Start usbfluxd bridging the remote device
+        if: env.TUNNEL_UP == 'true' && env.USBFLUXD_BUILT == 'true'
+        run: |
+          sudo systemctl stop usbmuxd 2>/dev/null || true
+          # shellcheck disable=SC2024 # the redirect target is $RUNNER_TEMP, writable by the
+          # runner user regardless of sudo -- only usbfluxd itself needs root.
+          sudo nohup usbfluxd -f -v -r "${DEVICE_VPN_IP}:${REMOTE_PORT}" \
+            > "$RUNNER_TEMP/usbfluxd.log" 2>&1 &
+          sleep 8
+
+      - name: Check whether the device appears as locally attached
+        if: always()
+        run: |
+          {
+            echo
+            echo "## Device visibility via usbfluxd"
+            echo
+            if [[ "${TUNNEL_UP:-false}" != "true" || "${USBFLUXD_BUILT:-false}" != "true" ]]; then
+              echo "Skipped -- prerequisite step(s) did not complete."
+            else
+              echo '```'
+              idevice_id -l 2>&1 || echo "(idevice_id found nothing / errored)"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: corellium-vpn-diagnostic-logs
+          path: |
+            ${{ runner.temp }}/openvpn.log
+            ${{ runner.temp }}/usbfluxd.log
+          if-no-files-found: ignore
+          retention-days: 7
