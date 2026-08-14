@@ -1,7 +1,7 @@
 """Pydantic models for Bedrock mitigation spike and forecast service."""
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import List, Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class Timing(BaseModel):
@@ -95,38 +95,106 @@ class MitigationRequest(BaseModel):
         }
 
 
+class ForecastObservation(BaseModel):
+    """One timestamped weather observation used by the trained WBGT model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    observed_at: datetime = Field(..., description="UTC observation time")
+    wbgt: Optional[float] = Field(None, ge=0, le=60)
+    air_temperature: Optional[float] = Field(None, ge=-10, le=60)
+    relative_humidity: Optional[float] = Field(None, ge=0, le=100)
+    wind_speed: Optional[float] = Field(None, ge=0, le=100)
+    wind_direction: Optional[float] = Field(None, ge=0, le=360)
+    rainfall: Optional[float] = Field(None, ge=0, le=500)
+
+
+class ForecastContext(BaseModel):
+    """Recent site readings required for trained WBGT inference."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    station_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    )
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    observations: List[ForecastObservation] = Field(..., min_length=2, max_length=16)
+
+
 class ForecastRequest(BaseModel):
-    """Request for WBGT forecast prediction."""
+    """Backward-compatible request for baseline or trained forecasting."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        json_schema_extra={
+            "example": {
+                "metric": "wbgt",
+                "horizon_minutes": 30,
+                "current_value": 35.5,
+                "context": None,
+            }
+        },
+    )
+
     metric: str = Field(
         ...,
         pattern="^(wbgt|temperature|humidity)$",
         description="Metric to forecast (wbgt, temperature, or humidity)"
     )
-    horizon_minutes: int = Field(
+    horizon_minutes: Literal[30, 60] = Field(
         default=30,
-        ge=30,
-        le=60,
         description="Forecast horizon in minutes (30 or 60)"
     )
     current_value: float = Field(
         ...,
-        ge=-10,
-        le=60,
         description="Current value of the metric"
     )
+    context: Optional[ForecastContext] = Field(
+        None,
+        description=(
+            "Recent timestamped readings for trained WBGT inference. When omitted, "
+            "the existing persistence contract is used."
+        ),
+    )
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "metric": "wbgt",
-                "horizon_minutes": 30,
-                "current_value": 35.5
-            }
+    @model_validator(mode="after")
+    def validate_metric_value(self) -> "ForecastRequest":
+        """Apply the physical range belonging to the requested metric."""
+
+        ranges = {
+            "wbgt": (0, 60),
+            "temperature": (-10, 60),
+            "humidity": (0, 100),
         }
-
+        minimum, maximum = ranges[self.metric]
+        if not minimum <= self.current_value <= maximum:
+            raise ValueError(f"current_value must be between {minimum} and {maximum}")
+        if self.context is not None and self.metric != "wbgt":
+            raise ValueError("forecast context is supported only for WBGT")
+        return self
 
 class ForecastPrediction(BaseModel):
     """Versioned forecast prediction conforming to committed contract."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "metric": "wbgt",
+                "predicted_value": 35.5,
+                "horizon_minutes": 30,
+                "model_version": "baseline-1.0.0",
+                "confidence_interval_lower": 34.2,
+                "confidence_interval_upper": 36.8,
+                "timestamp": "2026-02-08T12:00:00Z",
+            }
+        },
+    )
+
     metric: str = Field(..., description="Metric being predicted")
     predicted_value: float = Field(..., description="Predicted value at horizon")
     horizon_minutes: int = Field(..., description="Time horizon for prediction")
@@ -139,17 +207,7 @@ class ForecastPrediction(BaseModel):
         ...,
         description="Upper bound of 95% confidence interval"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Prediction timestamp")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "metric": "wbgt",
-                "predicted_value": 35.5,
-                "horizon_minutes": 30,
-                "model_version": "baseline-1.0.0",
-                "confidence_interval_lower": 34.2,
-                "confidence_interval_upper": 36.8,
-                "timestamp": "2026-02-08T12:00:00"
-            }
-        }
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Prediction generation time in UTC",
+    )

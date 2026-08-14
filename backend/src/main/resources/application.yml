@@ -153,6 +153,13 @@ app:
     max-tokens: ${BEDROCK_MAX_TOKENS:4096}
     temperature: ${BEDROCK_TEMPERATURE:0.7}
 
+  forecast:
+    # Internal FastAPI boundary. Browser and mobile clients call only the authorized
+    # backend endpoint; they never receive the ML service address or model bundle.
+    base-url: ${FORECAST_BASE_URL:http://localhost:8000}
+    connect-timeout: ${FORECAST_CONNECT_TIMEOUT:1s}
+    read-timeout: ${FORECAST_READ_TIMEOUT:3s}
+
 # Expose only what we need. Health is used by the container platform and the
 # smoke tests; everything else stays closed by default.
 management:

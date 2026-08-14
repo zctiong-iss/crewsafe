@@ -166,7 +166,14 @@ paths:
         Retains the shift and its assignments as a record — distinguishable from an
         active shift by status — rather than removing them the way DELETE does. Only a
         PLANNED or ACTIVE shift can be cancelled; a CLOSED or already-CANCELLED shift
-        returns 400. Terminal: there is no un-cancel.
+        returns 400. Terminal: there is no un-cancel. A required reason is recorded to
+        the audit trail only; it is never stored on the shift or returned in any payload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelShiftRequest"
       responses:
         "200":
           description: The cancelled shift.
@@ -499,3 +506,16 @@ components:
           format: uuid
         displayName:
           type: string
+
+    CancelShiftRequest:
+      type: object
+      required: [reason]
+      description: >
+          Explains why the shift was cancelled. The recorded reason is reflected in the audit trail only — never stored on the shift
+          or returned in any shift payload, because a site's shifts are readable by any site member
+          (workers included) and the reason may be sensitive.
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500

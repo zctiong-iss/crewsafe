@@ -14,6 +14,7 @@ import { rolesForRoute } from "./routeAccess";
 import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { ConditionsPage } from "@/features/conditions/ConditionsPage";
+import { EditShiftPage } from "@/features/shifts/EditShiftPage";
 
 /**
  * Routes are chosen by auth state, not guarded per-route.
@@ -120,15 +121,35 @@ export function App() {
 
           <Route
             path="/shifts/new"
-            element={<RoleRoute roles={rolesForRoute("/shifts/new")}><CreateShiftPage /></RoleRoute>}
+            element={
+              <RoleRoute 
+                roles={rolesForRoute("/shifts/new")}>
+                  <CreateShiftPage />
+              </RoleRoute>}
           />
           <Route
             path="/shifts"
-            element={<RoleRoute roles={rolesForRoute("/shifts")}><ShiftsPage /></RoleRoute>}
+            element={
+              <RoleRoute 
+                roles={rolesForRoute("/shifts")}>
+                  <ShiftsPage />
+              </RoleRoute>}
           />
           <Route
             path="/conditions"
-            element={<RoleRoute roles={rolesForRoute("/conditions")}><ConditionsPage /></RoleRoute>}
+            element={
+              <RoleRoute 
+                roles={rolesForRoute("/conditions")}>
+                  <ConditionsPage />
+              </RoleRoute>}
+          />
+          <Route
+            path="/shifts/:shiftId/edit"
+            element={
+              <RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}>
+                <EditShiftPage />
+              </RoleRoute>
+            }
           />
 
           {/* Replace a placeholder only when its real guarded route lands in this same change. */}

@@ -77,25 +77,37 @@ def _forecast_node(state: DraftState) -> DraftState:
 
     ForecastService is a plain in-process call, not an HTTP round trip to this same service's
     own /forecast route — the plan doc describes it as "let the Python side call /forecast",
-    and calling ourselves over the loopback to reach a static method would add a failure mode
-    for nothing. The endpoint stays as the contract for external callers.
+    and calling ourselves over the loopback would add a failure mode for nothing. The endpoint
+    stays as the contract for external callers.
 
-    Honest caveat, surfaced through to the response: today's forecast is the persistence
-    baseline, whose prediction *equals the current reading*. SCRUM-114's trained model exists
-    (PR #217) but is not wired to this service; SCRUM-281 does that. Until then a plan's
-    "forecast" is the present, and `forecastModelVersion` says so rather than letting the
-    number pass for a prediction.
+    Honest caveat, surfaced through to the response: the number this node produces is the
+    persistence baseline, which *equals the current reading*. SCRUM-114's trained model and
+    SCRUM-281's wiring are both merged now, but they do not reach this path: the model only
+    engages when given a ForecastContext of recent observations, and this node is handed a
+    single scalar. So a plan's "forecast" is still the present, and `forecastModelVersion`
+    says so rather than letting the number pass for a prediction.
+
+    Closing that is a backend change. It now has SiteForecastService.forecast(siteId,
+    horizonMinutes), which does have the observation history, and this contract already
+    accepts the result: `forecastWbgt30m` is optional and a supplied value wins outright
+    (the early return below), so the agent starts using real forecasts without either side's
+    contract changing.
     """
     request = state["request"]
     if request.forecastWbgt30m is not None:
         return {"forecast_wbgt_30m": request.forecastWbgt30m, "forecast_model_version": None}
 
     try:
-        # Called on an instance, not on the class. Today ForecastService.forecast is a
-        # @staticmethod and either form works; SCRUM-281 (PR #219) turns it into an instance
-        # method, at which point the class-level call raises and this node would quietly
-        # degrade the forecast to null for every draft. An instance call is correct under both,
-        # so this stays working when that lands instead of failing silently on merge day.
+        # A bare ForecastService(), not ForecastService.from_environment(). The trained model
+        # (SCRUM-281) only engages when handed a ForecastContext - recent 15-minute
+        # observations, station id, coordinates - and this node has none of that: it holds one
+        # scalar reading. from_environment() would load and checksum the model bundle on every
+        # draft and then take the same context is None branch back to the persistence baseline,
+        # so it would buy latency and a new failure mode for an identical number.
+        #
+        # Feeding the real forecast in is a backend change, not a change here: it already has
+        # the observation history, and forecastWbgt30m is optional with supplied values winning
+        # (see the early return above), so that lands without touching this contract.
         prediction = ForecastService().forecast(
             metric="wbgt", current_value=request.currentWbgt, horizon_minutes=30)
         request.forecastWbgt30m = prediction.predicted_value

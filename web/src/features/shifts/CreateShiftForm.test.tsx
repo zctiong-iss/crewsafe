@@ -123,7 +123,7 @@ describe("CreateShiftForm", () => {
     await screen.findByLabelText("Starts at");
     await addOneAssignment(user);
 
-    const acclimatisationDay = screen.getByLabelText("Acclimatisation day (optional)");
+    const acclimatisationDay = screen.getByLabelText("Acclimatisation Days (if applicable)");
     await user.type(acclimatisationDay, value);
 
     expect (acclimatisationDay).toBeInvalid();

@@ -129,10 +129,14 @@ then the same request with ml-service started against a bad `BEDROCK_MODEL_ID`, 
 
 ## Known gaps to state rather than hide
 
-- **The 30-minute forecast is not a prediction yet.** `/forecast` is still the persistence
-  baseline, whose output equals the current reading. SCRUM-114's trained model exists (PR #217)
-  but is not wired to the API — that is SCRUM-281. Every response carries
-  `forecastModelVersion: "baseline-1.0.0"` so this is visible rather than implied.
+- **The forecast in a drafted plan is not a prediction yet.** SCRUM-114's trained model and
+  SCRUM-281's wiring are both merged, so `/forecast` *can* now return a real forecast — but
+  only when the caller supplies a `context` of recent observations. The agent does not: it
+  holds a single current reading, so it takes the persistence baseline, whose output equals
+  that reading. Check `forecastModelVersion` on the draft: `baseline-1.0.0` means the number
+  is the present, not a prediction. Closing this is a backend change (it has
+  `SiteForecastService`, which does have the history) and needs no contract change on either
+  side, because `forecastWbgt30m` is already optional with a supplied value winning.
 - **Web has no recommendation UI at all.** The demo is mobile only.
 - **No auth between backend and ml-service.** Fine on localhost, must be closed before anything
   is deployed.

@@ -12,7 +12,7 @@ from agent.contract import AgentDraftRequest, AgentDraftResponse
 from agent.graph import draft_plan, set_bedrock_client
 from bedrock_client import BedrockClient, BedrockAccessError, BedrockModelAccessError
 from models import MitigationRequest, MitigationBatch, ForecastRequest, ForecastPrediction
-from forecast_service import ForecastService
+from forecast_service import ForecastService, ForecastServiceError
 
 # Selected in SCRUM-287 against the §8.6 evaluation set. Kept in sync with the backend's
 # app.bedrock.model-id, which is the same value with the same BEDROCK_MODEL_ID override.
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Initialize Bedrock client at startup
 bedrock_client: BedrockClient = None
+forecast_service = ForecastService.from_environment()
 
 
 @asynccontextmanager
@@ -159,16 +160,17 @@ async def suggest_mitigations(request: MitigationRequest):
     responses={
         200: {"description": "Versioned forecast prediction"},
         422: {"description": "Invalid forecast request parameters"},
+        503: {"description": "Trained model unavailable or inference failed"},
         500: {"description": "Internal server error"},
     },
 )
 async def forecast(request: ForecastRequest):
     """
-    Generate a versioned baseline forecast for WBGT, temperature, or humidity.
+    Generate a versioned trained or baseline forecast.
 
-    This endpoint serves the persistence baseline (naive: next value equals current)
-    that SCRUM-114's trained model must beat. Every prediction is versioned for
-    traceability (US-06 requirement).
+    A WBGT request with recent context uses the checksum-verified trained model.
+    Existing callers that send only the original three fields keep receiving the
+    labelled persistence baseline, so the SCRUM-188 contract is not broken.
 
     Request contract:
     - metric: wbgt, temperature, or humidity
@@ -187,27 +189,33 @@ async def forecast(request: ForecastRequest):
     start_time = time.time()
 
     try:
-        # Invoke persistence baseline forecast (synchronous, <5ms)
-        prediction = ForecastService.forecast(
+        prediction = forecast_service.forecast(
             metric=request.metric,
             current_value=request.current_value,
             horizon_minutes=request.horizon_minutes,
+            context=request.context,
         )
 
         latency_ms = (time.time() - start_time) * 1000
         logger.info(
-            f"Forecast: {request.metric}={prediction.predicted_value:.1f} "
-            f"(horizon={request.horizon_minutes}min, latency={latency_ms:.1f}ms, "
-            f"version={prediction.model_version})"
+            "Forecast completed: metric=%s horizon=%s latency_ms=%.1f version=%s",
+            request.metric,
+            request.horizon_minutes,
+            latency_ms,
+            prediction.model_version,
         )
 
         return prediction
 
+    except ForecastServiceError as error:
+        logger.warning("Forecast request failed safely: code=%s", error.code)
+        status_code = 422 if error.code == "FORECAST_INPUT_INVALID" else 503
+        raise HTTPException(status_code=status_code, detail=error.as_detail())
     except ValueError:
-        logger.exception("Forecast validation failed")
+        logger.warning("Forecast request failed validation")
         raise HTTPException(status_code=422, detail="Invalid forecast request parameters")
     except Exception:
-        logger.exception("Forecast error occurred")
+        logger.error("Forecast inference failed")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
