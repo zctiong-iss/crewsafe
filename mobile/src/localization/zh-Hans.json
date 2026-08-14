@@ -261,6 +261,26 @@
       "THUNDERY_SHOWERS": "雷阵雨"
     }
   },
+  "forecast": {
+    "title": "WBGT 预报",
+    "intro": "本工地的热应激预测。预报不是实测值——每个数值都会附上其可能的波动范围。",
+    "horizon_one": "{{count}} 分钟后",
+    "horizon_other": "{{count}} 分钟后",
+    "rangeLabel": "可能范围",
+    "range": "{{lower}} – {{upper}} °C",
+    "model": "模型 {{version}}",
+    "generatedAt": "预报生成于 {{time}}",
+    "unavailableTitle": "暂无预报",
+    "unavailableBody": "模型仅根据每 15 分钟稳定更新的近期实时读数进行预报。本工地的近期天气数据缺失、延迟或为模拟数据，因此暂不生成预测。当前读数不受影响。",
+    "noBandNote": "预报不显示风险等级。等级由服务器上的高温政策判定，目前尚未对预测值进行评定。",
+    "cardTitle": "预报",
+    "cardValue_one": "{{count}} 分钟后预计 {{value}}°C",
+    "cardValue_other": "{{count}} 分钟后预计 {{value}}°C",
+    "cardUnavailable": "暂无预报",
+    "cardError": "无法加载预报",
+    "cardOpen": "查看",
+    "cardAccessibilityLabel": "查看 WBGT 预报"
+  },
   "inbox": {
     "emptyTitle": "暂无待确认事项",
     "emptyBody": "主管下达的已批准指令将显示在此处。",

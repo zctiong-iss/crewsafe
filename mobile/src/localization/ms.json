@@ -262,6 +262,26 @@
       "THUNDERY_SHOWERS": "Hujan berguruh"
     }
   },
+  "forecast": {
+    "title": "Ramalan WBGT",
+    "intro": "Ramalan tekanan haba bagi tapak ini. Ramalan bukan bacaan sebenar — setiap nilai disertakan julat kemungkinannya.",
+    "horizon_one": "Dalam {{count}} minit",
+    "horizon_other": "Dalam {{count}} minit",
+    "rangeLabel": "Julat berkemungkinan",
+    "range": "{{lower}} – {{upper}} °C",
+    "model": "Model {{version}}",
+    "generatedAt": "Ramalan dibuat {{time}}",
+    "unavailableTitle": "Tiada ramalan buat masa ini",
+    "unavailableBody": "Model hanya meramal daripada bacaan langsung terkini pada kadar tetap 15 minit. Cuaca terkini bagi tapak ini tiada, lewat atau disimulasi, jadi tiada ramalan dibuat. Bacaan semasa tidak terjejas.",
+    "noBandNote": "Jalur risiko tidak ditunjukkan bagi ramalan. Jalur ditentukan oleh dasar haba di pelayan, dan belum dinilai untuk nilai ramalan.",
+    "cardTitle": "Ramalan",
+    "cardValue_one": "{{value}}°C diramal dalam {{count}} minit",
+    "cardValue_other": "{{value}}°C diramal dalam {{count}} minit",
+    "cardUnavailable": "Tiada ramalan buat masa ini",
+    "cardError": "Ramalan tidak dapat dimuatkan",
+    "cardOpen": "Lihat",
+    "cardAccessibilityLabel": "Lihat ramalan WBGT"
+  },
   "inbox": {
     "emptyTitle": "Tiada apa untuk diakui",
     "emptyBody": "Tindakan yang diluluskan oleh penyelia anda akan muncul di sini.",
