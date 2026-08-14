@@ -156,6 +156,45 @@ export type WeatherCondition =
  */
 export type WbgtBand = "BELOW_31" | "31_TO_BELOW_32" | "32_TO_BELOW_33" | "33_AND_ABOVE";
 
+/* --------------------- Forecast WBGT (SCRUM-362 / US-06) --------------------- */
+
+/**
+ * The horizons the backend accepts. Anything else is a 400 from `ForecastController`, so
+ * this is a union rather than `number`: an invalid horizon fails to compile instead of
+ * failing in the user's hand.
+ */
+export type ForecastHorizonMinutes = 30 | 60;
+
+/**
+ * A trained-model WBGT prediction for a site.
+ *
+ * Mirrors `SiteForecastService.SiteForecast` field for field. `predictedValue` and both
+ * interval bounds are `number`, not `string` — the server sends `BigDecimal` as a JSON
+ * number. Typing a numeric wire field as a string is exactly what broke the SCRUM-120
+ * create form, and it went unnoticed because the mock repeated the mistake, so every test
+ * agreed with the mock and disagreed with the server.
+ *
+ * NOTE THE ABSENCE OF A BAND, and do not add a derived one. FR-15 and §12.2 make the
+ * server authoritative for whether a number means rest, and `WbgtBand` above says the same.
+ * A band computed on the device from `predictedValue` would silently diverge the moment a
+ * Safety Manager versions the policy (SCRUM-120) — and would keep rendering the stale
+ * verdict with total confidence. Showing the degrees and the interval is the honest
+ * rendering until the backend evaluates a forecast band (SCRUM-369).
+ */
+export interface SiteForecast {
+  /** Currently always "WBGT". Present because the service is generic over metrics. */
+  metric: string;
+  /** Predicted value in °C. */
+  predictedValue: number;
+  horizonMinutes: ForecastHorizonMinutes;
+  /** The trained bundle that produced this, e.g. "wbgt-lgbm-2026.02". Provenance, FR-16. */
+  modelVersion: string;
+  confidenceIntervalLower: number;
+  confidenceIntervalUpper: number;
+  /** When the model produced this, ISO-8601. Not when the app asked. */
+  generatedAt: string;
+}
+
 export interface PolicyAction {
   /** e.g. REST_10_MIN_HOURLY, HYDRATE_HOURLY, RESCHEDULE_HEAVY_WORK. Open catalogue. */
   code: string;

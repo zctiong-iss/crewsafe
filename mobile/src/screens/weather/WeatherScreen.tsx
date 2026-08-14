@@ -33,6 +33,7 @@ import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import WeatherIcon from "@/components/weather/WeatherIcon";
 import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
+import ForecastCard from "@/components/weather/ForecastCard";
 import FreshnessBadge from "@/components/safety/FreshnessBadge";
 import FreshnessNotice from "@/components/safety/FreshnessNotice";
 
@@ -252,6 +253,11 @@ export default function WeatherScreen() {
             <View style={styles.block}>
               <FreshnessNotice status={conditions.qualityStatus} />
             </View>
+
+            {/* Below the hero and deliberately smaller than it. The measured reading is what
+                this screen is for; a prediction shown at equal weight beside a thermometer
+                invites someone to act on the forecast as though it were observed. */}
+            {selectedSiteId ? <ForecastCard siteId={selectedSiteId} /> : null}
 
             <View
               style={[

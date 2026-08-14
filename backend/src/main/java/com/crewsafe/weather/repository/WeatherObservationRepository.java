@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,6 +17,9 @@ import java.util.UUID;
 public interface WeatherObservationRepository extends JpaRepository<WeatherObservation, UUID> {
 
     Optional<WeatherObservation> findFirstBySiteIdOrderByObservedAtDesc(UUID siteId);
+
+    /** Recent rows used to build the private ML service's ordered forecast context. */
+    List<WeatherObservation> findTop9BySiteIdOrderByObservedAtDesc(UUID siteId);
 
     /**
      * Atomically inserts one observation or reports that its logical identity already

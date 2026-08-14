@@ -8,6 +8,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
@@ -17,6 +18,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import static com.crewsafe.weather.nea.NeaApiException.Reason.HTTP;
@@ -33,6 +35,7 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
  * {@code docs/runbooks/SCRUM-111-weather-ingestion.md}.
  *
  * @author Bryan Phang
+ * @author Justin Chua
  */
 @Component
 @ConditionalOnProperty(prefix = "app.weather.data", name = "mode", havingValue = "live",
@@ -199,9 +202,17 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
                     throw failure;
                 }
 
+                // A rate limit is not a transient blip and does not answer to the same curve.
+                // The server states when it will serve us again; obeying that beats doubling
+                // 250ms three times inside a ten-second penalty and calling it a retry.
+                Duration wait = rateLimitWait(exception).orElse(backoff);
+
+                // `failure` carries the translated kind (HTTP status, transport, or decode);
+                // logging only the attempt number makes a 429, a connection reset and a
+                // malformed payload indistinguishable in the one place they can be told apart.
                 log.warn("data.gov.sg {} attempt {}/{} failed; retrying after {}",
-                        operation, attempt, attempts, backoff);
-                waitBeforeRetry(operation, backoff);
+                        operation, attempt, attempts, wait, failure);
+                waitBeforeRetry(operation, wait);
                 backoff = nextBackoff(backoff);
             }
         }
@@ -231,6 +242,39 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
             return status == 429 || responseException.getStatusCode().is5xxServerError();
         }
         return false;
+    }
+
+    /**
+     * How long to wait when the failure is a rate limit, or empty when it is not one.
+     *
+     * Prefers the server's own {@code Retry-After}, which is the only source that knows the
+     * real window; falls back to the configured rate-limit backoff when the header is absent
+     * or unparseable. data.gov.sg currently states the delay in the error body rather than
+     * the header, so the fallback is the path normally taken — but reading the header first
+     * means a future change to send one is honoured without another incident like this.
+     *
+     * Only the delta-seconds form is parsed. The HTTP-date form is legal but unused here, and
+     * guessing at a malformed value would be worse than the configured default.
+     */
+    private Optional<Duration> rateLimitWait(RestClientException exception) {
+        if (!(exception instanceof RestClientResponseException responseException)
+                || responseException.getStatusCode().value() != 429) {
+            return Optional.empty();
+        }
+        String retryAfter = responseException.getResponseHeaders() == null
+                ? null
+                : responseException.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        if (StringUtils.hasText(retryAfter)) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                if (seconds > 0) {
+                    return Optional.of(Duration.ofSeconds(seconds));
+                }
+            } catch (NumberFormatException ignored) {
+                // Falls through to the configured default rather than failing the poll.
+            }
+        }
+        return Optional.of(properties.getRateLimitBackoff());
     }
 
     private void waitBeforeRetry(String operation, Duration backoff) {

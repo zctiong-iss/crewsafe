@@ -66,10 +66,7 @@ public class PolicyEngineService {
     ) {
         validateInputs(workerId, currentWbgt, workIntensity, acclimatisationDay);
 
-        PolicyVersion policy = policyVersionRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE)
-                .orElseThrow(() -> new NoSuchElementException(
-                        "No policy configured for site " + siteId
-                ));
+        PolicyVersion policy = resolveActivePolicy(siteId);
 
         AcclimatisationLevel level = AcclimatisationLevel.fromDay(acclimatisationDay);
         BigDecimal threshold = policy.getThreshold(level, workIntensity);
@@ -121,10 +118,9 @@ public class PolicyEngineService {
 
         if (assignments.isEmpty()) {
             validateWbgt(currentWbgt);
-            // Still require a configured policy for the site, matching evaluate()'s
+            // Still require a resolvable policy for the site, matching evaluate()'s
             // behaviour, even though an empty assignment list needs nothing else from it.
-            PolicyVersion policy = policyVersionRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE)
-                    .orElseThrow(() -> new NoSuchElementException("No policy configured for site " + siteId));
+            PolicyVersion policy = resolveActivePolicy(siteId);
             WbgtBand band = WbgtBand.classify(BigDecimal.valueOf(currentWbgt));
             return new PolicyDecision(policy.getVersionLabel(), band, band, List.of(), List.of());
         }
@@ -140,6 +136,25 @@ public class PolicyEngineService {
                 .toList();
 
         return mergeByActionCode(perWorker);
+    }
+
+    /**
+     * The site's own {@code ACTIVE} version if it has one; otherwise the one company-wide
+     * default (V16, {@code siteId IS NULL}) — MOM's published thresholds, seeded once and
+     * never edited through the application. A site that wants something different doesn't
+     * edit the default, it configures and activates its own version, which then always takes
+     * precedence here.
+     *
+     * @throws NoSuchElementException if the site has no version of its own and the default is
+     *                                 somehow not ACTIVE either (should not happen in practice —
+     *                                 V16 seeds it as ACTIVE and nothing in the application ever
+     *                                 deactivates it)
+     */
+    private PolicyVersion resolveActivePolicy(UUID siteId) {
+        return policyVersionRepository.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE)
+                .or(() -> policyVersionRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
+                .orElseThrow(() -> new NoSuchElementException(
+                        "No policy configured for site " + siteId + " and no company default is active"));
     }
 
     private static WorkIntensity toWorkIntensity(

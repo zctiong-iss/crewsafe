@@ -3,7 +3,7 @@ accounts:
   dev:
     - key: demo-worker
       username: synthetic-worker@synthetic.crewsafe.invalid
-      display_name: Synthetic Demo Worker
+      display_name: Synthetic Worker Alex Tan
       role: WORKER
       site_codes: [bishan]
       group: synthetic-test-users
@@ -11,7 +11,7 @@ accounts:
       cognito_sub: a9cae59c-a031-70dc-b0a7-10670f0ce4d3
     - key: demo-supervisor
       username: synthetic-supervisor@synthetic.crewsafe.invalid
-      display_name: Synthetic Demo Supervisor
+      display_name: Synthetic Supervisor Mei Ling
       role: SUPERVISOR
       site_codes: [bishan, campus]
       group: synthetic-test-users
@@ -19,9 +19,41 @@ accounts:
       cognito_sub: f98a659c-20f1-7066-ffe7-e14cb9a329a8
     - key: demo-safety-manager
       username: synthetic-safety-manager@synthetic.crewsafe.invalid
-      display_name: Synthetic Demo Safety Manager
+      display_name: Synthetic Safety Manager Ravi Kumar
       role: SAFETY_MANAGER
       site_codes: [bishan, campus]
       group: synthetic-test-users
       desired_status: enabled
       cognito_sub: f9ea754c-4091-70a1-c99a-fd783a6f5373
+    - key: demo-worker-2
+      username: synthetic-worker-2@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Farah Yusof
+      role: WORKER
+      site_codes: [campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 895af5dc-a011-706e-cb12-8df145988c3d
+    - key: demo-worker-3
+      username: synthetic-worker-3@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Wei Jie Lim
+      role: WORKER
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 89eac5fc-70e1-7042-25e7-8afbf2289805
+    - key: demo-worker-4
+      username: synthetic-worker-4@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Priya Nair
+      role: WORKER
+      site_codes: [campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 895a65ec-e081-70c6-a488-255f0953e3cb
+    - key: demo-worker-5
+      username: synthetic-worker-5@synthetic.crewsafe.invalid
+      display_name: Synthetic Worker Hafiz Rahman
+      role: WORKER
+      site_codes: [bishan, campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 091ab5fc-70b1-707b-5923-13d863b7ef21

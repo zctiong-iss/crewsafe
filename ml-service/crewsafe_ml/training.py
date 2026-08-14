@@ -123,6 +123,9 @@ def train_and_package(
     manifest = {
         "schema_version": 2,
         "model_version": version,
+        # Training never grants production approval. Promotion is a separate,
+        # reviewed action after an untouched-period evaluation.
+        "approved_for_inference": False,
         "feature_version": FEATURE_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_commit": source_commit or _current_commit(),
