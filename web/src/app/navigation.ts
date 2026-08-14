@@ -26,6 +26,7 @@ export const NAVIGATION: readonly NavItem[] = [
   { to: "/audit", label: "Audit Trail" },
   { to: "/settings", label: "Settings" },
   { to: "/conditions", label: "Weather Conditions" },
+  { to: "/policy", label: "Heat Policy" },
 ];
 
 export function navigationFor(role: Role): NavItem[] {

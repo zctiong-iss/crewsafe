@@ -1,6 +1,7 @@
-/** @author Tang Chee Seng (with assistance from Claude) */
+/** @author Jemilin Beulah, Tang Chee Seng */
 
 import { http, HttpResponse } from "msw";
+import type { PolicyVersion } from "@/api/policy";
 
 const BASE = "http://localhost:8080";   // matching VITE_API_BASE_URL stubbed in setup.ts
 
@@ -10,6 +11,52 @@ const errorBody = (error: string, message: string) => ({
   message,
   requestId: "test-request-id",
 });
+
+// Policy versions for site-1: one of each status, so tests can exercise the full catalogue
+// without needing a freshly-seeded site's trivial single-ACTIVE-version case.
+const POLICY_THRESHOLDS = {
+  wbgtThresholdUnacclimatisedLight: 25, wbgtThresholdUnacclimatisedModerate: 24, wbgtThresholdUnacclimatisedHeavy: 23,
+  wbgtThresholdPartialLight: 26, wbgtThresholdPartialModerate: 25, wbgtThresholdPartialHeavy: 24,
+  wbgtThresholdFullLight: 28, wbgtThresholdFullModerate: 27, wbgtThresholdFullHeavy: 26,
+};
+
+const SUPERSEDED_POLICY_VERSION: PolicyVersion = {
+  id: "policy-superseded", siteId: "site-1", versionLabel: "MOM-WBGT-2026.1",
+  source: "MOM Heat Stress Advisory 2026", effectiveDate: "2026-01-01", status: "SUPERSEDED",
+  ...POLICY_THRESHOLDS, wbgtEmergencyStop: 33, notes: null, createdBy: "u-1",
+  createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
+  activatedAt: "2026-01-01T00:00:00Z", supersededAt: "2026-07-01T00:00:00Z",
+};
+
+const ACTIVE_POLICY_VERSION: PolicyVersion = {
+  id: "policy-active", siteId: "site-1", versionLabel: "MOM-WBGT-2026.2",
+  source: "MOM Heat Stress Advisory, revised July 2026", effectiveDate: "2026-07-01", status: "ACTIVE",
+  ...POLICY_THRESHOLDS, wbgtEmergencyStop: 33, notes: "Revised after mid-year review.", createdBy: "u-1",
+  createdAt: "2026-06-20T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z",
+  activatedAt: "2026-07-01T00:00:00Z", supersededAt: null,
+};
+
+const DRAFT_POLICY_VERSION: PolicyVersion = {
+  id: "policy-draft", siteId: "site-1", versionLabel: "MOM-WBGT-2026.3",
+  source: "MOM Heat Stress Advisory, draft revision", effectiveDate: "2026-09-01", status: "DRAFT",
+  ...POLICY_THRESHOLDS, wbgtEmergencyStop: 33, notes: null, createdBy: "u-1",
+  createdAt: "2026-08-10T00:00:00Z", updatedAt: "2026-08-10T00:00:00Z",
+  activatedAt: null, supersededAt: null,
+};
+
+// site-2's own catalogue, distinct from site-1's, so a test can tell which one is on screen.
+const SITE_2_ACTIVE_POLICY_VERSION: PolicyVersion = {
+  id: "policy-site-2-active", siteId: "site-2", versionLabel: "NUS-WBGT-2026.1",
+  source: "NUS Campus Risk Assessment 2026", effectiveDate: "2026-02-01", status: "ACTIVE",
+  ...POLICY_THRESHOLDS, wbgtEmergencyStop: 32, notes: null, createdBy: "u-1",
+  createdAt: "2026-02-01T00:00:00Z", updatedAt: "2026-02-01T00:00:00Z",
+  activatedAt: "2026-02-01T00:00:00Z", supersededAt: null,
+};
+
+const POLICY_VERSIONS_BY_SITE: Record<string, PolicyVersion[]> = {
+  "site-1": [ACTIVE_POLICY_VERSION, DRAFT_POLICY_VERSION, SUPERSEDED_POLICY_VERSION],
+  "site-2": [SITE_2_ACTIVE_POLICY_VERSION],
+};
 
 export const handlers = [
 
@@ -43,13 +90,13 @@ export const handlers = [
 
     if (siteId === "unauthorised-worksite")
         return HttpResponse.json(errorBody(
-            "Forbidden", 
-            "Access denied. You are not accessing your assigned worksite."), 
+            "Forbidden",
+            "Access denied. You are not accessing your assigned worksite."),
             {
             status: 403
             }
         );
-    
+
     if (new Date(body.endsAt) <= new Date(body.startsAt)){
     return HttpResponse.json(errorBody(
         "Bad Request",
@@ -59,10 +106,10 @@ export const handlers = [
         }
         );
     }
-    
+
     return HttpResponse.json(
-        { id: "shift-1", 
-            siteId, 
+        { id: "shift-1",
+            siteId,
             status: "PLANNED", ...body }, { status: 201 });
     }),
 
@@ -89,5 +136,39 @@ http.get(`${BASE}/api/v1/sites`, () =>
     { id: "site-1", name: "Bishan Park Landscaping", latitude: 1.3622, longitude: 103.8455, timezone: "Asia/Singapore" },
     { id: "site-2", name: "NUS Campus Maintenance",  latitude: 1.2966, longitude: 103.7764, timezone: "Asia/Singapore" },
   ]),
-)
+),
+
+http.get(`${BASE}/api/v1/sites/:siteId/policy-versions`, ({ params }) =>
+  HttpResponse.json(POLICY_VERSIONS_BY_SITE[params.siteId as string] ?? []),
+),
+
+http.get(`${BASE}/api/v1/sites/:siteId/policy-versions/active`, ({ params }) => {
+  const found = (POLICY_VERSIONS_BY_SITE[params.siteId as string] ?? [])
+    .find((v) => v.status === "ACTIVE");
+  return found
+    ? HttpResponse.json(found)
+    : HttpResponse.json(errorBody("Not Found", "No active policy version for this site."), { status: 404 });
+}),
+
+http.post(`${BASE}/api/v1/sites/:siteId/policy-versions`, async ({ params, request }) => {
+  const body = await request.json() as Record<string, unknown>;
+  return HttpResponse.json(
+    {
+      id: "policy-created", siteId: params.siteId, status: "DRAFT",
+      createdBy: "u-1", createdAt: "2026-08-13T00:00:00Z", updatedAt: "2026-08-13T00:00:00Z",
+      activatedAt: null, supersededAt: null, notes: null,
+      ...body,
+    },
+    { status: 201 },
+  );
+}),
+
+http.post(`${BASE}/api/v1/sites/:siteId/policy-versions/:versionId/activate`, ({ params }) => {
+  const version = (POLICY_VERSIONS_BY_SITE[params.siteId as string] ?? [])
+    .find((v) => v.id === params.versionId);
+  if (!version) {
+    return HttpResponse.json(errorBody("Not Found", "No such policy version."), { status: 404 });
+  }
+  return HttpResponse.json({ ...version, status: "ACTIVE", activatedAt: "2026-08-13T00:00:00Z" });
+}),
 ];

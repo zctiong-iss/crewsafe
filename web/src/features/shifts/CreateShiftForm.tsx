@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng (with assistance from Claude) */
+/** @author Jemilin Beulah, Tang Chee Seng */
 
 import { useEffect, useState, type FormEvent } from "react";
 import DatePicker from "react-datepicker";
@@ -19,6 +19,7 @@ import { WorkIntensitySegmented } from "./WorkIntensitySegmented";
 import "./CreateShiftForm.css";
 import { Link } from "react-router-dom";
 import { type Site } from "@/api/identity";
+import { useSelectedSite } from "@/site/useSelectedSite";
 
 interface AssignmentRow {
   workerId: string;
@@ -39,10 +40,11 @@ type Submit =
   | { status: "error"; message: string; requestId: string | null };
 
 export function CreateShiftForm({ sites }: { sites: Site[] }) {
+  const { siteId: currentSiteId } = useSelectedSite();
   const [workersLoad, setWorkersLoad] = useState<WorkersLoad>({ status: "loading" });
   const [startsAt, setStartsAt] = useState<Date | null>(null);
   const [endsAt, setEndsAt] = useState<Date | null>(null);
-  const [siteId, setSiteId] = useState(sites[0]?.id ?? "");
+  const [siteId, setSiteId] = useState(currentSiteId ?? sites[0]?.id ?? "");
   const [rows, setRows] = useState<AssignmentRow[]>([]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submit, setSubmit] = useState<Submit>({ status: "idle" });
