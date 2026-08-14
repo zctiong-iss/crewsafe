@@ -61,6 +61,28 @@ done
 rg -q -F -- '-z "$APPLE_DIST_CERTIFICATE_P12"' "$workflow"
 rg -q -F -- 'exit 1' "$workflow"
 
+# --- unsigned-device profile assertions (SCRUM-350 follow-up: a real ARM64 .ipa without any
+#     Apple Developer Program dependency, to unblock Corellium dynamic scanning) ---
+
+for needle in \
+  "inputs.ios_profile == 'unsigned-device'" \
+  '-sdk iphoneos' \
+  'CODE_SIGNING_ALLOWED=NO' \
+  'CODE_SIGNING_REQUIRED=NO' \
+  'Payload' \
+  'mobile-ios-unsigned-device-'
+do
+  rg -q -F -- "$needle" "$workflow"
+done
+
+# The entire point of this profile is zero Apple Developer Program dependency -- the block
+# implementing it must never reference the ad-hoc profile's Apple signing secrets.
+unsigned_device_section="$(rg -A80 -F -- "inputs.ios_profile == 'unsigned-device'" "$workflow" | rg -B80 -m1 -- 'Upload unsigned device IPA artifact')"
+if echo "$unsigned_device_section" | rg -q -F -- 'secrets.APPLE_'; then
+  echo "FAIL: unsigned-device profile references an Apple signing secret -- defeats its purpose" >&2
+  exit 1
+fi
+
 # --- User Story 3 (guardrails + runbook) assertions ---
 
 # (a) manual-only trigger — no push/pull_request anywhere in the file.
