@@ -6,7 +6,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Runs live ingestion at the configured cadence without terminating future runs on failure. */
+/**
+ * Runs live ingestion at the configured cadence without terminating future runs on failure.
+ *
+ * @author Justin Chua
+ */
 @Component
 @ConditionalOnProperty(prefix = "app.weather.ingestion", name = "enabled", havingValue = "true")
 @RequiredArgsConstructor
@@ -28,7 +32,12 @@ public class WeatherIngestionScheduler {
             // A scheduled task stops running forever if its exception escapes. Record the
             // failure and let Spring invoke the next interval, where the DB constraint
             // makes a retry safe.
-            log.error("nea_weather_ingestion_failed_retry_scheduled");
+            //
+            // The exception is passed, not just the marker. Without it this line says only
+            // that ingestion failed, and every cause — an unreachable data.gov.sg, a rejected
+            // API key, one metric of four returning a malformed record — looks identical in
+            // the log. That turned a diagnosable failure into a guessing game.
+            log.error("nea_weather_ingestion_failed_retry_scheduled", failure);
         }
     }
 }

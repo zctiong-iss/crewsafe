@@ -57,26 +57,43 @@ jobs:
           fi
           printf '%s' "$VPN_OVPN_CONFIG" > "$RUNNER_TEMP/corellium.ovpn"
 
-      # Backgrounded via --daemon; polls for a tun interface to appear rather than a fixed
+      # Backgrounded via --daemon; polls for a tun/tap interface to appear rather than a fixed
       # sleep, bounded to 60s so a real connection failure doesn't just hang until the job
-      # timeout.
+      # timeout. The log file is pre-created and world-readable BEFORE openvpn (root) writes
+      # to it, and its content is printed inline here regardless of outcome -- a previous run
+      # of this diagnostic lost the only evidence of a connection failure to a permission
+      # mismatch (root-owned log, non-root upload-artifact step) and to relying solely on the
+      # artifact instead of also surfacing it in the live log.
+      #
+      # Confirmed via a real run (2026-08-14): Corellium's .ovpn config uses `dev tap`, not
+      # `dev tun` -- the interface that comes up is tap0. An earlier version of this check only
+      # matched tun[0-9]*, which reported a false TUNNEL_UP=false even though OpenVPN's own log
+      # showed "Initialization Sequence Completed" (its actual success signal) in under a
+      # second. Match both prefixes so this doesn't happen again.
       - name: Connect to Corellium VPN
         run: |
+          touch "$RUNNER_TEMP/openvpn.log"
+          chmod 666 "$RUNNER_TEMP/openvpn.log"
           sudo openvpn --config "$RUNNER_TEMP/corellium.ovpn" \
             --daemon --log "$RUNNER_TEMP/openvpn.log"
           elapsed=0
-          until ip -o link show | grep -q 'tun[0-9]*:' || [[ "$elapsed" -ge 60 ]]; do
+          until ip -o link show | grep -qE '(tun|tap)[0-9]*:' || [[ "$elapsed" -ge 60 ]]; do
             sleep 2
             elapsed=$((elapsed + 2))
           done
-          if ip -o link show | grep -q 'tun[0-9]*:'; then
+          if ip -o link show | grep -qE '(tun|tap)[0-9]*:'; then
             echo "TUNNEL_UP=true" >> "$GITHUB_ENV"
-            ip -o link show | grep 'tun[0-9]*:'
+            ip -o link show | grep -E '(tun|tap)[0-9]*:'
           else
             echo "TUNNEL_UP=false" >> "$GITHUB_ENV"
-            echo "::error::No tun interface appeared within 60s -- VPN connection likely failed. See openvpn.log in the uploaded artifact."
+            echo "::error::No tun/tap interface appeared within 60s -- VPN connection likely failed."
           fi
+          echo "--- openvpn.log ---"
+          cat "$RUNNER_TEMP/openvpn.log"
 
+      # Printed to both the step summary and stdout -- the summary isn't fetchable via `gh run
+      # view --log`, and a previous run's actual ping/SSH results were invisible from the CLI
+      # log for exactly that reason.
       - name: Check reachability to the device over the tunnel
         if: always()
         run: |
@@ -99,29 +116,47 @@ jobs:
             else
               echo "| (skipped -- tunnel never came up) | — |"
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # Verified against usbfluxd's own configure.ac: --with-static-libplist defaults to
+      # "yes" and expects a .a archive at a path derived from pkg-config, which Ubuntu's
+      # libplist-dev package doesn't ship (shared .so only) -- confirmed by a real build
+      # failure in a previous run of this diagnostic ("configure: error: The file
+      # /libplist-2.0.a ... does not exist"). --without-static-libplist falls back to
+      # dynamic linking, which the installed dev package does provide.
       - name: Build usbfluxd from source
         if: always()
         run: |
           git clone --depth 1 https://github.com/corellium/usbfluxd.git "$RUNNER_TEMP/usbfluxd"
           cd "$RUNNER_TEMP/usbfluxd"
-          ./autogen.sh
+          ./autogen.sh --without-static-libplist
           make
           sudo make install
           echo "USBFLUXD_BUILT=true" >> "$GITHUB_ENV"
 
       # -f (foreground) run in the background via nohup/&, since this step just needs to
       # start it and move on to the actual device-visibility check.
+      #
+      # Verified against usbfluxd's own README (Usage section): it redirects the *existing*
+      # usbmuxd socket, it does not replace it -- "usbmuxd-aware apps ... need to be restarted
+      # so they will talk to usbfluxd instead of the original usbmuxd," and Linux Usage
+      # explicitly starts usbmuxd first. A previous run stopped usbmuxd before starting
+      # usbfluxd (assuming usbfluxd was a drop-in replacement) and usbfluxd exited immediately:
+      # "Socket file '/var/run/usbmuxd' is not present. Original usbmuxd is not running or
+      # absent. Exiting." Ensure it's running instead.
       - name: Start usbfluxd bridging the remote device
         if: env.TUNNEL_UP == 'true' && env.USBFLUXD_BUILT == 'true'
         run: |
-          sudo systemctl stop usbmuxd 2>/dev/null || true
+          sudo systemctl start usbmuxd
+          touch "$RUNNER_TEMP/usbfluxd.log"
+          chmod 666 "$RUNNER_TEMP/usbfluxd.log"
           # shellcheck disable=SC2024 # the redirect target is $RUNNER_TEMP, writable by the
           # runner user regardless of sudo -- only usbfluxd itself needs root.
           sudo nohup usbfluxd -f -v -r "${DEVICE_VPN_IP}:${REMOTE_PORT}" \
             > "$RUNNER_TEMP/usbfluxd.log" 2>&1 &
           sleep 8
+          echo "--- usbfluxd.log ---"
+          cat "$RUNNER_TEMP/usbfluxd.log"
 
       - name: Check whether the device appears as locally attached
         if: always()
@@ -137,7 +172,7 @@ jobs:
               idevice_id -l 2>&1 || echo "(idevice_id found nothing / errored)"
               echo '```'
             fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload diagnostic logs
         if: always()

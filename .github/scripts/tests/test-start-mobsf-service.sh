@@ -31,6 +31,16 @@ cat >"$stub_bin/docker" <<'STUB'
 set -euo pipefail
 printf '%s\n' "$*" >>"$DOCKER_STUB_LOG"
 case "$1" in
+  pull)
+    if [[ "${DOCKER_STUB_PULL_FAIL:-0}" == 1 ]]; then
+      echo "docker: stub pull failure" >&2
+      exit 1
+    fi
+    # Real `docker pull` prints multi-line progress to stdout -- the script must discard
+    # this (>/dev/null), not capture it, since capturing it alongside `docker run`'s output
+    # is exactly what corrupted $GITHUB_ENV in a real run.
+    printf 'Pulling from opensecurity/mobile-security-framework-mobsf\nStatus: Downloaded newer image\n'
+    ;;
   run)
     if [[ "${DOCKER_STUB_RUN_FAIL:-0}" == 1 ]]; then
       echo "docker: stub run failure" >&2
@@ -104,6 +114,32 @@ else
   fail 'does not use -p port mapping (meaningless/redundant under --network host)'
 fi
 
+# --- Regression guard: docker pull happens, before docker run, and its multi-line stdout
+#     never ends up in the output env file (this exact corruption broke a real run) ---
+TESTS_RUN=$((TESTS_RUN + 1))
+if grep -qF -- "pull $MOBSF_IMAGE" "$DOCKER_STUB_LOG"; then
+  pass 'calls docker pull with MOBSF_IMAGE'
+else
+  fail 'calls docker pull with MOBSF_IMAGE'
+fi
+
+TESTS_RUN=$((TESTS_RUN + 1))
+pull_line="$(grep -n -F -- 'pull' "$DOCKER_STUB_LOG" | head -1 | cut -d: -f1)"
+run_line="$(grep -n -F -- 'run ' "$DOCKER_STUB_LOG" | head -1 | cut -d: -f1)"
+if [[ -n "$pull_line" && -n "$run_line" && "$pull_line" -lt "$run_line" ]]; then
+  pass 'docker pull runs before docker run'
+else
+  fail 'docker pull runs before docker run'
+fi
+
+TESTS_RUN=$((TESTS_RUN + 1))
+if grep -qF -- 'MOBSF_CONTAINER_ID=abc123' "$out1" \
+  && ! grep -q 'Pulling from' "$out1"; then
+  pass 'output env file has a clean single-line MOBSF_CONTAINER_ID (no pull-progress noise)'
+else
+  fail 'output env file has a clean single-line MOBSF_CONTAINER_ID (no pull-progress noise)'
+fi
+
 # --- The API key value must never be echoed to stdout/stderr, only written to the sink ---
 stdout_and_stderr="$WORK/combined-output.log"
 reset_docker_log
@@ -152,6 +188,23 @@ if [[ ! -e "$out4" ]]; then
   pass 'writes nothing to the output env file when the container fails to start'
 else
   fail 'writes nothing to the output env file when the container fails to start'
+fi
+
+# --- docker pull failing fails closed, and docker run is never attempted ---
+reset_docker_log
+out4b="$WORK/env4b.sh"
+DOCKER_STUB_PULL_FAIL=1 expect 1 'exits non-zero when the image pull fails' "$SCRIPT" "$out4b"
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ ! -e "$out4b" ]]; then
+  pass 'writes nothing to the output env file when the image pull fails'
+else
+  fail 'writes nothing to the output env file when the image pull fails'
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+if ! grep -qF -- 'run ' "$DOCKER_STUB_LOG"; then
+  pass 'never calls docker run when the image pull fails'
+else
+  fail 'never calls docker run when the image pull fails'
 fi
 
 # --- Readiness never appearing within the bounded timeout fails closed ---

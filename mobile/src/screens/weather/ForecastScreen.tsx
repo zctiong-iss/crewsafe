@@ -1,0 +1,248 @@
+/**
+ * The trained-model WBGT forecast for a site, at 30 and 60 minutes (SCRUM-365 / US-06).
+ *
+ * ── WHAT THIS SCREEN IS CAREFUL ABOUT ───────────────────────────────────────────────────
+ * A forecast that looks like a measurement is worse than no forecast, because it borrows the
+ * authority of a thermometer. Three things keep them apart here: the horizon is stated on
+ * every value, the interval is rendered beside every point estimate rather than behind a
+ * disclosure, and the model version and generation time are on screen rather than in a log.
+ *
+ * The interval is not decoration and is never omitted. A model that is unsure must *look*
+ * unsure — a bare number at one decimal place reads as precision the prediction does not
+ * have, and this is a screen someone may move a crew on.
+ *
+ * ── WHY THERE IS NO BAND HERE ───────────────────────────────────────────────────────────
+ * `SiteForecast` carries a predicted value and no band, and none is derived on the device.
+ * FR-15 and §12.2 make the server authoritative for whether a number means rest; a client
+ * that computed Green/Amber/Red from `predictedValue` would diverge silently the moment a
+ * Safety Manager versions the policy (SCRUM-120) and would keep showing the superseded
+ * verdict with full confidence. SCRUM-369 adds the evaluated band server-side. Until it
+ * lands, degrees and interval is the honest rendering — not a degraded one — and the screen
+ * says so rather than leaving the absence to be read as a bug.
+ *
+ * ── WHY UNAVAILABLE IS QUIET ────────────────────────────────────────────────────────────
+ * `SiteForecastService` declines on seven ordinary conditions, several of which (stale or
+ * simulated weather, a gap off the 15-minute cadence) are routine. That state gets an
+ * explanation, not an error banner. Only a genuine failure gets the banner, which is what
+ * keeps the banner worth reading.
+ *
+ * @author Justin Chua
+ */
+import { useCallback } from "react";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import type { RouteProp } from "@react-navigation/native";
+import { useRoute } from "@react-navigation/native";
+import { s, vs } from "react-native-size-matters";
+
+import AppSafeView from "@/components/views/AppSafeView";
+import AppText from "@/components/texts/AppText";
+import AppButton from "@/components/buttons/AppButton";
+import AppLoader from "@/components/feedback/AppLoader";
+import MessageBanner from "@/components/feedback/MessageBanner";
+
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import {
+  FORECAST_HORIZONS,
+  forecastSiteChanged,
+  loadForecast,
+  type HorizonState,
+} from "@/store/reducers/forecastSlice";
+import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
+import { formatTime } from "@/helpers/dateTime";
+import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
+import { useTheme } from "@/theme/ThemeProvider";
+import type { ForecastHorizonMinutes } from "@/types/domain";
+import type { WeatherStackParamList } from "@/navigation/types";
+
+export default function ForecastScreen() {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const dispatch = useAppDispatch();
+  const { siteId } = useRoute<RouteProp<WeatherStackParamList, "Forecast">>().params;
+
+  const { horizons, refreshing } = useAppSelector((state) => state.forecast);
+
+  const load = useCallback(
+    (isRefresh: boolean) => {
+      // Points the slice at this route's site first, so anything held for another one is
+      // discarded before a single number is drawn under this site's name.
+      dispatch(forecastSiteChanged(siteId));
+      FORECAST_HORIZONS.forEach((horizonMinutes) => {
+        void dispatch(loadForecast({ siteId, horizonMinutes, refreshing: isRefresh }));
+      });
+    },
+    [dispatch, siteId],
+  );
+
+  // Fires on focus and on resume as well as on an interval — a forecast left on screen while
+  // the phone was in a pocket is the one most likely to have expired.
+  useAutoRefresh(
+    useCallback(() => load(false), [load]),
+    REFRESH_INTERVALS.WEATHER_MS,
+  );
+
+  return (
+    <AppSafeView>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load(true)}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary]}
+          />
+        }
+      >
+        <AppText variant="body" tone="secondary">
+          {t("forecast.intro")}
+        </AppText>
+
+        {FORECAST_HORIZONS.map((horizonMinutes) => (
+          <HorizonCard
+            key={horizonMinutes}
+            horizonMinutes={horizonMinutes}
+            state={horizons[horizonMinutes]}
+            onRetry={() => load(false)}
+          />
+        ))}
+
+        {/* Stated rather than left as an absence. A supervisor who knows the app shows bands
+            elsewhere will otherwise read the missing band as something broken, and the true
+            answer — nobody has evaluated one for a predicted value yet — is more useful. */}
+        <AppText variant="caption" tone="secondary" style={styles.footnote}>
+          {t("forecast.noBandNote")}
+        </AppText>
+      </ScrollView>
+    </AppSafeView>
+  );
+}
+
+function HorizonCard({
+  horizonMinutes,
+  state,
+  onRetry,
+}: {
+  horizonMinutes: ForecastHorizonMinutes;
+  state: HorizonState;
+  onRetry: () => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const theme = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+        { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+      ]}
+    >
+      <AppText variant="label">{t("forecast.horizon", { count: horizonMinutes })}</AppText>
+
+      {state.status === "loading" || state.status === "idle" ? (
+        <View style={styles.cardBody}>
+          <AppLoader message={t("common.loading")} />
+        </View>
+      ) : null}
+
+      {state.status === "ready" && state.forecast ? (
+        <View style={styles.cardBody}>
+          <View style={styles.valueRow}>
+            <AppText variant="display">{state.forecast.predictedValue.toFixed(1)}</AppText>
+            <AppText variant="subtitle" tone="secondary" style={styles.unit}>
+              °C
+            </AppText>
+          </View>
+
+          {/* Always present, never behind a tap. The uncertainty is part of the reading. */}
+          <AppText variant="caption" tone="secondary">
+            {t("forecast.rangeLabel")}
+          </AppText>
+          <AppText variant="subtitle">
+            {t("forecast.range", {
+              lower: state.forecast.confidenceIntervalLower.toFixed(1),
+              upper: state.forecast.confidenceIntervalUpper.toFixed(1),
+            })}
+          </AppText>
+
+          <View style={styles.provenance}>
+            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+              {t("forecast.model", { version: state.forecast.modelVersion })}
+            </AppText>
+            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+              {t("forecast.generatedAt", {
+                time: formatTime(state.forecast.generatedAt, i18n.language),
+              })}
+            </AppText>
+          </View>
+        </View>
+      ) : null}
+
+      {state.status === "unavailable" ? (
+        <View style={styles.cardBody}>
+          <AppText variant="subtitle">{t("forecast.unavailableTitle")}</AppText>
+          <AppText variant="body" tone="secondary" style={styles.unavailableBody}>
+            {t("forecast.unavailableBody")}
+          </AppText>
+        </View>
+      ) : null}
+
+      {state.status === "error" ? (
+        <View style={styles.cardBody}>
+          <MessageBanner
+            message={t(state.errorKey ?? "errors.unknown")}
+            tone="danger"
+            requestId={state.requestId}
+          />
+          <AppButton title={t("common.retry")} onPress={onRetry} style={styles.retry} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  content: {
+    flexGrow: 1,
+    paddingHorizontal: sharedPaddingHorizontal,
+    paddingVertical: vs(12),
+  },
+  card: {
+    padding: s(16),
+    marginTop: vs(12),
+  },
+  cardBody: {
+    marginTop: vs(8),
+  },
+  valueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    // Wraps rather than clips once the text setting makes the pair too wide.
+    flexWrap: "wrap",
+    marginBottom: vs(6),
+  },
+  unit: {
+    marginStart: s(4),
+  },
+  provenance: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: vs(12),
+  },
+  metaItem: {
+    marginEnd: s(14),
+    marginTop: vs(2),
+  },
+  unavailableBody: {
+    marginTop: vs(6),
+  },
+  retry: {
+    marginTop: vs(12),
+  },
+  footnote: {
+    marginTop: vs(20),
+  },
+});

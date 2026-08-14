@@ -261,6 +261,26 @@
       "THUNDERY_SHOWERS": "Thundery showers"
     }
   },
+  "forecast": {
+    "title": "WBGT forecast",
+    "intro": "Predicted heat stress for this site. A forecast is not a measurement — each value is shown with the range it is likely to fall in.",
+    "horizon_one": "In {{count}} minute",
+    "horizon_other": "In {{count}} minutes",
+    "rangeLabel": "Likely range",
+    "range": "{{lower}} – {{upper}} °C",
+    "model": "Model {{version}}",
+    "generatedAt": "Forecast made {{time}}",
+    "unavailableTitle": "No forecast right now",
+    "unavailableBody": "The model only forecasts from recent, live readings on a steady 15-minute cadence. Recent weather for this site is missing, delayed or simulated, so no prediction is being made. The current reading is unaffected.",
+    "noBandNote": "No risk band is shown for a forecast. Bands are decided by the heat policy on the server, and one has not yet been evaluated for predicted values.",
+    "cardTitle": "Forecast",
+    "cardValue_one": "{{value}}°C predicted in {{count}} minute",
+    "cardValue_other": "{{value}}°C predicted in {{count}} minutes",
+    "cardUnavailable": "No forecast right now",
+    "cardError": "Forecast could not be loaded",
+    "cardOpen": "View",
+    "cardAccessibilityLabel": "View the WBGT forecast"
+  },
   "inbox": {
     "emptyTitle": "Nothing to acknowledge",
     "emptyBody": "Approved actions from your supervisor will appear here.",

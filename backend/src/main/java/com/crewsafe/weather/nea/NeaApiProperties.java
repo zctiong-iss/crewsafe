@@ -44,9 +44,25 @@ public class NeaApiProperties {
     @NotNull
     private Duration maxBackoff = Duration.ofSeconds(2);
 
+    /**
+     * How long to wait after a 429, when the response does not say.
+     *
+     * Separate from {@link #initialBackoff} because a rate limit is not a transient blip and
+     * does not respond to the same curve. data.gov.sg answers an anonymous caller with
+     * "try again in 10 seconds"; the exponential schedule above tops out at two, so all three
+     * attempts land inside the penalty window and every one of them is spent failing. Twelve
+     * seconds clears the documented window with margin.
+     *
+     * The real remedy is an API key ({@link #apiKey}), which raises the limit. This keeps
+     * ingestion working without one instead of failing every cycle.
+     */
+    @NotNull
+    private Duration rateLimitBackoff = Duration.ofSeconds(12);
+
     @AssertTrue(message = "NEA retry backoff durations must be positive")
     public boolean isRetryBackoffValid() {
-        return isPositive(initialBackoff) && isPositive(maxBackoff);
+        return isPositive(initialBackoff) && isPositive(maxBackoff)
+                && isPositive(rateLimitBackoff);
     }
 
     private boolean isPositive(Duration duration) {

@@ -47,6 +47,12 @@ app:
     max-attempts: ${NEA_MAX_ATTEMPTS:3}
     initial-backoff: ${NEA_INITIAL_BACKOFF:250ms}
     max-backoff: ${NEA_MAX_BACKOFF:2s}
+    # A 429 is answered separately from the curve above. data.gov.sg tells an anonymous
+    # caller to "try again in 10 seconds", which the 2s ceiling can never outlast — all
+    # three attempts land inside the penalty window and ingestion fails every cycle.
+    # Retry-After is preferred when the response carries it. Set NEA_API_KEY to raise the
+    # limit instead of waiting it out.
+    rate-limit-backoff: ${NEA_RATE_LIMIT_BACKOFF:12s}
 
   weather:
     data:
