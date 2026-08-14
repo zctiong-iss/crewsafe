@@ -18,7 +18,7 @@ requires.
 | Resource | Count | Note |
 | --- | --- | --- |
 | IAM group | 1 | `crewsafe-developers` |
-| IAM group policy (inline) | 1 | Scoped read-only — `ecs:List*`/`Describe*`, `rds:DescribeDBInstances`, `ec2:Describe*`, `logs:DescribeLogGroups`, `logs:GetLogEvents`/`FilterLogEvents`, `secretsmanager:ListSecrets`/`DescribeSecret` — never a write action, never `secretsmanager:GetSecretValue` |
+| IAM group policy attachment | 1 | AWS-managed `job-function/ViewOnlyAccess` (as of 2026-08-14 — originally a hand-authored inline policy scoped to five services; widened after live testing kept surfacing missing ones. See `specs/037-developer-readonly-iam-users/spec.md` Amendments) — never a write action, never `secretsmanager:GetSecretValue`, per AWS's own curation of that policy |
 | IAM user | N | One per developer in `developers.auto.tfvars`, path `/crewsafe/developers/` |
 | IAM login profile | N | Console password, reset required at first sign-in |
 | IAM access key | N | CLI credential |

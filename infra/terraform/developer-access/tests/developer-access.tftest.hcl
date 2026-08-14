@@ -2,17 +2,18 @@
 # component (SCRUM-372).
 #
 # Every run block plans against a mocked provider, so no AWS account, credential, or
-# network call is involved. The policy-content assertions in the "developer_read_only_policy"
-# run block are the load-bearing controls: this component's entire purpose is that every
-# developer identity can read exactly the listed resources and nothing else, and a widened
-# action or an accidentally granted `secretsmanager:GetSecretValue` is the single most likely
-# regression in an IAM policy (research.md R-009).
+# network call is involved.
 #
-# The IAM assertions decode the policy JSON actually attached to the group, not a local in
-# isolation — read via the resource's `policy` attribute after `jsonencode()`, which works
-# under a mocked provider only because the policy is built from a `local`, never a rendered
-# `data "aws_iam_policy_document"`, whose `json` attribute the mock would fabricate (R-009,
-# reused from secrets-and-iam's own R-004 finding).
+# Read access is granted via the AWS-managed job-function/ViewOnlyAccess policy, not a
+# hand-authored inline one (research.md R-002, second amendment, 2026-08-14) — reversing
+# the originally-approved decision after four rounds of live console testing each
+# surfacing a missing service. This means the "developer_view_only_policy" run below can
+# only assert that the correct, well-known managed policy ARN is attached — it cannot
+# decode and assert the policy's actual contents the way the earlier hand-authored
+# version could, because that content is AWS's, not this repository's, to own or fabricate
+# under a mock (R-009's limitation applies here too). The guarantee that ViewOnlyAccess
+# excludes secretsmanager:GetSecretValue and every write action is trusted from AWS's own
+# curation and documentation, not re-derived locally.
 
 mock_provider "aws" {}
 
@@ -78,13 +79,12 @@ run "rejects_username_outside_slug_convention" {
   expect_failures = [var.developers]
 }
 
-# --- User Story 1: policy content (T011) ----------------------------------------------
-# The acceptance test for SC-002: every statement's actions are a subset of an explicit
-# read-verb allow-list, and secretsmanager:GetSecretValue is granted nowhere. Decodes the
-# actual attached policy JSON, not local.read_only_policy directly (R-009) — command=apply
-# so the resource's real `policy` attribute is available to assert against.
+# --- User Story 1: policy attachment (T011, amended) ------------------------------------
+# What's left to test locally after the R-002 second amendment: that the group attaches
+# exactly the intended, well-known AWS-managed policy, to the intended group — not that
+# policy's contents, which this repository doesn't author (see file header).
 
-run "developer_read_only_policy" {
+run "developer_view_only_policy" {
   command = apply
 
   variables {
@@ -92,43 +92,13 @@ run "developer_read_only_policy" {
   }
 
   assert {
-    condition = alltrue([
-      for stmt in jsondecode(aws_iam_group_policy.developers_read_only.policy).Statement :
-      alltrue([
-        for action in stmt.Action :
-        anytrue([
-          startswith(action, "ecs:List"),
-          startswith(action, "ecs:Describe"),
-          action == "rds:DescribeDBInstances",
-          startswith(action, "ec2:Describe"),
-          action == "logs:DescribeLogGroups",
-          action == "logs:GetLogEvents",
-          action == "logs:FilterLogEvents",
-          action == "secretsmanager:ListSecrets",
-          action == "secretsmanager:DescribeSecret",
-        ])
-      ])
-    ])
-    error_message = "developers_read_only policy grants an action outside the read-only allow-list (SC-002)."
+    condition     = aws_iam_group_policy_attachment.developers_view_only.policy_arn == "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
+    error_message = "The developers group must attach exactly the AWS-managed job-function/ViewOnlyAccess policy — no other managed or inline policy grants read access here."
   }
 
   assert {
-    condition = !contains(
-      flatten([
-        for stmt in jsondecode(aws_iam_group_policy.developers_read_only.policy).Statement :
-        stmt.Action
-      ]),
-      "secretsmanager:GetSecretValue"
-    )
-    error_message = "developers_read_only policy must never grant secretsmanager:GetSecretValue (FR-005)."
-  }
-
-  assert {
-    condition = [
-      for stmt in jsondecode(aws_iam_group_policy.developers_read_only.policy).Statement :
-      stmt.Resource if stmt.Sid == "ListLogGroups"
-    ][0] == "*"
-    error_message = "logs:DescribeLogGroups must be scoped to Resource \"*\" — it accepts no resource scope (SCRUM-175 lesson)."
+    condition     = aws_iam_group_policy_attachment.developers_view_only.group == aws_iam_group.developers.name
+    error_message = "The ViewOnlyAccess attachment must target the crewsafe-developers group."
   }
 }
 
