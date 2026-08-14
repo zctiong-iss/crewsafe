@@ -137,6 +137,17 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+
+        // Every distinct test context Spring caches keeps its own Hikari pool open against the
+        // one shared Postgres container for the whole run, and any test class that overrides a
+        // bean (@MockitoBean, @TestPropertySource) is a distinct context. At Hikari's default of
+        // ten connections each, adding a test class eventually tips the container past its
+        // max_connections and the next context to start fails with "sorry, too many clients
+        // already" — in a class that has nothing to do with whatever was added. Integration
+        // tests here run one request at a time, so a small pool costs nothing and makes the
+        // suite's connection ceiling a property of the container rather than of how many test
+        // classes happen to exist (SCRUM-289).
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> 4);
         // Health monitoring starts immediately. Keep the shared integration context
         // deterministic and offline so tests never call the public NEA service.
         registry.add("app.weather.data.mode", () -> "fixture");

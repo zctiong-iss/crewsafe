@@ -71,6 +71,32 @@ services:
       # developer may want one feed running without the other.
       LIGHTNING_INGESTION_ENABLED: ${LIGHTNING_INGESTION_ENABLED:-true}
       LIGHTNING_FIXTURE_LOOP: ${LIGHTNING_FIXTURE_LOOP:-false}
+      # Where the agent (SCRUM-289) reaches ml-service. NOT localhost: the backend runs in this
+      # container, so localhost:8000 is the container itself and the call fails instantly.
+      #
+      # Getting this wrong is quiet rather than loud, which is why it is pinned here instead of
+      # left to the application default. An unreachable ml-service is a state the agent is built
+      # to survive: it falls back to the deterministic plan and still returns 201. So a demo run
+      # against the wrong host produces a real, correct, complete plan that the language model
+      # never touched — and nothing on screen says so. Check `modelVersion` on the response
+      # (`deterministic-fallback` means the model was not reached) rather than trusting that a
+      # plan appearing means the agent ran.
+      #
+      # ml-service is not in this Compose file: it needs AWS credentials for Bedrock, which do
+      # not belong in a checked-in local stack. Run it on the host and let the container reach
+      # back out via host.docker.internal (works on Docker Desktop and on Podman 4+).
+      BEDROCK_API_URL: ${BEDROCK_API_URL:-http://host.docker.internal:8000}
+      # Same trap, same fix, second endpoint: SCRUM-281's trained-model forecast (called via
+      # SiteForecastService -> ForecastApiClient -> ml-service's /forecast) defaults to
+      # localhost:8000 in application.yml, which inside this container is the backend itself.
+      # It is not silent in the same way BEDROCK_API_URL is - a wrong host here just means
+      # every draft's forecast quietly degrades to the persistence baseline (ForecastUnavailableException
+      # is caught and logged, never thrown to the caller) - but the demo should show a real
+      # forecast, not the baseline pretending to be one.
+      FORECAST_BASE_URL: ${FORECAST_BASE_URL:-http://host.docker.internal:8000}
+    extra_hosts:
+      # Linux Docker has no built-in host.docker.internal; this makes the same URL work there.
+      - "host.docker.internal:host-gateway"
     volumes:
       - ../:/workspace
       - crewsafe-m2-cache:/root/.m2
