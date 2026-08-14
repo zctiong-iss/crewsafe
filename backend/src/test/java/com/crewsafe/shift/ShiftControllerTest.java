@@ -158,10 +158,18 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     private ResultActions deleteAuthenticated(String url, String token) throws Exception {
         return mockMvc.perform(delete(url).header("Authorization", "Bearer " + token));
     }
+    
+    private static final String DEFAULT_CANCEL_REASON = "Bad weather — site closed for the day";
 
     private ResultActions cancelShift(String shiftId, String token) throws Exception {
+        return cancelShift(shiftId, token, DEFAULT_CANCEL_REASON);
+    }
+
+    private ResultActions cancelShift(String shiftId, String token, String reason) throws Exception {
         return mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/cancel")
-                .header("Authorization", "Bearer " + token));
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("reason", reason))));
     }
 
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
@@ -660,6 +668,33 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         String shiftId = createShift(startsAt, endsAt);
 
         cancelShift(shiftId, supervisorBToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancellationReasonIsRecordedInTheAuditDetail() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        cancelShift(shiftId, supervisorAToken, "Client stood down the crew").andExpect(status().isOk());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CANCELLED))
+                .filteredOn(e -> UUID.fromString(shiftId).equals(e.getTargetId()))
+                .singleElement()
+                .extracting(e -> e.getDetail())
+                .asString()
+                .contains("Client stood down the crew");
+    }
+
+    /** Reason is required (@NotBlank): a blank one is rejected before any state change. */
+    @Test
+    void cancellingWithoutAReasonIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        cancelShift(shiftId, supervisorAToken, "   ")
+                .andExpect(status().isBadRequest());
     }
 
     // --- SCRUM-159/160-fix: correct an assignment ---
