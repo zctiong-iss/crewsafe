@@ -13,6 +13,7 @@ import ProfileScreen from "@/screens/profile/ProfileScreen";
 import MyShiftScreen from "@/screens/worker/MyShiftScreen";
 import InboxScreen from "@/screens/worker/InboxScreen";
 import WeatherScreen from "@/screens/weather/WeatherScreen";
+import ForecastScreen from "@/screens/weather/ForecastScreen";
 import ShiftListScreen from "@/screens/supervisor/ShiftListScreen";
 import ShiftDetailScreen from "@/screens/supervisor/ShiftDetailScreen";
 import CreateShiftScreen from "@/screens/supervisor/CreateShiftScreen";
@@ -190,6 +191,11 @@ export function WeatherStack() {
         name="Weather"
         component={WeatherScreen}
         options={{ title: t("tabs.weather") }}
+      />
+      <WeatherStackNavigator.Screen
+        name="Forecast"
+        component={ForecastScreen}
+        options={{ title: t("forecast.title") }}
       />
     </WeatherStackNavigator.Navigator>
   );

@@ -2,6 +2,7 @@ package com.crewsafe.weather.nea;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -190,6 +191,48 @@ class DataGovSgNeaWeatherClientTest {
         server.verify();
     }
 
+    /*
+     * SCRUM-114 follow-up. Anonymous callers get 429 from data.gov.sg with "try again in 10
+     * seconds". The exponential curve tops out at max-backoff, so before this the three
+     * attempts all landed inside the penalty window and weather ingestion failed every single
+     * cycle while lightning — one call rather than five — kept succeeding beside it.
+     */
+    @Test
+    void waitsTheRateLimitBackoffRatherThanTheExponentialCurveOnA429() {
+        server.expect(once(), requestTo("https://data.gov.sg.test/rainfall"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS));
+        server.expect(once(), requestTo("https://data.gov.sg.test/rainfall"))
+                .andRespond(withSuccess(standardTemperatureResponse(), MediaType.APPLICATION_JSON));
+
+        Instant start = Instant.now();
+        NeaObservation result = client.fetch(NeaMetric.RAINFALL);
+        Duration waited = Duration.between(start, Instant.now());
+
+        assertThat(result.readings()).isNotEmpty();
+        // The 50ms rate-limit backoff, not the 1ms initial backoff: proves the 429 took the
+        // dedicated path rather than the curve that could never outlast a real penalty.
+        assertThat(waited).isGreaterThanOrEqualTo(Duration.ofMillis(50));
+        server.verify();
+    }
+
+    @Test
+    void prefersTheServersRetryAfterOverTheConfiguredDefault() {
+        server.expect(once(), requestTo("https://data.gov.sg.test/rainfall"))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                        .header(HttpHeaders.RETRY_AFTER, "1"));
+        server.expect(once(), requestTo("https://data.gov.sg.test/rainfall"))
+                .andRespond(withSuccess(standardTemperatureResponse(), MediaType.APPLICATION_JSON));
+
+        Instant start = Instant.now();
+        client.fetch(NeaMetric.RAINFALL);
+        Duration waited = Duration.between(start, Instant.now());
+
+        // A full second, well past the configured 50ms: the server knows its own window, so
+        // when it states one we obey it rather than our own guess.
+        assertThat(waited).isGreaterThanOrEqualTo(Duration.ofSeconds(1));
+        server.verify();
+    }
+
     @Test
     void healthReachabilityUsesTheRequestedSingleAttempt() {
         server.expect(once(), requestTo("https://data.gov.sg.test/weather?api=wbgt"))
@@ -207,6 +250,9 @@ class DataGovSgNeaWeatherClientTest {
         properties.setMaxAttempts(3);
         properties.setInitialBackoff(Duration.ofMillis(1));
         properties.setMaxBackoff(Duration.ofMillis(2));
+        // Set explicitly, not left at the 12s production default, or every rate-limit test
+        // below would really sleep twelve seconds each.
+        properties.setRateLimitBackoff(Duration.ofMillis(50));
         return properties;
     }
 
