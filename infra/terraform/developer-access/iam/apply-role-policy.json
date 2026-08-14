@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageDeveloperGroupApply",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateGroup",
+        "iam:DeleteGroup",
+        "iam:PutGroupPolicy",
+        "iam:DeleteGroupPolicy",
+        "iam:TagGroup",
+        "iam:UntagGroup"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
+    },
+    {
+      "Sid": "ManageDeveloperUsersApply",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateUser",
+        "iam:DeleteUser",
+        "iam:TagUser",
+        "iam:UntagUser",
+        "iam:CreateLoginProfile",
+        "iam:UpdateLoginProfile",
+        "iam:DeleteLoginProfile",
+        "iam:CreateAccessKey",
+        "iam:DeleteAccessKey",
+        "iam:AddUserToGroup",
+        "iam:RemoveUserFromGroup"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:user/crewsafe/developers/*"
+    }
+  ]
+}
