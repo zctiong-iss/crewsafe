@@ -1,5 +1,6 @@
 package com.crewsafe.common.error;
 
+import com.crewsafe.forecast.service.ForecastUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -105,5 +106,19 @@ class GlobalExceptionHandlerTest {
         assertNotNull(body);
         assertEquals("Not Found", body.error());
         assertEquals("No such resource", body.message());
+    }
+
+    @Test
+    void testHandleForecastUnavailableDoesNotExposeDependencyDetails() {
+        ForecastUnavailableException ex = new ForecastUnavailableException(
+                "private model path and weather context");
+
+        ResponseEntity<ErrorResponse> response = handler.handleForecastUnavailable(ex);
+
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, response.getStatusCode());
+        ErrorResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals("Service Unavailable", body.error());
+        assertEquals("Forecast temporarily unavailable", body.message());
     }
 }
