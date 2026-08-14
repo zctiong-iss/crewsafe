@@ -86,6 +86,14 @@ services:
       # not belong in a checked-in local stack. Run it on the host and let the container reach
       # back out via host.docker.internal (works on Docker Desktop and on Podman 4+).
       BEDROCK_API_URL: ${BEDROCK_API_URL:-http://host.docker.internal:8000}
+      # Same trap, same fix, second endpoint: SCRUM-281's trained-model forecast (called via
+      # SiteForecastService -> ForecastApiClient -> ml-service's /forecast) defaults to
+      # localhost:8000 in application.yml, which inside this container is the backend itself.
+      # It is not silent in the same way BEDROCK_API_URL is - a wrong host here just means
+      # every draft's forecast quietly degrades to the persistence baseline (ForecastUnavailableException
+      # is caught and logged, never thrown to the caller) - but the demo should show a real
+      # forecast, not the baseline pretending to be one.
+      FORECAST_BASE_URL: ${FORECAST_BASE_URL:-http://host.docker.internal:8000}
     extra_hosts:
       # Linux Docker has no built-in host.docker.internal; this makes the same URL work there.
       - "host.docker.internal:host-gateway"

@@ -80,18 +80,18 @@ def _forecast_node(state: DraftState) -> DraftState:
     and calling ourselves over the loopback would add a failure mode for nothing. The endpoint
     stays as the contract for external callers.
 
-    Honest caveat, surfaced through to the response: the number this node produces is the
-    persistence baseline, which *equals the current reading*. SCRUM-114's trained model and
-    SCRUM-281's wiring are both merged now, but they do not reach this path: the model only
-    engages when given a ForecastContext of recent observations, and this node is handed a
-    single scalar. So a plan's "forecast" is still the present, and `forecastModelVersion`
-    says so rather than letting the number pass for a prediction.
-
-    Closing that is a backend change. It now has SiteForecastService.forecast(siteId,
-    horizonMinutes), which does have the observation history, and this contract already
-    accepts the result: `forecastWbgt30m` is optional and a supplied value wins outright
-    (the early return below), so the agent starts using real forecasts without either side's
-    contract changing.
+    As of SCRUM-289's backend wiring, this node's own forecast is the fallback path, not the
+    normal one. AgentDraftService now calls SiteForecastService before it builds the request,
+    so `request.forecastWbgt30m` usually arrives already set to a real trained-model prediction
+    and the early return below fires immediately — this node's ForecastService() call and its
+    persistence baseline never run. They still exist for two reasons: a request built without
+    going through AgentDraftService (a test, a future caller) has no such guarantee, and the
+    backend itself passes `None` through here whenever *its* SiteForecastService call couldn't
+    produce one — new site, stale/simulated reading, ml-service unreachable (§7.1: a missing
+    input degrades the output, it does not fail the request). Either way this node is what
+    guarantees the plan always has *a* forecast figure, even if only the present standing in
+    for it. `forecast_model_version` is how a caller tells the two cases apart: null means the
+    backend supplied a real one, `"baseline-1.0.0"` means this node's fallback ran.
     """
     request = state["request"]
     if request.forecastWbgt30m is not None:
@@ -101,13 +101,10 @@ def _forecast_node(state: DraftState) -> DraftState:
         # A bare ForecastService(), not ForecastService.from_environment(). The trained model
         # (SCRUM-281) only engages when handed a ForecastContext - recent 15-minute
         # observations, station id, coordinates - and this node has none of that: it holds one
-        # scalar reading. from_environment() would load and checksum the model bundle on every
-        # draft and then take the same context is None branch back to the persistence baseline,
-        # so it would buy latency and a new failure mode for an identical number.
-        #
-        # Feeding the real forecast in is a backend change, not a change here: it already has
-        # the observation history, and forecastWbgt30m is optional with supplied values winning
-        # (see the early return above), so that lands without touching this contract.
+        # scalar reading, reached only once the backend's own attempt (with the real context)
+        # has already come back empty. from_environment() would load and checksum the model
+        # bundle on every one of those calls and then take the same context is None branch back
+        # to this same baseline, so it would buy latency and a new failure mode for no benefit.
         prediction = ForecastService().forecast(
             metric="wbgt", current_value=request.currentWbgt, horizon_minutes=30)
         request.forecastWbgt30m = prediction.predicted_value

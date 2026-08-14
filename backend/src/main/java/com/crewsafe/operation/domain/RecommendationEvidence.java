@@ -39,10 +39,13 @@ public record RecommendationEvidence(
     /**
      * 30-minute WBGT forecast at draft time, °C.
      *
-     * <p>Currently produced by the persistence baseline, whose prediction <em>equals</em>
-     * {@code observedWbgt} by construction. SCRUM-114's trained model exists but is not wired
-     * into the forecast endpoint; SCRUM-281 does that. Until then these two fields being equal
-     * is expected and is not evidence of a bug.
+     * <p>A real SCRUM-281 prediction from {@code SiteForecastService} when enough recent, live,
+     * single-station weather history exists for this site; the persistence baseline (equal to
+     * {@code observedWbgt} by construction) otherwise — the site is new, its last reading is
+     * stale or simulated, or ml-service itself was unreachable. Both are legitimate outcomes of
+     * §7.1's degrade-not-fail rule, so this field being equal to {@code observedWbgt} is not by
+     * itself evidence of anything; check {@code forecastBand} against {@code currentBand} if you
+     * need to tell the two cases apart.
      */
     BigDecimal forecastWbgt30m,
 

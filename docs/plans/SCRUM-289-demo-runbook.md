@@ -13,8 +13,10 @@ Three processes, and one of them is not in the Compose file.
 | 2 | **ml-service, on the host** | It needs AWS credentials for Bedrock, which do not belong in a checked-in local stack |
 | 3 | Mobile (Expo) | The supervisor's screen |
 
-The backend reaches ml-service via `host.docker.internal:8000`, wired in `local/compose.yaml`.
-Do not change it to `localhost` — inside the container that is the container itself.
+The backend reaches ml-service via `host.docker.internal:8000` for two separate calls, both
+wired in `local/compose.yaml`: `BEDROCK_API_URL` (the agent draft) and `FORECAST_BASE_URL`
+(SCRUM-281's trained-model forecast). Do not change either to `localhost` — inside the
+container that is the container itself, both fail, and the demo runs on unannounced fallbacks.
 
 ## Step 1 — ml-service, with live Bedrock
 
@@ -129,14 +131,15 @@ then the same request with ml-service started against a bad `BEDROCK_MODEL_ID`, 
 
 ## Known gaps to state rather than hide
 
-- **The forecast in a drafted plan is not a prediction yet.** SCRUM-114's trained model and
-  SCRUM-281's wiring are both merged, so `/forecast` *can* now return a real forecast — but
-  only when the caller supplies a `context` of recent observations. The agent does not: it
-  holds a single current reading, so it takes the persistence baseline, whose output equals
-  that reading. Check `forecastModelVersion` on the draft: `baseline-1.0.0` means the number
-  is the present, not a prediction. Closing this is a backend change (it has
-  `SiteForecastService`, which does have the history) and needs no contract change on either
-  side, because `forecastWbgt30m` is already optional with a supplied value winning.
+- **The forecast in a drafted plan is usually real now, but not guaranteed to be.**
+  `AgentDraftService` calls `SiteForecastService` before it calls the agent, so most drafts do
+  carry a genuine SCRUM-281 prediction. It silently degrades to the persistence baseline
+  (forecast == observed reading) whenever that call can't produce one — a brand-new site, a
+  stale or simulated last reading, fewer than two 15-minute-spaced observations, or ml-service
+  itself unreachable — because §7.1 says a missing input degrades the plan, it does not fail
+  the request. There is no field that says which case happened for a given plan: compare
+  `forecastWbgt30m` to `observedWbgt` in the evidence block, or, more reliably, deliberately
+  break `FORECAST_BASE_URL` and watch the backend log a `forecast_unavailable` line.
 - **Web has no recommendation UI at all.** The demo is mobile only.
 - **No auth between backend and ml-service.** Fine on localhost, must be closed before anything
   is deployed.

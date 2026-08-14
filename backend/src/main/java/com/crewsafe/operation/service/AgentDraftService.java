@@ -4,6 +4,8 @@ import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.forecast.service.ForecastUnavailableException;
+import com.crewsafe.forecast.service.SiteForecastService;
 import com.crewsafe.lightning.api.LightningRiskPayload;
 import com.crewsafe.lightning.domain.LightningRiskState;
 import com.crewsafe.lightning.risk.LightningRiskDerivationService;
@@ -96,6 +98,7 @@ public class AgentDraftService {
     private final PolicyEngineService policyEngine;
     private final WeatherQueryService weather;
     private final LightningRiskDerivationService lightning;
+    private final SiteForecastService siteForecast;
     private final AgentDraftClient agentDraftClient;
     private final DeterministicPlanBuilder deterministicPlans;
     private final RecommendationRepository recommendations;
@@ -222,12 +225,16 @@ public class AgentDraftService {
     private Draft modelDraft(Shift shift, UUID siteId, PolicyDecision decision, List<ShiftAssignment> assignments,
                               Optional<WeatherQueryService.LatestSiteWeather> latestWeather,
                               LightningRiskState lightningState, Double observedWbgt) {
+        // Fetched before the try, not inside it: if ml-service itself is unreachable below, the
+        // deterministic plan that results should still carry this in its evidence rather than
+        // discarding a forecast that was already fetched successfully.
+        Double forecastWbgt30m = fetchForecast(siteId);
         try {
-            AgentDraftClient.DraftResponse response = agentDraftClient.draft(new AgentDraftClient.DraftRequest(
+            AgentDraftClient.DraftRequest request = new AgentDraftClient.DraftRequest(
                     shift.getId().toString(),
                     siteId.toString(),
                     observedWbgt,
-                    null, // the graph derives the forecast; no Java forecast source exists yet
+                    forecastWbgt30m,
                     latestWeather.map(w -> w.qualityStatus().name()).orElse("STALE"),
                     lightningState == null ? "CLEAR" : lightningState.name(),
                     workerPayloads(shift.getId(), assignments),
@@ -236,7 +243,8 @@ public class AgentDraftService {
                     // ticket's data sources, and anything added here must be summarised
                     // server-side — the strings reach the model inside its prompt.
                     List.of(),
-                    policyPayload(decision)));
+                    policyPayload(decision));
+            AgentDraftClient.DraftResponse response = agentDraftClient.draft(request);
 
             List<MitigationSuggestion> mitigations =
                     response.mitigations() == null ? List.of() : response.mitigations();
@@ -260,7 +268,29 @@ public class AgentDraftService {
             // fallback cannot cover this case — it needs ml-service to be running — so this is
             // the layer that turns it into a plan instead of a 5xx.
             log.warn("agent_draft_unavailable shift_id={} falling back to the deterministic plan", shift.getId());
-            return deterministicDraft(decision, observedWbgt, "ml_service_unavailable", null);
+            return deterministicDraft(decision, observedWbgt, "ml_service_unavailable", forecastWbgt30m);
+        }
+    }
+
+    /**
+     * The trained-model 30-minute forecast (SCRUM-281), or null if one cannot be produced yet.
+     *
+     * <p>Every reason {@link SiteForecastService} can refuse — no weather history, too little of
+     * it, a stale or simulated reading, a station change mid-window, ml-service itself being
+     * unreachable — describes context that legitimately does not exist, not a bug. §7.1 says a
+     * degraded input degrades the output, it does not fail the request: a null here is not
+     * silently dropped, it is exactly what tells the graph to fall back to its own persistence
+     * baseline (see {@code agent/graph.py}'s {@code _forecast_node}), so the plan still gets
+     * <em>a</em> forecast figure, just not a predictive one.
+     */
+    private Double fetchForecast(UUID siteId) {
+        try {
+            return siteForecast.forecast(siteId, 30)
+                    .map(forecast -> forecast.predictedValue().doubleValue())
+                    .orElse(null);
+        } catch (ForecastUnavailableException e) {
+            log.warn("forecast_unavailable site_id={} reason={}", siteId, e.getMessage());
+            return null;
         }
     }
 
@@ -369,10 +399,12 @@ public class AgentDraftService {
                 forecast,
                 decision == null ? null : decision.currentBand(),
                 // Classified from the forecast value actually used, not copied from the policy
-                // decision. PolicyEngineService still hardcodes forecastBand = currentBand behind a
-                // TODO for SCRUM-188; that happens to be right today only because the persistence
-                // baseline predicts the present. Deriving it here keeps the evidence honest when
-                // SCRUM-281 makes the forecast a real one.
+                // decision. PolicyEngineService still hardcodes forecastBand = currentBand behind
+                // a TODO for SCRUM-188, which was harmless only while the forecast was always the
+                // persistence baseline (forecast == observed, so the bands always matched anyway).
+                // Now that fetchForecast() can return a real SCRUM-281 prediction, that hardcoding
+                // would misclassify the evidence the moment the two values genuinely differ;
+                // deriving it here from forecast itself keeps it correct regardless.
                 WbgtBand.classify(forecast),
                 observation == null ? null : observation.getObservedAt(),
                 latestWeather.map(WeatherQueryService.LatestSiteWeather::qualityStatus).orElse(null),

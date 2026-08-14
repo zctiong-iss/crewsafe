@@ -71,9 +71,13 @@ class AgentDraftRequest(BaseModel):
     forecastWbgt30m: Optional[float] = Field(
         None,
         description=(
-            "Optional. The backend has no forecast source of its own today, so it normally "
-            "omits this and the graph derives it locally via ForecastService. Supplied values "
-            "win, so a future backend-side forecast needs no change here."
+            "Optional. Since SCRUM-281 landed, the backend normally does supply this — a real "
+            "trained-model prediction from SiteForecastService when enough recent weather "
+            "history exists for the site, or None when it does not (new site, stale/simulated "
+            "reading, ml-service unreachable). Supplied values win outright: this field existing "
+            "as optional, with the graph deriving its own persistence-baseline number only when "
+            "it is absent, is exactly what let the backend start sending real forecasts without "
+            "any change on this side."
         ),
     )
     freshness: Freshness = "LIVE"
@@ -135,9 +139,12 @@ class AgentDraftResponse(BaseModel):
     forecastModelVersion: Optional[str] = Field(
         None,
         description=(
-            "Version of the forecast that produced forecastWbgt30m. Currently 'baseline-1.0.0', "
-            "a persistence baseline whose prediction equals the present reading (SCRUM-281 "
-            "replaces it with the trained model). Surfaced so nobody mistakes it for a real one."
+            "Version of the forecast that produced forecastWbgt30m, when this node computed it "
+            "itself: 'baseline-1.0.0' for the persistence baseline (its prediction equals the "
+            "present reading). Null whenever the backend supplied forecastWbgt30m directly "
+            "(the common case since SCRUM-281) — this node never ran a forecast in that case, "
+            "so it has no version to report. The backend, not this field, is the source of truth "
+            "for whether a given plan's forecast is a trained-model prediction or a baseline."
         ),
     )
     inputTokens: int = 0

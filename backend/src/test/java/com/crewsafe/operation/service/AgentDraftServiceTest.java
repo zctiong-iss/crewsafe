@@ -4,6 +4,8 @@ import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.forecast.service.ForecastUnavailableException;
+import com.crewsafe.forecast.service.SiteForecastService;
 import com.crewsafe.lightning.api.LightningRiskPayload;
 import com.crewsafe.lightning.domain.LightningRiskState;
 import com.crewsafe.lightning.risk.LightningRiskDerivationService;
@@ -91,6 +93,7 @@ class AgentDraftServiceTest {
     @Mock private PolicyEngineService policyEngine;
     @Mock private WeatherQueryService weather;
     @Mock private LightningRiskDerivationService lightning;
+    @Mock private SiteForecastService siteForecast;
     @Mock private AgentDraftClient agentDraftClient;
     @Mock private RecommendationRepository recommendations;
     @Mock private AuditService audit;
@@ -100,7 +103,7 @@ class AgentDraftServiceTest {
     @BeforeEach
     void setUp() {
         service = new AgentDraftService(shifts, shiftAssignments, readinessSubmissions, policyEngine,
-                weather, lightning, agentDraftClient, new DeterministicPlanBuilder(), recommendations,
+                weather, lightning, siteForecast, agentDraftClient, new DeterministicPlanBuilder(), recommendations,
                 audit, new ObjectMapper().findAndRegisterModules(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
@@ -226,6 +229,21 @@ class AgentDraftServiceTest {
     }
 
     @Test
+    @DisplayName("A forecast already fetched survives an ml-service outage instead of being discarded")
+    void forecastSurvivesAnUnreachableMlService() {
+        when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
+                "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
+                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW)));
+        when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("connection refused"));
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+
+        // The forecast was fetched successfully before ml-service was ever called, so the
+        // deterministic plan this outage produces should not lose it.
+        assertThat(evidenceOf(saved).forecastWbgt30m()).isEqualByComparingTo("34.20");
+    }
+
+    @Test
     @DisplayName("ml-service's own fallback is kept, but not attributed to the model")
     void mlServiceFallbackIsKeptAndLabelled() {
         stubDraft(validModelPlan(), true, "none");
@@ -310,6 +328,36 @@ class AgentDraftServiceTest {
 
         assertThat(evidence.currentBand()).isEqualTo(WbgtBand.BAND_32_TO_BELOW_33);
         assertThat(evidence.forecastBand()).isEqualTo(WbgtBand.BAND_33_AND_ABOVE);
+    }
+
+    // ----------------------------------------------------------------------------------
+    // The forecast (SCRUM-281 wiring)
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("A real SiteForecastService prediction is sent to ml-service, not left null")
+    void realForecastIsSentToMlService() {
+        when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
+                "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
+                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW)));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generate(SITE_ID, SHIFT_ID, ACTOR_ID);
+
+        assertThat(capturedRequest().forecastWbgt30m()).isEqualTo(34.2);
+    }
+
+    @Test
+    @DisplayName("An unavailable forecast degrades to null rather than failing the draft (§7.1)")
+    void unavailableForecastDegradesToNull() {
+        when(siteForecast.forecast(SITE_ID, 30))
+                .thenThrow(new ForecastUnavailableException("No recent weather exists for this site"));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+
+        assertThat(capturedRequest().forecastWbgt30m()).isNull();
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
     }
 
     // ----------------------------------------------------------------------------------
