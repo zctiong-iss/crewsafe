@@ -129,4 +129,6 @@ once. Approve it only if it beats persistence MAE without reducing recall at eit
 Until then, the application must keep its labelled persistence fallback. Missing or
 stale context, invalid model files, and ML-service failure must also remain safe,
 typed fallback conditions. Training stays offline; app startup and prediction never
-download historical data.
+download historical data. Runtime loading also requires an explicit
+`approved_for_inference: true` in the checksum-pinned manifest and rejects any
+remaining approval blocker.
