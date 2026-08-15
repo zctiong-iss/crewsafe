@@ -10,6 +10,10 @@
  * Conflating them means a supervisor who opens another site's shift gets logged out
  * mid-shift, loses what they were doing, and learns nothing about why.
  *
+ * A `kind` says what shape the failure had; an optional `code` says what actually caused it.
+ * Both exist because 409 alone cannot distinguish a lost write race from a site nobody has
+ * configured a heat policy for, and those need opposite advice.
+ *
  * @author Justin Chua
  */
 export type ApiErrorKind =
@@ -28,9 +32,27 @@ export type ApiErrorKind =
   /** Request never completed — offline, DNS, refused, timed out. */
   | "network";
 
+/**
+ * Machine-readable reasons the backend may name alongside a status, mirroring
+ * `ErrorCode.java`. Only codes this client actually branches on are listed; an unrecognised
+ * one is not an error, it simply falls back to the status-derived message.
+ */
+export type ApiErrorCode = "NO_ACTIVE_POLICY" | "NO_USABLE_WBGT";
+
+const KNOWN_ERROR_CODES: readonly string[] = ["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"];
+
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
   readonly status: number | null;
+  /**
+   * The specific reason the server named, when it named one.
+   *
+   * Without this, both of `AgentDraftService`'s refusals reach the user as the generic 409
+   * text — "Someone else changed this first. Reload and try again." — which is wrong advice
+   * for a site that has no heat policy configured, because no amount of reloading creates
+   * one. See `errors.codes.*` in the translation files.
+   */
+  readonly code: ApiErrorCode | null;
   /** The X-Request-Id the API issued, if the response carried one. Quote it in a bug report. */
   readonly requestId: string | null;
   /**
@@ -47,6 +69,7 @@ export class ApiError extends Error {
     status: number | null,
     requestId: string | null,
     fieldErrors: Record<string, string> = {},
+    code: ApiErrorCode | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -54,7 +77,15 @@ export class ApiError extends Error {
     this.status = status;
     this.requestId = requestId;
     this.fieldErrors = fieldErrors;
+    this.code = code;
   }
+}
+
+/** Narrows a raw `code` off the wire to one this client has a translation for. */
+export function toApiErrorCode(value: unknown): ApiErrorCode | null {
+  return typeof value === "string" && KNOWN_ERROR_CODES.includes(value)
+    ? (value as ApiErrorCode)
+    : null;
 }
 
 export function kindForStatus(status: number): ApiErrorKind {
@@ -73,8 +104,13 @@ export function kindForStatus(status: number): ApiErrorKind {
  *
  * Returning a key rather than a string is what keeps every error message translatable.
  * Call it as `t(messageKeyFor(error))`.
+ *
+ * A named `code` wins over the status-derived key, because the status alone describes the
+ * shape of the failure and the code describes the cause. `kind` remains the fallback, so an
+ * older backend — or a code this build has no translation for — behaves exactly as before.
  */
 export function messageKeyFor(error: ApiError): string {
+  if (error.code) return `errors.codes.${error.code}`;
   return `errors.${error.kind}`;
 }
 
