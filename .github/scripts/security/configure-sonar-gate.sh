@@ -65,6 +65,7 @@ declared_op() {
     new_security_hotspots_reviewed) printf 'LT' ;;
     new_reliability_rating) printf 'GT' ;;
     new_sca_rating_vulnerability) printf 'GT' ;;
+    *) fail "declared_op: unrecognized metric: $1" ;;
   esac
 }
 
@@ -349,10 +350,12 @@ configure_required_checks() {
 
 # --- entry point -------------------------------------------------------------
 
-PROPS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/sonar-project.properties"
-[[ -f "$PROPS_FILE" ]] || fail "sonar-project.properties not found at $PROPS_FILE"
-SONAR_ORG="$(read_prop sonar.organization)"
-SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  PROPS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/sonar-project.properties"
+  [[ -f "$PROPS_FILE" ]] || fail "sonar-project.properties not found at $PROPS_FILE"
+  SONAR_ORG="$(read_prop sonar.organization)"
+  SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
 
-configure_quality_gate
-configure_required_checks
+  configure_quality_gate
+  configure_required_checks
+fi
