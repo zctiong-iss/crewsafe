@@ -120,8 +120,11 @@ override_data {
   target = data.terraform_remote_state.ecr
   values = {
     outputs = {
-      repository_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/backend"
-      repository_arn = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/backend"
+      repository_url            = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/backend"
+      repository_arn            = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/backend"
+      ml_service_repository_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service"
+      ml_service_repository_arn = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/ml-service"
+      ml_service_push_role_arn  = "arn:aws:iam::123456789012:role/crewsafe-shared-dev-ecr-ml-service-push"
     }
   }
 }
@@ -167,9 +170,10 @@ override_data {
 }
 
 variables {
-  expected_account_id = "123456789012"
-  account_alias       = "crewsafe-dev"
-  initial_image_tag   = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  expected_account_id          = "123456789012"
+  account_alias                = "crewsafe-dev"
+  initial_image_tag            = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  initial_ml_service_image_tag = "b2c3d4e5f60718293a4b5c6d7e8f90123456789a"
   # SCRUM-298: required, no default (FR-017, FR-022) — reuses the exact fixture
   # value infra/terraform/ecr/tests/ecr.tftest.hcl already established.
   github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
@@ -547,14 +551,130 @@ run "container_hardening" {
     error_message = "No volume should be declared. The only one this component ever needed was the /tmp scratch mount that Fargate cannot make writable for a non-root user."
   }
 
+  # SCRUM-373 — deliberately widened from "exactly one" to "exactly two": the
+  # ml-service container is a same-task sidecar (spec FR-003), not the
+  # out-of-band migration-step shape FR-011/FR-037 originally ruled out. The
+  # count stays closed at two so a THIRD container cannot quietly join later.
   assert {
-    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)) == 1
-    error_message = "Exactly one container. A sidecar is the usual shape of an out-of-band migration step (FR-011, FR-037)."
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)) == 2
+    error_message = "Exactly two containers: backend and its ml-service sidecar (spec FR-003). A third would need its own deliberate review (FR-011, FR-037)."
   }
 
   assert {
     condition     = length([for c in jsondecode(aws_ecs_task_definition.backend.container_definitions) : c if can(c.command)]) == 0
     error_message = "No command override — the image starts the application, and an override is how a migration gets run separately from the process serving traffic (FR-037)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-373 — the ml-service sidecar container (data-model.md)
+# ---------------------------------------------------------------------------
+
+run "ml_service_container_shape" {
+  command = apply
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].name == "ml-service"
+    error_message = "The second container must be named ml-service (data-model.md)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].image == "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service:${var.initial_ml_service_image_tag}"
+    error_message = "The ml-service image reference must be the ml-service repository URL joined with its own commit-SHA tag (research.md R-009)."
+  }
+
+  assert {
+    condition = tolist(jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].portMappings) == tolist([
+      { containerPort = 8000, protocol = "tcp" }
+    ])
+    error_message = "ml-service must listen on exactly port 8000/tcp and no other (spec FR-003)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].essential == true
+    error_message = "ml-service must be essential — a crash takes the whole task down, the accepted trade-off (spec Known trade-off)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].user == "1000"
+    error_message = "ml-service must run as the non-root user its image already defines (spec FR-004)."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].environment) == 0
+    error_message = "Plaintext container environment values must remain absent from the ml-service container, matching backend's own convention."
+  }
+
+  assert {
+    condition = sort([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].secrets : entry.name
+    ]) == sort(["WBGT_MODEL_MANIFEST", "WBGT_MODEL_MANIFEST_SHA256"])
+    error_message = "ml-service must receive exactly the two deferred model-manifest slots as secret references, nothing else (spec FR-008)."
+  }
+
+  assert {
+    condition = alltrue([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].secrets :
+      startswith(entry.valueFrom, "arn:aws:ssm:ap-southeast-1:123456789012:parameter/crewsafe/shared-dev/ml/")
+    ])
+    error_message = "Both ml-service secret references must resolve under the secrets component's published config_parameter_prefix (spec FR-008)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].logConfiguration.logDriver == "awslogs"
+    error_message = "ml-service must ship stdout/stderr through the ECS awslogs driver, matching backend's convention."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].logConfiguration.options["awslogs-group"] == aws_cloudwatch_log_group.ml_service.name
+    error_message = "ml-service must use its own, dedicated CloudWatch log group — never sharing backend's stream (spec FR-003)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.ml_service.name != aws_cloudwatch_log_group.backend.name
+    error_message = "The two containers' log groups must be distinct, or an ml-service failure is indistinguishable from a backend one (spec User Story 3)."
+  }
+
+  assert {
+    condition     = length([for c in jsondecode(aws_ecs_task_definition.backend.container_definitions) : c if can(c.command)]) == 0
+    error_message = "Neither container may carry a command override."
+  }
+}
+
+# SC-004 — ml-service must stay unreachable from outside the task. No load
+# balancer, listener, or security-group rule may reference its port or name.
+run "ml_service_unreachable_from_outside" {
+  command = apply
+
+  assert {
+    condition     = !can(regex("ml-service", jsonencode(aws_lb_target_group.public))) && !can(regex("8000", jsonencode(aws_lb_target_group.public.health_check)))
+    error_message = "The public target group must not reference ml-service or its port (spec SC-004)."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.to_port != 8000 && aws_vpc_security_group_ingress_rule.app_from_public_lb.to_port != 8000
+    error_message = "No security-group rule may open port 8000 — ml-service is reachable only over localhost inside the task (spec SC-004)."
+  }
+
+  assert {
+    condition = toset([
+      for attachment in aws_ecs_service.backend.load_balancer : attachment.container_name
+    ]) == toset(["backend"])
+    error_message = "Only the backend container may be attached to a load balancer target group (spec FR-003, SC-004)."
+  }
+}
+
+run "task_sizing" {
+  command = apply
+
+  assert {
+    condition     = aws_ecs_task_definition.backend.cpu == "1024"
+    error_message = "task_cpu must be re-sized to 1024 for both containers running together (spec FR-005, research.md R-007)."
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.backend.memory == "4096"
+    error_message = "task_memory must be re-sized to 4096 for both containers running together, with real headroom above the 2048 MiB floor Fargate allows at 1024 CPU (spec FR-005, research.md R-007)."
   }
 }
 

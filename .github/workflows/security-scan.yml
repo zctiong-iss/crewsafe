@@ -454,6 +454,13 @@ jobs:
       - name: Sonar Quality Gate configurator self-tests
         run: .github/scripts/tests/test-sonar-gate-configure.sh
 
+      # SCRUM-405: wired in the same change that adds this test, not as a follow-up -- see
+      # research.md Decision 5 in specs/041-ci-shell-case-defaults (this job has a documented
+      # history of guard tests written but not wired in until a later PR: SCRUM-346, SCRUM-350,
+      # SCRUM-351).
+      - name: CI shell case-statement default-arm self-tests
+        run: .github/scripts/tests/test-ci-case-statement-defaults.sh
+
       # SCRUM-351: added here (unlike the ML-service coverage guard from SCRUM-346, which
       # was written but never wired into this job) so a change that silently drops or
       # weakens web coverage validation fails a test rather than passing unnoticed.

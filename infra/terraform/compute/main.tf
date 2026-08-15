@@ -165,6 +165,30 @@ locals {
       valueFrom = local.database_password_reference
     }],
   )
+
+  # SCRUM-373 — the ml-service sidecar. A same-task, localhost-only container:
+  # no portMappings entry here is ever referenced by an aws_lb_target_group,
+  # listener, or security-group rule (spec FR-003, SC-004).
+  ml_service_container_name  = "ml-service"
+  ml_service_container_port  = 8000
+  ml_service_container_image = "${local.ecr.ml_service_repository_url}:${var.initial_ml_service_image_tag}"
+  ml_service_log_group_name  = "/crewsafe/shared-dev/ml-service"
+
+  # Deliberately its own map, not a merge into local.parameter_secrets above:
+  # that map is Spring-Boot-specific (DB_*, Cognito settings) and none of it
+  # applies to ml-service. Both entries resolve to the two deliberately-empty
+  # SSM parameters secrets/main.tf declares (spec FR-008, research.md R-001) —
+  # empty today, not because the reference is wrong, but because no model
+  # bundle is approved for inference yet.
+  ml_service_parameter_secrets = {
+    WBGT_MODEL_MANIFEST        = "${local.secrets.config_parameter_prefix}/ml/model-manifest"
+    WBGT_MODEL_MANIFEST_SHA256 = "${local.secrets.config_parameter_prefix}/ml/model-manifest-sha256"
+  }
+
+  ml_service_container_secrets = [for name, parameter in local.ml_service_parameter_secrets : {
+    name      = name
+    valueFrom = "${local.parameter_arn_prefix}${parameter}"
+  }]
 }
 
 # ---------------------------------------------------------------------------
@@ -179,6 +203,14 @@ locals {
 # expire the evidence before the retrospective that needs it).
 resource "aws_cloudwatch_log_group" "backend" {
   name              = local.log_group_name
+  retention_in_days = var.log_retention_days
+}
+
+# SCRUM-373 — its own, dedicated stream. A shared log group would make an
+# ml-service failure indistinguishable from a backend one, defeating the
+# runbook's own diagnosis path (spec User Story 3, FR-003).
+resource "aws_cloudwatch_log_group" "ml_service" {
+  name              = local.ml_service_log_group_name
   retention_in_days = var.log_retention_days
 }
 
@@ -535,6 +567,57 @@ resource "aws_ecs_task_definition" "backend" {
           "awslogs-group"         = aws_cloudwatch_log_group.backend.name
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = local.container_name
+          "mode"                  = "non-blocking"
+          "max-buffer-size"       = "25m"
+        }
+      }
+    },
+    {
+      # SCRUM-373 — the ml-service sidecar. Fargate awsvpc mode gives every
+      # container in a task the same ENI, so backend already reaches this over
+      # localhost:8000 (its own FORECAST_BASE_URL/BEDROCK_API_URL defaults) —
+      # no service-discovery entry needed. essential = true is the accepted
+      # trade-off (spec Known trade-off): a crash-looping ml-service container
+      # takes the whole task down with it, the same as any other essential
+      # container failure.
+      name      = local.ml_service_container_name
+      image     = local.ml_service_container_image
+      essential = true
+
+      # Provided by ml-service's own Dockerfile (`useradd -m -u 1000 appuser`);
+      # asserted here for the same reason backend's is (SCRUM-177's image is
+      # authoritative, but this component owns the task definition that could
+      # override it).
+      user = "1000"
+
+      portMappings = [
+        {
+          containerPort = local.ml_service_container_port
+          protocol      = "tcp"
+        },
+      ]
+
+      # Unlike backend, no documented JVM-temp-dir blocker exists for this
+      # image: its Dockerfile already chmods application files 444 and
+      # crewsafe_ml read-only (research.md R-010). Attempted here as the
+      # stronger hardening posture; if a real Fargate startup failure surfaces
+      # (mirroring backend's own documented incident above), the fix is to set
+      # this to false with the same class of justification, not a silent
+      # revert.
+      readonlyRootFilesystem = true
+
+      # Explicitly empty, matching backend's own convention: every value the
+      # deployment overrides is a secret reference, never plaintext.
+      environment = []
+
+      secrets = local.ml_service_container_secrets
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ml_service.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = local.ml_service_container_name
           "mode"                  = "non-blocking"
           "max-buffer-size"       = "25m"
         }
