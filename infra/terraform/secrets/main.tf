@@ -323,29 +323,28 @@ locals {
       {
         # ml-service/bedrock_client.py's hardcoded health-check model, invoked
         # by GET /bedrock/access (backend's TestBedrockController/
-        # BedrockApiClient). A cross-region system-defined inference profile
-        # (the "global." prefix) - the profile ARN below is granted alongside
-        # the underlying foundation-model ARN in the next statement.
+        # BedrockApiClient). A "global." cross-region system-defined inference
+        # profile. AWS's own documentation for this feature
+        # (docs.aws.amazon.com/bedrock/latest/userguide/global-cross-region-inference.html,
+        # "IAM policy requirements for global cross-Region inference") is
+        # explicit that this needs a THREE-PART policy, not one grant: this
+        # profile-ARN statement, plus the two foundation-model statements
+        # that follow. Two live AccessDeniedExceptions on 2026-08-15
+        # (secrets-shared-dev; research.md R-005) independently rediscovered
+        # this the hard way before the doc was found — see those two
+        # statements for the exact failure each one fixes.
         Sid      = "InvokeBedrockAccessVerificationProfile"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:${var.aws_region}:${var.expected_account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
       },
       {
-        # Confirmed live (2026-08-15, secrets-shared-dev, research.md R-005
-        # amendment): AWS authorizes bedrock:InvokeModel through a cross-region
-        # inference profile against the underlying FOUNDATION MODEL, not the
-        # profile ARN above — a live AccessDeniedException named exactly this
-        # ARN even with the profile statement already granted.
-        #
-        # NO region segment (two colons, not one before "foundation-model") —
-        # a second live AccessDeniedException, this time from an actual
-        # /bedrock/suggest mitigation call, corrected the first attempt's
-        # ap-southeast-1-scoped ARN: AWS represents this resource region-less
-        # for a "global." cross-region profile, unlike a plain single-region
-        # foundation model (contrast InvokeMitigationSuggestionModel below,
-        # which correctly does carry a region). No account-id segment either:
-        # foundation models are AWS-owned, not account-scoped.
+        # Part 2 of 3 (see the profile statement above): the "Regional FM"
+        # grant AWS's global-cross-region-inference doc requires alongside
+        # the profile ARN. Confirmed live 2026-08-15 (secrets-shared-dev,
+        # research.md R-005, Round 1): without this, a real call is denied
+        # with an AccessDeniedException naming exactly this ARN, even with
+        # the profile statement already granted.
         #
         # This is also the model backend/mitigation/ai/bedrock/
         # BedrockProperties.java's app.bedrock.model-id actually defaults to
@@ -353,6 +352,24 @@ locals {
         # /bedrock/access check, not the Sonnet identifier
         # docs/runbooks/SCRUM-187-bedrock-spike.md's earlier spike assumed.
         Sid      = "InvokeBedrockAccessVerificationFoundationModel"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      },
+      {
+        # Part 3 of 3 (see the profile statement above): the "global FM"
+        # grant — no Region, no account-id segment, "intentional and
+        # required for the cross-Region functionality" per AWS's own doc.
+        # This is what actually enables routing to a Region other than the
+        # caller's own. Confirmed live 2026-08-15 (secrets-shared-dev,
+        # research.md R-005, Round 2): a real /bedrock/suggest mitigation
+        # call, made after the Regional-FM statement above was applied and
+        # confirmed, was denied with an AccessDeniedException naming this
+        # exact ARN instead. Both this and the Regional-FM statement above
+        # are required together — dropping either one reproduces the
+        # matching live denial (this repo tried exactly that, twice, before
+        # finding AWS's three-part-policy requirement documented).
+        Sid      = "InvokeBedrockAccessVerificationFoundationModelGlobal"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
