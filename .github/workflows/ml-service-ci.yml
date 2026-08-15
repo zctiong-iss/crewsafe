@@ -183,7 +183,12 @@ jobs:
       - name: Summarize ml-service image scan
         env:
           IMAGE: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}:${{ github.sha }}
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "ml-service image vulnerability scan"
+        # No fifth (title) argument: summarize-trivy-report.sh only allowlists
+        # 'ML-service container vulnerability scan' and 'Backend image
+        # vulnerability scan' (its own guard against free-form title
+        # injection into a CI summary). Omitting it defaults to the former,
+        # the same title verify-ml-service's own summary step already uses.
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}"
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN }}
