@@ -68,6 +68,18 @@ jobs:
         id: artifact
         run: .github/scripts/mobsf-dynamic/retrieve-and-verify-artifact.sh "$RUNNER_TEMP/android-artifact"
 
+      # Without this, /dev/kvm exists but the runner user has no group permission to use it
+      # (verified via a real run: "ProbeKVM: This user doesn't have permissions to use KVM"),
+      # so the emulator falls back to full software emulation (`-accel off`) and never boots
+      # within FR-004's 10-minute window. This is reactivecircus/android-emulator-runner's own
+      # documented prerequisite for Linux runners, not something specific to this workflow.
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       # FR-004: the emulator becoming ready is bounded to 10 minutes via this step's own
       # timeout. `script:` is a no-op confirmation -- the emulator keeps running for the rest
       # of this job's later steps (adb/MobSF/Maestro all target it directly).
@@ -100,21 +112,54 @@ jobs:
       # our SHA-256. X-Mobsf-Api-Key is the header name MobSF's own CORS policy documents
       # (mobsf/MobSF/views/api/api_middleware.py accepts it or a raw Authorization header;
       # X-Mobsf-Api-Key is used here since it is the more explicit, purpose-built one).
+      # --fail-with-body (curl >=7.76, present on ubuntu-latest) so an HTTP error still writes
+      # MobSF's actual response body to -o instead of discarding it -- a plain -f/--fail swallows
+      # the body on error, which previously left a bare "curl: (22) ... 400" in the log with zero
+      # information about what MobSF actually rejected (confirmed by a real run).
       - name: Upload artifact to MobSF
         id: mobsf_upload
         env:
           ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/upload" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             -F "file=@${ARTIFACT_PATH};type=application/vnd.android.package-archive" \
-            -o "$RUNNER_TEMP/mobsf-upload.json"
+            -o "$RUNNER_TEMP/mobsf-upload.json" || {
+              echo "::error::MobSF upload request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-upload.json" >&2 || true
+              exit 1
+            }
           mobsf_hash="$(jq -r '.hash // empty' "$RUNNER_TEMP/mobsf-upload.json")"
           if [[ -z "$mobsf_hash" ]]; then
             echo "::error::MobSF upload did not return a hash -- see mobsf-upload.json in the uploaded report."
             exit 1
           fi
           echo "mobsf_hash=${mobsf_hash}" >>"$GITHUB_OUTPUT"
+
+      # Required before start_analysis can resolve a package name: dynamic_analyzer() (the
+      # handler behind /api/v1/dynamic/start_analysis, mobsf/DynamicAnalyzer/views/android/
+      # dynamic_analyzer.py) calls get_package_name(checksum), which looks up
+      # StaticAnalyzerAndroid.objects.get(MD5=checksum) -- a row that only exists once static
+      # analysis has run. /api/v1/upload alone never populates it; only /api/v1/scan
+      # (mobsf/MobSF/views/api/api_static_analysis.py::api_scan) does, via a synchronous call
+      # to static_analyzer(). Skipping this produced a confirmed, real failure: start_analysis
+      # returned HTTP 500 with {"error": "Cannot get package name from checksum"}.
+      - name: Run MobSF static analysis
+        env:
+          MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
+        run: |
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/scan" \
+            -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+            --data-urlencode "hash=${MOBSF_HASH}" \
+            -o "$RUNNER_TEMP/mobsf-scan.json" || {
+              echo "::error::MobSF static scan request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-scan.json" >&2 || true
+              exit 1
+            }
+          if jq -e 'has("error")' "$RUNNER_TEMP/mobsf-scan.json" >/dev/null 2>&1; then
+            echo "::error::MobSF could not complete static analysis -- see mobsf-scan.json in the uploaded report."
+            exit 1
+          fi
 
       # Triggers MobSF's own environment setup (installs its Frida-based agent and MITM root
       # CA on the emulator the first time, i.e. "MobSFying"), then installs and prepares the
@@ -125,10 +170,14 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/start_analysis" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/start_analysis" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
-            -o "$RUNNER_TEMP/mobsf-start-analysis.json"
+            -o "$RUNNER_TEMP/mobsf-start-analysis.json" || {
+              echo "::error::MobSF start_analysis request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-start-analysis.json" >&2 || true
+              exit 1
+            }
           if jq -e 'has("error")' "$RUNNER_TEMP/mobsf-start-analysis.json" >/dev/null 2>&1; then
             echo "::error::MobSF could not start dynamic analysis -- see mobsf-start-analysis.json in the uploaded report."
             exit 1
@@ -171,14 +220,22 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/stop_analysis" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/stop_analysis" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
-            >/dev/null
-          curl -fsS -X POST "http://localhost:8000/api/v1/dynamic/report_json" \
+            -o "$RUNNER_TEMP/mobsf-stop-analysis.json" || {
+              echo "::error::MobSF stop_analysis request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-stop-analysis.json" >&2 || true
+              exit 1
+            }
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/dynamic/report_json" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
-            -o "$RUNNER_TEMP/mobsf-report.json"
+            -o "$RUNNER_TEMP/mobsf-report.json" || {
+              echo "::error::MobSF report_json request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-report.json" >&2 || true
+              exit 1
+            }
 
       # Verified against mobsf/DynamicAnalyzer/views/android/analysis.py +
       # views/common/shared.py: the report's "domains" field is a dict KEYED BY HOSTNAME
@@ -266,6 +323,16 @@ jobs:
             echo "| outcome | \`${outcome}\` |"
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      # Some MobSF API failures return a generic message with no real detail (confirmed by a
+      # real run: start_analysis failing with just {"error": "Dynamic Analysis Failed."} after
+      # ~3 minutes of real work) -- the actual cause only ever appears in MobSF's own container
+      # logs, never in the HTTP response body. MOBSF_CONTAINER_ID is only set once "Start MobSF
+      # service" itself has already succeeded, so an earlier failure there just makes this a
+      # harmless no-op via `|| true`.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
 
       # Only written once the scan reaches at least the sanitization step -- an early
       # infrastructure failure (emulator boot timeout, MobSF never becoming ready, upload
@@ -359,10 +426,14 @@ jobs:
         env:
           ARTIFACT_PATH: ${{ steps.artifact.outputs.artifact_path }}
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/upload" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/upload" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             -F "file=@${ARTIFACT_PATH};type=application/octet-stream" \
-            -o "$RUNNER_TEMP/mobsf-upload.json"
+            -o "$RUNNER_TEMP/mobsf-upload.json" || {
+              echo "::error::MobSF upload request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-upload.json" >&2 || true
+              exit 1
+            }
           mobsf_hash="$(jq -r '.hash // empty' "$RUNNER_TEMP/mobsf-upload.json")"
           if [[ -z "$mobsf_hash" ]]; then
             echo "::error::MobSF upload did not return a hash -- see mobsf-upload.json in the uploaded report."
@@ -397,14 +468,43 @@ jobs:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
           RUN_ID: ${{ github.run_id }}
         run: |
+          instance_id=""
+          # Stop AND destroy on every exit path -- this step never reaches a
+          # successful exit today (see the deliberate failure at the bottom), and
+          # this also covers a create/start/install failure partway through, so a
+          # trial's limited device-hours (or a per-project instance-count limit)
+          # are never silently left consumed by an orphaned instance. Verified
+          # against corellium_instance.py: stop_instance suspends the VM (what
+          # actually frees allocated device-time); destroy_instance removes it
+          # entirely. Invoked indirectly via `trap cleanup EXIT` below -- shellcheck's
+          # invocation heuristic doesn't recognize trap-registered functions, so it
+          # flags both the function itself (SC2329) and every statement inside it
+          # (SC2317) as unreachable.
+          # shellcheck disable=SC2329,SC2317
+          cleanup() {
+            [[ -n "$instance_id" ]] || return 0
+            echo "Stopping and destroying Corellium instance ${instance_id}..."
+            curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_stop_instance" \
+              -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+              --data-urlencode "instance_id=${instance_id}" >/dev/null 2>&1 || true
+            curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_destroy_instance" \
+              -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
+              --data-urlencode "instance_id=${instance_id}" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
           create_resp="$RUNNER_TEMP/corellium-create.json"
-          curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_create_ios_instance" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "project_id=${MOBSF_CORELLIUM_PROJECT_ID}" \
             --data-urlencode "flavor=${CORELLIUM_IOS_FLAVOR}" \
             --data-urlencode "version=${CORELLIUM_IOS_VERSION}" \
             --data-urlencode "name=MobSF Dynamic Scan ${RUN_ID}" \
-            -o "$create_resp"
+            -o "$create_resp" || {
+              echo "::error::MobSF corellium_create_ios_instance request failed -- response body:"
+              cat "$create_resp" >&2 || true
+              exit 1
+            }
           # create_vm_instance's own response embeds the id in a message string
           # ("Created a new instance with id: <id>"), not a dedicated JSON field --
           # verified against corellium_instance.py's create_vm_instance.
@@ -415,16 +515,25 @@ jobs:
           fi
           echo "instance_id=${instance_id}" >>"$GITHUB_OUTPUT"
 
-          curl -fsS -X POST "http://localhost:8000/api/v1/ios/corellium_start_instance" \
+          start_resp="$RUNNER_TEMP/corellium-start.json"
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/corellium_start_instance" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "instance_id=${instance_id}" \
-            >/dev/null
+            -o "$start_resp" || {
+              echo "::error::MobSF corellium_start_instance request failed -- response body:"
+              cat "$start_resp" >&2 || true
+              exit 1
+            }
 
-          curl -fsS -X POST "http://localhost:8000/api/v1/ios/setup_environment" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/setup_environment" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "hash=${MOBSF_HASH}" \
             --data-urlencode "instance_id=${instance_id}" \
-            -o "$RUNNER_TEMP/corellium-setup.json"
+            -o "$RUNNER_TEMP/corellium-setup.json" || {
+              echo "::error::MobSF setup_environment request failed -- response body:"
+              cat "$RUNNER_TEMP/corellium-setup.json" >&2 || true
+              exit 1
+            }
           if jq -e 'has("error")' "$RUNNER_TEMP/corellium-setup.json" >/dev/null 2>&1; then
             echo "::error::MobSF could not install the app on the Corellium instance -- see corellium-setup.json in the uploaded report."
             exit 1
@@ -438,11 +547,15 @@ jobs:
         env:
           MOBSF_HASH: ${{ steps.mobsf_upload.outputs.mobsf_hash }}
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/ios/device_install_ipa" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_install_ipa" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
             --data-urlencode "checksum=${MOBSF_HASH}" \
-            -o "$RUNNER_TEMP/device-install.json"
+            -o "$RUNNER_TEMP/device-install.json" || {
+              echo "::error::MobSF device_install_ipa request failed -- response body:"
+              cat "$RUNNER_TEMP/device-install.json" >&2 || true
+              exit 1
+            }
           if jq -e 'has("error")' "$RUNNER_TEMP/device-install.json" >/dev/null 2>&1; then
             echo "::error::MobSF could not install the app on the physical device -- see device-install.json in the uploaded report."
             exit 1
@@ -488,11 +601,15 @@ jobs:
         env:
           IOS_BUNDLE_ID: sg.crewsafe.mobile
         run: |
-          curl -fsS -X POST "http://localhost:8000/api/v1/ios/device_report_json" \
+          curl -sS --fail-with-body -X POST "http://localhost:8000/api/v1/ios/device_report_json" \
             -H "X-Mobsf-Api-Key: ${MOBSF_API_KEY}" \
             --data-urlencode "device_id=${IOS_DEVICE_UDID}" \
             --data-urlencode "bundle_id=${IOS_BUNDLE_ID}" \
-            -o "$RUNNER_TEMP/mobsf-report.json"
+            -o "$RUNNER_TEMP/mobsf-report.json" || {
+              echo "::error::MobSF device_report_json request failed -- response body:"
+              cat "$RUNNER_TEMP/mobsf-report.json" >&2 || true
+              exit 1
+            }
 
       - name: Extract captured network hosts
         if: env.analyzer_environment == 'ios-signed-device'
@@ -572,6 +689,13 @@ jobs:
             echo "| outcome | \`${outcome}\` |"
             echo "| coverage_evidence | \`${coverage_evidence}\` |"
           } >>"$GITHUB_STEP_SUMMARY"
+
+      # Same reasoning as the Android job's equivalent step: some MobSF API failures return a
+      # generic message with no real detail, and the actual cause only ever appears in MobSF's
+      # own container logs.
+      - name: Dump MobSF container logs on failure
+        if: failure()
+        run: docker logs "${MOBSF_CONTAINER_ID:-}" 2>&1 | tail -n 300 || true
 
       # Same reasoning as the Android job's upload step: nothing exists here yet for the
       # ios-corellium branch's deliberate explicit stop, or for any earlier infrastructure

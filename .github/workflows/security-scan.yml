@@ -180,8 +180,16 @@ jobs:
         run: |
           # Keep the SAST job deterministic and credential-free. test_agent_eval.py
           # is a live Bedrock benchmark and must run only in an AWS-enabled job.
+          #
+          # test_agent_graph.py and test_bedrock_client.py are the offline, stubbed
+          # counterparts and belong here: without them Sonar is handed a report in which
+          # the whole agent/ package looks near-untested (graph.py 36%, context.py 13%,
+          # validation.py 39%) purely because its tests were never run, which understates
+          # coverage on new code and would eventually be "fixed" by someone writing tests
+          # that already exist. With them: graph 95%, validation 100%, fallback 95%.
           python -m coverage run -m pytest test_forecast.py
           python -m coverage run --append -m pytest tests
+          python -m coverage run --append -m pytest test_agent_graph.py test_bedrock_client.py
           python -m coverage xml -o coverage.xml
 
       - name: Validate ML-service coverage report
@@ -445,6 +453,13 @@ jobs:
 
       - name: Sonar Quality Gate configurator self-tests
         run: .github/scripts/tests/test-sonar-gate-configure.sh
+
+      # SCRUM-405: wired in the same change that adds this test, not as a follow-up -- see
+      # research.md Decision 5 in specs/041-ci-shell-case-defaults (this job has a documented
+      # history of guard tests written but not wired in until a later PR: SCRUM-346, SCRUM-350,
+      # SCRUM-351).
+      - name: CI shell case-statement default-arm self-tests
+        run: .github/scripts/tests/test-ci-case-statement-defaults.sh
 
       # SCRUM-351: added here (unlike the ML-service coverage guard from SCRUM-346, which
       # was written but never wired into this job) so a change that silently drops or

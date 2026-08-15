@@ -164,10 +164,13 @@ run "entry_shape" {
     error_message = "The secret must be named inside this component's naming scope, or the read policy will not reach it (FR-004)."
   }
 
-  # Six, not thirteen: a value earns an entry only where the deployment must
-  # differ from the application's own default (FR-001, research.md R-008).
+  # Eight, not thirteen: a value earns an entry only where the deployment must
+  # differ from the application's own default (FR-001, research.md R-008). The
+  # two ml/model-manifest* entries (SCRUM-373, FR-008) are deliberately empty
+  # rather than absent — see the dedicated deferred_model_manifest_slots run
+  # block below.
   assert {
-    condition     = length(aws_ssm_parameter.config) == 6
+    condition     = length(aws_ssm_parameter.config) == 8
     error_message = "The configuration entry set changed. Adding one is fine; restating an application default is not (FR-001)."
   }
 
@@ -202,6 +205,44 @@ run "entry_shape" {
       && !contains(keys(aws_ssm_parameter.config), "cors/allowed-origins")
     )
     error_message = "db/url belongs to the database component and cors/allowed-origins to whatever creates the web origin; neither is declared here (FR-031)."
+  }
+}
+
+# SCRUM-373, FR-008 — the model-manifest configuration is declared but left
+# unset: no reviewed, approved_for_inference bundle currently exists to
+# activate (spec Clarifications). ForecastModelRegistry.from_environment()
+# treats an absent/empty WBGT_MODEL_MANIFEST as "no model configured" and
+# falls back to the persistence baseline — not an error path — so an empty
+# String parameter is deliberately indistinguishable from "unset" to the
+# application, while still being a real Terraform resource a future promotion
+# can update by value only.
+run "deferred_model_manifest_slots" {
+  command = apply
+
+  assert {
+    condition     = contains(keys(aws_ssm_parameter.config), "ml/model-manifest")
+    error_message = "A configuration slot for WBGT_MODEL_MANIFEST must exist (FR-008)."
+  }
+
+  assert {
+    condition     = contains(keys(aws_ssm_parameter.config), "ml/model-manifest-sha256")
+    error_message = "A configuration slot for WBGT_MODEL_MANIFEST_SHA256 must exist (FR-008)."
+  }
+
+  # "unset", not "": AWS SSM PutParameter rejects an actually-empty string
+  # (found live, secrets-shared-dev apply, 2026-08-15). "unset" is the
+  # AWS-API-legal placeholder that still means "no bundle is approved for
+  # inference yet" (FR-008) — see main.tf's comment for why this is
+  # behaviorally equivalent to a true empty value from ml-service's own
+  # perspective, modulo one harmless extra startup log line.
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == "unset"
+    error_message = "The model-manifest slot must hold the 'unset' placeholder in this issue — no bundle is approved for inference yet, and SSM rejects an empty string (FR-008)."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == "unset"
+    error_message = "The model-manifest-sha256 slot must hold the 'unset' placeholder in this issue, for the same reason (FR-008)."
   }
 }
 
@@ -267,11 +308,17 @@ run "iam_boundary" {
     error_message = "An identity holds a write, delete, or tag permission on a secret or parameter (SC-007, FR-012)."
   }
 
-  # SC-014 — exactly one grant reaches outside this component's naming scope: the
-  # service-managed database credential (FR-029), which cannot be pinned by ARN
-  # because the service names it and it does not exist until the database does.
-  # Every other resource ARN mentions the project scope; the one documented
-  # wildcard is excluded here and asserted separately by SC-016.
+  # SC-014 — a named, closed allow-list of grants reaching outside this
+  # component's naming scope (generalized by SCRUM-373, research.md R-006, from
+  # the original "exactly one per role, the rds! pattern" invariant SCRUM-174
+  # established). Two families are permitted: the service-managed database
+  # credential (FR-029, cannot be pinned by ARN — the service names it and it
+  # does not exist until the database does) and the four Bedrock model grants
+  # (FR-006, contracts/bedrock-invoke-grant.md — a Bedrock model ARN carries no
+  # "crewsafe" segment either, being an AWS/Anthropic-owned or account-scoped
+  # resource, not one this component names). Every other resource ARN mentions
+  # the project scope; the wildcard statements are excluded here and asserted
+  # separately by SC-016.
   assert {
     condition = length([
       for s in concat(
@@ -279,8 +326,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
-    ]) == 2
-    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one per role (the rds! service-managed credential path) is permitted (SC-014, FR-029)."
+    ]) == 6
+    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the four Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
   }
 
   assert {
@@ -288,24 +335,94 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : strcontains(s.Resource, ":secret:rds!")
+      ) : strcontains(s.Resource, ":secret:rds!") || strcontains(s.Resource, ":bedrock:")
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
     ])
-    error_message = "A grant reaches outside this component's naming scope and is not the rds! service-managed credential path (SC-014, FR-029)."
+    error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path nor a Bedrock model ARN (SC-014, FR-029, FR-006)."
   }
 
-  # SC-016 — the one unavoidable wildcard. ecr:GetAuthorizationToken does not
-  # support resource-level permissions; the service accepts only "*", which is
-  # why the platform's own managed policy is written that way. Constrained here
-  # to one statement holding one action so it cannot quietly acquire a sibling.
+  # FR-006 — exactly four Bedrock statements: one for the Sonnet
+  # mitigation-generation model, and three for the Haiku access-verification
+  # model (the inference-profile ARN, plus BOTH representations of the
+  # underlying foundation-model ARN AWS's authorization check has each
+  # independently required across separate live calls — confirmed
+  # 2026-08-15, research.md R-005, Rounds 1 through 3). Each grants only
+  # bedrock:InvokeModel, never bedrock:*, never merged into one statement (a
+  # list Resource would break the strcontains() checks above — research.md
+  # R-006).
+  assert {
+    condition = length([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : s.Sid
+      if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
+    ]) == 4
+    error_message = "There must be exactly four statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
+  }
+
+  # Confirmed live 2026-08-15, across three rounds: the underlying
+  # foundation-model ARN a cross-region "global." inference profile is
+  # authorized against does not consistently resolve to one canonical
+  # resource shape — both the calling-region-scoped form and the region-less
+  # form (arn:aws:bedrock:::foundation-model/...) have each independently
+  # been the one a live AccessDeniedException named, on different calls for
+  # the same model. Both statements must be present.
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.task.policy).Statement :
+      s.Resource == "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      if s.Sid == "InvokeBedrockAccessVerificationFoundationModel"
+    ])
+    error_message = "InvokeBedrockAccessVerificationFoundationModel must be scoped to the region-scoped foundation-model ARN — confirmed live (research.md R-005, Round 1 and Round 3)."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.task.policy).Statement :
+      s.Resource == "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      if s.Sid == "InvokeBedrockAccessVerificationFoundationModelGlobal"
+    ])
+    error_message = "InvokeBedrockAccessVerificationFoundationModelGlobal must be scoped to the region-less global foundation-model ARN — confirmed live (research.md R-005, Round 2) and per AWS's global-cross-region-inference IAM doc."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : s.Action == ["bedrock:InvokeModel"]
+      if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
+    ])
+    error_message = "Every Bedrock statement must grant exactly bedrock:InvokeModel — never bedrock:*, never bundled with another action (FR-006)."
+  }
+
+  # FR-009 — this issue adds no S3 access anywhere on either identity.
+  assert {
+    condition = alltrue([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : length([for a in s.Action : a if startswith(a, "s3:")]) == 0
+    ])
+    error_message = "Neither identity may hold any s3: action in this issue — a model bundle S3 fetch is explicitly deferred to a follow-up issue (FR-009)."
+  }
+
+  # SC-016 — exactly two unavoidable wildcards, named and closed (SCRUM-371,
+  # research.md R-004). ecr:GetAuthorizationToken does not support
+  # resource-level permissions; neither do the four ssmmessages channel actions
+  # ECS Exec's SSM sidecar needs on the task role. Both are the platform's own
+  # documented exceptions, not a gap in this component's scoping discipline.
+  # Constrained to exactly these two statements so a third cannot quietly
+  # acquire a wildcard alongside them.
   assert {
     condition = length([
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid if s.Resource == "*"
-    ]) == 1
-    error_message = "There must be exactly one statement using a full resource wildcard (SC-016, FR-032)."
+    ]) == 2
+    error_message = "There must be exactly two statements using a full resource wildcard (SC-016, FR-032, SCRUM-371 research.md R-004)."
   }
 
   assert {
@@ -313,10 +430,18 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : length(s.Action) == 1 && s.Action[0] == "ecr:GetAuthorizationToken"
+        ) : contains([
+          jsonencode(["ecr:GetAuthorizationToken"]),
+          jsonencode(sort([
+            "ssmmessages:CreateControlChannel",
+            "ssmmessages:CreateDataChannel",
+            "ssmmessages:OpenControlChannel",
+            "ssmmessages:OpenDataChannel",
+          ])),
+      ], jsonencode(sort(s.Action)))
       if s.Resource == "*"
     ])
-    error_message = "The single wildcard statement must hold exactly one action, and it must be ecr:GetAuthorizationToken (SC-016, FR-032)."
+    error_message = "Every wildcard statement's action list must be exactly ecr:GetAuthorizationToken or exactly the four ssmmessages channel actions — no other wildcard statement is permitted (SC-016, FR-032, SCRUM-371 research.md R-004)."
   }
 
   # FR-013 — neither role may be assumable by anything but the container runtime.

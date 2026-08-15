@@ -1,5 +1,6 @@
 package com.crewsafe.weather.nea;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -8,6 +9,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.math.BigDecimal;
@@ -17,6 +19,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import static com.crewsafe.weather.nea.NeaApiException.Reason.HTTP;
@@ -33,6 +37,7 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
  * {@code docs/runbooks/SCRUM-111-weather-ingestion.md}.
  *
  * @author Bryan Phang
+ * @author Justin Chua
  */
 @Component
 @ConditionalOnProperty(prefix = "app.weather.data", name = "mode", havingValue = "live",
@@ -100,20 +105,50 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
                 .max(Comparator.comparing(WbgtRecord::datetime))
                 .orElseThrow();
 
-        List<NeaStationReading> readings = requireNonEmpty(record.item().readings(), "WBGT readings")
-                .stream()
+        List<WbgtReading> reported = requireNonEmpty(record.item().readings(), "WBGT readings");
+        List<NeaStationReading> readings = reported.stream()
                 .map(this::mapWbgtReading)
+                .filter(Objects::nonNull)
                 .toList();
+
+        // A station reporting no value is normal; every station reporting none is not, and there
+        // is nothing to ingest from it. Failing here rather than returning an empty observation
+        // keeps "we received nothing usable" distinguishable from "conditions were unremarkable".
+        if (readings.isEmpty()) {
+            throw invalid("WBGT response contained no station with a usable reading");
+        }
+        int skipped = reported.size() - readings.size();
+        if (skipped > 0) {
+            // Count only. Station identifiers are third-party input and this reaches the log sink.
+            log.info("nea_wbgt_stations_without_reading skipped={} used={}", skipped, readings.size());
+        }
         return new NeaObservation(NeaMetric.WBGT, record.datetime().toInstant(), "deg C", readings);
     }
 
+    /**
+     * Maps one station's WBGT reading, or null if that station has no reading to report.
+     *
+     * <p>The null return is the whole point. data.gov.sg sends {@code "NA"} for a station that is
+     * online but has nothing for this interval, and both layers that met it used to destroy the
+     * entire batch: the DTO's strict {@link BigDecimal} mapping threw during deserialization, and
+     * this method threw again on a null value. One offline station out of twenty discarded the
+     * other nineteen, every cycle it happened — which is what left the WBGT history too sparse
+     * and too gappy for the forecast's context window to assemble.
+     *
+     * <p>Structural problems still throw. A station with no id, no name or no coordinates is a
+     * malformed record rather than an incomplete one: it cannot be attributed or located, so
+     * accepting it would put an unusable reading into the safety record. The distinction is
+     * between a station that did not answer and a response that no longer matches the contract.
+     */
     private NeaStationReading mapWbgtReading(WbgtReading reading) {
         if (reading == null || reading.station() == null || reading.location() == null
                 || !StringUtils.hasText(reading.station().id())
                 || !StringUtils.hasText(reading.station().name())
-                || reading.location().latitude() == null || reading.location().longitude() == null
-                || reading.wbgt() == null) {
+                || reading.location().latitude() == null || reading.location().longitude() == null) {
             throw invalid("WBGT response contains an incomplete station reading");
+        }
+        if (reading.wbgt() == null) {
+            return null;
         }
         NeaStation station = new NeaStation(
                 reading.station().id(),
@@ -199,9 +234,17 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
                     throw failure;
                 }
 
+                // A rate limit is not a transient blip and does not answer to the same curve.
+                // The server states when it will serve us again; obeying that beats doubling
+                // 250ms three times inside a ten-second penalty and calling it a retry.
+                Duration wait = rateLimitWait(exception).orElse(backoff);
+
+                // `failure` carries the translated kind (HTTP status, transport, or decode);
+                // logging only the attempt number makes a 429, a connection reset and a
+                // malformed payload indistinguishable in the one place they can be told apart.
                 log.warn("data.gov.sg {} attempt {}/{} failed; retrying after {}",
-                        operation, attempt, attempts, backoff);
-                waitBeforeRetry(operation, backoff);
+                        operation, attempt, attempts, wait, failure);
+                waitBeforeRetry(operation, wait);
                 backoff = nextBackoff(backoff);
             }
         }
@@ -231,6 +274,39 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
             return status == 429 || responseException.getStatusCode().is5xxServerError();
         }
         return false;
+    }
+
+    /**
+     * How long to wait when the failure is a rate limit, or empty when it is not one.
+     *
+     * Prefers the server's own {@code Retry-After}, which is the only source that knows the
+     * real window; falls back to the configured rate-limit backoff when the header is absent
+     * or unparseable. data.gov.sg currently states the delay in the error body rather than
+     * the header, so the fallback is the path normally taken — but reading the header first
+     * means a future change to send one is honoured without another incident like this.
+     *
+     * Only the delta-seconds form is parsed. The HTTP-date form is legal but unused here, and
+     * guessing at a malformed value would be worse than the configured default.
+     */
+    private Optional<Duration> rateLimitWait(RestClientException exception) {
+        if (!(exception instanceof RestClientResponseException responseException)
+                || responseException.getStatusCode().value() != 429) {
+            return Optional.empty();
+        }
+        String retryAfter = responseException.getResponseHeaders() == null
+                ? null
+                : responseException.getResponseHeaders().getFirst(HttpHeaders.RETRY_AFTER);
+        if (StringUtils.hasText(retryAfter)) {
+            try {
+                long seconds = Long.parseLong(retryAfter.trim());
+                if (seconds > 0) {
+                    return Optional.of(Duration.ofSeconds(seconds));
+                }
+            } catch (NumberFormatException ignored) {
+                // Falls through to the configured default rather than failing the poll.
+            }
+        }
+        return Optional.of(properties.getRateLimitBackoff());
     }
 
     private void waitBeforeRetry(String operation, Duration backoff) {
@@ -283,7 +359,14 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     private record WbgtItem(List<WbgtReading> readings) {
     }
 
-    private record WbgtReading(WbgtStation station, WbgtLocation location, BigDecimal wbgt,
+    /**
+     * {@code wbgt} is read leniently: data.gov.sg sends {@code "NA"} for a station with no
+     * reading this interval, and a strict {@link BigDecimal} mapping failed the entire response
+     * over one such station. See {@link NeaMissingNumberDeserializer}.
+     */
+    private record WbgtReading(WbgtStation station, WbgtLocation location,
+                               @JsonDeserialize(using = NeaMissingNumberDeserializer.class)
+                               BigDecimal wbgt,
                                String heatStress) {
     }
 

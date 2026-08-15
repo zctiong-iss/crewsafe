@@ -4,10 +4,13 @@ import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
+import com.crewsafe.operation.domain.RecommendationEvidence;
+import com.crewsafe.operation.service.AgentDraftService;
 import com.crewsafe.operation.service.RecommendationService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -41,6 +44,7 @@ import java.util.UUID;
 public class RecommendationController {
 
     private final RecommendationService recommendationService;
+    private final AgentDraftService agentDraftService;
 
     public record ApprovalResponse(UUID id, UUID approverId, String decision, String reason,
                                     List<MitigationSuggestion> editedMitigations, Instant decidedAt) {
@@ -50,14 +54,23 @@ public class RecommendationController {
         }
     }
 
+    /**
+     * {@code evidence} and {@code modelVersion} were added by SCRUM-359, satisfying §12.2's
+     * requirement that a recommendation always surfaces its data age, model version and policy
+     * version. Both are additive and both are null on recommendations drafted before they
+     * existed, so existing consumers are unaffected and new ones must render null as "not
+     * recorded" rather than substituting current readings.
+     */
     public record RecommendationResponse(UUID id, UUID shiftId, String policyVersion, String status,
                                           String rationale, Instant createdAt,
-                                          List<MitigationSuggestion> mitigations, ApprovalResponse approval) {
+                                          List<MitigationSuggestion> mitigations, ApprovalResponse approval,
+                                          RecommendationEvidence evidence, String modelVersion) {
         static RecommendationResponse from(Recommendation recommendation, List<MitigationSuggestion> mitigations,
-                                            ApprovalResponse approval) {
+                                            ApprovalResponse approval, RecommendationEvidence evidence) {
             return new RecommendationResponse(recommendation.getId(), recommendation.getShiftId(),
                     recommendation.getPolicyVersion(), recommendation.getStatus().name(),
-                    recommendation.getRationale(), recommendation.getCreatedAt(), mitigations, approval);
+                    recommendation.getRationale(), recommendation.getCreatedAt(), mitigations, approval,
+                    evidence, recommendation.getModelVersion());
         }
     }
 
@@ -104,11 +117,37 @@ public class RecommendationController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * Drafts a new recommendation for a shift (SCRUM-289, completing US-08).
+     *
+     * <p>Synchronous, and that is a considered choice for the MVP rather than an omission. The
+     * call takes roughly 10–20s against the selected model, which a supervisor-initiated action
+     * can carry behind a loading state; making it asynchronous would require a notification path
+     * to tell them it finished, and mobile has none — it loads recommendations on mount and
+     * pull-to-refresh only. Deferred rather than half-built.
+     *
+     * <p>Restricted to SUPERVISOR/ADMIN, matching {@code /decision}: drafting costs a billed
+     * model call and creates something a supervisor must then act on, so it belongs to the same
+     * people who can decide it. A safety manager may read the result but not trigger one.
+     */
+    @PostMapping("/generate")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<RecommendationResponse> generate(
+            @PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+
+        return agentDraftService.generate(siteId, shiftId, principal.getId())
+                .map(this::toResponse)
+                .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     private RecommendationResponse toResponse(Recommendation recommendation) {
         List<MitigationSuggestion> mitigations = recommendationService.draftMitigations(recommendation);
         ApprovalResponse approval = recommendationService.approvalFor(recommendation.getId())
                 .map(a -> ApprovalResponse.from(a, recommendationService.editedMitigations(a)))
                 .orElse(null);
-        return RecommendationResponse.from(recommendation, mitigations, approval);
+        return RecommendationResponse.from(recommendation, mitigations, approval,
+                recommendationService.evidenceFor(recommendation));
     }
 }

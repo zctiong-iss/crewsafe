@@ -19,6 +19,8 @@ import statistics
 import time
 from typing import Dict, List
 
+from agent.context import render_context
+from agent.contract import AgentDraftRequest, PolicyActionPayload, PolicyDecisionPayload, WorkerContext
 from bedrock_client import BedrockClient
 from eval_scenarios import SCENARIOS, EvalScenario, ExpectedAction, expected_policy_decision
 from eval_scoring import (
@@ -94,33 +96,80 @@ RANKED_SCENARIOS = [s for s in SCENARIOS if s.coverage not in SPECIAL_CASED_COVE
 SMOKE_SCENARIOS = list({s.coverage: s for s in SCENARIOS}.values())
 
 
-def render_context(scenario: EvalScenario, mandatory: List[ExpectedAction], advisory: List[ExpectedAction]) -> str:
-    """Turn a scenario's raw facts + the policy engine's decision into the context text the
-    prompt expects (the "Policy and shift context" section bedrock_client._build_prompt
-    inserts into)."""
-    lines = [f"Current WBGT: {scenario.current_wbgt}°C"]
-    if scenario.forecast_wbgt is not None:
-        lines.append(f"Forecast WBGT (30 min): {scenario.forecast_wbgt}°C")
-    lines.append(f"Data freshness: {scenario.freshness}")
-    lines.append(f"Lightning state: {scenario.lightning_state}")
-    if scenario.notes:
-        lines.append(f"Additional note: {scenario.notes}")
-    lines.append("")
-    lines.append("Shift roster:")
-    for w in scenario.workers:
-        lines.append(f"  - {w.worker_id}: {w.intensity} intensity, acclimatisation day {w.acclimatisation_day}")
-    lines.append("")
-    lines.append("MANDATORY actions (policy engine decided — every one of these must appear):")
-    for a in mandatory:
-        lines.append(f"  - {a.action_code} (rule: {a.rule_reference}) — applies to: {', '.join(a.applies_to)}")
-    if not mandatory:
-        lines.append("  (none)")
-    lines.append("ADVISORY actions (policy engine decided — may be included):")
-    for a in advisory:
-        lines.append(f"  - {a.action_code} (rule: {a.rule_reference}) — applies to: {', '.join(a.applies_to)}")
-    if not advisory:
-        lines.append("  (none)")
-    return "\n".join(lines)
+# The MOM policy version PolicyEngineServiceTest.java configures, and therefore the one
+# expected_policy_decision()'s thresholds were ported from.
+BENCH_POLICY_VERSION = "MOM-WBGT-2026.1"
+
+# eval_scenarios.py predates the backend's LightningRiskState and uses its own words. The
+# contract has to speak the backend's, so the adapter translates rather than either side
+# bending: WARNING is the state where a strike is near but work continues (ADVISORY), LIGHTNING
+# is the state where it does not (STOP_WORK).
+LIGHTNING_STATE_BY_SCENARIO_WORD = {"CLEAR": "CLEAR", "WARNING": "ADVISORY", "LIGHTNING": "STOP_WORK"}
+
+
+def _classify_band(wbgt: float) -> str:
+    """Mirrors com.crewsafe.weather.domain.WbgtBand.classify, including its half-open
+    boundaries (exactly 32.0 is 32_TO_BELOW_33). In production the band arrives from Java on
+    the request; the bench has no Java, so it classifies here."""
+    if wbgt >= 33:
+        return "33_AND_ABOVE"
+    if wbgt >= 32:
+        return "32_TO_BELOW_33"
+    if wbgt >= 31:
+        return "31_TO_BELOW_32"
+    return "BELOW_31"
+
+
+def to_draft_request(
+    scenario: EvalScenario, mandatory: List[ExpectedAction], advisory: List[ExpectedAction]
+) -> AgentDraftRequest:
+    """Dress a scenario up as the request the backend would really send.
+
+    This adapter is the whole point of the SCRUM-289 promotion. `render_context` now lives in
+    `agent/context.py` and is called by production; the bench reaches it through this
+    conversion instead of keeping its own copy. A model was selected on the strength of prompts
+    built by that function, so the benchmark measuring a *different* prompt-builder than the one
+    that ships would quietly invalidate the selection.
+
+    `readinessSubmitted` is True for every worker on purpose: the missing_readiness scenarios
+    express the gap through their own `notes` text, and letting the renderer synthesise a second
+    readiness sentence on top would change those prompts rather than preserve them.
+    """
+    return AgentDraftRequest(
+        shiftId=scenario.id,
+        siteId="bench",
+        currentWbgt=scenario.current_wbgt,
+        forecastWbgt30m=scenario.forecast_wbgt,
+        freshness=scenario.freshness,
+        lightningState=LIGHTNING_STATE_BY_SCENARIO_WORD[scenario.lightning_state],
+        workers=[
+            WorkerContext(
+                workerId=w.worker_id,
+                intensity=w.intensity,
+                acclimatisationDay=w.acclimatisation_day,
+                readinessSubmitted=True,
+            )
+            for w in scenario.workers
+        ],
+        contextNotes=[scenario.notes] if scenario.notes else [],
+        policyDecision=PolicyDecisionPayload(
+            policyVersion=BENCH_POLICY_VERSION,
+            currentBand=_classify_band(scenario.current_wbgt),
+            forecastBand=(_classify_band(scenario.forecast_wbgt)
+                          if scenario.forecast_wbgt is not None else None),
+            mandatoryActions=[_to_policy_action(a) for a in mandatory],
+            advisoryActions=[_to_policy_action(a) for a in advisory],
+        ),
+    )
+
+
+def _to_policy_action(action: ExpectedAction) -> PolicyActionPayload:
+    return PolicyActionPayload(
+        code=action.action_code,
+        ruleReference=action.rule_reference,
+        appliesTo=list(action.applies_to),
+        reasoning=f"Policy engine decided {action.action_code} under rule {action.rule_reference}",
+    )
 
 
 def run_bench(model_ids: List[str], scenarios: List[EvalScenario]) -> Dict[str, dict]:
@@ -144,7 +193,7 @@ def run_bench(model_ids: List[str], scenarios: List[EvalScenario]) -> Dict[str, 
             if i > 0:
                 time.sleep(REQUEST_SPACING_SECONDS)
             mandatory, advisory = expected_policy_decision(scenario.current_wbgt, scenario.workers)
-            context = render_context(scenario, mandatory, advisory)
+            context = render_context(to_draft_request(scenario, mandatory, advisory))
             # invoke()'s 1024-token default silently truncates multi-mitigation responses —
             # found live: an 8-mitigation scenario (3 workers) needed 1508 output tokens and
             # came back as an empty, schema-invalid tool call at the default cap. Size the

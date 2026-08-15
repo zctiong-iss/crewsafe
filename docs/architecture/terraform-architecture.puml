@@ -54,12 +54,16 @@ package "API edge" as api_edge {
 }
 
 package "VPC · 2 AZ" as vpc {
-  rectangle "ECS Fargate\nprivate · no public IP" as ecs
+  package "Backend ECS task · one ENI" as backend_task {
+    rectangle "ECS Fargate: backend\nprivate · no public IP" as ecs
+    rectangle "ml-service sidecar\nlocalhost:8000 only\nessential · task-coupled" as mlservice
+  }
   database "RDS PostgreSQL\nprivate · TLS" as rds
   rectangle "NAT gateway\nsingle AZ" as nat
 }
 
 cloud "NEA weather API" as weather
+cloud "Bedrock\nClaude models" as bedrock
 
 browser --> cognito
 client --> cognito
@@ -71,7 +75,10 @@ api_cf --> alb
 alb --> ecs
 ecs --> rds
 ecs --> nat
+ecs --> mlservice
 nat --> weather
+mlservice --> nat
+nat --> bedrock
 
 note right of api_cf
   Viewer HTTPS.
@@ -79,9 +86,16 @@ note right of api_cf
   ALB hostname has no project cert.
 end note
 
-note right of ecs
+note bottom of ecs
   Authz server-side.
   No public IP.
+end note
+
+note bottom of mlservice
+  No ALB, service discovery,
+  or security-group ingress.
+  Reaches Bedrock via the task
+  role's own InvokeModel grant.
 end note
 
 note right of rds
@@ -142,13 +156,14 @@ skinparam artifact {
 
 artifact "GitHub Actions\nCI + release" as github
 cloud "SonarCloud" as sonar
+cloud "Bedrock\nClaude models" as bedrock
 
 package "Backend dependencies" as runtime {
-  rectangle "ECS task" as ecs_platform
-  database "ECR\nbackend + web\nimmutable · scan on push" as ecr
+  rectangle "ECS task\nbackend + ml-service sidecar" as ecs_platform
+  database "ECR\nbackend + web + ml-service\nimmutable · scan on push" as ecr
   database "SSM\nruntime config" as ssm
-  database "Secrets Manager\nweather + RDS creds" as secrets
-  artifact "CloudWatch\napp + DB logs" as logs
+  database "Secrets Manager\nweather + RDS creds\n+ Bedrock InvokeModel grant" as secrets
+  artifact "CloudWatch\napp + DB + ml-service logs" as logs
 }
 
 package "Security" as security {
@@ -166,10 +181,13 @@ ecs_platform --> ecr
 ecs_platform --> ssm
 ecs_platform --> secrets
 ecs_platform --> logs
+ecs_platform --> bedrock
 
 note right of ecs_platform
   ECS roles separate.
   Release workflow owns revision.
+  ml-service sidecar: essential,
+  task-coupled, localhost-only.
 end note
 
 note right of importer

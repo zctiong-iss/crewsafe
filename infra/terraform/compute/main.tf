@@ -57,6 +57,19 @@ data "terraform_remote_state" "ecr" {
   }
 }
 
+# SCRUM-371 — read-only. Never written by this component (contracts/
+# developer-access-consumer-compliance.md rule 4). The only output consumed is
+# developer_group_name, so the new grant below attaches to the group SCRUM-372
+# already created rather than a hardcoded name or a second group.
+data "terraform_remote_state" "developer_access" {
+  backend = "s3"
+  config = {
+    bucket = "crewsafe-terraform-state-${var.expected_account_id}-${var.aws_region}"
+    key    = "crewsafe/developer-access/shared-dev.tfstate"
+    region = var.aws_region
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Managed edge policies
 #
@@ -152,6 +165,30 @@ locals {
       valueFrom = local.database_password_reference
     }],
   )
+
+  # SCRUM-373 — the ml-service sidecar. A same-task, localhost-only container:
+  # no portMappings entry here is ever referenced by an aws_lb_target_group,
+  # listener, or security-group rule (spec FR-003, SC-004).
+  ml_service_container_name  = "ml-service"
+  ml_service_container_port  = 8000
+  ml_service_container_image = "${local.ecr.ml_service_repository_url}:${var.initial_ml_service_image_tag}"
+  ml_service_log_group_name  = "/crewsafe/shared-dev/ml-service"
+
+  # Deliberately its own map, not a merge into local.parameter_secrets above:
+  # that map is Spring-Boot-specific (DB_*, Cognito settings) and none of it
+  # applies to ml-service. Both entries resolve to the two deliberately-empty
+  # SSM parameters secrets/main.tf declares (spec FR-008, research.md R-001) —
+  # empty today, not because the reference is wrong, but because no model
+  # bundle is approved for inference yet.
+  ml_service_parameter_secrets = {
+    WBGT_MODEL_MANIFEST        = "${local.secrets.config_parameter_prefix}/ml/model-manifest"
+    WBGT_MODEL_MANIFEST_SHA256 = "${local.secrets.config_parameter_prefix}/ml/model-manifest-sha256"
+  }
+
+  ml_service_container_secrets = [for name, parameter in local.ml_service_parameter_secrets : {
+    name      = name
+    valueFrom = "${local.parameter_arn_prefix}${parameter}"
+  }]
 }
 
 # ---------------------------------------------------------------------------
@@ -166,6 +203,14 @@ locals {
 # expire the evidence before the retrospective that needs it).
 resource "aws_cloudwatch_log_group" "backend" {
   name              = local.log_group_name
+  retention_in_days = var.log_retention_days
+}
+
+# SCRUM-373 — its own, dedicated stream. A shared log group would make an
+# ml-service failure indistinguishable from a backend one, defeating the
+# runbook's own diagnosis path (spec User Story 3, FR-003).
+resource "aws_cloudwatch_log_group" "ml_service" {
+  name              = local.ml_service_log_group_name
   retention_in_days = var.log_retention_days
 }
 
@@ -527,6 +572,57 @@ resource "aws_ecs_task_definition" "backend" {
         }
       }
     },
+    {
+      # SCRUM-373 — the ml-service sidecar. Fargate awsvpc mode gives every
+      # container in a task the same ENI, so backend already reaches this over
+      # localhost:8000 (its own FORECAST_BASE_URL/BEDROCK_API_URL defaults) —
+      # no service-discovery entry needed. essential = true is the accepted
+      # trade-off (spec Known trade-off): a crash-looping ml-service container
+      # takes the whole task down with it, the same as any other essential
+      # container failure.
+      name      = local.ml_service_container_name
+      image     = local.ml_service_container_image
+      essential = true
+
+      # Provided by ml-service's own Dockerfile (`useradd -m -u 1000 appuser`);
+      # asserted here for the same reason backend's is (SCRUM-177's image is
+      # authoritative, but this component owns the task definition that could
+      # override it).
+      user = "1000"
+
+      portMappings = [
+        {
+          containerPort = local.ml_service_container_port
+          protocol      = "tcp"
+        },
+      ]
+
+      # Unlike backend, no documented JVM-temp-dir blocker exists for this
+      # image: its Dockerfile already chmods application files 444 and
+      # crewsafe_ml read-only (research.md R-010). Attempted here as the
+      # stronger hardening posture; if a real Fargate startup failure surfaces
+      # (mirroring backend's own documented incident above), the fix is to set
+      # this to false with the same class of justification, not a silent
+      # revert.
+      readonlyRootFilesystem = true
+
+      # Explicitly empty, matching backend's own convention: every value the
+      # deployment overrides is a secret reference, never plaintext.
+      environment = []
+
+      secrets = local.ml_service_container_secrets
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ml_service.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = local.ml_service_container_name
+          "mode"                  = "non-blocking"
+          "max-buffer-size"       = "25m"
+        }
+      }
+    },
   ])
 }
 
@@ -536,6 +632,14 @@ resource "aws_ecs_service" "backend" {
   task_definition = aws_ecs_task_definition.backend.arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
+
+  # SCRUM-371 — hosts the SSM Exec agent sidecar so a developer's session can
+  # run inside this task. Fargate's default platform version (unset here,
+  # LATEST) already satisfies ECS Exec's >= 1.4.0 minimum; no image or
+  # platform-version change is needed (research.md R-006). The task role's own
+  # ssmmessages grant (secrets/main.tf, HostEcsExecSession) is what lets the
+  # session actually open once this flag is set.
+  enable_execute_command = true
 
   network_configuration {
     subnets          = local.network.private_subnet_ids
@@ -588,6 +692,60 @@ resource "aws_ecs_service" "backend" {
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-371 — narrow ECS Exec / RDS-secret grant on the existing developer group
+#
+# Attaches to crewsafe-developers (SCRUM-372), never a new or second identity
+# (contracts/developer-access-consumer-compliance.md rule 1). Exactly three
+# actions, each scoped — no restatement of what ViewOnlyAccess (SCRUM-372)
+# already grants that group (ecs:Describe*, ecs:List*, rds:DescribeDBInstances
+# are deliberately absent here; spec FR-006). See contracts/
+# rds-troubleshooting-grant.md for the audit-facing statement of this exact
+# policy and research.md R-005 for the ARN-pattern reasoning.
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_group_policy" "developers_rds_troubleshooting" {
+  name  = "crewsafe-developers-rds-troubleshooting"
+  group = data.terraform_remote_state.developer_access.outputs.developer_group_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ExecIntoBackendTask"
+        Effect   = "Allow"
+        Action   = ["ecs:ExecuteCommand"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*"
+      },
+      {
+        # Amendment (live-tested 2026-08-14, research.md R-005): ssm:StartSession
+        # for the ECS Exec port-forwarding path is authorized against BOTH the
+        # ECS task target AND the SSM document resource — confirmed by a live
+        # AccessDeniedException naming exactly this document ARN when only the
+        # task ARN was granted. AWS-StartPortForwardingSessionToRemoteHost is an
+        # AWS-owned public document, hence the account-less "::document/" ARN.
+        Sid    = "StartSessionToBackendTask"
+        Effect = "Allow"
+        Action = ["ssm:StartSession"]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-StartPortForwardingSessionToRemoteHost",
+        ]
+      },
+      {
+        # Same rds!* wildcard pattern secrets/main.tf's
+        # rds_managed_secret_arn_pattern already uses, and for the identical
+        # reason: the managed service names this secret and it does not exist
+        # as a fixed value until the database does.
+        Sid      = "ReadRdsManagedCredentialForTunnel"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:rds!*"
+      },
+    ]
+  })
 }
 
 # ---------------------------------------------------------------------------

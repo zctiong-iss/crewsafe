@@ -31,6 +31,7 @@ flowchart LR
   mobile[Mobile / CLI<br/>client]
   github[GitHub Actions<br/>CI + release]
   nea[NEA weather API]
+  bedrock[Bedrock<br/>Claude models]
   sonar[SonarCloud]
 
   subgraph aws[AWS account · ap-southeast-1 · shared-dev]
@@ -48,14 +49,17 @@ flowchart LR
 
     subgraph vpc[VPC · two Availability Zones]
       nat[NAT gateway<br/>single egress AZ]
-      ecs[ECS Fargate<br/>private · no public IP]
+      subgraph backendtask[Backend ECS task · one ENI]
+        ecs[ECS Fargate: backend<br/>private · no public IP]
+        mlservice[ml-service sidecar<br/>localhost:8000 only<br/>essential · task-coupled]
+      end
       rds[RDS PostgreSQL<br/>private · TLS]
     end
 
-    ecr[ECR<br/>backend + web<br/>immutable + scan]
+    ecr[ECR<br/>backend + web + ml-service<br/>immutable + scan]
     ssm[SSM<br/>runtime config]
     secrets[Secrets Manager<br/>weather + RDS creds]
-    logs[CloudWatch<br/>app + DB logs]
+    logs[CloudWatch<br/>app + DB + ml-service logs]
     securityhub[Security Hub<br/>Inspector + Sonar]
     importer[OIDC importer<br/>BatchImport only]
     state[Versioned S3 state<br/>account-isolated]
@@ -72,8 +76,13 @@ flowchart LR
   ecs -->|secrets| secrets
   ecs -->|image| ecr
   ecs -->|logs| logs
+  ecs -->|localhost:8000<br/>same task ENI| mlservice
+  mlservice -->|image| ecr
+  mlservice -->|logs| logs
+  mlservice -->|config secrets<br/>manifest unset today| secrets
   rds -->|logs| logs
   ecs -->|egress| nat --> nea
+  mlservice -->|egress<br/>task role InvokeModel| nat --> bedrock
   ecr -.->|Inspector| securityhub
 
   github -->|publish| ecr
@@ -87,9 +96,9 @@ flowchart LR
   classDef compute fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20,font-size:15px;
   classDef data fill:#fff3e0,stroke:#ef6c00,color:#e65100,font-size:15px;
   classDef ops fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c,font-size:15px;
-  class browser,mobile,github,nea,sonar client;
+  class browser,mobile,github,nea,bedrock,sonar client;
   class cognito,webcf,apicf,alb edge;
-  class nat,ecs compute;
+  class nat,ecs,mlservice compute;
   class webbucket,rds,ecr,ssm,secrets data;
   class logs,securityhub,importer,state ops;
 ```
@@ -112,10 +121,22 @@ flowchart LR
   logs, configuration and secret references; the running task role is restricted
   to the application reads it needs. Neither Terraform outputs nor this diagram
   expose credential values.
-- ECR provides immutable, scan-on-push backend and web repositories. The deployed
-  web app is a static S3 sync, not an ECR runtime consumer. Terraform deliberately
-  ignores the ECS service's task-definition revision and desired count: the
-  reviewed release workflow is authoritative for the running backend revision.
+- `ml-service` runs as a **second container inside the same backend ECS task**, not
+  a standalone service: Fargate `awsvpc` mode gives both containers one ENI, so
+  `backend` reaches it over `localhost:8000` with no ALB target group, listener,
+  service-discovery entry, or security-group ingress of its own — it is
+  unreachable from outside the task. It is `essential: true`, so its failure stops
+  the whole task, and it shares the backend task role, including a narrowly scoped
+  `bedrock:InvokeModel` grant (exactly the Claude model identifiers `ml-service`
+  and `backend` invoke — never `bedrock:*`, never a resource wildcard). The
+  `WBGT_MODEL_MANIFEST`/`WBGT_MODEL_MANIFEST_SHA256` configuration entries exist
+  today only as a declared placeholder (`"unset"`) — no trained model is
+  activated, so `/forecast` always serves the persistence baseline.
+- ECR provides immutable, scan-on-push backend, web, and ml-service repositories,
+  each with its own scoped push role. The deployed web app is a static S3 sync,
+  not an ECR runtime consumer. Terraform deliberately ignores the ECS service's
+  task-definition revision and desired count: the reviewed release workflow is
+  authoritative for the running backend (and ml-service sidecar) revision.
 - Security Hub receives Inspector ECR findings. The separately provisioned,
   main-branch GitHub OIDC role can import narrowly redacted eligible SonarCloud
   findings; it has no remediation or ticket-creation permission.
@@ -225,6 +246,7 @@ flowchart LR
     backend[Backend CI<br/>Java 21 · Maven]
     web[Web CI<br/>Node 22 · test]
     mobile[Mobile CI<br/>Node 22 · test]
+    mlservice[ml-service CI<br/>Python · pytest]
   end
 
   subgraph security[Security gates]
@@ -251,11 +273,13 @@ flowchart LR
   actions --> backend
   actions --> web
   actions --> mobile
+  actions --> mlservice
   actions --> secrets
   actions --> sast
   actions --> iac
   actions --> selftests
   backend --> ecr --> ecs
+  mlservice --> ecr
   web --> s3 --> webstg
   iac --> plan --> apply
   sast --> hub
@@ -277,17 +301,38 @@ remediation or ticket-creation permission.
 | `network-shared-dev` | VPC, two-AZ public/private subnets, NAT, app and database security groups | — |
 | `secrets-shared-dev` | Runtime configuration, weather-secret container and ECS roles | Cognito |
 | `database-shared-dev` | PostgreSQL, subnet/parameter groups, logs and connection configuration | Network, secrets |
-| `ecr-shared-dev` | Backend/web repositories, Inspector scanning and Security Hub insight | — |
-| `compute-shared-dev` | Backend ECS/ALB/API edge and static web S3/CloudFront delivery | Network, secrets, database, ECR |
+| `ecr-shared-dev` | Backend/web/ml-service repositories, each with a scoped push role, Inspector scanning and Security Hub insight | — |
+| `compute-shared-dev` | Backend ECS/ALB/API edge (with the ml-service sidecar container, SCRUM-373) and static web S3/CloudFront delivery | Network, secrets, database, ECR |
 | `iam-policy-management-shared-dev` | Centrally managed least-privilege Terraform CI policies and attachments | — |
+| `developer-access-shared-dev` | Individual read-only developer IAM console/CLI users and group policy | — |
 | `securityhub-import-shared-dev` | OIDC role restricted to controlled SonarCloud finding imports | — |
 
 ## Deliberate limitations and follow-ups
 
-- This shared-development architecture does not declare the planned internal ML
-  service, agent runtime, mobile deployment runtime, EventBridge scheduling, or
-  production custom domains/certificates. They remain product-plan targets, not
-  current Terraform resources.
+- `ml-service` is declared and deployed (SCRUM-373) as a same-task ECS sidecar —
+  it is no longer an undeclared, product-plan-only target. What remains
+  deliberately undeclared: an agent runtime, mobile deployment runtime,
+  EventBridge scheduling, or production custom domains/certificates. Those
+  remain product-plan targets, not current Terraform resources.
+- `ml-service`'s own trained-model activation is a separate, later step this
+  architecture does not yet cover: `WBGT_MODEL_MANIFEST`/
+  `WBGT_MODEL_MANIFEST_SHA256` are declared SSM parameters holding a deliberate
+  `"unset"` placeholder value, so `/forecast` always serves the persistence
+  baseline today. Promoting a real model is designed as a value-only parameter
+  change plus a redeploy — no task-definition or Terraform-shape change — see
+  `docs/runbooks/SCRUM-373-ml-service-deploy.md` §8.
+- A model bundle shipped via S3 rather than baked into the `ml-service` image is
+  explicitly out of scope for this architecture; no S3 read permission exists on
+  either ECS identity for that purpose. The one trained candidate that exists
+  today sits in a SageMaker Studio experiment output in **a separate AWS
+  account** (`087819194272`, `ap-southeast-2`) — not the account this
+  architecture's `secrets`/`compute`/`ecr` deploy to (`ap-southeast-1` only;
+  `secrets/variables.tf` rejects any other region), and not one this diagram
+  connects to, since no cross-account IAM trust or Terraform dependency exists
+  between them. Promoting that candidate is a manual, out-of-band pull
+  performed on a developer's own workstation, never a live or CI-driven
+  fetch — see `docs/runbooks/SCRUM-373-ml-service-deploy.md` §8.1 for its
+  exact bucket/prefix inventory and §8.2 for the promotion steps.
 - Both CloudFront distributions use provider-issued hostnames. Their declared
   default-certificate setting therefore has a TLS 1.0 minimum; raising that floor
   requires a project-controlled domain, ACM certificate in `us-east-1`, and DNS

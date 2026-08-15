@@ -100,10 +100,36 @@ variable "initial_image_tag" {
   }
 }
 
+variable "initial_ml_service_image_tag" {
+  description = <<-EOT
+    Image tag Terraform names in the INITIAL ml-service container definition. Same
+    bootstrap requirement as initial_image_tag above: the value must be the commit
+    SHA of an image ml-service-ci.yml's publish-image job has ALREADY pushed to
+    crewsafe/ml-service, and the validation cannot check that (research.md R-009).
+
+    Unlike initial_image_tag, EVERY revision after the first one for THIS container
+    also flows through Terraform (SCRUM-373's deploy-backend-staging.sh amendment
+    only ever rewrites the "backend" container's image, never this one) — so this
+    value keeps governing which ml-service image is deployed on every apply, not
+    only the first.
+  EOT
+  type        = string
+
+  # No real ml-service image exists in crewsafe/ml-service until this feature's
+  # own T024 (first publish-image dispatch) runs. This placeholder is 40
+  # syntactically valid hex characters that name nothing — the first compute
+  # apply MUST replace it with that real pushed SHA before proceeding (T025).
+  default = "e1d4d404cc9d270fd5b3ecf1952fb262d18c8604"
+  validation {
+    condition     = can(regex("^[0-9a-f]{7,40}$", var.initial_ml_service_image_tag))
+    error_message = "initial_ml_service_image_tag must be a commit SHA: 7 to 40 lowercase hexadecimal characters. 'latest' and branch names are rejected."
+  }
+}
+
 variable "task_cpu" {
-  description = "Fargate CPU units for the task. 512 is the smallest allocation that starts this application without the cold start dominating the health grace period."
+  description = "Fargate CPU units for the task. 1024 is sized for the backend Spring Boot container plus its ml-service sidecar running together (SCRUM-373, research.md R-007) — up from 512, which was sized for backend alone."
   type        = number
-  default     = 512
+  default     = 1024
   validation {
     condition     = contains([256, 512, 1024, 2048, 4096], var.task_cpu)
     error_message = "task_cpu must be a valid Fargate CPU value: 256, 512, 1024, 2048, or 4096."
@@ -111,9 +137,9 @@ variable "task_cpu" {
 }
 
 variable "task_memory" {
-  description = "Fargate memory (MiB) for the task. A JVM with JPA, Flyway, and a resource-server filter chain needs more than 512 MiB to start comfortably."
+  description = "Fargate memory (MiB) for the task. 4096 is sized for the backend JVM (JPA, Flyway, a resource-server filter chain) plus its ml-service sidecar (FastAPI, numpy, pandas, scikit-learn, scipy — a memory-heavy import even before any model is loaded) running together (SCRUM-373, research.md R-007). Deliberately more than the 2048 MiB floor Fargate allows at 1024 CPU: 2048 is the minimum for that CPU tier, not headroom, and neither container's real footprint has been profiled — up from 1024, which was sized for backend alone."
   type        = number
-  default     = 1024
+  default     = 4096
   validation {
     condition     = var.task_memory >= 512 && var.task_memory <= 30720 && var.task_memory % 256 == 0
     error_message = "task_memory must be between 512 and 30720 MiB and a multiple of 256."

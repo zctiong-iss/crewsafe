@@ -40,6 +40,23 @@ public class Recommendation {
     @Column(name = "rationale")
     private String rationale;
 
+    /**
+     * Serialised {@link RecommendationEvidence} — the conditions at draft time (SCRUM-359).
+     * Null on rows drafted before it existed; clients must render that as "not recorded"
+     * rather than substituting current readings.
+     */
+    @Column(name = "evidence")
+    private String evidence;
+
+    /**
+     * The Bedrock model that drafted this plan, or a deterministic-fallback sentinel when no
+     * model was involved (SCRUM-359, satisfying §12.2's model-version requirement). Never the
+     * configured model id when the model's output was discarded — a plan the model did not
+     * write must not be attributed to it.
+     */
+    @Column(name = "model_version")
+    private String modelVersion;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

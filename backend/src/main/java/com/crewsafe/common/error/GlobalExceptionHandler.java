@@ -20,7 +20,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * tell an attacker about internals they should have to guess. Each response does carry a
  * {@code requestId}, which is how a report of "it broke" becomes findable in the logs.
  *
- * @author Jemilin Beulah and Abu Bakar
+ * @author Jemilin Beulah, Abu Bakar and Justin Chua
  */
 @RestControllerAdvice
 @Slf4j
@@ -59,12 +59,18 @@ public class GlobalExceptionHandler {
 
     /**
      * Keep the event generic for the same reason as {@link #handleBadRequest}.
+     *
+     * <p>The message stays category-level; only {@link ConflictException#getCode()} crosses
+     * the boundary, and that is a closed vocabulary fixed at compile time rather than
+     * anything read off the exception. Logging the code is safe for the same reason, and is
+     * what makes "supervisors cannot draft plans" diagnosable from the log sink alone.
      */
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException e) {
-        log.debug("conflict_handled");
+        log.debug("conflict_handled code={}", e.getCode());
         return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorResponse.of("Conflict", "Request conflicts with the current state of the resource"));
+                .body(ErrorResponse.of(
+                        "Conflict", "Request conflicts with the current state of the resource", e.getCode()));
     }
 
     /** Keeps ML failures typed while SCRUM-141 retains ownership of fallback policy. */
