@@ -103,6 +103,7 @@ for section_name in android ios; do
   case "$section_name" in
     android) section="$android_section" ;;
     ios) section="$ios_section" ;;
+    *) echo "FAIL: unrecognized section_name: $section_name" >&2; exit 1 ;;
   esac
   echo "$section" | rg -q -F -- 'write-artifact-metadata.sh'
 done
