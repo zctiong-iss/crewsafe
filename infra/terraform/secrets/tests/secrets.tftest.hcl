@@ -360,6 +360,20 @@ run "iam_boundary" {
     error_message = "There must be exactly three statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
   }
 
+  # Confirmed live 2026-08-15: the underlying foundation-model ARN a
+  # cross-region "global." inference profile is authorized against carries NO
+  # region segment (arn:aws:bedrock:::foundation-model/...) — a live
+  # AccessDeniedException named exactly this ARN when the statement instead
+  # used the calling region (arn:aws:bedrock:ap-southeast-1::foundation-model/...).
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.task.policy).Statement :
+      s.Resource == "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      if s.Sid == "InvokeBedrockAccessVerificationFoundationModel"
+    ])
+    error_message = "InvokeBedrockAccessVerificationFoundationModel must be scoped to the region-less foundation-model ARN — confirmed live, not the calling region (research.md R-005)."
+  }
+
   assert {
     condition = alltrue([
       for s in concat(
