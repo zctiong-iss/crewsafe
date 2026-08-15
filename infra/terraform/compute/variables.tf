@@ -119,7 +119,7 @@ variable "initial_ml_service_image_tag" {
   # own T024 (first publish-image dispatch) runs. This placeholder is 40
   # syntactically valid hex characters that name nothing — the first compute
   # apply MUST replace it with that real pushed SHA before proceeding (T025).
-  default = "0000000000000000000000000000000000000a"
+  default = "e1d4d404cc9d270fd5b3ecf1952fb262d18c8604"
   validation {
     condition     = can(regex("^[0-9a-f]{7,40}$", var.initial_ml_service_image_tag))
     error_message = "initial_ml_service_image_tag must be a commit SHA: 7 to 40 lowercase hexadecimal characters. 'latest' and branch names are rejected."
