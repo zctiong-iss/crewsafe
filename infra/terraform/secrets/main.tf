@@ -315,15 +315,29 @@ locals {
         # ml-service/bedrock_client.py's hardcoded health-check model, invoked
         # by GET /bedrock/access (backend's TestBedrockController/
         # BedrockApiClient). A cross-region system-defined inference profile
-        # (the "global." prefix) - the profile ARN below is this issue's
-        # starting grant; research.md R-005 flags that AWS may also require the
-        # underlying regional foundation-model ARN(s) the profile can route to,
-        # confirmed by tasks.md's live verification step, not by static
-        # research alone.
+        # (the "global." prefix) - the profile ARN below is granted alongside
+        # the underlying foundation-model ARN in the next statement.
         Sid      = "InvokeBedrockAccessVerificationProfile"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:${var.aws_region}:${var.expected_account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+      },
+      {
+        # Confirmed live (2026-08-15, secrets-shared-dev, research.md R-005
+        # amendment): AWS authorizes bedrock:InvokeModel through a cross-region
+        # inference profile against the underlying REGIONAL FOUNDATION MODEL,
+        # not the profile ARN above — a live AccessDeniedException named
+        # exactly this ARN even with the profile statement already granted.
+        # No account-id segment: foundation models are AWS-owned, not
+        # account-scoped, matching InvokeMitigationSuggestionModel's shape.
+        # Only the ap-southeast-1 ARN is granted because that is the only
+        # region ml-service's AnthropicBedrock client ever calls (aws_region
+        # is pinned, not multi-region) — confirmed by the live request itself
+        # (POST https://bedrock-runtime.ap-southeast-1.amazonaws.com/...).
+        Sid      = "InvokeBedrockAccessVerificationFoundationModel"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
       },
     ])
   }

@@ -313,7 +313,7 @@ run "iam_boundary" {
   # the original "exactly one per role, the rds! pattern" invariant SCRUM-174
   # established). Two families are permitted: the service-managed database
   # credential (FR-029, cannot be pinned by ARN — the service names it and it
-  # does not exist until the database does) and the two Bedrock model grants
+  # does not exist until the database does) and the three Bedrock model grants
   # (FR-006, contracts/bedrock-invoke-grant.md — a Bedrock model ARN carries no
   # "crewsafe" segment either, being an AWS/Anthropic-owned or account-scoped
   # resource, not one this component names). Every other resource ARN mentions
@@ -326,8 +326,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
-    ]) == 4
-    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the two Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
+    ]) == 5
+    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the three Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
   }
 
   assert {
@@ -341,10 +341,14 @@ run "iam_boundary" {
     error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path nor a Bedrock model ARN (SC-014, FR-029, FR-006)."
   }
 
-  # FR-006 — exactly two Bedrock statements, one per model identifier
-  # (contracts/bedrock-invoke-grant.md), each granting only bedrock:InvokeModel,
-  # never bedrock:*, never merged into one statement (a list Resource would
-  # break the strcontains() checks above — research.md R-006).
+  # FR-006 — exactly three Bedrock statements: one for the Sonnet
+  # mitigation-generation model, and two for the Haiku access-verification
+  # model (the inference-profile ARN, plus the underlying ap-southeast-1
+  # foundation-model ARN AWS actually authorizes InvokeModel against for a
+  # cross-region profile — confirmed live 2026-08-15, research.md R-005).
+  # Each grants only bedrock:InvokeModel, never bedrock:*, never merged into
+  # one statement (a list Resource would break the strcontains() checks above
+  # — research.md R-006).
   assert {
     condition = length([
       for s in concat(
@@ -352,8 +356,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
-    ]) == 2
-    error_message = "There must be exactly two statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
+    ]) == 3
+    error_message = "There must be exactly three statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
   }
 
   assert {
