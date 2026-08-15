@@ -248,15 +248,22 @@ run "compute_ci_can_manage_ml_service_log_group" {
     values = { account_id = "123456789012" }
   }
 
+  # Guarded with try(..., false): stmt.Resource is a bare string for most
+  # statements in this policy and a list only for ManageApplicationLogGroup.
+  # An unguarded contains() call errors out on a string argument rather than
+  # returning false, which aborts the whole for-expression instead of just
+  # skipping the non-matching statement (discovered live in CI — the pinned
+  # 1.10.5 Terraform surfaced it; a newer local version did not).
   assert {
     condition = anytrue([
       for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
-      (
+      try(
         stmt.Sid == "ManageApplicationLogGroup"
         && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/ml-service")
         && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/ml-service:*")
         && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/backend")
-        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/backend:*")
+        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/backend:*"),
+        false
       )
     ])
     error_message = "The compute apply policy's ManageApplicationLogGroup statement must cover both the backend and the new ml-service log groups (research.md R-003)."

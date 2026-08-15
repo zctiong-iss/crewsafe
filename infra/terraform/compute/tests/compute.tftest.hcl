@@ -170,9 +170,9 @@ override_data {
 }
 
 variables {
-  expected_account_id        = "123456789012"
-  account_alias              = "crewsafe-dev"
-  initial_image_tag          = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  expected_account_id          = "123456789012"
+  account_alias                = "crewsafe-dev"
+  initial_image_tag            = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
   initial_ml_service_image_tag = "b2c3d4e5f60718293a4b5c6d7e8f90123456789a"
   # SCRUM-298: required, no default (FR-017, FR-022) — reuses the exact fixture
   # value infra/terraform/ecr/tests/ecr.tftest.hcl already established.
@@ -579,7 +579,7 @@ run "ml_service_container_shape" {
   }
 
   assert {
-    condition = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].image == "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service:${var.initial_ml_service_image_tag}"
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].image == "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service:${var.initial_ml_service_image_tag}"
     error_message = "The ml-service image reference must be the ml-service repository URL joined with its own commit-SHA tag (research.md R-009)."
   }
 
