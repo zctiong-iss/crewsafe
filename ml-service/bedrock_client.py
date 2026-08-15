@@ -1,9 +1,10 @@
 """Bedrock client for spike verification."""
 import logging
 import time
-from typing import Optional
+from typing import Optional, Type
 import anthropic
 from anthropic import AnthropicBedrock
+from pydantic import BaseModel
 
 from models import MitigationBatch, MitigationSuggestion
 
@@ -105,10 +106,19 @@ class BedrockClient:
         model_id: str = "global.anthropic.claude-haiku-4-5-20251001-v1:0",
         max_tokens: int = 1024,
         temperature: float = 0.7,
-    ) -> tuple[MitigationBatch, float, int, int]:
+        response_model: Optional[Type[BaseModel]] = None,
+        extra_instructions: str = "",
+    ) -> tuple[BaseModel, float, int, int]:
         """
         Invoke Bedrock with structured output constraint.
-        Returns (batch, latency_ms, input_tokens, output_tokens)
+        Returns (parsed_response, latency_ms, input_tokens, output_tokens)
+
+        `response_model` is the Pydantic model Bedrock is constrained to produce and the type
+        the result is parsed back into; it defaults to {@code MitigationBatch}, which is what
+        the §8.6 benchmark and /bedrock/suggest use. The agent graph passes its own richer
+        model instead, so adding a plan-level rationale to the draft did not require changing
+        the shape the benchmark measured. `extra_instructions` is appended to the prompt for
+        the same reason — additive, so the benchmarked prompt is a prefix of the agent's.
         """
         if not self._access_verified:
             self.verify_access()
@@ -116,8 +126,11 @@ class BedrockClient:
         if self.client is None:
             self.client = AnthropicBedrock(aws_region=self.region, max_retries=8)
 
+        model = response_model or MitigationBatch
         prompt = self._build_prompt(context)
-        schema = self._get_schema()
+        if extra_instructions:
+            prompt = f"{prompt}\n\n{extra_instructions}"
+        schema = self._get_schema(model)
 
         try:
             start = time.time()
@@ -143,7 +156,7 @@ class BedrockClient:
             # Parse structured output
             tool_use_block = next(b for b in response.content if b.type == "tool_use")
             structured = tool_use_block.input
-            batch = MitigationBatch(**structured)
+            parsed = model(**structured)
 
             # Input tokens
             input_tokens = response.usage.input_tokens
@@ -153,10 +166,10 @@ class BedrockClient:
 
             logger.info(
                 f"Bedrock invocation: latency={latency_ms:.0f}ms, "
-                f"suggestions={len(batch.mitigations)}, tokens={input_tokens} + {output_tokens}"
+                f"suggestions={len(parsed.mitigations)}, tokens={input_tokens} + {output_tokens}"
             )
 
-            return batch, latency_ms, input_tokens, output_tokens
+            return parsed, latency_ms, input_tokens, output_tokens
 
         except (anthropic.AuthenticationError, anthropic.PermissionDeniedError) as e:
             msg = f"Bedrock access denied in region={self.region}: {e}"
@@ -211,8 +224,11 @@ For every mandatory and advisory action listed above, produce one mitigation wit
 Every action marked MANDATORY above must appear in your output — do not omit one."""
 
     @staticmethod
-    def _get_schema() -> dict:
-        """Derived from MitigationBatch itself, not hand-duplicated — a change to the
-        Pydantic model is automatically what Bedrock is asked to produce, so the two can
-        never silently drift apart the way the original hand-written copy did."""
-        return MitigationBatch.model_json_schema()
+    def _get_schema(model: Type[BaseModel] = MitigationBatch) -> dict:
+        """Derived from the Pydantic model itself, not hand-duplicated — a change to the
+        model is automatically what Bedrock is asked to produce, so the two can never
+        silently drift apart the way the original hand-written copy did.
+
+        Nested models ($defs/$ref, e.g. Timing) round-trip fine: the Anthropic SDK forwards
+        the schema to the tool-use API verbatim and it resolves internal references itself."""
+        return model.model_json_schema()

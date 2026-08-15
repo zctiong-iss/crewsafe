@@ -60,13 +60,15 @@ class RestTemplateConfigurationTest {
     }
 
     @Test
-    @DisplayName("RestTemplate is configured with default timeout (5000ms)")
+    @DisplayName("RestTemplate is configured with the default timeout (30000ms)")
     void restTemplateUsesDefaultTimeout() {
-        // Properties default is 5000ms
+        // 30000ms since SCRUM-289. The spike's 5000ms was shorter than the measured p95 for an
+        // agent draft (10.4s), so this RestTemplate timed out on every real call and the
+        // deterministic fallback ran every time while looking like a working LLM path.
         RestTemplate restTemplate = configuration.bedrockRestTemplate(properties);
 
         assertThat(restTemplate).isNotNull();
-        assertThat(properties.getBedrockTimeoutMs()).isEqualTo(5000);
+        assertThat(properties.getBedrockTimeoutMs()).isEqualTo(30000);
     }
 
     @Test

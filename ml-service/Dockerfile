@@ -12,11 +12,12 @@ RUN pip install --no-cache-dir --require-hashes --only-binary :all: -r requireme
 # deployment pipeline only after their manifest checksum is configured.
 COPY app.py models.py bedrock_client.py forecast_service.py ./
 COPY crewsafe_ml ./crewsafe_ml
+COPY agent ./agent
 
 # Create non-root user and set restrictive permissions on all files
 RUN useradd -m -u 1000 appuser && \
     chmod 444 app.py models.py bedrock_client.py forecast_service.py && \
-    chmod -R a-w crewsafe_ml && \
+    chmod -R a-w crewsafe_ml agent && \
     chown -R appuser:appuser /app
 
 # Run both the application and its health check without root privileges.

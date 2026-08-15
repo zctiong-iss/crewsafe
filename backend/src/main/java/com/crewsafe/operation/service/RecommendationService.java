@@ -11,6 +11,7 @@ import com.crewsafe.mitigation.domain.ActionCatalogue;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
+import com.crewsafe.operation.domain.RecommendationEvidence;
 import com.crewsafe.operation.repository.ApprovalRepository;
 import com.crewsafe.operation.repository.RecommendationRepository;
 import com.crewsafe.shift.domain.ShiftAssignment;
@@ -19,6 +20,7 @@ import com.crewsafe.shift.repository.ShiftRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -42,6 +44,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RecommendationService {
 
     /**
@@ -95,6 +98,29 @@ public class RecommendationService {
     /** The mitigations an approval's edited plan holds. Empty when the decision made no edits. */
     public List<MitigationSuggestion> editedMitigations(Approval approval) {
         return parsePlan(approval.getEditedPlan());
+    }
+
+    /**
+     * The conditions this recommendation was drafted under (SCRUM-359). Null on rows drafted
+     * before the evidence block existed — clients render that as "not recorded".
+     *
+     * <p>Unparseable JSON also yields null rather than throwing, unlike {@link #parsePlan}. The
+     * distinction is deliberate: a corrupt plan makes a recommendation undecidable and must be
+     * loud, whereas corrupt evidence costs an explanatory panel. Failing a supervisor's whole
+     * recommendation list because one row's evidence will not deserialise would trade a small
+     * loss for a total one.
+     */
+    public RecommendationEvidence evidenceFor(Recommendation recommendation) {
+        String evidence = recommendation.getEvidence();
+        if (evidence == null || evidence.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(evidence, RecommendationEvidence.class);
+        } catch (JsonProcessingException e) {
+            log.warn("recommendation_evidence_unreadable recommendation_id={}", recommendation.getId());
+            return null;
+        }
     }
 
     private List<MitigationSuggestion> parsePlan(String plan) {

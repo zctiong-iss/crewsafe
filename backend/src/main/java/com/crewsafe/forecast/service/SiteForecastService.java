@@ -13,6 +13,7 @@ import com.crewsafe.weather.ingestion.WeatherFreshnessClassifier;
 import com.crewsafe.weather.repository.WeatherObservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -28,7 +29,17 @@ import java.util.UUID;
 /** Builds validated recent context and calls the private trained-model service. */
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+// REQUIRES_NEW, not the default REQUIRED: AgentDraftService calls this from inside its own
+// @Transactional write. Without its own transaction, a ForecastUnavailableException thrown
+// here - an ordinary, expected outcome (§7.1) that AgentDraftService already catches and
+// degrades to null - joins and poisons that outer transaction anyway: Spring's interceptor
+// marks the shared transaction rollback-only the moment the exception crosses this proxy
+// boundary, before the caller's catch block ever runs. The draft would still appear to
+// succeed (the code keeps running, logs success) right up until the outer commit, which
+// then throws UnexpectedRollbackException and silently discards the whole recommendation -
+// a caught, handled exception silently losing a write nowhere near it. Its own transaction
+// means a forecast failure can only roll back its own read, never the draft it's part of.
+@Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
 public class SiteForecastService {
 
     private static final Duration CONTEXT_HISTORY = Duration.ofHours(2);

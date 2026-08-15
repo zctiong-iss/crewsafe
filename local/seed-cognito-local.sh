@@ -144,7 +144,12 @@ if command -v cygpath >/dev/null 2>&1; then
   MOUNT="$(cygpath -m "$MOUNT")"
 fi
 
-echo "Starting $CONTAINER…"
+# Braces are load-bearing: bash 5.3 on arm64 macOS treats the following U+2026 ellipsis's
+# UTF-8 bytes as part of the identifier, so bare $CONTAINER… expands as a variable literally
+# named "CONTAINER…" and `set -u` aborts the script before the emulator ever starts. Locale
+# makes no difference. The other ellipses in this file are all in plain text, not glued to a
+# variable, which is why this was the only line that failed.
+echo "Starting ${CONTAINER}…"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 MSYS_NO_PATHCONV=1 docker run -d --name "$CONTAINER" -p "$PORT:9229" \
   -v "$MOUNT:/app/.cognito" \
