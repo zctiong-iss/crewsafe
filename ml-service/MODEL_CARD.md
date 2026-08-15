@@ -1,6 +1,6 @@
 # CrewSafe short-horizon WBGT forecast model card
 
-Status: **development candidate only; not approved for application integration**.
+Status: **accepted for the shared staging demonstration only; not production-approved**.
 
 ## Intended use
 
@@ -13,20 +13,25 @@ or replace an on-site instrument where one is legally required.
 
 ## Model and data identity
 
-- Development model: `wbgt-six-month-safety-floor-dev-v1`
+- Staging runtime model: `wbgt-six-month-safety-floor-staging-demo-v1`
+- Underlying frozen candidate: `wbgt-six-month-frozen-candidate-v2`
 - Feature version: `wbgt-features-1.2.0`
 - Source: data.gov.sg WBGT and supporting weather APIs
 - Download periods: 1 February–31 July 2026
 - Validated source readings: 20,302,614
 - Prepared 15-minute rows: 409,456 across 27 WBGT stations
 - Prepared feature SHA-256: `743db27b878d70314d17d8af08aa35ee29beee47da438ac56ca29eb4b0d0bdf3`
-- Development manifest SHA-256: `5ba4812bc68d29692815d42989a06c1fcebf036aae0fc218e64e83454f866587`
+- Staging manifest SHA-256: `36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031`
+- 30-minute artifact SHA-256: `d3f4111b5f712821f9e63c73563b8dbb1303cecbeeae8ead8a947c57db32822f`
+- 60-minute artifact SHA-256: `300dcdd2bc30331da0b97dbe69b8e654756f61466662479c1782a9d112bc77da`
+- Frozen at: 14 August 2026 02:17 UTC
+- Reviewed source commit: `8df59f20b9b842752af3bbcee7a36961ecb27ed4`
 - Pre-July rolling report SHA-256: `bae4da94342d640f62cbdf3f39d99310babbbf07b4dd727c8d87224edc9dd4d9`
 - Random seed: `114`
 
-The source commit is marked `dirty` because this local evaluation includes approved,
-uncommitted ML changes. A release candidate must be trained from reviewed code and
-receive new checksums.
+The artifacts reproduce the reviewed frozen candidate and are pinned by the manifest
+and individual artifact checksums. They are baked into the staging image but remain
+inactive until the deployed service receives the exact manifest path and checksum.
 
 ## Features and target
 
@@ -122,13 +127,20 @@ required to satisfy Scrum 114's baseline-measurement and versioned-model accepta
 
 ## Approval and fallback
 
-Before integration, collect a newer untouched period and run the locked candidate
-once. Approve it only if it beats persistence MAE without reducing recall at either
-32°C or 33°C, and review false alarms, bias, per-band error, and uncertainty.
+On 16 August 2026, Bryan Phang accepted a time-limited exception for the shared
+university-project staging demonstration. The normal 21-day post-freeze period cannot
+finish before submission. This decision uses the six-month chronological comparison,
+four pre-July expanding-window backtests, checksum-pinned artifacts, and the reviewed
+source commit. It does not claim that those development results are equivalent to a
+new untouched period.
 
-Until then, the application must keep its labelled persistence fallback. Missing or
-stale context, invalid model files, and ML-service failure must also remain safe,
-typed fallback conditions. Training stays offline; app startup and prediction never
-download historical data. Runtime loading also requires an explicit
-`approved_for_inference: true` in the checksum-pinned manifest and rejects any
-remaining approval blocker.
+The bundled manifest therefore permits inference only with an explicit
+`STAGING_DEMO_ONLY` scope and records `production_approved: false`. The model must not
+be described as production-approved or used to authorise a safety action. A future
+production decision still requires independent evidence and named human review.
+
+Persistence remains the labelled fallback. Missing or stale context, invalid model
+files, ML-service failure, and requests without context remain safe, typed fallback
+conditions. Training stays offline; app startup and prediction never download
+historical data. Runtime loading requires the exact checksum-pinned manifest and
+artifact files.
