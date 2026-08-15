@@ -367,4 +367,41 @@ assert_not_contains "$(cat "$out")" "SUPER_SECRET_SONAR_TOKEN_XYZ" "SEC-003: Son
 assert_not_contains "$(cat "$out")" "SUPER_SECRET_GH_TOKEN_XYZ" "SEC-003: GitHub token never appears in output"
 assert_not_contains "$(cat "$work/calls.log")" "SUPER_SECRET" "SEC-003: neither token appears in the mock's call log"
 
+# --- SCRUM-403 (T002): declared_op default case ------------------------------
+#
+# declared_op's DECLARED_METRICS lookup had no default case (SonarQube
+# shelldre:S131, issue AZ_iU7JOycsaNSww1Wwa). Sourcing the script directly
+# (safe now that it's guarded behind `[[ "${BASH_SOURCE[0]}" == "${0}" ]]`,
+# so this source does not also run the network-calling configure_* flow)
+# lets these assertions call declared_op itself instead of going through a
+# whole subprocess run.
+#
+# declared_op is sourced into THIS shell, unlike the rest of the suite's
+# subprocess invocations -- its fail()-on-unrecognized-metric path calls
+# `exit`, which would kill the whole test runner if invoked directly. This
+# wrapper confines that exit to a subshell instead.
+# shellcheck source=../security/configure-sonar-gate.sh
+. "$SCRIPT"
+call_declared_op() { local metric="$1"; ( declared_op "$metric" ); }
+
+assert_declared_op() {
+  local metric="$1" expected="$2" actual
+  actual="$(declared_op "$metric")"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if [[ "$actual" == "$expected" ]]; then
+    _pass "SCRUM-403: declared_op($metric) unchanged"
+  else
+    _fail "SCRUM-403: declared_op($metric) unchanged" "expected $expected, got $actual"
+  fi
+}
+
+assert_declared_op new_security_rating "GT"
+assert_declared_op new_security_hotspots_reviewed "LT"
+assert_declared_op new_reliability_rating "GT"
+assert_declared_op new_sca_rating_vulnerability "GT"
+
+assert_exit 1 "SCRUM-403: declared_op exits non-zero for an unrecognized metric" call_declared_op not_a_real_metric
+declared_op_err="$(call_declared_op not_a_real_metric 2>&1 1>/dev/null || true)"
+assert_contains "$declared_op_err" "not_a_real_metric" "SCRUM-403: error names the unrecognized metric"
+
 finish

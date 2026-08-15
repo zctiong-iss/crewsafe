@@ -60,11 +60,13 @@ GATE_NAME="CrewSafe Security Gate"
 DECLARED_METRICS=(new_security_rating new_security_hotspots_reviewed new_reliability_rating new_sca_rating_vulnerability)
 
 declared_op() {
-  case "$1" in
+  local metric="$1"
+  case "$metric" in
     new_security_rating) printf 'GT' ;;
     new_security_hotspots_reviewed) printf 'LT' ;;
     new_reliability_rating) printf 'GT' ;;
     new_sca_rating_vulnerability) printf 'GT' ;;
+    *) fail "declared_op: unrecognized metric: $metric" ;;
   esac
 }
 
@@ -349,10 +351,12 @@ configure_required_checks() {
 
 # --- entry point -------------------------------------------------------------
 
-PROPS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/sonar-project.properties"
-[[ -f "$PROPS_FILE" ]] || fail "sonar-project.properties not found at $PROPS_FILE"
-SONAR_ORG="$(read_prop sonar.organization)"
-SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  PROPS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)/sonar-project.properties"
+  [[ -f "$PROPS_FILE" ]] || fail "sonar-project.properties not found at $PROPS_FILE"
+  SONAR_ORG="$(read_prop sonar.organization)"
+  SONAR_PROJECT_KEY="$(read_prop sonar.projectKey)"
 
-configure_quality_gate
-configure_required_checks
+  configure_quality_gate
+  configure_required_checks
+fi
