@@ -30,6 +30,11 @@ on:
       - ".github/scripts/tests/test-summarize-trivy-report.sh"
       - ".github/security/ml-service-image.trivyignore.source"
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also build and push the image to ECR (main only)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -105,3 +110,113 @@ jobs:
           path: trivy-ml-service-report.json
           if-no-files-found: error
           retention-days: 7
+
+  # SCRUM-373: ml-service existed only as a CI-tested image, with no ECR
+  # repository or push identity, until infra/terraform/ecr/main.tf added both.
+  # This job publishes it, mirroring backend-ci.yml's publish-image job
+  # (structure, gating, and the build-then-scan-then-push ordering) so the new
+  # repository/role are actually used rather than provisioned and idle.
+  publish-image:
+    name: Publish image
+    needs: verify-ml-service
+    if: >
+      github.ref == 'refs/heads/main' &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && inputs.publish)
+      ) &&
+      vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN != '' && vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_uri: ${{ steps.publish.outputs.image_uri }}
+      image_tag: ${{ steps.publish.outputs.image_tag }}
+      image_digest: ${{ steps.publish.outputs.image_digest }}
+      run_id: ${{ steps.publish.outputs.run_id }}
+      run_url: ${{ steps.publish.outputs.run_url }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # Fails fast on a bad repository, role, or tag before any build/scan/
+      # AWS-credentialed step runs, mirroring backend-ci.yml's own
+      # publication-contract validation.
+      - name: Validate ml-service publication contract
+        env:
+          REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
+          PUSH_ROLE_ARN: ${{ vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$REPO" ]] || { echo "Missing CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL" >&2; exit 1; }
+          [[ "$REPO" =~ ^[0-9]{12}\.dkr\.ecr\.ap-southeast-1\.amazonaws\.com/crewsafe/ml-service$ ]] || { echo "ml-service repository must be the regional ECR crewsafe/ml-service repository" >&2; exit 1; }
+          [[ -n "$PUSH_ROLE_ARN" ]] || { echo "Missing CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN" >&2; exit 1; }
+          [[ "$PUSH_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-ecr-ml-service-push$ ]] || { echo "Unexpected ml-service publisher role" >&2; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "GITHUB_SHA must be a 40-character lowercase commit SHA" >&2; exit 1; }
+          printf 'Validated repository=%s role=%s tag=%s\n' "$REPO" "$PUSH_ROLE_ARN" "$SHA"
+      - name: Build ml-service image
+        env:
+          REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
+          SHA: ${{ github.sha }}
+        run: docker build -t "$REPO:$SHA" ml-service
+      - name: Prepare active ML-service Trivy ignorefile
+        run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
+      # Report-only for now (exit-code: '0'), matching backend-ci.yml's own
+      # publish-time scan: this is the first time this exact, ECR-tagged image
+      # is scanned (verify-ml-service scans a locally-tagged build, not this
+      # one), so its baseline is unknown.
+      - name: Scan ml-service image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+          scanners: vuln
+          format: json
+          output: trivy-ml-service-publish-report.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '0'
+          trivyignores: .trivyignore-active-ml-service
+      - name: Summarize ml-service image scan
+        env:
+          IMAGE: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "ml-service image vulnerability scan"
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeMlServicePublish-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Log in to ECR
+        run: |
+          aws ecr get-login-password --region ap-southeast-1 \
+            | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}"
+      # Captures the pushed image's content digest (the only truly immutable
+      # reference), validates its shape, and surfaces
+      # image_uri/image_tag/image_digest/run_id/run_url as both job outputs
+      # and job-summary evidence, mirroring backend-ci.yml's `id: publish` step.
+      - name: Push ml-service image and record digest
+        id: publish
+        env:
+          REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
+          SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "$REPO:$SHA"
+          image_digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$REPO:$SHA" | sed 's/.*@//')"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "No valid pushed image digest was returned" >&2; exit 1; }
+          {
+            echo "image_uri=$REPO:$SHA"
+            echo "image_tag=$SHA"
+            echo "image_digest=$image_digest"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '## ml-service image publication'
+            echo "- Image URI: \`$REPO:$SHA\`"
+            echo "- Commit tag: \`$SHA\`"
+            echo "- Content digest: \`$image_digest\`"
+            echo "- CI run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$GITHUB_STEP_SUMMARY"

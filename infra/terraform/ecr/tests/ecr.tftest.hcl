@@ -52,6 +52,28 @@ override_resource {
   }
 }
 
+override_resource {
+  target = aws_ecr_repository.ml_service
+  values = {
+    arn            = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/ml-service"
+    repository_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service"
+  }
+}
+
+override_resource {
+  target = aws_iam_role.ml_service_ecr_push
+  values = {
+    arn = "arn:aws:iam::123456789012:role/crewsafe-shared-dev-ecr-ml-service-push"
+  }
+}
+
+override_resource {
+  target = aws_ecr_lifecycle_policy.ml_service
+  values = {
+    id = "crewsafe/ml-service"
+  }
+}
+
 variables {
   expected_account_id      = "123456789012"
   account_alias            = "shared-dev"
@@ -200,8 +222,162 @@ run "rejects_mismatched_account" {
   expect_failures = [
     aws_ecr_repository.backend,
     aws_ecr_repository.web,
+    aws_ecr_repository.ml_service,
     aws_securityhub_account.mvp,
   ]
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-373: the ml-service registry — mirrors the web repository/lifecycle
+# shape exactly (data-model.md).
+# ---------------------------------------------------------------------------
+
+run "ml_service_entry_shape" {
+  command = apply
+
+  assert {
+    condition     = aws_ecr_repository.ml_service.name == "crewsafe/ml-service"
+    error_message = "The ml-service repository must be named crewsafe/ml-service, or the secrets component's existing crewsafe/* pull grant stops covering it."
+  }
+
+  assert {
+    condition     = aws_ecr_repository.ml_service.image_scanning_configuration[0].scan_on_push == true
+    error_message = "Every pushed ml-service image must be scanned."
+  }
+
+  assert {
+    condition     = aws_ecr_repository.ml_service.image_tag_mutability == "IMMUTABLE"
+    error_message = "ml-service image tags must be immutable (AWS-0031)."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_ecr_lifecycle_policy.ml_service.policy).rules) == 2
+    error_message = "The ml-service lifecycle policy must contain the two reviewed retention rules."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in jsondecode(aws_ecr_lifecycle_policy.ml_service.policy).rules :
+      r.selection.tagStatus == "untagged" &&
+      r.selection.countType == "sinceImagePushed" &&
+      try(r.selection.countUnit, null) == "days" &&
+      r.selection.countNumber == 1 &&
+      r.action.type == "expire"
+    ])
+    error_message = "ml-service untagged images must expire after one day."
+  }
+
+  assert {
+    condition = anytrue([
+      for r in jsondecode(aws_ecr_lifecycle_policy.ml_service.policy).rules :
+      r.selection.tagStatus == "any" &&
+      r.selection.countType == "imageCountMoreThan" &&
+      r.selection.countNumber == 20 &&
+      r.action.type == "expire"
+    ])
+    error_message = "The ml-service lifecycle policy must retain the newest 20 images."
+  }
+}
+
+run "ml_service_iam_boundary" {
+  command = apply
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role_policy.ml_service_ecr_push.policy).Statement :
+      s.Resource == aws_ecr_repository.ml_service.arn || s.Resource == "*"
+    ])
+    error_message = "The ml-service push policy must be scoped to the exact ml-service repository or the documented token wildcard."
+  }
+
+  assert {
+    condition = length([
+      for s in jsondecode(aws_iam_role_policy.ml_service_ecr_push.policy).Statement : s
+      if s.Resource == aws_ecr_repository.ml_service.arn
+    ]) == 1
+    error_message = "The ml-service push policy must have exactly one repository-scoped statement."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role_policy.ml_service_ecr_push.policy).Statement :
+      toset(s.Action) == toset([
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        "ecr:BatchGetImage",
+      ])
+      if s.Resource == aws_ecr_repository.ml_service.arn
+    ])
+    error_message = "The ml-service repository statement must contain only the reviewed ECR push actions."
+  }
+
+  assert {
+    condition = length([
+      for s in jsondecode(aws_iam_role_policy.ml_service_ecr_push.policy).Statement : s
+      if s.Resource == "*"
+    ]) == 1
+    error_message = "The ml-service push policy must contain exactly one wildcard statement."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role_policy.ml_service_ecr_push.policy).Statement :
+      length(s.Action) == 1 && s.Action[0] == "ecr:GetAuthorizationToken"
+      if s.Resource == "*"
+    ])
+    error_message = "The ml-service wildcard statement must contain only ecr:GetAuthorizationToken."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role.ml_service_ecr_push.assume_role_policy).Statement :
+      try(s.Principal.Federated, null) == "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+      && try(s.Principal.AWS, null) == null
+      && s.Effect == "Allow"
+      && try(s.Condition.StringEquals["token.actions.githubusercontent.com:sub"], null) == var.github_oidc_main_subject
+      && try(s.Condition.StringEquals["token.actions.githubusercontent.com:aud"], null) == "sts.amazonaws.com"
+    ])
+    error_message = "The ml-service push role must trust only the exact GitHub main-branch OIDC subject and audience."
+  }
+
+  assert {
+    condition     = aws_iam_role.ml_service_ecr_push.name == "crewsafe-shared-dev-ecr-ml-service-push"
+    error_message = "The ml-service publisher must use its dedicated role name."
+  }
+}
+
+run "ml_service_producer_contract" {
+  command = apply
+
+  assert {
+    condition     = output.ml_service_repository_url == aws_ecr_repository.ml_service.repository_url
+    error_message = "ml_service_repository_url must expose the ml-service repository's pull/push URL."
+  }
+
+  assert {
+    condition     = output.ml_service_repository_arn == aws_ecr_repository.ml_service.arn
+    error_message = "ml_service_repository_arn must expose the ml-service repository's ARN."
+  }
+
+  assert {
+    condition     = output.ml_service_push_role_arn == aws_iam_role.ml_service_ecr_push.arn
+    error_message = "ml_service_push_role_arn must expose the ml-service push role's ARN."
+  }
+
+  assert {
+    condition = alltrue([
+      for v in [output.ml_service_repository_arn, output.ml_service_push_role_arn] : startswith(v, "arn:aws:")
+    ])
+    error_message = "ml-service repository and push-role outputs must be ARNs."
+  }
+
+  assert {
+    condition     = length(regexall("^[0-9]{12}\\.dkr\\.ecr\\.", output.ml_service_repository_url)) == 1
+    error_message = "ml_service_repository_url must be a registry URL, not a credential or an arbitrary string."
+  }
 }
 
 # ---------------------------------------------------------------------------

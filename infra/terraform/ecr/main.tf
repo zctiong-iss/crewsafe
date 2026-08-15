@@ -5,15 +5,18 @@ data "aws_caller_identity" "current" {}
 locals {
   # Must stay under crewsafe/* - that's the prefix the secrets component's task
   # role already has pull access to.
-  repository_name     = "crewsafe/backend"
-  web_repository_name = "crewsafe/web"
+  repository_name            = "crewsafe/backend"
+  web_repository_name        = "crewsafe/web"
+  ml_service_repository_name = "crewsafe/ml-service"
 
-  push_role_name     = "crewsafe-shared-dev-ecr-push"
-  web_push_role_name = "crewsafe-shared-dev-ecr-web-push"
+  push_role_name            = "crewsafe-shared-dev-ecr-push"
+  web_push_role_name        = "crewsafe-shared-dev-ecr-web-push"
+  ml_service_push_role_name = "crewsafe-shared-dev-ecr-ml-service-push"
 
-  repository_arn        = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
-  web_repository_arn    = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
-  inspector_product_arn = "arn:aws:securityhub:${var.aws_region}::product/aws/inspector"
+  repository_arn            = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.repository_name}"
+  web_repository_arn        = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.web_repository_name}"
+  ml_service_repository_arn = "arn:aws:ecr:${var.aws_region}:${var.expected_account_id}:repository/${local.ml_service_repository_name}"
+  inspector_product_arn     = "arn:aws:securityhub:${var.aws_region}::product/aws/inspector"
 
   ecr_push_assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -111,6 +114,55 @@ locals {
       },
     ]
   }
+
+  # SCRUM-373 — assumable only by the ml-service-ci workflow's GitHub Actions
+  # run on this repository's main branch, same shape as the backend/web roles.
+  ml_service_ecr_push_assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowGitHubActionsMainBranchToAssume"
+        Effect = "Allow"
+        Principal = {
+          Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com"
+        }
+        Action = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+          }
+        }
+      },
+    ]
+  })
+
+  ml_service_ecr_push_policy = {
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "PushMlServiceContainerImage"
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:BatchGetImage",
+        ]
+        Resource = local.ml_service_repository_arn
+      },
+      {
+        # GetAuthorizationToken doesn't support resource-level perms, only "*".
+        # Kept in its own statement so it can't quietly pick up more actions.
+        Sid      = "GetRegistryAuthorizationToken"
+        Effect   = "Allow"
+        Action   = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+    ]
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -139,6 +191,25 @@ resource "aws_ecr_repository" "backend" {
 
 resource "aws_ecr_repository" "web" {
   name                 = local.web_repository_name
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
+      error_message = "Authenticated AWS account does not match the expected account for this dispatch."
+    }
+  }
+}
+
+# SCRUM-373 — ml-service was previously a CI-tested container image only, with
+# no ECR repository or push role. This gives it the same registry shape as
+# backend/web.
+resource "aws_ecr_repository" "ml_service" {
+  name                 = local.ml_service_repository_name
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
@@ -215,6 +286,36 @@ resource "aws_ecr_lifecycle_policy" "web" {
   })
 }
 
+resource "aws_ecr_lifecycle_policy" "ml_service" {
+  repository = aws_ecr_repository.ml_service.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after 1 day"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 1
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep the newest 20 images"
+        selection = {
+          tagStatus   = "any"
+          countType   = "imageCountMoreThan"
+          countNumber = 20
+        }
+        action = { type = "expire" }
+      },
+    ]
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Push identity
 #
@@ -248,6 +349,19 @@ resource "aws_iam_role_policy" "web_ecr_push" {
   name   = "${local.web_push_role_name}-push"
   role   = aws_iam_role.web_ecr_push.id
   policy = jsonencode(local.web_ecr_push_policy)
+}
+
+resource "aws_iam_role" "ml_service_ecr_push" {
+  name        = local.ml_service_push_role_name
+  description = "Assumed by the ml-service-ci GitHub Actions workflow on this repository's main branch to push only the ml-service container image."
+
+  assume_role_policy = local.ml_service_ecr_push_assume_role_policy
+}
+
+resource "aws_iam_role_policy" "ml_service_ecr_push" {
+  name   = "${local.ml_service_push_role_name}-push"
+  role   = aws_iam_role.ml_service_ecr_push.id
+  policy = jsonencode(local.ml_service_ecr_push_policy)
 }
 
 # ---------------------------------------------------------------------------
@@ -296,6 +410,11 @@ resource "aws_ecr_registry_scanning_configuration" "enhanced" {
 
     repository_filter {
       filter      = "crewsafe/web"
+      filter_type = "WILDCARD"
+    }
+
+    repository_filter {
+      filter      = "crewsafe/ml-service"
       filter_type = "WILDCARD"
     }
   }

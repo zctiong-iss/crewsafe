@@ -56,11 +56,13 @@ locals {
 
   cognito = data.terraform_remote_state.cognito.outputs
 
-  # Six entries. A value earns one only where the deployed environment must differ
-  # from the default the application already carries (FR-001, research.md R-008).
-  # The server port, the weather freshness thresholds, the ingestion interval, and
-  # the external weather API base URL all keep their application defaults and are
-  # deliberately absent.
+  # Eight entries. A value earns one only where the deployed environment must
+  # differ from the default the application already carries (FR-001, research.md
+  # R-008), or (the two ml/model-manifest* entries, SCRUM-373) where the
+  # application has no default at all and the slot is deliberately declared
+  # empty rather than omitted (FR-008). The server port, the weather freshness
+  # thresholds, the ingestion interval, and the external weather API base URL
+  # all keep their application defaults and are deliberately absent.
   #
   # Two more entries live under this prefix but are declared elsewhere, because
   # their values do not exist until the component that produces them does (FR-031):
@@ -73,6 +75,18 @@ locals {
     "cognito/client-ids"        = join(",", [local.cognito.web_client_id, local.cognito.mobile_client_id, local.cognito.cli_client_id])
     "spring/profiles-active"    = "staging"
     "weather/ingestion-enabled" = "true"
+
+    # SCRUM-373 (FR-008) — deliberately empty, not absent and not omitted. The
+    # only trained WBGT model artifact that exists today (a SageMaker
+    # experiment output) is not approved for inference, so there is nothing to
+    # activate in this issue. ForecastModelRegistry.from_environment()
+    # (ml-service/crewsafe_ml/inference.py) treats an empty/absent
+    # WBGT_MODEL_MANIFEST as "no model configured" and falls back to the
+    # persistence baseline - not an error path. Declaring the slot now (rather
+    # than adding it only in the follow-up that promotes a model) means that
+    # follow-up is a parameter VALUE change, not a task-definition change.
+    "ml/model-manifest"        = ""
+    "ml/model-manifest-sha256" = ""
   }
 
   config_parameter_descriptions = {
@@ -82,6 +96,8 @@ locals {
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
+    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. Deliberately empty: no model bundle is approved_for_inference yet. A future promotion updates this value only - no task-definition change. Never a secret; the manifest path and checksum are not sensitive."
+    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. Deliberately empty alongside it; ForecastModelRegistry.from_environment() requires both or neither to be set meaningfully."
   }
 }
 
@@ -247,6 +263,14 @@ locals {
   # class of exception GetRegistryAuthorizationToken above already documents.
   # secrets.tftest.hcl's iam_boundary run block holds this to exactly these four
   # actions in exactly one statement, the same discipline applied there.
+  #
+  # SCRUM-373 — two more additions, one per model identifier ml-service/backend
+  # actually invoke (spec FR-006, contracts/bedrock-invoke-grant.md). Kept as
+  # two separate statements rather than one with a list Resource: the existing
+  # SC-014 assertions call strcontains() directly on each statement's Resource,
+  # which type-errors on a list (research.md R-006) — splitting by model also
+  # lets each statement carry its own reviewable Sid, matching the rest of this
+  # policy's per-concern style. Never bedrock:*, never a resource wildcard.
   task_policy = {
     Version = "2012-10-17"
     Statement = concat(local.secret_read_statements, [
@@ -260,6 +284,32 @@ locals {
           "ssmmessages:OpenDataChannel",
         ]
         Resource = "*"
+      },
+      {
+        # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID, defaulting to
+        # this exact identifier) is sent as a fixed value on every
+        # POST /mitigations call - never caller-supplied, since ml-service is
+        # reachable only from backend inside the task (spec SEC-001). A single-
+        # region foundation-model ARN, confirmed against this repository's own
+        # SCRUM-187 spike runbook (docs/runbooks/SCRUM-187-bedrock-spike.md).
+        Sid      = "InvokeMitigationSuggestionModel"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+      },
+      {
+        # ml-service/bedrock_client.py's hardcoded health-check model, invoked
+        # by GET /bedrock/access (backend's TestBedrockController/
+        # BedrockApiClient). A cross-region system-defined inference profile
+        # (the "global." prefix) - the profile ARN below is this issue's
+        # starting grant; research.md R-005 flags that AWS may also require the
+        # underlying regional foundation-model ARN(s) the profile can route to,
+        # confirmed by tasks.md's live verification step, not by static
+        # research alone.
+        Sid      = "InvokeBedrockAccessVerificationProfile"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}:${var.expected_account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
       },
     ])
   }
