@@ -404,4 +404,31 @@ assert_exit 1 "SCRUM-403: declared_op exits non-zero for an unrecognized metric"
 declared_op_err="$(call_declared_op not_a_real_metric 2>&1 1>/dev/null || true)"
 assert_contains "$declared_op_err" "not_a_real_metric" "SCRUM-403: error names the unrecognized metric"
 
+# --- SCRUM-405: declared_error default case ----------------------------------
+#
+# declared_error's DECLARED_METRICS lookup had the identical gap as declared_op
+# (SonarQube shelldre:S131, issue AZ_iU7JOycsaNSww1Wwc), explicitly left out of
+# scope by SCRUM-403. Same sourcing/subshell rationale as declared_op above.
+call_declared_error() { local metric="$1"; ( declared_error "$metric" ); }
+
+assert_declared_error() {
+  local metric="$1" expected="$2" actual
+  actual="$(declared_error "$metric")"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if [[ "$actual" == "$expected" ]]; then
+    _pass "SCRUM-405: declared_error($metric) unchanged"
+  else
+    _fail "SCRUM-405: declared_error($metric) unchanged" "expected $expected, got $actual"
+  fi
+}
+
+assert_declared_error new_security_rating "3"
+assert_declared_error new_security_hotspots_reviewed "100"
+assert_declared_error new_reliability_rating "3"
+assert_declared_error new_sca_rating_vulnerability "3"
+
+assert_exit 1 "SCRUM-405: declared_error exits non-zero for an unrecognized metric" call_declared_error not_a_real_metric
+declared_error_err="$(call_declared_error not_a_real_metric 2>&1 1>/dev/null || true)"
+assert_contains "$declared_error_err" "not_a_real_metric" "SCRUM-405: error names the unrecognized metric"
+
 finish

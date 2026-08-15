@@ -71,11 +71,13 @@ declared_op() {
 }
 
 declared_error() {
-  case "$1" in
+  local metric="$1"
+  case "$metric" in
     new_security_rating) printf '3' ;;
     new_security_hotspots_reviewed) printf '100' ;;
     new_reliability_rating) printf '3' ;;
     new_sca_rating_vulnerability) printf '3' ;;
+    *) fail "declared_error: unrecognized metric: $metric" ;;
   esac
 }
 
