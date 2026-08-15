@@ -300,12 +300,21 @@ locals {
         Resource = "*"
       },
       {
-        # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID, defaulting to
-        # this exact identifier) is sent as a fixed value on every
-        # POST /mitigations call - never caller-supplied, since ml-service is
-        # reachable only from backend inside the task (spec SEC-001). A single-
-        # region foundation-model ARN, confirmed against this repository's own
-        # SCRUM-187 spike runbook (docs/runbooks/SCRUM-187-bedrock-spike.md).
+        # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID) is sent as a
+        # fixed value on every POST /mitigations call - never caller-supplied,
+        # since ml-service is reachable only from backend inside the task
+        # (spec SEC-001). A single-region foundation-model ARN, confirmed
+        # against this repository's own SCRUM-187 spike runbook
+        # (docs/runbooks/SCRUM-187-bedrock-spike.md).
+        #
+        # NOT the current default: BedrockProperties.java's own default
+        # (SCRUM-287) is the "global." Haiku profile granted below, not this
+        # Sonnet identifier - confirmed live 2026-08-15 (a real
+        # /bedrock/suggest call invoked Haiku, not Sonnet). This grant is kept
+        # because BEDROCK_MODEL_ID is operator-configurable without a
+        # Terraform change (spec Assumptions); switching back to Sonnet stays
+        # denied-by-default everywhere except this one pinned identifier if it
+        # ever is.
         Sid      = "InvokeMitigationSuggestionModel"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
@@ -325,19 +334,28 @@ locals {
       {
         # Confirmed live (2026-08-15, secrets-shared-dev, research.md R-005
         # amendment): AWS authorizes bedrock:InvokeModel through a cross-region
-        # inference profile against the underlying REGIONAL FOUNDATION MODEL,
-        # not the profile ARN above — a live AccessDeniedException named
-        # exactly this ARN even with the profile statement already granted.
-        # No account-id segment: foundation models are AWS-owned, not
-        # account-scoped, matching InvokeMitigationSuggestionModel's shape.
-        # Only the ap-southeast-1 ARN is granted because that is the only
-        # region ml-service's AnthropicBedrock client ever calls (aws_region
-        # is pinned, not multi-region) — confirmed by the live request itself
-        # (POST https://bedrock-runtime.ap-southeast-1.amazonaws.com/...).
+        # inference profile against the underlying FOUNDATION MODEL, not the
+        # profile ARN above — a live AccessDeniedException named exactly this
+        # ARN even with the profile statement already granted.
+        #
+        # NO region segment (two colons, not one before "foundation-model") —
+        # a second live AccessDeniedException, this time from an actual
+        # /bedrock/suggest mitigation call, corrected the first attempt's
+        # ap-southeast-1-scoped ARN: AWS represents this resource region-less
+        # for a "global." cross-region profile, unlike a plain single-region
+        # foundation model (contrast InvokeMitigationSuggestionModel below,
+        # which correctly does carry a region). No account-id segment either:
+        # foundation models are AWS-owned, not account-scoped.
+        #
+        # This is also the model backend/mitigation/ai/bedrock/
+        # BedrockProperties.java's app.bedrock.model-id actually defaults to
+        # (SCRUM-287) — the same "global." Haiku profile used for the
+        # /bedrock/access check, not the Sonnet identifier
+        # docs/runbooks/SCRUM-187-bedrock-spike.md's earlier spike assumed.
         Sid      = "InvokeBedrockAccessVerificationFoundationModel"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+        Resource = "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
       },
     ])
   }
