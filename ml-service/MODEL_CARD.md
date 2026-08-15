@@ -1,6 +1,6 @@
 # CrewSafe short-horizon WBGT forecast model card
 
-Status: **development candidate only; not approved for application integration**.
+Status: **frozen candidate awaiting untouched-period review; not approved for application integration**.
 
 ## Intended use
 
@@ -13,20 +13,25 @@ or replace an on-site instrument where one is legally required.
 
 ## Model and data identity
 
-- Development model: `wbgt-six-month-safety-floor-dev-v1`
+- Frozen candidate: `wbgt-six-month-frozen-candidate-v2`
 - Feature version: `wbgt-features-1.2.0`
 - Source: data.gov.sg WBGT and supporting weather APIs
 - Download periods: 1 February–31 July 2026
 - Validated source readings: 20,302,614
 - Prepared 15-minute rows: 409,456 across 27 WBGT stations
 - Prepared feature SHA-256: `743db27b878d70314d17d8af08aa35ee29beee47da438ac56ca29eb4b0d0bdf3`
-- Development manifest SHA-256: `5ba4812bc68d29692815d42989a06c1fcebf036aae0fc218e64e83454f866587`
+- Frozen manifest SHA-256: `ad0a3ba2f1a7e587ceaa7333c8bf65afe6535c0b31f0d15cb9028ca41e3b9359`
+- 30-minute artifact SHA-256: `d3f4111b5f712821f9e63c73563b8dbb1303cecbeeae8ead8a947c57db32822f`
+- 60-minute artifact SHA-256: `300dcdd2bc30331da0b97dbe69b8e654756f61466662479c1782a9d112bc77da`
+- Frozen at: 14 August 2026 02:17 UTC
+- Reviewed source commit: `8df59f20b9b842752af3bbcee7a36961ecb27ed4`
 - Pre-July rolling report SHA-256: `bae4da94342d640f62cbdf3f39d99310babbbf07b4dd727c8d87224edc9dd4d9`
 - Random seed: `114`
 
-The source commit is marked `dirty` because this local evaluation includes approved,
-uncommitted ML changes. A release candidate must be trained from reviewed code and
-receive new checksums.
+The candidate was rebuilt from the clean commit that contains the merged forecasting
+integration and approval evaluator. Its model artifacts reproduce the development
+candidate's recorded checksums, while the new manifest pins the clean source commit and
+keeps `approved_for_inference` false.
 
 ## Features and target
 
@@ -122,9 +127,15 @@ required to satisfy Scrum 114's baseline-measurement and versioned-model accepta
 
 ## Approval and fallback
 
-Before integration, collect a newer untouched period and run the locked candidate
-once. Approve it only if it beats persistence MAE without reducing recall at either
-32°C or 33°C, and review false alarms, bias, per-band error, and uncertainty.
+The planned untouched period is 15 August–4 September 2026. Download it only after
+the full period has finished, then run the locked candidate once using the exact
+manifest checksum above. Follow
+[`docs/runbooks/SCRUM-114-model-approval.md`](../docs/runbooks/SCRUM-114-model-approval.md)
+for the commands and human-review checklist.
+
+Approve the candidate only if both horizons beat persistence MAE without reducing
+recall at either 32°C or 33°C, and a named human reviewer accepts the false alarms,
+bias, per-band error, uncertainty, and remaining limitations.
 
 Until then, the application must keep its labelled persistence fallback. Missing or
 stale context, invalid model files, and ML-service failure must also remain safe,
