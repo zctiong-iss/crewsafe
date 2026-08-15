@@ -164,10 +164,13 @@ run "entry_shape" {
     error_message = "The secret must be named inside this component's naming scope, or the read policy will not reach it (FR-004)."
   }
 
-  # Six, not thirteen: a value earns an entry only where the deployment must
-  # differ from the application's own default (FR-001, research.md R-008).
+  # Eight, not thirteen: a value earns an entry only where the deployment must
+  # differ from the application's own default (FR-001, research.md R-008). The
+  # two ml/model-manifest* entries (SCRUM-373, FR-008) are deliberately empty
+  # rather than absent — see the dedicated deferred_model_manifest_slots run
+  # block below.
   assert {
-    condition     = length(aws_ssm_parameter.config) == 6
+    condition     = length(aws_ssm_parameter.config) == 8
     error_message = "The configuration entry set changed. Adding one is fine; restating an application default is not (FR-001)."
   }
 
@@ -202,6 +205,38 @@ run "entry_shape" {
       && !contains(keys(aws_ssm_parameter.config), "cors/allowed-origins")
     )
     error_message = "db/url belongs to the database component and cors/allowed-origins to whatever creates the web origin; neither is declared here (FR-031)."
+  }
+}
+
+# SCRUM-373, FR-008 — the model-manifest configuration is declared but left
+# unset: no reviewed, approved_for_inference bundle currently exists to
+# activate (spec Clarifications). ForecastModelRegistry.from_environment()
+# treats an absent/empty WBGT_MODEL_MANIFEST as "no model configured" and
+# falls back to the persistence baseline — not an error path — so an empty
+# String parameter is deliberately indistinguishable from "unset" to the
+# application, while still being a real Terraform resource a future promotion
+# can update by value only.
+run "deferred_model_manifest_slots" {
+  command = apply
+
+  assert {
+    condition     = contains(keys(aws_ssm_parameter.config), "ml/model-manifest")
+    error_message = "A configuration slot for WBGT_MODEL_MANIFEST must exist (FR-008)."
+  }
+
+  assert {
+    condition     = contains(keys(aws_ssm_parameter.config), "ml/model-manifest-sha256")
+    error_message = "A configuration slot for WBGT_MODEL_MANIFEST_SHA256 must exist (FR-008)."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == ""
+    error_message = "The model-manifest slot must be empty in this issue — no bundle is approved for inference yet (FR-008)."
+  }
+
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == ""
+    error_message = "The model-manifest-sha256 slot must be empty in this issue (FR-008)."
   }
 }
 
@@ -267,11 +302,17 @@ run "iam_boundary" {
     error_message = "An identity holds a write, delete, or tag permission on a secret or parameter (SC-007, FR-012)."
   }
 
-  # SC-014 — exactly one grant reaches outside this component's naming scope: the
-  # service-managed database credential (FR-029), which cannot be pinned by ARN
-  # because the service names it and it does not exist until the database does.
-  # Every other resource ARN mentions the project scope; the one documented
-  # wildcard is excluded here and asserted separately by SC-016.
+  # SC-014 — a named, closed allow-list of grants reaching outside this
+  # component's naming scope (generalized by SCRUM-373, research.md R-006, from
+  # the original "exactly one per role, the rds! pattern" invariant SCRUM-174
+  # established). Two families are permitted: the service-managed database
+  # credential (FR-029, cannot be pinned by ARN — the service names it and it
+  # does not exist until the database does) and the two Bedrock model grants
+  # (FR-006, contracts/bedrock-invoke-grant.md — a Bedrock model ARN carries no
+  # "crewsafe" segment either, being an AWS/Anthropic-owned or account-scoped
+  # resource, not one this component names). Every other resource ARN mentions
+  # the project scope; the wildcard statements are excluded here and asserted
+  # separately by SC-016.
   assert {
     condition = length([
       for s in concat(
@@ -279,8 +320,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
-    ]) == 2
-    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one per role (the rds! service-managed credential path) is permitted (SC-014, FR-029)."
+    ]) == 4
+    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the two Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
   }
 
   assert {
@@ -288,10 +329,47 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : strcontains(s.Resource, ":secret:rds!")
+      ) : strcontains(s.Resource, ":secret:rds!") || strcontains(s.Resource, ":bedrock:")
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
     ])
-    error_message = "A grant reaches outside this component's naming scope and is not the rds! service-managed credential path (SC-014, FR-029)."
+    error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path nor a Bedrock model ARN (SC-014, FR-029, FR-006)."
+  }
+
+  # FR-006 — exactly two Bedrock statements, one per model identifier
+  # (contracts/bedrock-invoke-grant.md), each granting only bedrock:InvokeModel,
+  # never bedrock:*, never merged into one statement (a list Resource would
+  # break the strcontains() checks above — research.md R-006).
+  assert {
+    condition = length([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : s.Sid
+      if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
+    ]) == 2
+    error_message = "There must be exactly two statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : s.Action == ["bedrock:InvokeModel"]
+      if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
+    ])
+    error_message = "Every Bedrock statement must grant exactly bedrock:InvokeModel — never bedrock:*, never bundled with another action (FR-006)."
+  }
+
+  # FR-009 — this issue adds no S3 access anywhere on either identity.
+  assert {
+    condition = alltrue([
+      for s in concat(
+        jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
+        jsondecode(aws_iam_role_policy.task.policy).Statement
+      ) : length([for a in s.Action : a if startswith(a, "s3:")]) == 0
+    ])
+    error_message = "Neither identity may hold any s3: action in this issue — a model bundle S3 fetch is explicitly deferred to a follow-up issue (FR-009)."
   }
 
   # SC-016 — exactly two unavoidable wildcards, named and closed (SCRUM-371,

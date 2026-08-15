@@ -32,6 +32,21 @@ output "web_push_role_arn" {
   value       = aws_iam_role.web_ecr_push.arn
 }
 
+output "ml_service_repository_url" {
+  description = "Registry URL for the ml-service image publication and the compute component's runtime pull, e.g. <account>.dkr.ecr.<region>.amazonaws.com/crewsafe/ml-service."
+  value       = aws_ecr_repository.ml_service.repository_url
+}
+
+output "ml_service_repository_arn" {
+  description = "Exact ARN of the crewsafe/ml-service repository for runtime pull policy scoping."
+  value       = aws_ecr_repository.ml_service.arn
+}
+
+output "ml_service_push_role_arn" {
+  description = "ARN of the dedicated ml-service GitHub Actions image-push role. Set as CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN, used by .github/workflows/ml-service-ci.yml."
+  value       = aws_iam_role.ml_service_ecr_push.arn
+}
+
 output "securityhub_ecr_insight_arn" {
   description = "ARN of the stable Security Hub Insight for active Critical and High Inspector ECR findings."
   value       = aws_securityhub_insight.ecr_active_critical_high.arn

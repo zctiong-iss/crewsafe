@@ -125,7 +125,9 @@
       ],
       "Resource": [
         "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/backend",
-        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/backend:*"
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/backend:*",
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/ml-service",
+        "arn:aws:logs:ap-southeast-1:<ACCOUNT_ID>:log-group:/crewsafe/shared-dev/ml-service:*"
       ]
     },
     {
