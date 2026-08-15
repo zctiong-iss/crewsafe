@@ -229,14 +229,20 @@ run "deferred_model_manifest_slots" {
     error_message = "A configuration slot for WBGT_MODEL_MANIFEST_SHA256 must exist (FR-008)."
   }
 
+  # "unset", not "": AWS SSM PutParameter rejects an actually-empty string
+  # (found live, secrets-shared-dev apply, 2026-08-15). "unset" is the
+  # AWS-API-legal placeholder that still means "no bundle is approved for
+  # inference yet" (FR-008) — see main.tf's comment for why this is
+  # behaviorally equivalent to a true empty value from ml-service's own
+  # perspective, modulo one harmless extra startup log line.
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == ""
-    error_message = "The model-manifest slot must be empty in this issue — no bundle is approved for inference yet (FR-008)."
+    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == "unset"
+    error_message = "The model-manifest slot must hold the 'unset' placeholder in this issue — no bundle is approved for inference yet, and SSM rejects an empty string (FR-008)."
   }
 
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == ""
-    error_message = "The model-manifest-sha256 slot must be empty in this issue (FR-008)."
+    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == "unset"
+    error_message = "The model-manifest-sha256 slot must hold the 'unset' placeholder in this issue, for the same reason (FR-008)."
   }
 }
 
