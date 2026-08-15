@@ -1,4 +1,14 @@
-FROM python:3.11-slim@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff
+# Pinned by digest alone, not `python:3.11-slim@sha256:...` (docker:S8431). Specifying both
+# is not belt-and-braces: Docker resolves the reference by digest and never checks the tag
+# against it, so the tag is decorative and can drift into an outright lie about which image
+# this is. The digest is the half that carries the guarantee, so the digest is the half kept.
+#
+# This digest was pinned from python:3.11-slim, and the image must stay a Python 3.11 base:
+# ml-service is analysed as `sonar.python.version=3.11`, CI installs and tests on 3.11, and
+# requirements*.txt is compiled against it. Re-pin deliberately when moving Python version,
+# and update this comment in the same change - it is the only remaining record of what the
+# digest is supposed to be.
+FROM python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff
 
 WORKDIR /app
 
