@@ -60,12 +60,13 @@ GATE_NAME="CrewSafe Security Gate"
 DECLARED_METRICS=(new_security_rating new_security_hotspots_reviewed new_reliability_rating new_sca_rating_vulnerability)
 
 declared_op() {
-  case "$1" in
+  local metric="$1"
+  case "$metric" in
     new_security_rating) printf 'GT' ;;
     new_security_hotspots_reviewed) printf 'LT' ;;
     new_reliability_rating) printf 'GT' ;;
     new_sca_rating_vulnerability) printf 'GT' ;;
-    *) fail "declared_op: unrecognized metric: $1" ;;
+    *) fail "declared_op: unrecognized metric: $metric" ;;
   esac
 }
 

@@ -382,7 +382,7 @@ assert_not_contains "$(cat "$work/calls.log")" "SUPER_SECRET" "SEC-003: neither 
 # wrapper confines that exit to a subshell instead.
 # shellcheck source=../security/configure-sonar-gate.sh
 . "$SCRIPT"
-call_declared_op() { ( declared_op "$1" ); }
+call_declared_op() { local metric="$1"; ( declared_op "$metric" ); }
 
 assert_declared_op() {
   local metric="$1" expected="$2" actual
