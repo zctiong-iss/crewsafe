@@ -31,7 +31,10 @@ class ForecastControllerTest {
                 "wbgt-v2:hist-gradient",
                 new BigDecimal("30.8"),
                 new BigDecimal("32.8"),
-                Instant.parse("2026-08-14T04:00:00Z"));
+                Instant.parse("2026-08-14T04:00:00Z"),
+                com.crewsafe.forecast.service.ForecastBasis.MODEL,
+                5L,
+                false);
         when(service.forecast(siteId, 30)).thenReturn(Optional.of(forecast));
 
         var response = controller.getForecast(siteId, 30);

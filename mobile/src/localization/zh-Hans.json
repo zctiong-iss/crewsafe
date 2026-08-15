@@ -275,7 +275,7 @@
     "model": "模型 {{version}}",
     "generatedAt": "预报生成于 {{time}}",
     "unavailableTitle": "暂无预报",
-    "unavailableBody": "模型仅根据每 15 分钟稳定更新的近期实时读数进行预报。本工地的近期天气数据缺失、延迟或为模拟数据，因此暂不生成预测。当前读数不受影响。",
+    "unavailableBody": "本工地没有足够新的可用读数可供预测，或条件变化过快，无法给出有意义的范围。当前读数不受影响。",
     "noBandNote": "预报不显示风险等级。等级由服务器上的高温政策判定，目前尚未对预测值进行评定。",
     "cardTitle": "预报",
     "cardValue_one": "{{count}} 分钟后预计 {{value}}°C",
@@ -283,7 +283,19 @@
     "cardUnavailable": "暂无预报",
     "cardError": "无法加载预报",
     "cardOpen": "查看",
-    "cardAccessibilityLabel": "查看 WBGT 预报"
+    "cardAccessibilityLabel": "查看 WBGT 预报",
+    "basisTag": {
+      "MODEL_IMPUTED": "已补全缺口",
+      "TREND": "趋势推算",
+      "PERSISTENCE": "沿用上次读数"
+    },
+    "basisNote": {
+      "MODEL_IMPUTED": "模型运行前补全了一个缺失读数，因此可能范围已相应放宽。",
+      "TREND": "近期读数不足以运行模型，此为趋势推算。请参考范围而非具体数值。",
+      "PERSISTENCE": "无法建立近期趋势，此为沿用上一次读数，仅供粗略参考。"
+    },
+    "inputAge_one": "来自 {{count}} 分钟前的读数",
+    "inputAge_other": "来自 {{count}} 分钟前的读数"
   },
   "inbox": {
     "emptyTitle": "暂无待确认事项",
