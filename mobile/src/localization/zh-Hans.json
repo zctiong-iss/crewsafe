@@ -604,5 +604,14 @@
       "ordering": "每个等级中，轻度须不低于中度，中度须不低于重度。",
       "checkFields": "请检查以上字段。"
     }
+  },
+  "datePicker": {
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "time": "时间",
+    "hourUp": "推迟一小时",
+    "hourDown": "提前一小时",
+    "minuteUp": "推迟五分钟",
+    "minuteDown": "提前五分钟"
   }
 }

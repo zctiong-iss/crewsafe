@@ -605,5 +605,14 @@
       "ordering": "Dalam setiap tahap, ringan mesti ≥ sederhana, dan sederhana ≥ berat.",
       "checkFields": "Semak medan di atas."
     }
+  },
+  "datePicker": {
+    "previousMonth": "Bulan sebelum",
+    "nextMonth": "Bulan seterusnya",
+    "time": "Masa",
+    "hourUp": "Lewat satu jam",
+    "hourDown": "Awal satu jam",
+    "minuteUp": "Lewat lima minit",
+    "minuteDown": "Awal lima minit"
   }
 }
