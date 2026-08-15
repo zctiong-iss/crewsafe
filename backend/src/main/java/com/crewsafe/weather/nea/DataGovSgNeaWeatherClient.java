@@ -1,5 +1,6 @@
 package com.crewsafe.weather.nea;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -18,6 +19,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -103,20 +105,50 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
                 .max(Comparator.comparing(WbgtRecord::datetime))
                 .orElseThrow();
 
-        List<NeaStationReading> readings = requireNonEmpty(record.item().readings(), "WBGT readings")
-                .stream()
+        List<WbgtReading> reported = requireNonEmpty(record.item().readings(), "WBGT readings");
+        List<NeaStationReading> readings = reported.stream()
                 .map(this::mapWbgtReading)
+                .filter(Objects::nonNull)
                 .toList();
+
+        // A station reporting no value is normal; every station reporting none is not, and there
+        // is nothing to ingest from it. Failing here rather than returning an empty observation
+        // keeps "we received nothing usable" distinguishable from "conditions were unremarkable".
+        if (readings.isEmpty()) {
+            throw invalid("WBGT response contained no station with a usable reading");
+        }
+        int skipped = reported.size() - readings.size();
+        if (skipped > 0) {
+            // Count only. Station identifiers are third-party input and this reaches the log sink.
+            log.info("nea_wbgt_stations_without_reading skipped={} used={}", skipped, readings.size());
+        }
         return new NeaObservation(NeaMetric.WBGT, record.datetime().toInstant(), "deg C", readings);
     }
 
+    /**
+     * Maps one station's WBGT reading, or null if that station has no reading to report.
+     *
+     * <p>The null return is the whole point. data.gov.sg sends {@code "NA"} for a station that is
+     * online but has nothing for this interval, and both layers that met it used to destroy the
+     * entire batch: the DTO's strict {@link BigDecimal} mapping threw during deserialization, and
+     * this method threw again on a null value. One offline station out of twenty discarded the
+     * other nineteen, every cycle it happened — which is what left the WBGT history too sparse
+     * and too gappy for the forecast's context window to assemble.
+     *
+     * <p>Structural problems still throw. A station with no id, no name or no coordinates is a
+     * malformed record rather than an incomplete one: it cannot be attributed or located, so
+     * accepting it would put an unusable reading into the safety record. The distinction is
+     * between a station that did not answer and a response that no longer matches the contract.
+     */
     private NeaStationReading mapWbgtReading(WbgtReading reading) {
         if (reading == null || reading.station() == null || reading.location() == null
                 || !StringUtils.hasText(reading.station().id())
                 || !StringUtils.hasText(reading.station().name())
-                || reading.location().latitude() == null || reading.location().longitude() == null
-                || reading.wbgt() == null) {
+                || reading.location().latitude() == null || reading.location().longitude() == null) {
             throw invalid("WBGT response contains an incomplete station reading");
+        }
+        if (reading.wbgt() == null) {
+            return null;
         }
         NeaStation station = new NeaStation(
                 reading.station().id(),
@@ -327,7 +359,14 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
     private record WbgtItem(List<WbgtReading> readings) {
     }
 
-    private record WbgtReading(WbgtStation station, WbgtLocation location, BigDecimal wbgt,
+    /**
+     * {@code wbgt} is read leniently: data.gov.sg sends {@code "NA"} for a station with no
+     * reading this interval, and a strict {@link BigDecimal} mapping failed the entire response
+     * over one such station. See {@link NeaMissingNumberDeserializer}.
+     */
+    private record WbgtReading(WbgtStation station, WbgtLocation location,
+                               @JsonDeserialize(using = NeaMissingNumberDeserializer.class)
+                               BigDecimal wbgt,
                                String heatStress) {
     }
 
