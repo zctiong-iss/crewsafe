@@ -23,7 +23,11 @@
     "server": "Ada masalah di pihak kami. Cuba lagi sebentar.",
     "network": "Tidak dapat menghubungi CrewSafe. Semak sambungan anda dan cuba lagi.",
     "configMissing": "Aplikasi belum dikonfigurasikan. Tiada: {{keys}}",
-    "unknown": "Ada masalah berlaku. Cuba lagi."
+    "unknown": "Ada masalah berlaku. Cuba lagi.",
+    "codes": {
+      "NO_ACTIVE_POLICY": "Tapak ini tiada polisi haba yang aktif, jadi pelan tidak boleh dirangka. Minta Pengurus Keselamatan mengaktifkan satu versi polisi.",
+      "NO_USABLE_WBGT": "Belum ada bacaan WBGT yang boleh digunakan untuk tapak ini, jadi pelan tidak boleh dirangka. Cuba lagi apabila bacaan tiba."
+    }
   },
   "auth": {
     "signInTitle": "Log masuk",

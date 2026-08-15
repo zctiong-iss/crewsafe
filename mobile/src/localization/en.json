@@ -22,7 +22,11 @@
     "server": "Something went wrong on our end. Try again in a moment.",
     "network": "Cannot reach CrewSafe. Check your connection and try again.",
     "configMissing": "The app is not configured. Missing: {{keys}}",
-    "unknown": "Something went wrong. Try again."
+    "unknown": "Something went wrong. Try again.",
+    "codes": {
+      "NO_ACTIVE_POLICY": "This site has no active heat policy, so a plan cannot be drafted. Ask a Safety Manager to activate a policy version.",
+      "NO_USABLE_WBGT": "There is no usable WBGT reading for this site yet, so a plan cannot be drafted. Try again once a reading arrives."
+    }
   },
   "auth": {
     "signInTitle": "Sign in",
