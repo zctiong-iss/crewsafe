@@ -60,7 +60,8 @@ locals {
   # differ from the default the application already carries (FR-001, research.md
   # R-008), or (the two ml/model-manifest* entries, SCRUM-373) where the
   # application has no default at all and the slot is deliberately declared
-  # empty rather than omitted (FR-008). The server port, the weather freshness
+  # with a placeholder value rather than omitted (FR-008 — SSM rejects an
+  # actually-empty string). The server port, the weather freshness
   # thresholds, the ingestion interval, and the external weather API base URL
   # all keep their application defaults and are deliberately absent.
   #
@@ -76,17 +77,30 @@ locals {
     "spring/profiles-active"    = "staging"
     "weather/ingestion-enabled" = "true"
 
-    # SCRUM-373 (FR-008) — deliberately empty, not absent and not omitted. The
-    # only trained WBGT model artifact that exists today (a SageMaker
-    # experiment output) is not approved for inference, so there is nothing to
-    # activate in this issue. ForecastModelRegistry.from_environment()
-    # (ml-service/crewsafe_ml/inference.py) treats an empty/absent
-    # WBGT_MODEL_MANIFEST as "no model configured" and falls back to the
-    # persistence baseline - not an error path. Declaring the slot now (rather
-    # than adding it only in the follow-up that promotes a model) means that
-    # follow-up is a parameter VALUE change, not a task-definition change.
-    "ml/model-manifest"        = ""
-    "ml/model-manifest-sha256" = ""
+    # SCRUM-373 (FR-008) — deliberately a placeholder, not a real manifest.
+    # NOT an empty string: AWS SSM PutParameter rejects "" outright
+    # ("Member must have length greater than or equal to 1" — found live,
+    # secrets-shared-dev apply, 2026-08-15), so "unset" is the closest
+    # AWS-API-legal equivalent. The only trained WBGT model artifact that
+    # exists today (a SageMaker experiment output) is not approved for
+    # inference, so there is nothing to activate in this issue.
+    # ForecastModelRegistry.from_environment() (ml-service/crewsafe_ml/
+    # inference.py) cannot distinguish "unset" from "a path that doesn't
+    # resolve": both raise inside ForecastService.from_environment()'s
+    # try/except (OSError from Path("unset").resolve(strict=True)), landing
+    # on model_configuration_failed=True — behaviorally identical to the
+    # model_registry=None state a true empty value would have produced
+    # (forecast() without context still serves the persistence baseline
+    # either way; forecast() with context still raises
+    # ForecastModelUnavailableError either way). The one observable
+    # difference is a single ERROR-level "Configured WBGT model bundle could
+    # not be loaded" log line at every task start until a real bundle is
+    # promoted — an accepted, documented trade-off, not a bug. Declaring the
+    # slot now (rather than adding it only in the follow-up that promotes a
+    # model) means that follow-up is a parameter VALUE change, not a
+    # task-definition change.
+    "ml/model-manifest"        = "unset"
+    "ml/model-manifest-sha256" = "unset"
   }
 
   config_parameter_descriptions = {
@@ -96,8 +110,8 @@ locals {
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
-    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. Deliberately empty: no model bundle is approved_for_inference yet. A future promotion updates this value only - no task-definition change. Never a secret; the manifest path and checksum are not sensitive."
-    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. Deliberately empty alongside it; ForecastModelRegistry.from_environment() requires both or neither to be set meaningfully."
+    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. Placeholder value 'unset' (SSM rejects empty strings): no model bundle is approved_for_inference yet. A future promotion updates this value only - no task-definition change. Never a secret; the manifest path and checksum are not sensitive."
+    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. Placeholder value 'unset' alongside it, for the same AWS API reason; ForecastModelRegistry.from_environment() requires both or neither to be set meaningfully."
   }
 }
 
