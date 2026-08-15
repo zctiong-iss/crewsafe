@@ -613,6 +613,8 @@
     "hourUp": "Later by one hour",
     "hourDown": "Earlier by one hour",
     "minuteUp": "Later by five minutes",
-    "minuteDown": "Earlier by five minutes"
+    "minuteDown": "Earlier by five minutes",
+    "hourInput": "Hour",
+    "minuteInput": "Minute"
   }
 }

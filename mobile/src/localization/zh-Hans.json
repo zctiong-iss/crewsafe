@@ -612,6 +612,8 @@
     "hourUp": "推迟一小时",
     "hourDown": "提前一小时",
     "minuteUp": "推迟五分钟",
-    "minuteDown": "提前五分钟"
+    "minuteDown": "提前五分钟",
+    "hourInput": "小时",
+    "minuteInput": "分钟"
   }
 }

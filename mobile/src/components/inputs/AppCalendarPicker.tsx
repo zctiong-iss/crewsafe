@@ -35,7 +35,7 @@
  * @author Justin Chua
  */
 import { useMemo, useState, type FC } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
@@ -46,10 +46,24 @@ import AppButton from "../buttons/AppButton";
 import { useReduceMotion } from "@/hooks/useReduceMotion";
 import { useTheme } from "@/theme/ThemeProvider";
 
-/** Minutes move in fives. A shift start of 10:37 is noise, not precision. */
+/**
+ * The steppers move minutes in fives — fewest taps to a realistic shift time.
+ *
+ * Coarse on purpose, and affordable because it is no longer the only way in: the hour and
+ * minute are editable fields, so an exact 10:23 is typed rather than tapped for twenty
+ * seconds. The stepper is for nudging, the keyboard is for precision.
+ */
 const MINUTE_STEP = 5;
 
 const DAYS_IN_WEEK = 7;
+
+const MAX_HOUR = 23;
+const MAX_MINUTE = 59;
+
+/** Two digits, so a typed "9" settles to "09" rather than sitting ambiguous next to ":". */
+function pad(value: number): string {
+  return `${value}`.padStart(2, "0");
+}
 
 export interface AppCalendarPickerProps {
   visible: boolean;
@@ -151,6 +165,17 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
   const [visibleMonth, setVisibleMonth] = useState(startOfDay(initialValue));
 
   /*
+   * The typed text is held separately from the draft, and that separation is the whole point.
+   *
+   * Deriving the field's value from `draft` would make it impossible to type: clearing the
+   * box to retype an hour produces an empty string, which is not a number, so the field would
+   * snap back to its old value between keystrokes. Holding the raw text lets a half-finished
+   * entry exist while the draft keeps the last value that actually parsed.
+   */
+  const [hourText, setHourText] = useState(pad(initialValue.getHours()));
+  const [minuteText, setMinuteText] = useState(pad(initialValue.getMinutes()));
+
+  /*
    * Re-seed when the picker is reopened. `key` on the parent would do this too, but this
    * keeps the reset next to the reason for it: the draft belongs to one opening of the modal,
    * and reopening after a Cancel must not resurrect the abandoned draft.
@@ -161,6 +186,8 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
     if (visible) {
       setDraft(initialValue);
       setVisibleMonth(startOfDay(initialValue));
+      setHourText(pad(initialValue.getHours()));
+      setMinuteText(pad(initialValue.getMinutes()));
     }
   }
 
@@ -198,7 +225,69 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
   const shiftMinutes = (delta: number) => {
     // Date arithmetic rather than setHours, so stepping past midnight rolls the day rather
     // than wrapping to the same day's other end.
-    setDraft((current) => new Date(current.getTime() + delta * 60_000));
+    const next = new Date(draft.getTime() + delta * 60_000);
+    setDraft(next);
+    // The fields follow the stepper. Without this the two controls would disagree about the
+    // same value, and whichever the supervisor looked at last would be the one they trusted.
+    setHourText(pad(next.getHours()));
+    setMinuteText(pad(next.getMinutes()));
+  };
+
+  /** Applies an hour/minute to the draft, keeping the chosen calendar day. */
+  const applyTime = (hours: number, minutes: number) => {
+    setDraft(
+      new Date(draft.getFullYear(), draft.getMonth(), draft.getDate(), hours, minutes, 0, 0),
+    );
+  };
+
+  /**
+   * Typing is unrestricted while the field has focus; only what parses in range reaches the
+   * draft.
+   *
+   * Rejecting out-of-range keystrokes outright reads well until someone types "5" intending
+   * "59" — the first digit is valid, the second would be refused, and the field fights the
+   * person using it. Letting the text be anything and committing only valid values keeps
+   * mid-entry states possible without ever committing nonsense.
+   */
+  const onTimeTextChange = (raw: string, unit: "hour" | "minute") => {
+    // Digits only: the numeric keypad still offers separators on some locales, and a stray
+    // "." would silently make the whole value unparseable.
+    const digits = raw.replace(/[^0-9]/g, "").slice(0, 2);
+    const limit = unit === "hour" ? MAX_HOUR : MAX_MINUTE;
+
+    if (unit === "hour") setHourText(digits);
+    else setMinuteText(digits);
+
+    if (digits === "") return;
+    const parsed = Number(digits);
+    if (parsed > limit) return;
+
+    if (unit === "hour") applyTime(parsed, draft.getMinutes());
+    else applyTime(draft.getHours(), parsed);
+  };
+
+  /**
+   * On blur the field settles: out of range clamps, empty or unparseable reverts to the draft.
+   *
+   * Reverting rather than zeroing matters — a supervisor who clears the hour to retype it and
+   * then taps elsewhere gets the time they had, not midnight. Nothing here can leave the
+   * field showing a value the draft does not hold.
+   */
+  const onTimeBlur = (unit: "hour" | "minute") => {
+    const text = unit === "hour" ? hourText : minuteText;
+    const limit = unit === "hour" ? MAX_HOUR : MAX_MINUTE;
+    const fallback = unit === "hour" ? draft.getHours() : draft.getMinutes();
+
+    const parsed = text === "" ? Number.NaN : Number(text);
+    const settled = Number.isNaN(parsed) ? fallback : Math.min(limit, Math.max(0, parsed));
+
+    if (unit === "hour") {
+      setHourText(pad(settled));
+      applyTime(settled, draft.getMinutes());
+    } else {
+      setMinuteText(pad(settled));
+      applyTime(draft.getHours(), settled);
+    }
   };
 
   const cellSize = Math.max(theme.metrics.minTouchTarget, vs(36) * theme.fontScale);
@@ -341,9 +430,29 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
                 </Pressable>
 
                 {/* 24-hour, matching the rest of the app and the old picker's is24Hour. */}
-                <AppText variant="subtitle" testID="datePicker-hour" style={styles.timeValue}>
-                  {`${draft.getHours()}`.padStart(2, "0")}
-                </AppText>
+                <TextInput
+                  testID="datePicker-hour"
+                  value={hourText}
+                  onChangeText={(raw) => onTimeTextChange(raw, "hour")}
+                  onBlur={() => onTimeBlur("hour")}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  // Selects the existing value so typing replaces it. Without this, tapping a
+                  // field showing "14" and typing "9" gives "149" truncated to "14" — the
+                  // entry appears to do nothing.
+                  selectTextOnFocus
+                  accessibilityLabel={t("datePicker.hourInput")}
+                  style={[
+                    styles.timeInput,
+                    {
+                      color: theme.colors.textPrimary,
+                      borderColor: theme.colors.border,
+                      borderWidth: theme.metrics.borderWidth,
+                      borderRadius: theme.metrics.radius,
+                      minHeight: theme.metrics.minTouchTarget,
+                    },
+                  ]}
+                />
 
                 <Pressable
                   onPress={() => shiftMinutes(60)}
@@ -367,9 +476,26 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
                   <Ionicons name="remove" size={s(18)} color={theme.colors.textPrimary} />
                 </Pressable>
 
-                <AppText variant="subtitle" testID="datePicker-minute" style={styles.timeValue}>
-                  {`${draft.getMinutes()}`.padStart(2, "0")}
-                </AppText>
+                <TextInput
+                  testID="datePicker-minute"
+                  value={minuteText}
+                  onChangeText={(raw) => onTimeTextChange(raw, "minute")}
+                  onBlur={() => onTimeBlur("minute")}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  selectTextOnFocus
+                  accessibilityLabel={t("datePicker.minuteInput")}
+                  style={[
+                    styles.timeInput,
+                    {
+                      color: theme.colors.textPrimary,
+                      borderColor: theme.colors.border,
+                      borderWidth: theme.metrics.borderWidth,
+                      borderRadius: theme.metrics.radius,
+                      minHeight: theme.metrics.minTouchTarget,
+                    },
+                  ]}
+                />
 
                 <Pressable
                   onPress={() => shiftMinutes(MINUTE_STEP)}
@@ -384,13 +510,20 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
             </View>
           ) : null}
 
+          {/*
+            Each button is wrapped in a flexed View rather than flexed itself. AppButton is
+            deliberately `width: "100%"` (see its own comment on Yoga sizing the row to its
+            label), so two of them in a row makes the first claim the full width and pushes
+            the second off the panel — which is exactly what happened to Cancel, leaving the
+            backdrop and the hardware back button as the only ways out.
+          */}
           <View style={styles.actions}>
-            <AppButton title={t("common.cancel")} variant="secondary" onPress={onCancel} />
-            <AppButton
-              title={t("common.confirm")}
-              onPress={() => onConfirm(draft)}
-              style={styles.confirm}
-            />
+            <View style={styles.action}>
+              <AppButton title={t("common.cancel")} variant="secondary" onPress={onCancel} />
+            </View>
+            <View style={[styles.action, styles.confirm]}>
+              <AppButton title={t("common.confirm")} onPress={() => onConfirm(draft)} />
+            </View>
           </View>
         </View>
       </View>
@@ -467,14 +600,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: vs(6),
   },
-  timeValue: {
-    minWidth: s(34),
+  timeInput: {
+    minWidth: s(52),
+    marginHorizontal: s(4),
+    paddingHorizontal: s(8),
     textAlign: "center",
+    // Matches AppText's "subtitle" so the field reads as part of the same row as the ":".
+    fontSize: s(16),
   },
   actions: {
     flexDirection: "row",
-    justifyContent: "flex-end",
     marginTop: vs(14),
+  },
+  action: {
+    flex: 1,
   },
   confirm: {
     marginStart: s(10),

@@ -613,6 +613,8 @@
     "hourUp": "Lewat satu jam",
     "hourDown": "Awal satu jam",
     "minuteUp": "Lewat lima minit",
-    "minuteDown": "Awal lima minit"
+    "minuteDown": "Awal lima minit",
+    "hourInput": "Jam",
+    "minuteInput": "Minit"
   }
 }

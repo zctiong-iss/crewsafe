@@ -612,6 +612,8 @@
     "hourUp": "एक घंटा बाद",
     "hourDown": "एक घंटा पहले",
     "minuteUp": "पाँच मिनट बाद",
-    "minuteDown": "पाँच मिनट पहले"
+    "minuteDown": "पाँच मिनट पहले",
+    "hourInput": "घंटा",
+    "minuteInput": "मिनट"
   }
 }

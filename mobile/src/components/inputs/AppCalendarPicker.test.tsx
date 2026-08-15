@@ -74,9 +74,10 @@ describe("rendering", () => {
   it("shows the time row in datetime mode", async () => {
     await renderPicker();
     expect(screen.getByText("datePicker.time")).toBeTruthy();
-    // By testID, not text: "10" and "15" are also day numbers in the grid above.
-    expect(screen.getByTestId("datePicker-hour")).toHaveTextContent("10");
-    expect(screen.getByTestId("datePicker-minute")).toHaveTextContent("15");
+    // By testID and `value`, not text: these are inputs now, and "10"/"15" are also day
+    // numbers in the grid above.
+    expect(screen.getByTestId("datePicker-hour").props.value).toBe("10");
+    expect(screen.getByTestId("datePicker-minute").props.value).toBe("15");
   });
 });
 
@@ -201,6 +202,130 @@ describe("time stepping", () => {
     const picked = onConfirm.mock.calls[0][0] as Date;
     expect(picked.getDate()).toBe(27);
     expect(picked.getHours()).toBe(0);
+  });
+});
+
+describe("typed time entry", () => {
+  it("accepts a typed hour", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "7");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getHours()).toBe(7);
+  });
+
+  it("accepts a typed minute the stepper could never reach", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-minute"), "23");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getMinutes()).toBe(23);
+  });
+
+  it("keeps the chosen day when the time is typed", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.press(screen.getByLabelText("Monday, 10 August 2026"));
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "6");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    const picked = onConfirm.mock.calls[0][0] as Date;
+    expect(picked.getDate()).toBe(10);
+    expect(picked.getHours()).toBe(6);
+  });
+
+  it("strips non-digits rather than becoming unparseable", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-minute"), "4.5");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getMinutes()).toBe(45);
+  });
+
+  /*
+   * The reason the raw text is held apart from the draft. Clearing the box to retype must be
+   * possible; if the field were derived from the draft it would snap back between keystrokes.
+   */
+  it("allows the field to be cleared mid-entry without committing", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "");
+
+    expect(screen.getByTestId("datePicker-hour").props.value).toBe("");
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it("reverts a cleared field to the draft value on blur, not to midnight", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "");
+    await fireEvent(screen.getByTestId("datePicker-hour"), "blur");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getHours()).toBe(10);
+  });
+
+  it("clamps an out-of-range hour on blur", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "99");
+    await fireEvent(screen.getByTestId("datePicker-hour"), "blur");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getHours()).toBe(23);
+  });
+
+  it("clamps an out-of-range minute on blur", async () => {
+    const { onConfirm } = await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-minute"), "88");
+    await fireEvent(screen.getByTestId("datePicker-minute"), "blur");
+    await fireEvent.press(screen.getByText("common.confirm"));
+
+    expect((onConfirm.mock.calls[0][0] as Date).getMinutes()).toBe(59);
+  });
+
+  it("pads a single digit to two on blur", async () => {
+    await renderPicker();
+
+    await fireEvent.changeText(screen.getByTestId("datePicker-hour"), "9");
+    await fireEvent(screen.getByTestId("datePicker-hour"), "blur");
+
+    expect(screen.getByTestId("datePicker-hour").props.value).toBe("09");
+  });
+
+  /* The two controls edit one value, so neither may show something the other disagrees with. */
+  it("updates the typed fields when the stepper is used", async () => {
+    await renderPicker();
+
+    await fireEvent.press(screen.getByLabelText("datePicker.minuteUp"));
+
+    expect(screen.getByTestId("datePicker-minute").props.value).toBe("20");
+  });
+
+  it("updates the hour field when stepping rolls the hour", async () => {
+    await renderPicker();
+
+    await fireEvent.press(screen.getByLabelText("datePicker.hourUp"));
+
+    expect(screen.getByTestId("datePicker-hour").props.value).toBe("11");
+  });
+});
+
+describe("actions", () => {
+  /*
+   * Regression: AppButton is width:100%, so two in a flex row made the first claim the panel
+   * and push the second off it. Cancel disappeared, leaving the backdrop and hardware back
+   * as the only ways out.
+   */
+  it("renders both Cancel and Confirm", async () => {
+    await renderPicker();
+
+    expect(screen.getByText("common.cancel")).toBeTruthy();
+    expect(screen.getByText("common.confirm")).toBeTruthy();
   });
 });
 
