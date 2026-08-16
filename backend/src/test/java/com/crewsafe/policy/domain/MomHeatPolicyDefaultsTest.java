@@ -167,7 +167,7 @@ class MomHeatPolicyDefaultsTest {
                 .as("could not locate V17's threshold block; did the migration's shape change?")
                 .isTrue();
 
-        Matcher numbers = Pattern.compile("(\\d++\\.\\d++)").matcher(block.group(1));
+        Matcher numbers = Pattern.compile("(\\d{1,3}\\.\\d{1,2})").matcher(block.group(1));
         List<BigDecimal> found = new ArrayList<>();
         while (numbers.find()) {
             found.add(new BigDecimal(numbers.group(1)));
