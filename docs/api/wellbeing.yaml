@@ -1,0 +1,408 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Wellbeing logs and concerns
+  version: "1.0"
+  description: >
+    Contract for SCRUM-315 (US-11 / SCRUM-125): the worker self-log (rest/hydration) and
+    raise-concern event contract. Written after the fact — `WorkerWellbeingController`
+    and `SupervisorWellbeingController` were already built and shipped without this spec
+    existing; this documents their actual behaviour rather than a fresh design, the same
+    approach action-dispatch.yaml took for SCRUM-184.
+
+    Two resources, deliberately kept apart. A wellbeing log is a fact with no state — a
+    rest or a drink happened, tagged SELF (worker-initiated) or INSTRUCTED (derived from
+    completing a dispatched REST_* action, see action-dispatch.yaml). A concern has a
+    life: OPEN until a supervisor acknowledges it, and no RESOLVED — the app can know a
+    supervisor read the report, not whether the worker is now all right.
+
+    A worker can only report about themselves: there is no workerId anywhere in a
+    worker-facing request or path, and every write resolves the shift from the caller's
+    own assignment on it. There is no un-acknowledge and no way to overwrite who
+    acknowledged a concern first — a second attempt is 409, not an overwrite.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/shifts/{shiftId}/wellbeing-logs:
+    parameters:
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: logWellbeing
+      summary: Worker logs a rest or a drink for themselves, on a shift they are assigned to
+      description: >
+        Always recorded as source SELF — the INSTRUCTED counterpart is only ever written
+        server-side, when a dispatched REST_* action is completed (see
+        action-dispatch.yaml's completeDispatch). 201 always, never an update: a log is a
+        new fact each time, never a correction of the last one.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WellbeingLogRequest"
+      responses:
+        "201":
+          description: The recorded log.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WellbeingLog"
+        "400":
+          description: Caller has no assignment on this shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not WORKER.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/shifts/{shiftId}/concerns:
+    parameters:
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: raiseConcern
+      summary: Worker tells their supervisor something is wrong
+      description: >
+        At least one symptom or a note is required — an empty concern says nothing a
+        supervisor can act on. NONE is a valid readiness-check answer elsewhere but is
+        not offered here: opening this form already means something is wrong. note is
+        optional and shown verbatim, labelled as the worker's own words, because the app
+        cannot translate it and a worker must never be unable to report they are unwell
+        because they cannot write in a language their supervisor reads.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConcernRequest"
+      responses:
+        "201":
+          description: The raised concern, status OPEN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Concern"
+        "400":
+          description: Caller has no assignment on this shift, or neither a symptom nor a note was given.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is not WORKER.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/wellbeing:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    get:
+      operationId: crewWellbeing
+      summary: One row per worker — last rest, last drink, and whether either was instructed
+      description: >
+        Folded server-side so three clients cannot each disagree about what "last" means.
+        A worker with no logs at all does not appear; the client already knows the crew
+        from the shift roster and renders "nothing logged yet" for anyone missing here.
+      responses:
+        "200":
+          description: The shift's crew wellbeing summary.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CrewWellbeingRow"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/wellbeing-logs:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    get:
+      operationId: wellbeingLogsForShift
+      summary: The raw log timeline for a shift, for a supervisor who wants more than the latest of each
+      responses:
+        "200":
+          description: This shift's wellbeing logs, most recent first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WellbeingLog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/concerns:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: concernsForSite
+      summary: Every concern across the site's shifts, newest first
+      description: >
+        Not filtered to OPEN only — a supervisor can still see what was already handled.
+        The Concerns tab badge count is computed client-side from status.
+      responses:
+        "200":
+          description: This site's concerns.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Concern"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/sites/{siteId}/concerns/{concernId}/acknowledge:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - name: concernId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: acknowledgeConcern
+      summary: Supervisor marks a concern as seen
+      description: >
+        SUPERVISOR or ADMIN only — SAFETY_MANAGER can read concerns (oversight) but not
+        acknowledge them, because acknowledging is a claim to have acted. Terminal: there
+        is no un-acknowledge. Who got there first is the fact worth keeping, so a second
+        acknowledgement is 409, never an overwrite.
+      responses:
+        "200":
+          description: The concern, status ACKNOWLEDGED.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Concern"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Caller is SAFETY_MANAGER or WORKER, or fails site access.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No concern with this id exists on a shift under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: This concern was already acknowledged.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Caller's role is not permitted, or fails site access for this siteId.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    LogType:
+      type: string
+      enum: [REST, HYDRATION]
+
+    LogSource:
+      type: string
+      enum: [SELF, INSTRUCTED]
+      description: >
+        SELF for a worker-initiated tap. INSTRUCTED is never client-settable — it is
+        written only when a dispatched REST_* action is completed (see
+        action-dispatch.yaml), so "has this crew rested?" has one answer regardless of
+        which feature recorded it.
+
+    SymptomFlag:
+      type: string
+      enum: [NONE, DIZZINESS, NAUSEA, HEADACHE, FATIGUE, MUSCLE_CRAMPS, OTHER]
+      description: >
+        Shared with the pre-shift readiness check (shift-readiness.yaml). NONE is valid
+        there but must not be sent when raising a concern — raising one already means
+        something is wrong.
+
+    ConcernStatus:
+      type: string
+      enum: [OPEN, ACKNOWLEDGED]
+      description: Server-controlled. Terminal at ACKNOWLEDGED — there is no RESOLVED and no un-acknowledge.
+
+    WellbeingLogRequest:
+      type: object
+      required: [logType]
+      properties:
+        logType:
+          $ref: "#/components/schemas/LogType"
+
+    WellbeingLog:
+      type: object
+      required: [id, shiftId, logType, source, loggedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        logType:
+          $ref: "#/components/schemas/LogType"
+        source:
+          $ref: "#/components/schemas/LogSource"
+        loggedAt:
+          type: string
+          format: date-time
+
+    ConcernRequest:
+      type: object
+      description: At least one of symptoms or note is required.
+      properties:
+        symptoms:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymptomFlag"
+        note:
+          type: string
+          maxLength: 500
+          description: Shown verbatim and labelled as the worker's own words; never translated.
+
+    Concern:
+      type: object
+      required: [id, shiftId, workerId, symptoms, status, raisedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        workerId:
+          type: string
+          format: uuid
+        symptoms:
+          type: array
+          items:
+            $ref: "#/components/schemas/SymptomFlag"
+        note:
+          type: string
+          nullable: true
+        status:
+          $ref: "#/components/schemas/ConcernStatus"
+        raisedAt:
+          type: string
+          format: date-time
+        acknowledgedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when a supervisor acknowledges. Null while OPEN.
+
+    CrewWellbeingRow:
+      type: object
+      required: [workerId, restCount, hydrationCount]
+      properties:
+        workerId:
+          type: string
+          format: uuid
+        lastRestAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastRestSource:
+          allOf:
+            - $ref: "#/components/schemas/LogSource"
+          nullable: true
+          description: Source of the most recent rest. Null if no rest has been logged.
+        lastHydrationAt:
+          type: string
+          format: date-time
+          nullable: true
+        restCount:
+          type: integer
+          minimum: 0
+        hydrationCount:
+          type: integer
+          minimum: 0
