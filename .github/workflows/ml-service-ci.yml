@@ -83,8 +83,7 @@ jobs:
       # so it needs no AWS credentials and runs in under a second (SCRUM-289).
       - name: Run ML-service tests
         working-directory: ml-service
-        run: python -m pytest test_forecast.py test_bedrock_client.py test_agent_graph.py test_app_error_handling.py
-        run: python -m pytest test_forecast.py test_bedrock_client.py test_agent_graph.py test_app_bind.py
+        run: python -m pytest test_forecast.py test_bedrock_client.py test_agent_graph.py test_app_error_handling.py test_app_bind.py
 
       - name: Run Scrum 114 unit and data-contract tests
         working-directory: ml-service
