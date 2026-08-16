@@ -40,6 +40,7 @@ flowchart LR
     subgraph webedge[Web delivery]
       webcf[CloudFront: web<br/>viewer HTTPS]
       webbucket[Private S3 web bucket<br/>OAC-only read access]
+      weblogs[S3 web_logs<br/>access logs · 30d]
     end
 
     subgraph apiedge[API delivery]
@@ -68,6 +69,7 @@ flowchart LR
   browser -->|sign in| cognito
   mobile -->|sign in| cognito
   browser -->|SPA| webcf -->|OAC read| webbucket
+  webbucket -->|access logs| weblogs
   browser -->|API| apicf -->|HTTP origin| alb -->|health checks| ecs
   mobile -->|API| apicf
   cognito -.->|issuer + JWKS| ecs
@@ -99,7 +101,7 @@ flowchart LR
   class browser,mobile,github,nea,bedrock,sonar client;
   class cognito,webcf,apicf,alb edge;
   class nat,ecs,mlservice compute;
-  class webbucket,rds,ecr,ssm,secrets data;
+  class webbucket,weblogs,rds,ecr,ssm,secrets data;
   class logs,securityhub,importer,state ops;
 ```
 
@@ -107,7 +109,10 @@ flowchart LR
 
 - The web SPA and backend API have **separate CloudFront distributions and
   hostnames**. The web distribution reads a private, versioned S3 bucket through
-  Origin Access Control; it has no ECS, ALB, or VPC dependency.
+  Origin Access Control; it has no ECS, ALB, or VPC dependency. The web bucket
+  delivers its own S3 server access logs to a dedicated, private, encrypted
+  `web_logs` bucket (30-day lifecycle expiry) behind a least-privilege delivery
+  policy scoped to the web bucket's own ARN (SonarQube `terraform:S6258`).
 - API traffic is CloudFront → public ALB → private ECS task. The ALB accepts its
   origin traffic only from AWS's managed CloudFront prefix list. The temporary
   CloudFront-to-ALB origin transport is HTTP on port 80 because the AWS-owned ALB
@@ -129,9 +134,11 @@ flowchart LR
   the whole task, and it shares the backend task role, including a narrowly scoped
   `bedrock:InvokeModel` grant (exactly the Claude model identifiers `ml-service`
   and `backend` invoke — never `bedrock:*`, never a resource wildcard). The
-  `WBGT_MODEL_MANIFEST`/`WBGT_MODEL_MANIFEST_SHA256` configuration entries exist
-  today only as a declared placeholder (`"unset"`) — no trained model is
-  activated, so `/forecast` always serves the persistence baseline.
+  `WBGT_MODEL_MANIFEST`/`WBGT_MODEL_MANIFEST_SHA256` configuration entries now
+  point at the checksum-verified `staging-demo-v1` bundle baked into the
+  `ml-service` image (SCRUM-114/SCRUM-373) — activated for the shared staging
+  demonstration only, not a production model approval; a manifest/checksum
+  mismatch still fails safely to the persistence baseline.
 - ECR provides immutable, scan-on-push backend, web, and ml-service repositories,
   each with its own scoped push role. The deployed web app is a static S3 sync,
   not an ECR runtime consumer. Terraform deliberately ignores the ECS service's
@@ -176,6 +183,7 @@ flowchart LR
   ecr[ECR<br/>ecr/shared-dev.tfstate]
   compute[Compute<br/>compute/shared-dev.tfstate]
   iam[IAM policy mgmt<br/>iam-policy-management/shared-dev.tfstate]
+  devaccess[Developer access<br/>developer-access/shared-dev.tfstate]
   importer[SecurityHub import<br/>securityhub-import/shared-dev.tfstate]
 
   gha --> bootstrap
@@ -186,6 +194,7 @@ flowchart LR
   gha --> ecr
   gha --> compute
   gha --> iam
+  gha --> devaccess
   gha --> importer
   bootstrap -.->|creates| state
   cognito -.->|Cognito outputs| secrets
@@ -202,14 +211,18 @@ flowchart LR
   ecr -.-> state
   compute -.-> state
   iam -.-> state
+  devaccess -.-> state
   importer -.-> state
 ```
 
 `iam-policy-management-shared-dev` is intentionally not shown as a remote-state
 consumer: it centrally creates and attaches reviewed Terraform plan/apply policies
 to the pre-existing GitHub OIDC roles. `securityhub-import-shared-dev` independently
-creates the narrow SonarCloud-to-Security-Hub importer role. Neither component
-creates a runtime application dependency.
+creates the narrow SonarCloud-to-Security-Hub importer role.
+`developer-access-shared-dev` independently creates the read-only
+`crewsafe-developers` IAM group (AWS-managed `ViewOnlyAccess`) and its member
+users. None of the three creates a runtime application dependency or consumes
+another component's outputs.
 
 ## DevSecOps toolchain
 
@@ -269,6 +282,11 @@ flowchart LR
     hub[Security Hub<br/>controlled import]
   end
 
+  subgraph verify[Staging verification]
+    smoke[Staging smoke<br/>auth + WBGT check]
+    dast[Authenticated DAST<br/>OWASP ZAP baseline]
+  end
+
   dev --> actions
   actions --> backend
   actions --> web
@@ -283,6 +301,10 @@ flowchart LR
   web --> s3 --> webstg
   iac --> plan --> apply
   sast --> hub
+  ecs --> smoke
+  webstg --> smoke
+  ecs --> dast
+  webstg --> dast
 ```
 
 Backend and web promotion uses immutable, commit-addressed artifacts. Terraform
@@ -290,7 +312,35 @@ mutation is CI-only and requires the exact reviewed plan, commit, account and ty
 confirmation. Security scanning fails closed for unavailable secret scanning; the
 SonarCloud analysis covers backend, web and mobile, with coverage generated before
 analysis. The SonarCloud-to-Security-Hub path is a controlled, redacted import with no
-remediation or ticket-creation permission.
+remediation or ticket-creation permission. After a successful staging deploy, both the
+backend and web release workflows call a shared staging-smoke check (synthetic sign-in
+plus a WBGT read/forecast round trip) and an authenticated DAST scan (ZAP baseline
+against the deployed staging origins); both run as post-deploy evidence and do not roll
+back or gate the release that already happened.
+
+## Manual operational workflows
+
+Two further workflow families exist outside the push/PR pipeline above: they are
+`workflow_dispatch`-only, gated to `github.ref == 'refs/heads/main'`, and never
+triggered by a push or a pull request.
+
+- **Mobile security testing** (`mobile-native-build.yml` → `mobsf-dynamic-scan.yml`,
+  SCRUM-348/SCRUM-350): builds a non-store Android/iOS artifact for internal security
+  testing and QA only — a structural test fails the build if a Play Store/App
+  Store/TestFlight step is ever added — then, given a build produced with
+  `auth_mode=cognito-password`, drives MobSF dynamic analysis with a Maestro-scripted
+  sign-in/API-call/sign-out flow against the real staging backend. Findings are
+  recorded as CI evidence and are non-blocking this iteration.
+- **Cognito operations** (`cognito-mapping-publication.yml`,
+  `cognito-user-administration.yml`): publish the staging Cognito app-client mapping
+  and perform an allowlisted set of user/group administration operations (inspect,
+  list, enable/disable, password reset, forced global sign-out, group membership,
+  synthetic-worker lifecycle). Every state-changing call requires a typed
+  `<operation> <alias> <subject>` confirmation phrase, mirroring the Terraform Apply
+  gate's confirmation pattern.
+
+The detailed standalone PlantUML page for both flows is the third page of
+[`devsecops-toolchain.puml`](devsecops-toolchain.puml).
 
 ## Declared component inventory
 
@@ -299,7 +349,7 @@ remediation or ticket-creation permission.
 | `state-backend` | Account-isolated, versioned and protected state bucket | Self-bootstrap |
 | `cognito-shared-dev` | Shared user pool, OAuth clients, groups and administration role | — |
 | `network-shared-dev` | VPC, two-AZ public/private subnets, NAT, app and database security groups | — |
-| `secrets-shared-dev` | Runtime configuration, weather-secret container and ECS roles | Cognito |
+| `secrets-shared-dev` | Runtime configuration (incl. `ml-service` model-manifest SSM parameters), weather-secret container and ECS roles | Cognito |
 | `database-shared-dev` | PostgreSQL, subnet/parameter groups, logs and connection configuration | Network, secrets |
 | `ecr-shared-dev` | Backend/web/ml-service repositories, each with a scoped push role, Inspector scanning and Security Hub insight | — |
 | `compute-shared-dev` | Backend ECS/ALB/API edge (with the ml-service sidecar container, SCRUM-373) and static web S3/CloudFront delivery | Network, secrets, database, ECR |
@@ -314,13 +364,18 @@ remediation or ticket-creation permission.
   deliberately undeclared: an agent runtime, mobile deployment runtime,
   EventBridge scheduling, or production custom domains/certificates. Those
   remain product-plan targets, not current Terraform resources.
-- `ml-service`'s own trained-model activation is a separate, later step this
-  architecture does not yet cover: `WBGT_MODEL_MANIFEST`/
-  `WBGT_MODEL_MANIFEST_SHA256` are declared SSM parameters holding a deliberate
-  `"unset"` placeholder value, so `/forecast` always serves the persistence
-  baseline today. Promoting a real model is designed as a value-only parameter
-  change plus a redeploy — no task-definition or Terraform-shape change — see
-  `docs/runbooks/SCRUM-373-ml-service-deploy.md` §8.
+- `ml-service`'s trained-model activation is now live for a time-limited,
+  explicitly non-production exception: `WBGT_MODEL_MANIFEST`/
+  `WBGT_MODEL_MANIFEST_SHA256` point at the checksum-pinned `staging-demo-v1`
+  bundle baked into the `ml-service` image (SCRUM-114/SCRUM-373, accepted by
+  decision owner Bryan Phang on 16 August 2026 as a university-project staging
+  demonstration only — `ml-service/MODEL_CARD.md`). It does not satisfy the
+  normal 21-day post-freeze production-evidence procedure, does not alter the
+  deterministic policy or human-approval boundaries, and a manifest/checksum
+  mismatch still fails safely to the persistence baseline — see
+  `docs/runbooks/SCRUM-373-ml-service-deploy.md` §8.0 for the exception and
+  §8 generally for the value-only parameter-plus-redeploy activation path (no
+  task-definition or Terraform-shape change).
 - A model bundle shipped via S3 rather than baked into the `ml-service` image is
   explicitly out of scope for this architecture; no S3 read permission exists on
   either ECS identity for that purpose. The one trained candidate that exists
