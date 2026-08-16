@@ -168,6 +168,27 @@ function HorizonCard({
             })}
           </AppText>
 
+          {/*
+            Placed directly under the range and above the provenance, because it explains the
+            range rather than describing where the number came from. A supervisor who reads
+            only as far as the interval has still been told why it is as wide as it is.
+
+            `degraded` is the server's own verdict; the client never infers trustworthiness
+            from a timestamp, for the same reason it does not compute the band.
+          */}
+          {state.forecast.degraded && state.forecast.basis && state.forecast.basis !== "MODEL" ? (
+            <View style={styles.basisNote}>
+              <AppText variant="caption">
+                {t(`forecast.basisNote.${state.forecast.basis}`)}
+              </AppText>
+              {typeof state.forecast.inputAgeMinutes === "number" ? (
+                <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+                  {t("forecast.inputAge", { count: state.forecast.inputAgeMinutes })}
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.provenance}>
             <AppText variant="caption" tone="secondary" style={styles.metaItem}>
               {t("forecast.model", { version: state.forecast.modelVersion })}
@@ -226,6 +247,9 @@ const styles = StyleSheet.create({
   },
   unit: {
     marginStart: s(4),
+  },
+  basisNote: {
+    marginTop: vs(10),
   },
   provenance: {
     flexDirection: "row",

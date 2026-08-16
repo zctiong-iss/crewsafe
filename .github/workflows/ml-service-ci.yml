@@ -35,6 +35,15 @@ on:
         description: "Also build and push the image to ECR (main only)"
         type: boolean
         default: false
+      redeploy:
+        description: "Redeploy an approved main-ancestor commit's existing immutable ml-service image without publishing"
+        type: boolean
+        default: false
+      redeploy_image_tag:
+        description: "Full approved commit SHA of an existing ml-service image that is reachable from main"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -75,6 +84,7 @@ jobs:
       - name: Run ML-service tests
         working-directory: ml-service
         run: python -m pytest test_forecast.py test_bedrock_client.py test_agent_graph.py test_app_error_handling.py
+        run: python -m pytest test_forecast.py test_bedrock_client.py test_agent_graph.py test_app_bind.py
 
       - name: Run Scrum 114 unit and data-contract tests
         working-directory: ml-service
@@ -126,7 +136,7 @@ jobs:
       github.ref == 'refs/heads/main' &&
       (
         github.event_name == 'push' ||
-        (github.event_name == 'workflow_dispatch' && inputs.publish)
+        (github.event_name == 'workflow_dispatch' && inputs.publish && !inputs.redeploy)
       ) &&
       vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN != '' && vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL != ''
     runs-on: ubuntu-latest
@@ -228,3 +238,101 @@ jobs:
             echo "- Content digest: \`$image_digest\`"
             echo "- CI run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # SCRUM-373 follow-up: redeploys an already-published, main-ancestor
+  # ml-service image without requiring a Terraform apply to bump
+  # var.initial_ml_service_image_tag (research.md R-011's lesson, applied to
+  # the sidecar). Mirrors backend-ci.yml's resolve-existing-image job exactly:
+  # accepts a full commit SHA, proves it is reachable from the selected main
+  # ref, then resolves its image using the dedicated ml-service deploy role.
+  # Never builds or pushes.
+  resolve-existing-image:
+    name: Resolve existing ml-service image
+    needs: verify-ml-service
+    if: >
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.redeploy && !inputs.publish &&
+      vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN != '' && vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ steps.resolve.outputs.image_tag }}
+      image_digest: ${{ steps.resolve.outputs.image_digest }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+      - name: Validate existing-image redeploy contract
+        env:
+          REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
+          DEPLOY_ROLE_ARN: ${{ vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN }}
+          IMAGE_TAG: ${{ inputs.redeploy_image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REPO" =~ ^[0-9]{12}\.dkr\.ecr\.ap-southeast-1\.amazonaws\.com/crewsafe/ml-service$ ]] || { echo "ml-service repository must be the regional ECR crewsafe/ml-service repository" >&2; exit 1; }
+          [[ "$DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-ml-service-deploy$ ]] || { echo "Unexpected ml-service deployment role" >&2; exit 1; }
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "redeploy_image_tag must be a 40-character lowercase commit SHA" >&2; exit 1; }
+          git cat-file -e "$IMAGE_TAG^{commit}" || { echo "redeploy_image_tag is not a repository commit" >&2; exit 1; }
+          git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA" || { echo "redeploy_image_tag is not reachable from selected main" >&2; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeMlServiceRedeploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Resolve selected main image digest
+        id: resolve
+        env:
+          IMAGE_TAG: ${{ inputs.redeploy_image_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_digest="$(aws ecr describe-images --repository-name crewsafe/ml-service --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "No immutable digest exists for approved commit" >&2; exit 1; }
+          {
+            echo "image_tag=$IMAGE_TAG"
+            echo "image_digest=$image_digest"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo '## Existing ml-service image resolved'
+            echo "- Approved commit tag: \`$IMAGE_TAG\`"
+            echo "- Content digest: \`$image_digest\`"
+            echo '- Result: ready for deployment without publication'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-staging:
+    name: Deploy staging ml-service
+    needs: resolve-existing-image
+    if: always() && needs.resolve-existing-image.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REPOSITORY: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
+      IMAGE_TAG: ${{ needs.resolve-existing-image.outputs.image_tag }}
+      IMAGE_DIGEST: ${{ needs.resolve-existing-image.outputs.image_digest }}
+      CLUSTER: ${{ vars.CREWSAFE_BACKEND_ECS_CLUSTER_NAME }}
+      SERVICE: ${{ vars.CREWSAFE_BACKEND_ECS_SERVICE_NAME }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - name: Validate ml-service deployment contract
+        env:
+          DEPLOY_ROLE_ARN: ${{ vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/crewsafe-shared-dev-ml-service-deploy$ ]]
+          [[ "$CLUSTER" == crewsafe-shared-dev && "$SERVICE" == backend ]]
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN }}
+          aws-region: ap-southeast-1
+          role-session-name: CrewSafeMlServiceDeploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Deploy immutable ml-service release
+        id: deploy
+        run: .github/scripts/deploy/deploy-ml-service-staging.sh
