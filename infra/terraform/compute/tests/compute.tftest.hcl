@@ -1307,6 +1307,29 @@ run "web_access_logging_delivery" {
   }
 }
 
+# terraform:S6258 also flags the web_logs bucket itself (it is an S3 bucket
+# with no access logging of its own): self-logging closes that gap without
+# introducing a third bucket, since the 30-day lifecycle already bounds
+# growth regardless of source.
+run "web_logs_bucket_self_logging" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket must have its own access logging configured, so it is not itself an unlogged S3 bucket (terraform:S6258)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket's own access logs must be delivered to itself (there is no third bucket) — this is a deliberate, bounded self-reference, not the recursive-loop risk the naive case would create, because it targets a distinct prefix and is subject to the same 30-day expiration."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_prefix != aws_s3_bucket_logging.web.target_prefix
+    error_message = "The web_logs bucket's self-logging prefix must differ from the web bucket's own log prefix, so the two object streams cannot collide."
+  }
+}
+
 run "web_logs_bucket_privacy_and_encryption" {
   command = apply
 
@@ -1355,18 +1378,30 @@ run "web_logs_bucket_policy_least_privilege" {
     condition = anytrue([
       for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
       stmt.Principal.Service == "logging.s3.amazonaws.com" &&
-      try(stmt.Condition.ArnLike["aws:SourceArn"], "") == aws_s3_bucket.web.arn &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web.arn) &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web_logs.arn) &&
       try(stmt.Condition.StringEquals["aws:SourceAccount"], "") == var.expected_account_id
     ])
-    error_message = "The logging target bucket's policy must grant s3:PutObject only to the S3 log-delivery principal, scoped to the web bucket's own ARN (via ArnLike) and this account (via StringEquals) (FR-003)."
+    error_message = "The logging target bucket's policy must grant s3:PutObject to the S3 log-delivery principal, scoped (via ArnLike) to both source buckets that deliver to it — web and web_logs itself — and this account (via StringEquals) (FR-003)."
   }
 
   assert {
     condition = alltrue([
       for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
-      stmt.Principal != "*" && (try(stmt.Condition.ArnLike["aws:SourceArn"], "no-wildcard") != "*")
+      stmt.Principal != "*" && alltrue([
+        for arn in try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "no-wildcard")]) :
+        arn != "*"
+      ])
     ])
     error_message = "No statement in the logging target bucket's policy may use a wildcard principal or SourceArn (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      length(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")])) == 2
+    ])
+    error_message = "The logging target bucket's policy must scope SourceArn to exactly the two known delivering buckets — no additional, unaccounted-for source (FR-003)."
   }
 }
 

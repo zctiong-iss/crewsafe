@@ -1113,8 +1113,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "web_logs" {
 }
 
 # FR-003. Grants write access to exactly the S3 server-access-logging delivery
-# mechanism, scoped to this bucket and the web bucket's own ARN and account —
-# never a broader principal or resource scope (research.md R-001).
+# mechanism, scoped to this bucket and to the account and the two buckets that
+# deliver logs into it — web (FR-001) and web_logs itself (terraform:S6258
+# below) — never a broader principal or resource scope (research.md R-001).
 #
 # jsonencode(), not data "aws_iam_policy_document" — this file's own header
 # comment already records why: mock_provider "aws" fabricates a random string
@@ -1134,7 +1135,7 @@ locals {
         Principal = { Service = "logging.s3.amazonaws.com" }
         Condition = {
           ArnLike = {
-            "aws:SourceArn" = aws_s3_bucket.web.arn
+            "aws:SourceArn" = [aws_s3_bucket.web.arn, aws_s3_bucket.web_logs.arn]
           }
           StringEquals = {
             "aws:SourceAccount" = var.expected_account_id
@@ -1157,6 +1158,19 @@ resource "aws_s3_bucket_logging" "web" {
 
   target_bucket = aws_s3_bucket.web_logs.id
   target_prefix = "web-access-logs/"
+}
+
+# terraform:S6258 flags web_logs too: it is itself an S3 bucket, and an
+# unlogged one is exactly the finding this whole feature exists to close.
+# Self-logging (source == target) closes the gap without a third bucket —
+# a distinct prefix keeps the two object streams apart, and the 30-day
+# lifecycle above already bounds total growth regardless of which bucket a
+# given log object came from, so this does not create unbounded recursion.
+resource "aws_s3_bucket_logging" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-logs-bucket-access-logs/"
 }
 
 # ---------------------------------------------------------------------------
