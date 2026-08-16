@@ -30,6 +30,7 @@ import java.util.UUID;
  *
  * @author Surya Kumaraguru
  * @author Justin Chua
+ * @author Jemilin Beulah
  */
 @Service
 @RequiredArgsConstructor

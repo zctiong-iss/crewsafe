@@ -1,0 +1,120 @@
+/** @author Jemilin Beulah */
+
+.lightning-history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+}
+
+/* ---- Current State Card ----------------------------------------------
+   Surface (background/border/radius/shadow) comes from the global .card class applied
+   alongside this one in JSX; only layout and the left-edge state accent live here. */
+.lightning-history__risk-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+  border-left: 8px solid var(--status-none);
+  padding: var(--space-4);
+}
+.lightning-history__risk-card--clear      { border-left-color: var(--status-ok); }
+.lightning-history__risk-card--advisory   { border-left-color: var(--band-moderate); background: var(--band-moderate-wash); }
+.lightning-history__risk-card--stop_work  { border-left-color: var(--band-high); background: var(--band-high); }
+.lightning-history__risk-card--stop_work .lightning-history__risk-detail { color: var(--action-ink); }
+
+.lightning-history__risk-detail {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+
+.lightning-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+.lightning-state--none      { background: var(--status-none-wash);    color: var(--status-none); }
+.lightning-state--clear     { background: var(--status-ok-wash);      color: var(--status-ok); }
+.lightning-state--advisory  { background: var(--band-moderate-wash);  color: var(--band-moderate); }
+.lightning-state--stop_work { background: var(--band-extreme);        color: var(--action-ink); }
+
+/* ---- Observation History Table -----------------------------------------
+   Surface comes from the global .card class applied alongside this one in JSX; layout only. */
+.lightning-history__table-card {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.lightning-history__table-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+  margin: 0;
+}
+.lightning-history__table-scroll {
+  overflow-x: auto;
+}
+.lightning-history__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.lightning-history__table th {
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.lightning-history__table td {
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.lightning-history__no-strike {
+  color: var(--ink-muted);
+}
+
+.lightning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+.lightning-badge--live {
+  background-color: var(--band-low-wash);
+  color: var(--band-low);
+  border: 1.5px solid var(--band-low);
+}
+.lightning-badge--delayed {
+  background-color: var(--band-moderate-wash);
+  color: var(--band-moderate);
+  border: 1.5px solid var(--band-moderate);
+}
+.lightning-badge--stale {
+  background-color: var(--status-none-wash);
+  color: var(--status-none);
+  border: 1.5px solid var(--status-none);
+}
+.lightning-badge--simulated {
+  background-color: var(--action-quiet);
+  color: var(--action);
+  border: 1.5px solid var(--action);
+}

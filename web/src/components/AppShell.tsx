@@ -16,9 +16,10 @@ import "./AppShell.css";
  * building that in now is much cheaper than retrofitting it around a supervisor-shaped
  * shell later.
  */
-export function AppShell({ title, subtitle, actions, children }: {
+export function AppShell({ title, subtitle, siteSwitcher, actions, children }: {
   title: string;
   subtitle?: string;
+  siteSwitcher?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -66,6 +67,7 @@ export function AppShell({ title, subtitle, actions, children }: {
           <div>
             <h1 className="shell__title">{title}</h1>
             {subtitle && <p className="shell__subtitle">{subtitle}</p>}
+            {siteSwitcher && <div className="shell__site-switcher">{siteSwitcher}</div>}
           </div>
           {actions && <div className="shell__actions">{actions}</div>}
         </div>
