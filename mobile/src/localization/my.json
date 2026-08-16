@@ -485,6 +485,7 @@
     "generateFailedTitle": "အစီအစဉ် မရေးဆွဲနိုင်ပါ",
     "generatedToast": "အစီအစဉ်တစ်ခု ရေးဆွဲပြီးပါပြီ။",
     "statusDraft": "မူကြမ်း",
+    "statusSuperseded": "အစားထိုးခံရပြီး",
     "requiredCannotRemove": "အပူစည်းမျဉ်းအရ မဖြစ်မနေလိုအပ် — ဖယ်၍မရပါ။"
   },
   "mitigationCategory": {

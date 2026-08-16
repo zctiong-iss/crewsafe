@@ -484,6 +484,7 @@
     "generateFailedTitle": "திட்டம் வரையப்படவில்லை",
     "generatedToast": "திட்டம் வரையப்பட்டது.",
     "statusDraft": "வரைவு",
+    "statusSuperseded": "மாற்றப்பட்டது",
     "requiredCannotRemove": "வெப்ப விதிகளின்படி கட்டாயம் — இதை நீக்க முடியாது."
   },
   "mitigationCategory": {

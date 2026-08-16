@@ -484,6 +484,7 @@
     "generateFailedTitle": "পরিকল্পনা তৈরি হয়নি",
     "generatedToast": "একটি পরিকল্পনা তৈরি হয়েছে।",
     "statusDraft": "খসড়া",
+    "statusSuperseded": "প্রতিস্থাপিত",
     "requiredCannotRemove": "তাপ নীতির কারণে আবশ্যক — এটি সরানো যাবে না।"
   },
   "mitigationCategory": {

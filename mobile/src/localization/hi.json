@@ -483,6 +483,7 @@
     "generateFailedTitle": "योजना नहीं बनी",
     "generatedToast": "योजना तैयार हो गई।",
     "statusDraft": "मसौदा",
+    "statusSuperseded": "प्रतिस्थापित",
     "requiredCannotRemove": "गर्मी नीति के अनुसार आवश्यक — इसे हटाया नहीं जा सकता।"
   },
   "mitigationCategory": {

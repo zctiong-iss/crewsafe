@@ -40,13 +40,20 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
    */
   const draft = status === "DRAFT";
 
+  /*
+   * SCRUM-291: a newer auto-triggered draft replaced this one before anyone decided on it — not
+   * a decision either way, so it gets the same non-fall-through treatment as DRAFT rather than
+   * inheriting the "otherwise, approved" default.
+   */
+  const superseded = status === "SUPERSEDED";
+
   // Filled only while pending: that is the one state asking someone to do something. A draft is
   // not yet asking anything, and a list of decided plans should recede rather than keep shouting.
   const color = pending
     ? theme.colors.warningFill
     : rejected
       ? theme.colors.danger
-      : draft
+      : draft || superseded
         ? theme.colors.textSecondary
         : theme.colors.success;
 
@@ -56,9 +63,11 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
       ? t("recommendations.decidedRejected")
       : draft
         ? t("recommendations.statusDraft")
-        : decision === "EDITED"
-          ? t("recommendations.decidedEdited")
-          : t("recommendations.decidedApproved");
+        : superseded
+          ? t("recommendations.statusSuperseded")
+          : decision === "EDITED"
+            ? t("recommendations.decidedEdited")
+            : t("recommendations.decidedApproved");
 
   return (
     <View

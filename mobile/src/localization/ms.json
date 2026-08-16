@@ -484,6 +484,7 @@
     "generateFailedTitle": "Tiada pelan didraf",
     "generatedToast": "Satu pelan telah didraf.",
     "statusDraft": "Draf",
+    "statusSuperseded": "Digantikan",
     "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {

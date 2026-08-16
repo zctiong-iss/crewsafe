@@ -372,8 +372,12 @@ export interface Approval {
  * value as green "Approved", so a contract-legal status could have shown a plan as approved that
  * nobody had approved. Nothing writes DRAFT today; it is handled explicitly so that stays true by
  * construction rather than by luck.
+ *
+ * `SUPERSEDED` (SCRUM-291): a newer auto-triggered draft replaced this one before a supervisor
+ * decided on it. No `Approval` row exists for it, so it is not "decided" in the sense `decided`
+ * checks elsewhere in this app — handled explicitly for the same reason `DRAFT` is.
  */
-export type RecommendationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+export type RecommendationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "SUPERSEDED";
 
 /**
  * Mirrors `RecommendationController.RecommendationResponse` (SCRUM-119).

@@ -37,6 +37,14 @@ it("labels a DRAFT recommendation as draft, not as approved", async () => {
   expect(queryByText("recommendations.decidedApproved")).toBeNull();
 });
 
+it("labels a SUPERSEDED recommendation as superseded, not as approved", async () => {
+  // Same regression class as DRAFT: SUPERSEDED (SCRUM-291) is a legal backend status with no
+  // Approval row behind it, so a fall-through here would render it green "Approved" too.
+  const { queryByText } = await render(<RecommendationStatusPill status="SUPERSEDED" />);
+  expect(queryByText("recommendations.statusSuperseded")).not.toBeNull();
+  expect(queryByText("recommendations.decidedApproved")).toBeNull();
+});
+
 it("labels a plain approval as approved", async () => {
   const { queryByText } = await render(
     <RecommendationStatusPill status="APPROVED" decision="APPROVED" />,
