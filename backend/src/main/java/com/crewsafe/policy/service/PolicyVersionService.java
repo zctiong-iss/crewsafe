@@ -53,9 +53,9 @@ public class PolicyVersionService {
     /**
      * The version actually governing recommendations for a site right now: its own
      * {@code ACTIVE} version if it has configured one, otherwise the company-wide default
-     * (V16, {@code siteId IS NULL}) that {@link PolicyEngineService} falls back to. Unlike
+     * (V18, {@code siteId IS NULL}) that {@link PolicyEngineService} falls back to. Unlike
      * {@link #getActive}, this comes back empty only if the default itself were somehow not
-     * ACTIVE — V16 seeds it that way permanently, so in practice a caller always gets a
+     * ACTIVE — V18 seeds it that way permanently, so in practice a caller always gets a
      * result.
      */
     public Optional<PolicyVersion> getEffective(UUID siteId) {

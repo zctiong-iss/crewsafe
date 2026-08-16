@@ -1,4 +1,4 @@
--- V16: Company-wide default heat policy
+-- V18: Company-wide default heat policy
 -- @author Jemilin Beulah
 --
 -- Purpose: a site with zero ACTIVE policy_version rows of its own cannot produce a single
@@ -40,5 +40,5 @@ INSERT INTO policy_version (
 );
 
 COMMENT ON COLUMN policy_version.site_id IS
-'The site this version belongs to, or NULL for the one company-wide default (V16) that
+'The site this version belongs to, or NULL for the one company-wide default (V18) that
 PolicyEngineService falls back to when a site has no ACTIVE version of its own.';

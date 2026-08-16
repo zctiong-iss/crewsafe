@@ -39,7 +39,7 @@ public interface PolicyVersionRepository extends JpaRepository<PolicyVersion, UU
     Optional<PolicyVersion> findBySiteIdAndId(UUID siteId, UUID id);
 
     /**
-     * The one company-wide default (V16) — {@code siteId IS NULL} — that
+     * The one company-wide default (V18) — {@code siteId IS NULL} — that
      * {@code PolicyEngineService} falls back to for a site with no {@code ACTIVE} version of
      * its own. Never written by the application; seeded once by the migration.
      */

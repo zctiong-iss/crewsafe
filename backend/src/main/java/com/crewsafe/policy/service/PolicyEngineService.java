@@ -140,14 +140,14 @@ public class PolicyEngineService {
 
     /**
      * The site's own {@code ACTIVE} version if it has one; otherwise the one company-wide
-     * default (V16, {@code siteId IS NULL}) — MOM's published thresholds, seeded once and
+     * default (V18, {@code siteId IS NULL}) — MOM's published thresholds, seeded once and
      * never edited through the application. A site that wants something different doesn't
      * edit the default, it configures and activates its own version, which then always takes
      * precedence here.
      *
      * @throws NoSuchElementException if the site has no version of its own and the default is
      *                                 somehow not ACTIVE either (should not happen in practice —
-     *                                 V16 seeds it as ACTIVE and nothing in the application ever
+     *                                 V18 seeds it as ACTIVE and nothing in the application ever
      *                                 deactivates it)
      */
     private PolicyVersion resolveActivePolicy(UUID siteId) {

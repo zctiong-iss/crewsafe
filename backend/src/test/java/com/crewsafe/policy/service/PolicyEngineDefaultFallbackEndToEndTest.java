@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Proves the V16-seeded company default is actually reached through the real, DI-wired path —
+ * Proves the V18-seeded company default is actually reached through the real, DI-wired path —
  * real Postgres via Flyway, the real {@link PolicyEngineService} bean, the real
  * {@link PolicyVersionRepository} — rather than the Mockito-simulated version in
  * {@link PolicyEngineServiceTest}, which never touches an actual migrated schema.

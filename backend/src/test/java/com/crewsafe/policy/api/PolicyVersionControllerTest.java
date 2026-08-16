@@ -168,7 +168,7 @@ class PolicyVersionControllerTest extends AbstractIntegrationTest {
 
     @Test
     void getEffectiveVersion_noSiteVersion_fallsBackToCompanyDefault() throws Exception {
-        // V16 seeds one company-wide default (siteId null) as ACTIVE; siteA has configured
+        // V18 seeds one company-wide default (siteId null) as ACTIVE; siteA has configured
         // nothing of its own, so /effective must resolve to it instead of 404ing.
         mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/policy-versions/effective")
                         .header("Authorization", "Bearer " + safetyManagerAToken))

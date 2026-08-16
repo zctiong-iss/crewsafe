@@ -324,7 +324,7 @@ class PolicyEngineServiceTest {
     }
 
     @Nested
-    @DisplayName("Company-wide default fallback (V16)")
+    @DisplayName("Company-wide default fallback (V18)")
     class CompanyDefaultFallback {
 
         private PolicyVersion defaultPolicy;
@@ -380,7 +380,7 @@ class PolicyEngineServiceTest {
         @DisplayName("Site with its own ACTIVE version wins over the company default")
         void siteOwnPolicyWinsOverDefault() {
             // testPolicy (siteId) is already stubbed as ACTIVE in setUp(); the default is also
-            // present, as it always is once V16 has run.
+            // present, as it always is once V18 has run.
             when(policyRepository.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
                     .thenReturn(Optional.of(defaultPolicy));
 
