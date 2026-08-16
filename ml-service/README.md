@@ -230,7 +230,20 @@ python app.py
 AWS_REGION=us-east-1 python app.py
 ```
 
-Service starts on `http://localhost:8000`.
+Service starts on `http://127.0.0.1:8000` — loopback only, so nothing outside this machine can
+reach it (SCRUM-401). That is the right default when the caller is this same machine.
+
+Override the bind address only when something genuinely outside the host must connect. The usual
+case is a backend running in Docker Compose reaching ml-service on the host, since
+`host.docker.internal` arrives on a non-loopback interface:
+
+```bash
+ML_SERVICE_HOST=0.0.0.0 python app.py
+```
+
+This applies to `python app.py` only. The container image is unaffected: its `CMD` binds
+`0.0.0.0` on purpose, because Docker port publishing requires it, and it is isolated by the
+container boundary instead (in ECS, by having no ALB or security-group ingress at all).
 
 ## Endpoints
 
