@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
@@ -80,8 +81,7 @@ class ShiftActivationTest {
                 .thenReturn(List.of(shift));
 
         service.activateDueShifts();
-        TransactionSynchronizationManager.getSynchronizations().forEach(
-                synchronization -> synchronization.afterCommit());
+        TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
 
         verify(audit).record(isNull(), eq(AuditEventType.SHIFT_ACTIVATED), eq("SHIFT"),
                 eq(shift.getId()), any());
