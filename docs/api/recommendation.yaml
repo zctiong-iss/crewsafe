@@ -264,11 +264,14 @@ components:
 
     RecommendationStatus:
       type: string
-      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED]
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SUPERSEDED]
       description: >
         Server-controlled. Set to APPROVED by a decision of either APPROVED or EDITED
         (both mean a plan reaches dispatch, just with or without changes) and to
         REJECTED by a decision of REJECTED. A client cannot set this directly.
+        SUPERSEDED means a newer auto-triggered draft replaced this one before a
+        supervisor decided on it -- POST .../decision returns 409 for a recommendation
+        in this state.
 
     ApprovalDecision:
       type: string

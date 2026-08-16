@@ -59,6 +59,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -549,6 +551,60 @@ class AgentDraftServiceTest {
         service.generate(SITE_ID, SHIFT_ID, ACTOR_ID);
 
         verify(audit, never()).record(any(), any(), any(), any(), any());
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Auto-trigger (SCRUM-291)
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("generateAuto drafts with a null actor, recording that it was system-triggered")
+    void generateAutoUsesANullActor() {
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generateAuto(SITE_ID, SHIFT_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_DRAFTED), eq("RECOMMENDATION"),
+                eq(saved.getId()), any());
+    }
+
+    @Test
+    @DisplayName("An open PENDING_APPROVAL recommendation is superseded before the new one is drafted")
+    void generateAutoSupersedesAnOpenRecommendation() {
+        Recommendation existing = Recommendation.builder()
+                .id(UUID.randomUUID())
+                .shiftId(SHIFT_ID)
+                .status(Recommendation.RecommendationStatus.PENDING_APPROVAL)
+                .createdAt(NOW.minusSeconds(600))
+                .build();
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.of(existing));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
+        verify(recommendations).save(existing);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+                eq(existing.getId()), any());
+    }
+
+    @Test
+    @DisplayName("With no open recommendation for the shift, nothing is superseded")
+    void generateAutoSupersedesNothingWhenNoneIsOpen() {
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
     }
 
     // ----------------------------------------------------------------------------------

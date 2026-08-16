@@ -262,6 +262,25 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void decidingASupersededRecommendationIsConflict() throws Exception {
+        Recommendation r = recommendations.save(Recommendation.builder()
+                .id(UUID.randomUUID())
+                .shiftId(shiftA.getId())
+                .policyVersion("HS-32-HEAVY-v1")
+                .draftPlan(DRAFT_PLAN)
+                // SCRUM-291: what an auto-trigger leaves behind when a newer draft replaced this
+                // one before a supervisor ever decided on it -- no Approval row exists for it.
+                .status(Recommendation.RecommendationStatus.SUPERSEDED)
+                .rationale("WBGT forecast to cross 32°C within the shift window")
+                .createdAt(Instant.now())
+                .build());
+
+        postJson(recommendationsUrl(shiftA) + "/" + r.getId() + "/decision", supervisorAToken,
+                        decisionBody("APPROVED", null, null))
+                .andExpect(status().isConflict());
+    }
+
     // --- decide: reject ---
 
     @Test

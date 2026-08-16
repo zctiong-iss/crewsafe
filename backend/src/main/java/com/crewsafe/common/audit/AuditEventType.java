@@ -96,6 +96,11 @@ public final class AuditEventType {
      * the resulting approval. */
     public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
 
+    /** An open PENDING_APPROVAL recommendation was replaced by a new auto-triggered draft for
+     * the same shift before a supervisor decided on it (SCRUM-291). System-triggered --
+     * actorId is null, the same as {@link #SHIFT_ACTIVATED}. */
+    public static final String RECOMMENDATION_SUPERSEDED = "RECOMMENDATION_SUPERSEDED";
+
     /** A worker logged a rest or a drink of water (US-11). */
     public static final String WELLBEING_LOGGED = "WELLBEING_LOGGED";
 

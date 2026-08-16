@@ -121,6 +121,10 @@ public class AgentDraftService {
      */
     @Transactional
     public Optional<Recommendation> generate(UUID siteId, UUID shiftId, UUID actorId) {
+        return doGenerate(siteId, shiftId, actorId);
+    }
+
+    private Optional<Recommendation> doGenerate(UUID siteId, UUID shiftId, UUID actorId) {
         Optional<Shift> found = shifts.findByIdAndSiteId(shiftId, siteId);
         if (found.isEmpty()) {
             return Optional.empty();
@@ -185,6 +189,35 @@ public class AgentDraftService {
                 recommendationId, auditDetail(draft)));
 
         return Optional.of(saved);
+    }
+
+    /**
+     * The auto-trigger's entry point (SCRUM-291): supersedes whichever recommendation is
+     * currently open for this shift, then drafts a new one exactly as {@link #generate} would
+     * for a supervisor, with a null actor recording that this draft was system-triggered — the
+     * same convention {@code ShiftService#activateDueShifts} uses for {@code SHIFT_ACTIVATED}.
+     *
+     * <p>Dedup, not stacking: a shift's conditions can change again before anyone has looked at
+     * the last draft, and the old one is now describing conditions that no longer hold. Callers
+     * are expected to have already checked the shift-state guard — this method does not
+     * re-derive it, the same way {@link #generate} does not re-check who is allowed to call it.
+     */
+    @Transactional
+    public Optional<Recommendation> generateAuto(UUID siteId, UUID shiftId) {
+        supersedeOpenRecommendation(shiftId);
+        return doGenerate(siteId, shiftId, null);
+    }
+
+    private void supersedeOpenRecommendation(UUID shiftId) {
+        recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                shiftId, Recommendation.RecommendationStatus.PENDING_APPROVAL).ifPresent(existing -> {
+            existing.setStatus(Recommendation.RecommendationStatus.SUPERSEDED);
+            recommendations.save(existing);
+
+            UUID existingId = existing.getId();
+            afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, "RECOMMENDATION",
+                    existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
+        });
     }
 
     /**

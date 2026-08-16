@@ -64,6 +64,14 @@ public class Recommendation {
         DRAFT,
         PENDING_APPROVAL,
         APPROVED,
-        REJECTED
+        REJECTED,
+
+        /**
+         * A newer auto-triggered draft replaced this one before a supervisor decided on it
+         * (SCRUM-291) -- dedup, not rejection: nobody looked at this plan and said no, the
+         * conditions it was drafted under simply changed first. {@code RecommendationService
+         * #decide} refuses a decision on a recommendation in this state.
+         */
+        SUPERSEDED
     }
 }
