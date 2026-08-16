@@ -88,6 +88,12 @@ workflow_policy_guard() {
   [[ -s "$resolve_job" ]] || return 1
   [[ -s "$deploy_job" ]] || return 1
 
+  # Forbidden literals checked against all four job blocks below — named once
+  # so each not_contains call reads what it's actually guarding against.
+  local static_key_id='AWS_ACCESS_KEY_ID'
+  local static_secret_key='AWS_SECRET_ACCESS_KEY'
+  local soft_fail='continue-on-error:'
+
   # verify-ml-service is test-and-scan only. It must never gain the ability
   # to touch a real AWS account, or a workflow meant only to verify a PR would
   # become a second, unreviewed path to production credentials.
@@ -114,13 +120,13 @@ workflow_policy_guard() {
   contains "$verify_job" 'test-ml-service-smoke.sh' || return 1
   contains "$verify_job" 'test-validate-ml-service-trivy-exceptions.sh' || return 1
   contains "$verify_job" 'test-summarize-trivy-report.sh' || return 1
-  not_contains "$verify_job" 'continue-on-error:' || return 1
+  not_contains "$verify_job" "$soft_fail" || return 1
   not_contains "$verify_job" 'configure-aws-credentials' || return 1
   not_contains "$verify_job" 'aws ecr' || return 1
   not_contains "$verify_job" 'docker login' || return 1
   not_contains "$verify_job" 'docker push' || return 1
-  not_contains "$verify_job" 'AWS_ACCESS_KEY_ID' || return 1
-  not_contains "$verify_job" 'AWS_SECRET_ACCESS_KEY' || return 1
+  not_contains "$verify_job" "$static_key_id" || return 1
+  not_contains "$verify_job" "$static_secret_key" || return 1
   ordered "$verify_job" \
     'Run ML-service CI self-tests' \
     'Install ML-service dependencies' \
@@ -154,9 +160,9 @@ workflow_policy_guard() {
   contains "$publish_job" 'docker push "$REPO:$SHA"' || return 1
   contains "$publish_job" 'image_digest=' || return 1
   contains "$publish_job" '!inputs.redeploy' || return 1
-  not_contains "$publish_job" 'AWS_ACCESS_KEY_ID' || return 1
-  not_contains "$publish_job" 'AWS_SECRET_ACCESS_KEY' || return 1
-  not_contains "$publish_job" 'continue-on-error:' || return 1
+  not_contains "$publish_job" "$static_key_id" || return 1
+  not_contains "$publish_job" "$static_secret_key" || return 1
+  not_contains "$publish_job" "$soft_fail" || return 1
 
   # resolve-existing-image (SCRUM-373 follow-up) never builds or pushes — it
   # only proves a previously-published commit is a reachable main ancestor and
@@ -176,9 +182,9 @@ workflow_policy_guard() {
   contains "$resolve_job" 'aws ecr describe-images' || return 1
   not_contains "$resolve_job" 'docker build' || return 1
   not_contains "$resolve_job" 'docker push' || return 1
-  not_contains "$resolve_job" 'AWS_ACCESS_KEY_ID' || return 1
-  not_contains "$resolve_job" 'AWS_SECRET_ACCESS_KEY' || return 1
-  not_contains "$resolve_job" 'continue-on-error:' || return 1
+  not_contains "$resolve_job" "$static_key_id" || return 1
+  not_contains "$resolve_job" "$static_secret_key" || return 1
+  not_contains "$resolve_job" "$soft_fail" || return 1
 
   # deploy-staging (SCRUM-373 follow-up) only registers the resolved digest
   # against the shared backend task family and force-deploys — it never
@@ -195,9 +201,9 @@ workflow_policy_guard() {
   contains "$deploy_job" 'deploy-ml-service-staging.sh' || return 1
   not_contains "$deploy_job" 'docker build' || return 1
   not_contains "$deploy_job" 'docker push' || return 1
-  not_contains "$deploy_job" 'AWS_ACCESS_KEY_ID' || return 1
-  not_contains "$deploy_job" 'AWS_SECRET_ACCESS_KEY' || return 1
-  not_contains "$deploy_job" 'continue-on-error:' || return 1
+  not_contains "$deploy_job" "$static_key_id" || return 1
+  not_contains "$deploy_job" "$static_secret_key" || return 1
+  not_contains "$deploy_job" "$soft_fail" || return 1
 
   return 0
 }
