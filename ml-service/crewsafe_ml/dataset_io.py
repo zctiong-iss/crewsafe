@@ -198,23 +198,25 @@ def build_historical_dataset(
         reused_station_metadata_by_metric.values()
     )
     manifest = _dataset_manifest(
-        start_date=start_date,
-        end_date=end_date,
-        selected_metrics=selected_metrics,
-        normalized_csv=normalized_csv,
-        normalized_sha256=normalized_sha256,
-        row_count=len(ordered_readings),
-        skipped_missing_count=skipped_missing_count,
-        skipped_missing_by_metric=skipped_missing_by_metric,
-        reused_station_metadata_count=reused_station_metadata_count,
-        reused_station_metadata_by_metric=reused_station_metadata_by_metric,
-        duplicate_reading_count=duplicate_reading_count,
-        station_metadata_corrections=station_metadata_corrections,
-        station_metadata_corrections_csv=station_metadata_corrections_csv,
-        reused_raw_page_count=reused_raw_page_count,
-        downloaded_raw_page_count=downloaded_raw_page_count,
-        quality_report=quality_report,
-        prepared_result=prepared_result,
+        _DatasetManifestInputs(
+            start_date=start_date,
+            end_date=end_date,
+            selected_metrics=selected_metrics,
+            normalized_csv=normalized_csv,
+            normalized_sha256=normalized_sha256,
+            row_count=len(ordered_readings),
+            skipped_missing_count=skipped_missing_count,
+            skipped_missing_by_metric=skipped_missing_by_metric,
+            reused_station_metadata_count=reused_station_metadata_count,
+            reused_station_metadata_by_metric=reused_station_metadata_by_metric,
+            duplicate_reading_count=duplicate_reading_count,
+            station_metadata_corrections=station_metadata_corrections,
+            station_metadata_corrections_csv=station_metadata_corrections_csv,
+            reused_raw_page_count=reused_raw_page_count,
+            downloaded_raw_page_count=downloaded_raw_page_count,
+            quality_report=quality_report,
+            prepared_result=prepared_result,
+        )
     )
     _atomic_write_text(manifest_json, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
@@ -370,26 +372,30 @@ def _prepare_features_if_possible(
     return write_prepared_15_minute_dataset(normalized_csv, prepared_csv)
 
 
-def _dataset_manifest(
-    *,
-    start_date: date,
-    end_date: date,
-    selected_metrics: tuple[WeatherMetric, ...],
-    normalized_csv: Path,
-    normalized_sha256: str,
-    row_count: int,
-    skipped_missing_count: int,
-    skipped_missing_by_metric: dict[str, int],
-    reused_station_metadata_count: int,
-    reused_station_metadata_by_metric: dict[str, int],
-    duplicate_reading_count: int,
-    station_metadata_corrections: list[StationMetadataCorrection],
-    station_metadata_corrections_csv: Path,
-    reused_raw_page_count: int,
-    downloaded_raw_page_count: int,
-    quality_report: DataQualityReport,
-    prepared_result: PreparedDatasetResult | None,
-) -> dict[str, object]:
+@dataclass(frozen=True)
+class _DatasetManifestInputs:
+    """Everything `_dataset_manifest` needs, grouped so the signature stays readable."""
+
+    start_date: date
+    end_date: date
+    selected_metrics: tuple[WeatherMetric, ...]
+    normalized_csv: Path
+    normalized_sha256: str
+    row_count: int
+    skipped_missing_count: int
+    skipped_missing_by_metric: dict[str, int]
+    reused_station_metadata_count: int
+    reused_station_metadata_by_metric: dict[str, int]
+    duplicate_reading_count: int
+    station_metadata_corrections: list[StationMetadataCorrection]
+    station_metadata_corrections_csv: Path
+    reused_raw_page_count: int
+    downloaded_raw_page_count: int
+    quality_report: DataQualityReport
+    prepared_result: PreparedDatasetResult | None
+
+
+def _dataset_manifest(inputs: _DatasetManifestInputs) -> dict[str, object]:
     return {
         "schema_version": DATASET_SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -401,57 +407,57 @@ def _dataset_manifest(
                 "url": SOURCE_LICENCE_URL,
             },
         },
-        "start_date": start_date.isoformat(),
-        "end_date": end_date.isoformat(),
-        "metrics": [metric.slug for metric in selected_metrics],
+        "start_date": inputs.start_date.isoformat(),
+        "end_date": inputs.end_date.isoformat(),
+        "metrics": [metric.slug for metric in inputs.selected_metrics],
         "download": {
-            "raw_page_count": reused_raw_page_count + downloaded_raw_page_count,
-            "reused_raw_page_count": reused_raw_page_count,
-            "downloaded_raw_page_count": downloaded_raw_page_count,
+            "raw_page_count": inputs.reused_raw_page_count + inputs.downloaded_raw_page_count,
+            "reused_raw_page_count": inputs.reused_raw_page_count,
+            "downloaded_raw_page_count": inputs.downloaded_raw_page_count,
             "state_file": DOWNLOAD_STATE_FILE,
         },
-        "raw_page_count": reused_raw_page_count + downloaded_raw_page_count,
-        "row_count": row_count,
-        "normalized_file": normalized_csv.name,
-        "normalized_sha256": normalized_sha256,
+        "raw_page_count": inputs.reused_raw_page_count + inputs.downloaded_raw_page_count,
+        "row_count": inputs.row_count,
+        "normalized_file": inputs.normalized_csv.name,
+        "normalized_sha256": inputs.normalized_sha256,
         "prepared_15_minute_dataset": (
-            prepared_dataset_manifest(prepared_result) if prepared_result else None
+            prepared_dataset_manifest(inputs.prepared_result) if inputs.prepared_result else None
         ),
         "data_quality": {
-            "row_count_by_metric": quality_report.row_count_by_metric,
-            "station_count_by_metric": quality_report.station_count_by_metric,
-            "coverage_by_metric": quality_report.coverage_by_metric,
-            "skipped_missing_reading_count": skipped_missing_count,
-            "skipped_missing_reading_count_by_metric": skipped_missing_by_metric,
+            "row_count_by_metric": inputs.quality_report.row_count_by_metric,
+            "station_count_by_metric": inputs.quality_report.station_count_by_metric,
+            "coverage_by_metric": inputs.quality_report.coverage_by_metric,
+            "skipped_missing_reading_count": inputs.skipped_missing_count,
+            "skipped_missing_reading_count_by_metric": inputs.skipped_missing_by_metric,
             "reused_prior_page_station_metadata_reading_count": (
-                reused_station_metadata_count
+                inputs.reused_station_metadata_count
             ),
             "reused_prior_page_station_metadata_reading_count_by_metric": (
-                reused_station_metadata_by_metric
+                inputs.reused_station_metadata_by_metric
             ),
-            "exact_duplicate_reading_count": duplicate_reading_count,
+            "exact_duplicate_reading_count": inputs.duplicate_reading_count,
             "accepted_station_metadata_correction_count": len(
-                station_metadata_corrections
+                inputs.station_metadata_corrections
             ),
             "station_metadata_corrections": {
-                "file": station_metadata_corrections_csv.name,
-                "sha256": _sha256(station_metadata_corrections_csv),
+                "file": inputs.station_metadata_corrections_csv.name,
+                "sha256": _sha256(inputs.station_metadata_corrections_csv),
                 "maximum_accepted_distance_metres": (
                     MAX_STATION_LOCATION_CORRECTION_METRES
                 ),
             },
             "rejected_invalid_reading_count": 0,
-            "internal_gap_count_by_metric": quality_report.gap_count_by_metric,
+            "internal_gap_count_by_metric": inputs.quality_report.gap_count_by_metric,
             "largest_internal_gap_minutes_by_metric": (
-                quality_report.largest_gap_minutes_by_metric
+                inputs.quality_report.largest_gap_minutes_by_metric
             ),
             "station_inventory": {
-                "file": quality_report.station_inventory_csv.name,
-                "sha256": quality_report.station_inventory_sha256,
+                "file": inputs.quality_report.station_inventory_csv.name,
+                "sha256": inputs.quality_report.station_inventory_sha256,
             },
             "missing_periods": {
-                "file": quality_report.missing_periods_csv.name,
-                "sha256": quality_report.missing_periods_sha256,
+                "file": inputs.quality_report.missing_periods_csv.name,
+                "sha256": inputs.quality_report.missing_periods_sha256,
                 "definition": "Internal gaps between observed station readings",
             },
         },
