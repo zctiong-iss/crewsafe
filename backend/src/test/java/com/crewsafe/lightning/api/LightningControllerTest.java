@@ -40,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * banner that needs it is on the worker's own shift screen.
  *
  * @author Justin Chua
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class LightningControllerTest extends AbstractIntegrationTest {

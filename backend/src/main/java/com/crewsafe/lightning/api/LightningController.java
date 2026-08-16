@@ -39,6 +39,7 @@ import java.util.UUID;
  * no freshness while costing battery on a phone that has to last an outdoor shift.
  *
  * @author Justin Chua
+ * @author Jemilin Beulah
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/lightning")
