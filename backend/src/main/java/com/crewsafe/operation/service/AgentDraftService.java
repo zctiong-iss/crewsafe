@@ -107,6 +107,7 @@ public class AgentDraftService {
     private final AgentDraftClient agentDraftClient;
     private final DeterministicPlanBuilder deterministicPlans;
     private final RecommendationRepository recommendations;
+    private final RecommendationService recommendationService;
     private final AuditService audit;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -165,6 +166,17 @@ public class AgentDraftService {
         RecommendationEvidence evidence = evidence(
                 latestWeather, decision, draft.forecastWbgt30m(), lightningState, observedWbgt);
 
+        // SCRUM-440: a lightning-immediate stop-work or a WBGT-max mandatory stop-work skips
+        // supervisor approval entirely, per the team's four-rule alert policy -- whether this
+        // draft was auto-triggered or a supervisor pressed "Generate" themselves and it turned
+        // out to be one of these two. Checked here, not against the persisted plan later:
+        // decision.isEmergencyStop() and lightningState are live at draft time and this is the
+        // only place both are still in hand -- neither survives into the persisted Recommendation
+        // row, so a model-suggested STOP_WORK that was never actually mandatory cannot be
+        // mistaken for one after the fact.
+        boolean autoDispatch = lightningState == LightningRiskState.STOP_WORK
+                || (decision != null && decision.isEmergencyStop());
+
         Recommendation saved = recommendations.save(Recommendation.builder()
                 .id(UUID.randomUUID())
                 .shiftId(shiftId)
@@ -173,7 +185,8 @@ public class AgentDraftService {
                 // status pill falls through to rendering an unknown status as a green "Approved" —
                 // a plan nobody has approved would display as approved. The enum value exists for
                 // historical rows; nothing new may be written with it.
-                .status(Recommendation.RecommendationStatus.PENDING_APPROVAL)
+                .status(autoDispatch ? Recommendation.RecommendationStatus.AUTO_DISPATCHED
+                        : Recommendation.RecommendationStatus.PENDING_APPROVAL)
                 .draftPlan(serialise(new MitigationSuggestion.Batch(draft.mitigations())))
                 .rationale(draft.rationale())
                 .evidence(serialiseEvidence(evidence))
@@ -181,12 +194,19 @@ public class AgentDraftService {
                 .createdAt(now)
                 .build());
 
-        log.info("recommendation_drafted shift_id={} mitigations={} model_version={} fallback_reason={}",
-                shiftId, draft.mitigations().size(), draft.modelVersion(), draft.fallbackReason());
+        log.info("recommendation_drafted shift_id={} mitigations={} model_version={} fallback_reason={} "
+                        + "auto_dispatch={}",
+                shiftId, draft.mitigations().size(), draft.modelVersion(), draft.fallbackReason(), autoDispatch);
 
         UUID recommendationId = saved.getId();
-        afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
-                recommendationId, auditDetail(draft)));
+        if (autoDispatch) {
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, "RECOMMENDATION",
+                    recommendationId, auditDetail(draft)));
+            afterCommit(() -> recommendationService.autoDispatch(saved, actorId, draft.mitigations()));
+        } else {
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
+                    recommendationId, auditDetail(draft)));
+        }
 
         return Optional.of(saved);
     }

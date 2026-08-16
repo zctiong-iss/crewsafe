@@ -37,11 +37,16 @@ public interface ActionDispatchRepository extends JpaRepository<ActionDispatch, 
 
     /**
      * Powers the SCRUM-324 site action-status stream. {@code shiftId} reaches this
-     * entity only via {@code approval.recommendation.shiftId} (Recommendation carries it
-     * as a plain UUID column, same as {@link com.crewsafe.shift.domain.Shift}), so callers
-     * resolve a site's active shift first (see ActionStatusSnapshotService) rather than
-     * this repository knowing about siteId directly.
+     * entity via {@code recommendation.shiftId} (Recommendation carries it as a plain UUID
+     * column, same as {@link com.crewsafe.shift.domain.Shift}), so callers resolve a site's
+     * active shift first (see ActionStatusSnapshotService) rather than this repository
+     * knowing about siteId directly.
+     *
+     * <p>Goes through {@code recommendation}, not {@code approval} (SCRUM-440): an
+     * auto-dispatched stop-work has no approval at all, and {@code approval.recommendation}
+     * would have been an implicit inner join silently hiding those rows from this stream --
+     * the one place they most need to be visible.
      */
-    @Query("SELECT ad FROM ActionDispatch ad WHERE ad.approval.recommendation.shiftId = :shiftId ORDER BY ad.dispatchedAt DESC")
+    @Query("SELECT ad FROM ActionDispatch ad WHERE ad.recommendation.shiftId = :shiftId ORDER BY ad.dispatchedAt DESC")
     List<ActionDispatch> findByShiftId(@Param("shiftId") UUID shiftId);
 }

@@ -212,6 +212,10 @@ public class RecommendationService {
             throw new ConflictException("Recommendation " + recommendationId + " was superseded by a newer draft "
                     + "and can no longer be decided on");
         }
+        if (recommendation.getStatus() == Recommendation.RecommendationStatus.AUTO_DISPATCHED) {
+            throw new ConflictException("Recommendation " + recommendationId
+                    + " was auto-dispatched without approval and can no longer be decided on");
+        }
     }
 
     /** Which fields are required depends on the value of {@code decision}, so request-shape validation alone cannot check this. */
@@ -282,6 +286,38 @@ public class RecommendationService {
             for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
                 actionDispatchService.dispatchAction(approval.getId(), workerId, dispatchCode,
                         mitigation.action(), actingPrincipal);
+            }
+        }
+    }
+
+    /**
+     * The SCRUM-440 counterpart to {@link #fanOutDispatches}: fans out every mitigation on an
+     * auto-dispatched recommendation's plan (the mandatory {@code STOP_WORK} and whatever
+     * accompanies it, e.g. {@code CLOSE_MONITORING}) with no {@link Approval} and no acting
+     * supervisor -- there was no decision to fan out from, only a drafted plan a lightning
+     * strike or a WBGT-max breach already made mandatory.
+     *
+     * <p>Called from {@code AgentDraftService}'s {@code afterCommit} callback, same reasoning
+     * as {@link #fanOutDispatches}: a dispatch failing for one worker must never undo the
+     * recommendation already having been persisted as {@code AUTO_DISPATCHED}.
+     */
+    void autoDispatch(Recommendation recommendation, UUID actorId, List<MitigationSuggestion> mitigations) {
+        if (mitigations.isEmpty()) {
+            return;
+        }
+
+        List<UUID> shiftWorkerIds = shiftAssignments.findByShiftId(recommendation.getShiftId()).stream()
+                .map(ShiftAssignment::getWorkerId)
+                .distinct()
+                .toList();
+
+        for (MitigationSuggestion mitigation : mitigations) {
+            String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
+                    .orElse(AI_MITIGATION_ACTION_CODE);
+
+            for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
+                actionDispatchService.autoDispatchAction(recommendation, actorId, workerId, dispatchCode,
+                        mitigation.action());
             }
         }
     }
