@@ -137,7 +137,8 @@ new_repo() {
 
 # commit_file <repo> <relative path> <content> [message]
 commit_file() {
-  local repo="$1" path="$2" content="$3" msg="${4:-add $path}"
+  local repo="$1" path="$2" content="$3"
+  local msg="${4:-add $path}"
   mkdir -p "$(dirname "$repo/$path")"
   printf '%s\n' "$content" >"$repo/$path"
   git -C "$repo" add "$path"
