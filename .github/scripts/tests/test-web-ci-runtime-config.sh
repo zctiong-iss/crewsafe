@@ -90,7 +90,7 @@ web_build_config_guard() {
     if [[ "$job" == build-test ]]; then
       assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'run: npm run build' || return 1
     else
-      assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'npm ci && npm run build' || return 1
+      assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'npm ci --ignore-scripts && npm run build' || return 1
       assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'run: ./scripts/sync-static-site.sh' || return 1
     fi
   done
@@ -166,7 +166,7 @@ done
 build_test_block="$(job_block "$WORKFLOW" build-test)"
 deploy_block="$(job_block "$WORKFLOW" deploy-staging)"
 assert_order "build-test validates before production build" "$build_test_block" "$VALIDATE_STEP_NAME" 'run: npm run build'
-assert_order "deploy validates before production build" "$deploy_block" "$VALIDATE_STEP_NAME" 'npm ci && npm run build'
+assert_order "deploy validates before production build" "$deploy_block" "$VALIDATE_STEP_NAME" 'npm ci --ignore-scripts && npm run build'
 assert_order "deploy validates before S3 sync" "$deploy_block" "$VALIDATE_STEP_NAME" 'run: ./scripts/sync-static-site.sh'
 
 TESTS_RUN=$((TESTS_RUN + 1))
