@@ -59,11 +59,12 @@ locals {
   # Eight entries. A value earns one only where the deployed environment must
   # differ from the default the application already carries (FR-001, research.md
   # R-008), or (the two ml/model-manifest* entries, SCRUM-373) where the
-  # application has no default at all and the slot is deliberately declared
-  # with a placeholder value rather than omitted (FR-008 — SSM rejects an
-  # actually-empty string). The server port, the weather freshness
-  # thresholds, the ingestion interval, and the external weather API base URL
-  # all keep their application defaults and are deliberately absent.
+  # application has no default at all and the slot is declared explicitly
+  # rather than omitted (FR-008 — SSM rejects an actually-empty string, which
+  # is why the slot could never simply be absent-by-default). The server port,
+  # the weather freshness thresholds, the ingestion interval, and the external
+  # weather API base URL all keep their application defaults and are
+  # deliberately absent.
   #
   # Two more entries live under this prefix but are declared elsewhere, because
   # their values do not exist until the component that produces them does (FR-031):
@@ -77,30 +78,28 @@ locals {
     "spring/profiles-active"    = "staging"
     "weather/ingestion-enabled" = "true"
 
-    # SCRUM-373 (FR-008) — deliberately a placeholder, not a real manifest.
-    # NOT an empty string: AWS SSM PutParameter rejects "" outright
-    # ("Member must have length greater than or equal to 1" — found live,
-    # secrets-shared-dev apply, 2026-08-15), so "unset" is the closest
-    # AWS-API-legal equivalent. The only trained WBGT model artifact that
-    # exists today (a SageMaker experiment output) is not approved for
-    # inference, so there is nothing to activate in this issue.
+    # SCRUM-373 (FR-008) declared this slot with the placeholder value
+    # "unset" — NOT an empty string, since AWS SSM PutParameter rejects ""
+    # outright ("Member must have length greater than or equal to 1" — found
+    # live, secrets-shared-dev apply, 2026-08-15). That let the follow-up that
+    # actually promotes a model be a parameter VALUE change only, never a
+    # task-definition change — exactly what is happening here.
+    #
+    # SCRUM-114 (2026-08-16): promoted to the checksum-pinned staging-demo
+    # bundle, per decision owner Bryan Phang's time-limited exception
+    # (ml-service/MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md
+    # #8.0) — the shared university-project staging demonstration only, NOT a
+    # production approval. The path below must be absolute
+    # (/app/model-bundle/..., matching ml-service/Dockerfile's WORKDIR /app):
     # ForecastModelRegistry.from_environment() (ml-service/crewsafe_ml/
-    # inference.py) cannot distinguish "unset" from "a path that doesn't
-    # resolve": both raise inside ForecastService.from_environment()'s
-    # try/except (OSError from Path("unset").resolve(strict=True)), landing
-    # on model_configuration_failed=True — behaviorally identical to the
-    # model_registry=None state a true empty value would have produced
-    # (forecast() without context still serves the persistence baseline
-    # either way; forecast() with context still raises
-    # ForecastModelUnavailableError either way). The one observable
-    # difference is a single ERROR-level "Configured WBGT model bundle could
-    # not be loaded" log line at every task start until a real bundle is
-    # promoted — an accepted, documented trade-off, not a bug. Declaring the
-    # slot now (rather than adding it only in the follow-up that promotes a
-    # model) means that follow-up is a parameter VALUE change, not a
-    # task-definition change.
-    "ml/model-manifest"        = "unset"
-    "ml/model-manifest-sha256" = "unset"
+    # inference.py) calls Path(value).resolve(strict=True), and a relative
+    # value resolves against the process's cwd, not image root — silently
+    # landing on model_configuration_failed=True (the same safe-fallback path
+    # "unset" took) rather than failing loudly. The full untouched-period
+    # review (docs/runbooks/SCRUM-114-model-approval.md) is still pending and
+    # still required before any production promotion.
+    "ml/model-manifest"        = "/app/model-bundle/staging-demo-v1/manifest.json"
+    "ml/model-manifest-sha256" = "36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031"
   }
 
   config_parameter_descriptions = {
@@ -110,8 +109,8 @@ locals {
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
-    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. Placeholder value 'unset' (SSM rejects empty strings): no model bundle is approved_for_inference yet. A future promotion updates this value only - no task-definition change. Never a secret; the manifest path and checksum are not sensitive."
-    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. Placeholder value 'unset' alongside it, for the same AWS API reason; ForecastModelRegistry.from_environment() requires both or neither to be set meaningfully."
+    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
+    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
   }
 }
 

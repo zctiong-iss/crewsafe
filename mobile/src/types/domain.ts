@@ -193,7 +193,28 @@ export interface SiteForecast {
   confidenceIntervalUpper: number;
   /** When the model produced this, ISO-8601. Not when the app asked. */
   generatedAt: string;
+  /**
+   * Which rung of the server's forecast ladder produced this, mirroring `ForecastBasis.java`.
+   *
+   * Optional because a backend predating the ladder omits it; treat a missing value as MODEL,
+   * which is what those builds always returned.
+   */
+  basis?: ForecastBasis;
+  /** Age in minutes of the newest observation behind this forecast, at response time. */
+  inputAgeMinutes?: number;
+  /** True for any basis other than MODEL. The server decides this; the client never infers it. */
+  degraded?: boolean;
 }
+
+/**
+ * How a forecast was produced, in descending order of confidence.
+ *
+ * The client must never derive this from a timestamp. Section 12.2 and `weatherSlice`'s own
+ * rule — the band "arrives evaluated; the client does not compute it" — apply for the same
+ * reason: a client judging trustworthiness itself drifts out of step with the service that
+ * produced the number.
+ */
+export type ForecastBasis = "MODEL" | "MODEL_IMPUTED" | "TREND" | "PERSISTENCE";
 
 export interface PolicyAction {
   /** e.g. REST_10_MIN_HOURLY, HYDRATE_HOURLY, RESCHEDULE_HEAVY_WORK. Open catalogue. */

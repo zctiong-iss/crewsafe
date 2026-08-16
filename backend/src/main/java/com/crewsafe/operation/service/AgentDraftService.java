@@ -4,6 +4,7 @@ import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.common.error.ErrorCode;
 import com.crewsafe.forecast.service.ForecastUnavailableException;
 import com.crewsafe.forecast.service.SiteForecastService;
 import com.crewsafe.lightning.api.LightningRiskPayload;
@@ -71,7 +72,11 @@ import java.util.UUID;
  * about the <em>request</em> — an unknown shift, a cancelled one, or a site with no readings at
  * all — never about the model.
  *
- * @author Abu Bakar
+ * <p>Both 4xx paths carry an {@link ErrorCode}, because "no plan was drafted" is not
+ * self-explanatory to the person who pressed the button and the two causes need different
+ * actions from different people (SCRUM-289 follow-up).
+ *
+ * @author Abu Bakar and Justin Chua
  */
 @Service
 @RequiredArgsConstructor
@@ -140,7 +145,8 @@ public class AgentDraftService {
             // invented from no reading would carry an evidence block with nothing in it, which is
             // exactly the unexplainable output US-08 exists to prevent.
             throw new ConflictException(
-                    "No usable WBGT reading is available for this site, so no plan can be drafted");
+                    "No usable WBGT reading is available for this site, so no plan can be drafted",
+                    ErrorCode.NO_USABLE_WBGT);
         }
 
         // Evaluated even on the lightning path. The plan itself will not come from it, but the
@@ -201,7 +207,8 @@ public class AgentDraftService {
         } catch (NoSuchElementException e) {
             throw new ConflictException(
                     "No active heat policy is configured for this site, so no plan can be drafted. "
-                            + "A Safety Manager must configure and activate a policy version first.");
+                            + "A Safety Manager must configure and activate a policy version first.",
+                    ErrorCode.NO_ACTIVE_POLICY);
         }
     }
 
