@@ -39,7 +39,6 @@
       ],
       "expo-web-browser",
       "expo-localization",
-      "@react-native-community/datetimepicker",
       [
         "expo-image-picker",
         {

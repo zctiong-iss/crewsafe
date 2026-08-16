@@ -18,16 +18,18 @@ RUN pip install --no-cache-dir --require-hashes --only-binary :all: -r requireme
     pip uninstall --yes setuptools wheel && \
     chmod 444 requirements-runtime.txt
 
-# Copy application code as root. Model artifacts are mounted or copied by the
-# deployment pipeline only after their manifest checksum is configured.
+# Copy application code and the reviewed staging-demo bundle as root. The
+# runtime still refuses the bundle unless ECS supplies its exact manifest
+# checksum, so baking it into the image does not activate it by itself.
 COPY app.py models.py bedrock_client.py forecast_service.py ./
 COPY crewsafe_ml ./crewsafe_ml
 COPY agent ./agent
+COPY model-bundle/staging-demo-v1 ./model-bundle/staging-demo-v1
 
 # Create non-root user and set restrictive permissions on all files
 RUN useradd -m -u 1000 appuser && \
     chmod 444 app.py models.py bedrock_client.py forecast_service.py && \
-    chmod -R a-w crewsafe_ml agent && \
+    chmod -R a-w crewsafe_ml agent model-bundle && \
     chown -R appuser:appuser /app
 
 # Run both the application and its health check without root privileges.

@@ -1062,6 +1062,61 @@ run "mapping_publication_role_boundary" {
   }
 }
 
+# SCRUM-373 follow-up: ml-service's own out-of-band redeploy role, mirroring
+# backend_deploy's shape (same trust condition, same shared aws_ecs_service.backend
+# target — a second ECS service does not exist to scope this any narrower) but
+# scoped to the ml-service ECR repository rather than backend's.
+run "ml_service_deploy_role_boundary" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.ml_service_deploy.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The ml-service deploy role must trust only the exact main-branch GitHub OIDC subject."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecr:DescribeImages"]) &&
+      try(stmt.Resource, "") == local.ecr.ml_service_repository_arn
+    ])
+    error_message = "The ml-service deploy role must read image metadata only from the ml-service ECR repository, never the backend one."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecs:DescribeServices", "ecs:UpdateService"]) &&
+      try(stmt.Resource, "") == aws_ecs_service.backend.id
+    ])
+    error_message = "The ml-service deploy role's UpdateService grant must be scoped to the one shared backend service (no narrower target exists)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["iam:PassRole"]) &&
+      try(toset(stmt.Resource), toset([])) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
+    ])
+    error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
+  }
+
+  # Never a Terraform apply role - this deploy role stands alone from the
+  # reviewed plan/apply CI policies, matching backend_deploy's own boundary.
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      length([for a in stmt.Action : a if can(regex("^ssm:(Put|Delete)|^ecs:(DeleteService|DeregisterTaskDefinition)", a))]) == 0
+    ])
+    error_message = "The ml-service deploy role must never gain a write action beyond registering a task definition and updating the one service it targets."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # US1 — reach the deployed web app over a stable HTTPS origin, independent of
 # the backend's own domain

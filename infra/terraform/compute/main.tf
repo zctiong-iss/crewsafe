@@ -887,6 +887,45 @@ resource "aws_iam_role_policy" "backend_deploy" {
   })
 }
 
+# SCRUM-373 follow-up: redeploying an already-published ml-service image must
+# not require bumping var.initial_ml_service_image_tag through a Terraform
+# apply (research.md R-011's same lesson, applied to the sidecar container).
+# A dedicated role, not a reuse of backend_deploy: ECS grants IAM at the
+# service level, not per container, so this role's ecs:UpdateService grant is
+# scoped to the exact same aws_ecs_service.backend.id backend_deploy already
+# holds — reusing that role would add no isolation, only ambiguity about which
+# workflow is actually responsible for a given deploy. Matches the precedent
+# cognito_mapping_publication already set below for the identical reasoning.
+resource "aws_iam_role" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  role = aws_iam_role.ml_service_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = "${local.ecr.ml_service_repository_arn}" },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = aws_ecs_service.backend.id },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } }
+    ]
+  })
+}
+
 # SCRUM-303: publishing the application-user mapping changes which signed Cognito
 # subjects can enter CrewSafe. It must therefore never share the ordinary backend
 # deployment role. This OIDC role can write exactly the one runtime parameter and

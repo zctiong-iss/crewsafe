@@ -70,6 +70,7 @@ crash.*.log
 *.ipynb_checkpoints/
 *.pkl
 *.joblib
+!/ml-service/model-bundle/staging-demo-v1/*.joblib
 *.parquet
 /ml-service/data/
 /ml-service/artifacts/
