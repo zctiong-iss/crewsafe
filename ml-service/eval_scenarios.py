@@ -98,71 +98,101 @@ def expected_policy_decision(
 
     Returns (mandatory_actions, advisory_actions).
     """
-    mandatory = []
-    advisory = []
+    mandatory: List[ExpectedAction] = []
+    advisory: List[ExpectedAction] = []
 
     for worker in workers:
-        level = acclimatisation_level(worker.acclimatisation_day)
-        threshold = THRESHOLDS[(level, worker.intensity)]
-        if current_wbgt >= EMERGENCY_STOP_WBGT:
-            mandatory.append(ExpectedAction(
-                action_code="STOP_WORK", origin="MANDATORY",
-                rule_reference="EMERGENCY_STOP_RULE", applies_to=[worker.worker_id]))
-            mandatory.append(ExpectedAction(
-                action_code="CLOSE_MONITORING", origin="MANDATORY",
-                rule_reference="EMERGENCY_STOP_RULE", applies_to=[worker.worker_id]))
-            continue
-
-        elif current_wbgt >= threshold:
-            severe = (level == "UNACCLIMATISED") and (worker.intensity in {"MODERATE", "HEAVY"})
-
-            rule_ref = "UNACCLIMATISED_HEAVY_WORK_RULE" if severe else "HEAT_STRESS_REST_RULE"
-            
-            if severe:
-                mandatory.append(ExpectedAction(
-                    action_code="REST_15_MIN_HOURLY", origin="MANDATORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-                mandatory.append(ExpectedAction(
-                    action_code="HYDRATE_HOURLY", origin="MANDATORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-                advisory.append(ExpectedAction(
-                    action_code="CLOSE_MONITORING", origin="ADVISORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-            else:
-                mandatory.append(ExpectedAction(
-                    action_code="REST_10_MIN_HOURLY", origin="MANDATORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-                mandatory.append(ExpectedAction(
-                    action_code="HYDRATE_HOURLY", origin="MANDATORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-                advisory.append(ExpectedAction(
-                    action_code="CLOSE_MONITORING", origin="ADVISORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-            if worker.intensity == "HEAVY":
-                advisory.append(ExpectedAction(
-                    action_code="RESCHEDULE_HEAVY_WORK", origin="ADVISORY",
-                    rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-                if level == "UNACCLIMATISED":
-                    advisory.append(ExpectedAction(
-                        action_code="ROTATE_TO_LIGHT_DUTY", origin="ADVISORY",
-                        rule_reference=rule_ref, applies_to=[worker.worker_id]))
-                
-        else:
-            advisory.append(ExpectedAction(
-                action_code="HYDRATE_REGULARLY", origin="ADVISORY",
-                rule_reference="SAFE_WORK_RULE", applies_to=[worker.worker_id]))
-            advisory.append(ExpectedAction(
-                action_code="SHADE_RECOVERY", origin="ADVISORY",
-                rule_reference="SAFE_WORK_RULE", applies_to=[worker.worker_id]))
+        worker_mandatory, worker_advisory = _actions_for_worker(current_wbgt, worker)
+        mandatory.extend(worker_mandatory)
+        advisory.extend(worker_advisory)
 
     return _merge_by_code(mandatory), _merge_by_code(advisory)
+
+
+def _actions_for_worker(
+    current_wbgt: float,
+    worker: WorkerContext,
+) -> Tuple[List[ExpectedAction], List[ExpectedAction]]:
+    """Return the policy actions for one worker before whole-shift merging."""
+    level = acclimatisation_level(worker.acclimatisation_day)
+    threshold = THRESHOLDS[(level, worker.intensity)]
+
+    if current_wbgt >= EMERGENCY_STOP_WBGT:
+        return _emergency_actions(worker)
+    if current_wbgt >= threshold:
+        return _heat_stress_actions(worker, level)
+    return _safe_work_actions(worker)
+
+
+def _emergency_actions(
+    worker: WorkerContext,
+) -> Tuple[List[ExpectedAction], List[ExpectedAction]]:
+    mandatory = [
+        _worker_action("STOP_WORK", "MANDATORY", "EMERGENCY_STOP_RULE", worker),
+        _worker_action("CLOSE_MONITORING", "MANDATORY", "EMERGENCY_STOP_RULE", worker),
+    ]
+    return mandatory, []
+
+
+def _heat_stress_actions(
+    worker: WorkerContext,
+    acclimatisation: str,
+) -> Tuple[List[ExpectedAction], List[ExpectedAction]]:
+    severe = acclimatisation == "UNACCLIMATISED" and worker.intensity in {
+        "MODERATE",
+        "HEAVY",
+    }
+    rule_reference = (
+        "UNACCLIMATISED_HEAVY_WORK_RULE" if severe else "HEAT_STRESS_REST_RULE"
+    )
+    rest_action = "REST_15_MIN_HOURLY" if severe else "REST_10_MIN_HOURLY"
+
+    mandatory = [
+        _worker_action(rest_action, "MANDATORY", rule_reference, worker),
+        _worker_action("HYDRATE_HOURLY", "MANDATORY", rule_reference, worker),
+    ]
+    advisory = [
+        _worker_action("CLOSE_MONITORING", "ADVISORY", rule_reference, worker)
+    ]
+
+    if worker.intensity == "HEAVY":
+        advisory.append(
+            _worker_action("RESCHEDULE_HEAVY_WORK", "ADVISORY", rule_reference, worker)
+        )
+        if acclimatisation == "UNACCLIMATISED":
+            advisory.append(
+                _worker_action(
+                    "ROTATE_TO_LIGHT_DUTY",
+                    "ADVISORY",
+                    "UNACCLIMATISED_HEAVY_WORK_RULE",
+                    worker,
+                )
+            )
+    return mandatory, advisory
+
+
+def _safe_work_actions(
+    worker: WorkerContext,
+) -> Tuple[List[ExpectedAction], List[ExpectedAction]]:
+    advisory = [
+        _worker_action("HYDRATE_REGULARLY", "ADVISORY", "SAFE_WORK_RULE", worker),
+        _worker_action("SHADE_RECOVERY", "ADVISORY", "SAFE_WORK_RULE", worker),
+    ]
+    return [], advisory
+
+
+def _worker_action(
+    action_code: str,
+    origin: Literal["MANDATORY", "ADVISORY"],
+    rule_reference: str,
+    worker: WorkerContext,
+) -> ExpectedAction:
+    return ExpectedAction(
+        action_code=action_code,
+        origin=origin,
+        rule_reference=rule_reference,
+        applies_to=[worker.worker_id],
+    )
 
 
 def _merge_by_code(actions: List[ExpectedAction]) -> List[ExpectedAction]:
