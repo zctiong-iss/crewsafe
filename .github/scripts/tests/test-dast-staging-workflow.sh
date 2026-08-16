@@ -14,8 +14,8 @@ PLAN="$ROOT/docs/plans/SCRUM-273-authenticated-staging-dast-plan.md"
 TESTS_RUN=0
 TESTS_FAILED=0
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 
 file_exists() {
   local label="$1" path="$2"
@@ -172,6 +172,9 @@ if [[ -x "$VALIDATOR" ]]; then
     DAST_USERNAME=worker.bishan@synthetic.crewsafe.invalid DAST_SYNTHETIC_WORKER_PASSWORD=synthetic-password \
     ZAP_IMAGE=ghcr.io/zaproxy/zaproxy@sha256:71db37cd5b75663b35758d10aaec05bf6fbac23f5020e3046c70e628a5f84efa \
     DAST_POLICY_PATH="$AUTOMATION" "$VALIDATOR"
+  # S5332 accepted exception: example.invalid is an RFC 6761 reserved test domain, used
+  # here only as a synthetic non-HTTPS fixture to prove the validator rejects it -- never a
+  # real network call.
   script_rejects "validator rejects non-HTTPS target without leaking password" env \
     TRIGGER_COMPONENT=backend TRIGGER_SHA=0123456789012345678901234567890123456789 \
     WEB_BASE_URL=http://example.invalid BACKEND_BASE_URL=https://d3b75ru76gta2n.cloudfront.net \

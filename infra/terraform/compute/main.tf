@@ -57,6 +57,19 @@ data "terraform_remote_state" "ecr" {
   }
 }
 
+# SCRUM-371 — read-only. Never written by this component (contracts/
+# developer-access-consumer-compliance.md rule 4). The only output consumed is
+# developer_group_name, so the new grant below attaches to the group SCRUM-372
+# already created rather than a hardcoded name or a second group.
+data "terraform_remote_state" "developer_access" {
+  backend = "s3"
+  config = {
+    bucket = "crewsafe-terraform-state-${var.expected_account_id}-${var.aws_region}"
+    key    = "crewsafe/developer-access/shared-dev.tfstate"
+    region = var.aws_region
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Managed edge policies
 #
@@ -152,6 +165,30 @@ locals {
       valueFrom = local.database_password_reference
     }],
   )
+
+  # SCRUM-373 — the ml-service sidecar. A same-task, localhost-only container:
+  # no portMappings entry here is ever referenced by an aws_lb_target_group,
+  # listener, or security-group rule (spec FR-003, SC-004).
+  ml_service_container_name  = "ml-service"
+  ml_service_container_port  = 8000
+  ml_service_container_image = "${local.ecr.ml_service_repository_url}:${var.initial_ml_service_image_tag}"
+  ml_service_log_group_name  = "/crewsafe/shared-dev/ml-service"
+
+  # Deliberately its own map, not a merge into local.parameter_secrets above:
+  # that map is Spring-Boot-specific (DB_*, Cognito settings) and none of it
+  # applies to ml-service. Both entries resolve to the two deliberately-empty
+  # SSM parameters secrets/main.tf declares (spec FR-008, research.md R-001) —
+  # empty today, not because the reference is wrong, but because no model
+  # bundle is approved for inference yet.
+  ml_service_parameter_secrets = {
+    WBGT_MODEL_MANIFEST        = "${local.secrets.config_parameter_prefix}/ml/model-manifest"
+    WBGT_MODEL_MANIFEST_SHA256 = "${local.secrets.config_parameter_prefix}/ml/model-manifest-sha256"
+  }
+
+  ml_service_container_secrets = [for name, parameter in local.ml_service_parameter_secrets : {
+    name      = name
+    valueFrom = "${local.parameter_arn_prefix}${parameter}"
+  }]
 }
 
 # ---------------------------------------------------------------------------
@@ -166,6 +203,14 @@ locals {
 # expire the evidence before the retrospective that needs it).
 resource "aws_cloudwatch_log_group" "backend" {
   name              = local.log_group_name
+  retention_in_days = var.log_retention_days
+}
+
+# SCRUM-373 — its own, dedicated stream. A shared log group would make an
+# ml-service failure indistinguishable from a backend one, defeating the
+# runbook's own diagnosis path (spec User Story 3, FR-003).
+resource "aws_cloudwatch_log_group" "ml_service" {
+  name              = local.ml_service_log_group_name
   retention_in_days = var.log_retention_days
 }
 
@@ -275,6 +320,10 @@ resource "aws_lb_target_group" "public" {
 # HTTP is the documented temporary origin transport: no trusted certificate can
 # be issued for the AWS-owned ALB hostname. Its security group accepts only the
 # managed CloudFront prefix list, and all requests still reach backend authn/z.
+#
+# SonarQube terraform:S5332 (issue AZ_LiOshb-JeFb7z_1Fk) is accepted for this
+# same reason — SCRUM-414 formally marks that finding accepted rather than
+# open, so the codebase and the scanner's own state agree.
 #trivy:ignore:AWS-0054
 resource "aws_lb_listener" "public" {
   load_balancer_arn = aws_lb.public.arn
@@ -527,6 +576,57 @@ resource "aws_ecs_task_definition" "backend" {
         }
       }
     },
+    {
+      # SCRUM-373 — the ml-service sidecar. Fargate awsvpc mode gives every
+      # container in a task the same ENI, so backend already reaches this over
+      # localhost:8000 (its own FORECAST_BASE_URL/BEDROCK_API_URL defaults) —
+      # no service-discovery entry needed. essential = true is the accepted
+      # trade-off (spec Known trade-off): a crash-looping ml-service container
+      # takes the whole task down with it, the same as any other essential
+      # container failure.
+      name      = local.ml_service_container_name
+      image     = local.ml_service_container_image
+      essential = true
+
+      # Provided by ml-service's own Dockerfile (`useradd -m -u 1000 appuser`);
+      # asserted here for the same reason backend's is (SCRUM-177's image is
+      # authoritative, but this component owns the task definition that could
+      # override it).
+      user = "1000"
+
+      portMappings = [
+        {
+          containerPort = local.ml_service_container_port
+          protocol      = "tcp"
+        },
+      ]
+
+      # Unlike backend, no documented JVM-temp-dir blocker exists for this
+      # image: its Dockerfile already chmods application files 444 and
+      # crewsafe_ml read-only (research.md R-010). Attempted here as the
+      # stronger hardening posture; if a real Fargate startup failure surfaces
+      # (mirroring backend's own documented incident above), the fix is to set
+      # this to false with the same class of justification, not a silent
+      # revert.
+      readonlyRootFilesystem = true
+
+      # Explicitly empty, matching backend's own convention: every value the
+      # deployment overrides is a secret reference, never plaintext.
+      environment = []
+
+      secrets = local.ml_service_container_secrets
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ml_service.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = local.ml_service_container_name
+          "mode"                  = "non-blocking"
+          "max-buffer-size"       = "25m"
+        }
+      }
+    },
   ])
 }
 
@@ -536,6 +636,14 @@ resource "aws_ecs_service" "backend" {
   task_definition = aws_ecs_task_definition.backend.arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
+
+  # SCRUM-371 — hosts the SSM Exec agent sidecar so a developer's session can
+  # run inside this task. Fargate's default platform version (unset here,
+  # LATEST) already satisfies ECS Exec's >= 1.4.0 minimum; no image or
+  # platform-version change is needed (research.md R-006). The task role's own
+  # ssmmessages grant (secrets/main.tf, HostEcsExecSession) is what lets the
+  # session actually open once this flag is set.
+  enable_execute_command = true
 
   network_configuration {
     subnets          = local.network.private_subnet_ids
@@ -588,6 +696,60 @@ resource "aws_ecs_service" "backend" {
   lifecycle {
     ignore_changes = [task_definition, desired_count]
   }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-371 — narrow ECS Exec / RDS-secret grant on the existing developer group
+#
+# Attaches to crewsafe-developers (SCRUM-372), never a new or second identity
+# (contracts/developer-access-consumer-compliance.md rule 1). Exactly three
+# actions, each scoped — no restatement of what ViewOnlyAccess (SCRUM-372)
+# already grants that group (ecs:Describe*, ecs:List*, rds:DescribeDBInstances
+# are deliberately absent here; spec FR-006). See contracts/
+# rds-troubleshooting-grant.md for the audit-facing statement of this exact
+# policy and research.md R-005 for the ARN-pattern reasoning.
+# ---------------------------------------------------------------------------
+
+resource "aws_iam_group_policy" "developers_rds_troubleshooting" {
+  name  = "crewsafe-developers-rds-troubleshooting"
+  group = data.terraform_remote_state.developer_access.outputs.developer_group_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ExecIntoBackendTask"
+        Effect   = "Allow"
+        Action   = ["ecs:ExecuteCommand"]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*"
+      },
+      {
+        # Amendment (live-tested 2026-08-14, research.md R-005): ssm:StartSession
+        # for the ECS Exec port-forwarding path is authorized against BOTH the
+        # ECS task target AND the SSM document resource — confirmed by a live
+        # AccessDeniedException naming exactly this document ARN when only the
+        # task ARN was granted. AWS-StartPortForwardingSessionToRemoteHost is an
+        # AWS-owned public document, hence the account-less "::document/" ARN.
+        Sid    = "StartSessionToBackendTask"
+        Effect = "Allow"
+        Action = ["ssm:StartSession"]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.expected_account_id}:task/${local.name_prefix}/*",
+          "arn:aws:ssm:${var.aws_region}::document/AWS-StartPortForwardingSessionToRemoteHost",
+        ]
+      },
+      {
+        # Same rds!* wildcard pattern secrets/main.tf's
+        # rds_managed_secret_arn_pattern already uses, and for the identical
+        # reason: the managed service names this secret and it does not exist
+        # as a fixed value until the database does.
+        Sid      = "ReadRdsManagedCredentialForTunnel"
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.expected_account_id}:secret:rds!*"
+      },
+    ]
+  })
 }
 
 # ---------------------------------------------------------------------------
@@ -729,6 +891,45 @@ resource "aws_iam_role_policy" "backend_deploy" {
   })
 }
 
+# SCRUM-373 follow-up: redeploying an already-published ml-service image must
+# not require bumping var.initial_ml_service_image_tag through a Terraform
+# apply (research.md R-011's same lesson, applied to the sidecar container).
+# A dedicated role, not a reuse of backend_deploy: ECS grants IAM at the
+# service level, not per container, so this role's ecs:UpdateService grant is
+# scoped to the exact same aws_ecs_service.backend.id backend_deploy already
+# holds — reusing that role would add no isolation, only ambiguity about which
+# workflow is actually responsible for a given deploy. Matches the precedent
+# cognito_mapping_publication already set below for the identical reasoning.
+resource "aws_iam_role" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  role = aws_iam_role.ml_service_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = "${local.ecr.ml_service_repository_arn}" },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = aws_ecs_service.backend.id },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } }
+    ]
+  })
+}
+
 # SCRUM-303: publishing the application-user mapping changes which signed Cognito
 # subjects can enter CrewSafe. It must therefore never share the ordinary backend
 # deployment role. This OIDC role can write exactly the one runtime parameter and
@@ -844,6 +1045,132 @@ resource "aws_s3_bucket_lifecycle_configuration" "web" {
       noncurrent_days = var.web_bucket_noncurrent_version_expiration_days
     }
   }
+}
+
+# ---------------------------------------------------------------------------
+# Web bucket access-log target (SCRUM-414, terraform:S6258)
+#
+# Private, encrypted, ACLs disabled entirely — the same hardening pattern the
+# web bucket itself uses (research.md R-002). Not versioned: unlike the web
+# bucket, access-log objects are write-once and never overwritten in place, so
+# there is no noncurrent-version concept for a lifecycle rule to protect
+# against; the lifecycle rule below instead bounds total retention directly.
+# ---------------------------------------------------------------------------
+
+resource "aws_s3_bucket" "web_logs" {
+  bucket = "${local.name_prefix}-web-logs"
+}
+
+resource "aws_s3_bucket_ownership_controls" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# AWS-managed SSE-S3 (AES256), matching the web bucket's own accepted
+# exemption (research.md R-002) — access logs are operational metadata
+# (requester identity, source IP, request metadata), the same sensitivity
+# class as the web bucket's own already-public SPA content, so a dedicated
+# KMS key buys no confidentiality gain here either.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+# FR-002. All four flags true — no public ACL, no public policy, no exception.
+resource "aws_s3_bucket_public_access_block" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# FR-004 / research.md R-003. 30 days, matching the CloudWatch retention floor
+# this same feature sets for the PostgreSQL engine log group (FR-005).
+resource "aws_s3_bucket_lifecycle_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.web_access_log_expiration_days
+    }
+  }
+}
+
+# FR-003. Grants write access to exactly the S3 server-access-logging delivery
+# mechanism, scoped to this bucket and to the account and the two buckets that
+# deliver logs into it — web (FR-001) and web_logs itself (terraform:S6258
+# below) — never a broader principal or resource scope (research.md R-001).
+#
+# jsonencode(), not data "aws_iam_policy_document" — this file's own header
+# comment already records why: mock_provider "aws" fabricates a random string
+# for that data source's .json attribute rather than rendering it, which fails
+# every test that plans this resource. The web bucket's own CloudFront-read
+# policy (below) already learned this the hard way; applying it here from the
+# start.
+locals {
+  web_logs_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.web_logs.arn}/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = [aws_s3_bucket.web.arn, aws_s3_bucket.web_logs.arn]
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  policy = local.web_logs_bucket_policy
+}
+
+# FR-001. Delivers the web bucket's own access logs to the dedicated target
+# bucket above — never to itself.
+resource "aws_s3_bucket_logging" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-access-logs/"
+}
+
+# terraform:S6258 flags web_logs too: it is itself an S3 bucket, and an
+# unlogged one is exactly the finding this whole feature exists to close.
+# Self-logging (source == target) closes the gap without a third bucket —
+# a distinct prefix keeps the two object streams apart, and the 30-day
+# lifecycle above already bounds total growth regardless of which bucket a
+# given log object came from, so this does not create unbounded recursion.
+resource "aws_s3_bucket_logging" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-logs-bucket-access-logs/"
 }
 
 # ---------------------------------------------------------------------------

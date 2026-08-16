@@ -25,6 +25,14 @@
       "allow_destroy": false,
       "execution_role_family": "standard"
     },
+    "developer-access-shared-dev": {
+      "jira_key": "SCRUM-372",
+      "root": "infra/terraform/developer-access",
+      "backend_strategy": "remote",
+      "state_key": "crewsafe/developer-access/shared-dev.tfstate",
+      "allow_destroy": false,
+      "execution_role_family": "standard"
+    },
     "ecr-shared-dev": {
       "jira_key": "SCRUM-192",
       "root": "infra/terraform/ecr",

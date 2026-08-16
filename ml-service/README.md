@@ -101,11 +101,11 @@ evaluate that exact checksum-pinned bundle without retraining it:
 
 ```bash
 python -m crewsafe_ml.evaluate_approval \
-  --model-manifest artifacts/wbgt-six-month-safety-floor-dev-v1/manifest.json \
-  --model-manifest-sha256 <64-character-manifest-sha256> \
-  --features data/approval-2026-08/weather_features_15min.csv \
-  --feature-manifest data/approval-2026-08/manifest.json \
-  --output artifacts/approval-2026-08.json
+  --model-manifest artifacts/wbgt-six-month-frozen-candidate-v2/manifest.json \
+  --model-manifest-sha256 ad0a3ba2f1a7e587ceaa7333c8bf65afe6535c0b31f0d15cb9028ca41e3b9359 \
+  --features data/approval-2026-08-15-to-2026-09-04/weather_features_15min.csv \
+  --feature-manifest data/approval-2026-08-15-to-2026-09-04/manifest.json \
+  --output artifacts/approval-2026-08-15-to-2026-09-04-v2.json
 ```
 
 The default evidence window is at least 21 complete days. The report checks that
@@ -115,6 +115,10 @@ requires no loss of recall at 32°C
 or 33°C. It is evidence for a human review, not an automatic unlock. A report
 also stays blocked when the model was produced from an unreviewable `dirty`
 source commit or the new period contains no high-risk examples.
+
+The exact download command, dates, and human-review checks for this frozen
+candidate are in
+[`docs/runbooks/SCRUM-114-model-approval.md`](../docs/runbooks/SCRUM-114-model-approval.md).
 
 The current six-month development evaluation, intended use, uncertainty,
 limitations, per-band errors, and retraining triggers are recorded in
@@ -126,16 +130,20 @@ The `/forecast` response contract is unchanged. Existing clients may keep sendin
 `metric`, `horizon_minutes`, and `current_value`; without recent context the service
 returns the labelled `baseline-1.0.0` persistence result.
 
-To activate a trained WBGT model, deploy a reviewed bundle outside the container
-image and configure both values below. The manifest and each referenced artifact
-are checksum-verified before use. Never activate the development-only bundle while
-its model card or manifest contains an approval blocker. Training always writes
-`"approved_for_inference": false`; a reviewed promotion must change it to `true`
-and publish the checksum of that exact promoted manifest.
+The shared staging image contains one reviewed, checksum-pinned demonstration bundle
+at `model-bundle/staging-demo-v1`. Baking it into the image does not activate it by
+itself. ECS must still provide the exact path and manifest checksum below. The loader
+then verifies the manifest and both referenced artifacts before deserializing them.
+
+Training always writes `"approved_for_inference": false`. The bundled copy records a
+decision-owner exception for the university-project staging demonstration, an explicit
+`STAGING_DEMO_ONLY` scope, and `production_approved: false`. It must not be reused as
+production approval. Raw downloads, generated training folders, and unrelated model
+artifacts remain outside Git and outside the image.
 
 ```bash
-WBGT_MODEL_MANIFEST=/run/crewsafe-model/manifest.json
-WBGT_MODEL_MANIFEST_SHA256=<64-character-manifest-sha256>
+WBGT_MODEL_MANIFEST=/app/model-bundle/staging-demo-v1/manifest.json
+WBGT_MODEL_MANIFEST_SHA256=36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031
 ```
 
 A trained request adds optional `context` containing 2–16 ordered observations at
@@ -222,7 +230,20 @@ python app.py
 AWS_REGION=us-east-1 python app.py
 ```
 
-Service starts on `http://localhost:8000`.
+Service starts on `http://127.0.0.1:8000` — loopback only, so nothing outside this machine can
+reach it (SCRUM-401). That is the right default when the caller is this same machine.
+
+Override the bind address only when something genuinely outside the host must connect. The usual
+case is a backend running in Docker Compose reaching ml-service on the host, since
+`host.docker.internal` arrives on a non-loopback interface:
+
+```bash
+ML_SERVICE_HOST=0.0.0.0 python app.py
+```
+
+This applies to `python app.py` only. The container image is unaffected: its `CMD` binds
+`0.0.0.0` on purpose, because Docker port publishing requires it, and it is isolated by the
+container boundary instead (in ECS, by having no ALB or security-group ingress at all).
 
 ## Endpoints
 

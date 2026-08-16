@@ -85,6 +85,15 @@
         "ssm:ListTagsForResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "ReadDeveloperGroupExecGrantPlan",
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetGroupPolicy",
+        "iam:ListGroupPolicies"
+      ],
+      "Resource": "arn:aws:iam::<ACCOUNT_ID>:group/crewsafe-developers"
     }
   ]
 }

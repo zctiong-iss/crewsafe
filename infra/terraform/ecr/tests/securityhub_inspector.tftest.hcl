@@ -42,6 +42,7 @@ run "rejects_mismatched_account" {
   expect_failures = [
     aws_ecr_repository.backend,
     aws_ecr_repository.web,
+    aws_ecr_repository.ml_service,
     aws_securityhub_account.mvp,
   ]
 }
@@ -83,8 +84,8 @@ run "securityhub_inspector_contract" {
     condition = toset([
       for f in one(aws_ecr_registry_scanning_configuration.enhanced.rule).repository_filter :
       f.filter
-    ]) == toset(["crewsafe/backend", "crewsafe/web"])
-    error_message = "Continuous enhanced scanning must cover exactly the two CrewSafe repositories."
+    ]) == toset(["crewsafe/backend", "crewsafe/web", "crewsafe/ml-service"])
+    error_message = "Continuous enhanced scanning must cover exactly the three CrewSafe repositories."
   }
 
   assert {

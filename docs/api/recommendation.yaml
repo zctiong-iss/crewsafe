@@ -55,6 +55,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/generate:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: generateRecommendation
+      summary: Draft a recommendation for this shift (SUPERVISOR/ADMIN)
+      description: >
+        Runs the agent: gathers conditions, evaluates the heat policy, and drafts an
+        explainable plan, persisted as PENDING_APPROVAL and returned in full.
+
+
+        Synchronous, and slow by API standards — roughly 10–20s, since it makes a live model
+        call. Clients must show a loading state rather than assume a fast response.
+
+
+        There is no failure mode that returns no plan. Active lightning short-circuits to a
+        stop-work plan without any model call; an unreachable ml-service, a model that never
+        answered, or a draft that fails the §8.5 validation gate all fall back to a plan built
+        deterministically from the policy decision. `modelVersion` on the response tells the
+        client which path ran. The 4xx responses below are all about the *request* — an unknown
+        shift, a shift that is over, or a site with no readings — never about the model.
+
+
+        No deduplication: a shift may hold several pending recommendations, each decided
+        independently, matching SCRUM-119's existing behaviour.
+      responses:
+        "201":
+          description: The drafted recommendation, PENDING_APPROVAL.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recommendation"
+        "400":
+          description: The shift is CLOSED or CANCELLED, so a plan for it would be meaningless.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >
+            Nothing to assess, for one of two reasons: the site has no usable WBGT reading and no
+            active lightning stop-work, or it has no ACTIVE heat policy version configured. Both
+            are refused rather than answered — an invented reading, or thresholds nobody at this
+            site signed off on, would decide what a worker must do on numbers that are not on the
+            record (§7.1).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /api/v1/sites/{siteId}/shifts/{shiftId}/recommendations/{recommendationId}:
     parameters:
       - $ref: "#/components/parameters/SiteId"
@@ -390,6 +451,82 @@ components:
           $ref: "#/components/schemas/Approval"
           nullable: true
           description: Null until a supervisor has decided on this recommendation.
+        evidence:
+          $ref: "#/components/schemas/RecommendationEvidence"
+          nullable: true
+          description: >
+            The conditions this plan was drafted under (SCRUM-359). Null on recommendations
+            drafted before the block existed — render that as "not recorded", never by
+            substituting current readings.
+        modelVersion:
+          type: string
+          nullable: true
+          description: >
+            The Bedrock model that drafted this plan, or a deterministic-fallback sentinel
+            (`deterministic-fallback`, `deterministic-lightning`) when no model was used.
+            §12.2 requires this alongside `policyVersion` and the evidence block's data age.
+            Never the configured model id when the model's output was discarded.
+          example: global.anthropic.claude-haiku-4-5-20251001-v1:0
+
+    RecommendationEvidence:
+      type: object
+      description: >
+        What the agent saw at draft time (SCRUM-359, satisfying §12.2). A snapshot, never
+        recomputed on read: a plan drafted at 32.5°C stays explainable an hour later when the
+        site has cooled, and an approval recorded against it can be audited against the
+        conditions that justified it. Every field is nullable because degraded operation is a
+        real state (§7.1) — a site with no weather reading can still receive a lightning
+        stop-work plan, and that plan says so rather than carrying an invented reading.
+      properties:
+        observedWbgt:
+          type: number
+          nullable: true
+          description: WBGT at draft time, °C.
+          example: 32.5
+        forecastWbgt30m:
+          type: number
+          nullable: true
+          description: >
+            30-minute WBGT forecast at draft time, °C. Currently produced by the persistence
+            baseline, whose prediction equals `observedWbgt` by construction — SCRUM-281 wires
+            in SCRUM-114's trained model. The two being equal is expected, not a bug.
+          example: 32.5
+        currentBand:
+          $ref: "#/components/schemas/WbgtBand"
+          nullable: true
+        forecastBand:
+          $ref: "#/components/schemas/WbgtBand"
+          nullable: true
+        observedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the underlying weather observation was taken — §12.2's data age.
+        freshness:
+          type: string
+          nullable: true
+          enum: [LIVE, DELAYED, STALE, SIMULATED]
+          description: Evaluated at draft time, not at read time.
+        source:
+          type: string
+          nullable: true
+          enum: [NEA, MANUAL, CACHED]
+        stationId:
+          type: string
+          nullable: true
+          example: S50
+        lightningState:
+          type: string
+          nullable: true
+          enum: [CLEAR, ADVISORY, STOP_WORK]
+          description: Null when lightning has never been ingested for this site.
+
+    WbgtBand:
+      type: string
+      enum: [BELOW_31, 31_TO_BELOW_32, 32_TO_BELOW_33, 33_AND_ABOVE]
+      description: >
+        Server-authoritative WBGT risk band (§7.1). Boundaries are half-open — exactly 32.0 is
+        `32_TO_BELOW_33`. No client may compute or override this (§12.2).
 
     RecommendationDecisionRequest:
       type: object

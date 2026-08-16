@@ -73,6 +73,14 @@ public final class AuditEventType {
      * so the sweep completed it instead (SCRUM-324). */
     public static final String ACTION_AUTO_COMPLETED = "ACTION_AUTO_COMPLETED";
 
+    /**
+     * The agent drafted a recommendation for a shift (SCRUM-289). Recorded for every draft,
+     * including ones the language model never touched — the detail carries which model wrote
+     * it and whether the deterministic fallback produced it, so the audit trail distinguishes
+     * "the model said this" from "the model was unavailable and the policy engine said this".
+     */
+    public static final String RECOMMENDATION_DRAFTED = "RECOMMENDATION_DRAFTED";
+
     /** A supervisor approved an AI-drafted recommendation as-is (SCRUM-119). */
     public static final String RECOMMENDATION_APPROVED = "RECOMMENDATION_APPROVED";
 

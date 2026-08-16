@@ -6,6 +6,7 @@ locals {
     "compute",
     "compute-web",
     "database",
+    "developer-access",
     "ecr",
     "network",
     "securityhub-import",
@@ -86,8 +87,8 @@ resource "terraform_data" "input_validation" {
     }
 
     precondition {
-      condition     = length(local.policy_bindings) == 16
-      error_message = "The policy-management root must contain exactly sixteen component bindings."
+      condition     = length(local.policy_bindings) == 18
+      error_message = "The policy-management root must contain exactly eighteen component bindings."
     }
   }
 }

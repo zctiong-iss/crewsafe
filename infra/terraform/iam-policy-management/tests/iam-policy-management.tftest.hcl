@@ -17,7 +17,7 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_bindings) == 16
+    condition     = length(output.policy_bindings) == 18
     error_message = "The IAM policy-management root must expose exactly sixteen bindings."
   }
 
@@ -33,7 +33,7 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_arns) == 16 && length(output.attachment_keys) == 16
+    condition     = length(output.policy_arns) == 18 && length(output.attachment_keys) == 18
     error_message = "Every customer-managed policy must have one explicit attachment."
   }
 
@@ -83,6 +83,190 @@ run "compute_web_policies_stay_least_privilege" {
       alltrue([for action in stmt.Action : !can(regex(":\\*$", action))])
     ])
     error_message = "No statement in the compute-web plan policy may grant a wildcard action on any service."
+  }
+}
+
+# SCRUM-371: compute's own apply role must be able to manage a policy on the
+# crewsafe-developers group (SCRUM-372) before it can create the
+# aws_iam_group_policy.developers_rds_troubleshooting resource. Written before
+# the templates changed, per this runbook's own "Policy changes" process
+# (docs/runbooks/SCRUM-265-terraform-iam-policy-management.md).
+run "compute_ci_can_manage_developer_group_policy" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region               = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
+      (
+        try(sort(stmt.Action), []) == sort([
+          "iam:GetGroupPolicy",
+          "iam:PutGroupPolicy",
+          "iam:DeleteGroupPolicy",
+          "iam:ListGroupPolicies",
+        ])
+        && stmt.Resource == "arn:aws:iam::123456789012:group/crewsafe-developers"
+      )
+    ])
+    error_message = "The compute apply policy must grant exactly iam:GetGroupPolicy, iam:PutGroupPolicy, iam:DeleteGroupPolicy, and iam:ListGroupPolicies, scoped to the crewsafe-developers group ARN and nothing else (research.md R-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-plan"].policy).Statement :
+      (
+        try(sort(stmt.Action), []) == sort([
+          "iam:GetGroupPolicy",
+          "iam:ListGroupPolicies",
+        ])
+        && stmt.Resource == "arn:aws:iam::123456789012:group/crewsafe-developers"
+      )
+    ])
+    error_message = "The compute plan policy must grant exactly iam:GetGroupPolicy and iam:ListGroupPolicies, scoped to the crewsafe-developers group ARN and nothing else (research.md R-002)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
+      alltrue([for action in stmt.Action : !can(regex(":\\*$", action))])
+    ])
+    error_message = "No statement in the compute apply policy may grant a wildcard action on any service, including this new group-policy grant."
+  }
+}
+
+# SCRUM-373: ecr's own apply role must be able to manage a crewsafe/ml-service
+# repository and its dedicated push role before it can create those resources.
+# Today's ManageEcrRepository/ManagePushRoleIdentity statements are pinned to
+# the exact backend/web repository and role ARNs (research.md R-002) — a third
+# repository/role needs its own statements. Written before the templates
+# changed, per this runbook's own "Policy changes" process
+# (docs/runbooks/SCRUM-265-terraform-iam-policy-management.md).
+run "ecr_ci_can_manage_ml_service_repository" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region               = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["ecr-apply"].policy).Statement :
+      (
+        stmt.Sid == "ManageMlServiceEcrRepository"
+        && try(sort(stmt.Action), []) == sort([
+          "ecr:CreateRepository",
+          "ecr:DeleteRepository",
+          "ecr:DescribeRepositories",
+          "ecr:PutLifecyclePolicy",
+          "ecr:GetLifecyclePolicy",
+          "ecr:DeleteLifecyclePolicy",
+          "ecr:PutImageScanningConfiguration",
+          "ecr:TagResource",
+          "ecr:UntagResource",
+          "ecr:ListTagsForResource",
+        ])
+        && stmt.Resource == "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/ml-service"
+      )
+    ])
+    error_message = "The ecr apply policy must grant the same repository-management action set as the existing backend/web statements, scoped to the new crewsafe/ml-service repository ARN (research.md R-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["ecr-apply"].policy).Statement :
+      (
+        stmt.Sid == "ManageMlServicePushRoleIdentity"
+        && try(sort(stmt.Action), []) == sort([
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:GetRole",
+          "iam:PutRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:GetRolePolicy",
+          "iam:ListAttachedRolePolicies",
+          "iam:ListRolePolicies",
+          "iam:ListRoleTags",
+          "iam:TagRole",
+          "iam:UntagRole",
+          "iam:UpdateAssumeRolePolicy",
+          "iam:UpdateRoleDescription",
+        ])
+        && stmt.Resource == "arn:aws:iam::123456789012:role/crewsafe-shared-dev-ecr-ml-service-push"
+      )
+    ])
+    error_message = "The ecr apply policy must grant the same push-role-management action set as the existing backend/web statements, scoped to the new crewsafe-shared-dev-ecr-ml-service-push role ARN (research.md R-002)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_policy.component["ecr-apply"].policy).Statement :
+      stmt.Resource != "*" || stmt.Sid == "GetRegistryAuthorizationToken" || stmt.Sid == "ManageSecurityHubAccount" || stmt.Sid == "ManageSecurityHubInsight" || stmt.Sid == "ManageInspectorEcrEnablement" || stmt.Sid == "ManageEcrEnhancedScanning"
+    ])
+    error_message = "The two new ml-service statements must not use a resource wildcard."
+  }
+}
+
+# SCRUM-373: compute's own apply role must be able to manage the new,
+# dedicated ml-service CloudWatch log group before it can create it. Today's
+# ManageApplicationLogGroup statement is pinned to exactly the backend log
+# group's two ARNs (research.md R-003). Written before the templates changed,
+# per this runbook's own "Policy changes" process.
+run "compute_ci_can_manage_ml_service_log_group" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region               = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  # Guarded with try(..., false): stmt.Resource is a bare string for most
+  # statements in this policy and a list only for ManageApplicationLogGroup.
+  # An unguarded contains() call errors out on a string argument rather than
+  # returning false, which aborts the whole for-expression instead of just
+  # skipping the non-matching statement (discovered live in CI — the pinned
+  # 1.10.5 Terraform surfaced it; a newer local version did not).
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-apply"].policy).Statement :
+      try(
+        stmt.Sid == "ManageApplicationLogGroup"
+        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/ml-service")
+        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/ml-service:*")
+        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/backend")
+        && contains(stmt.Resource, "arn:aws:logs:ap-southeast-1:123456789012:log-group:/crewsafe/shared-dev/backend:*"),
+        false
+      )
+    ])
+    error_message = "The compute apply policy's ManageApplicationLogGroup statement must cover both the backend and the new ml-service log groups (research.md R-003)."
   }
 }
 

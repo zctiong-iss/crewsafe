@@ -8,8 +8,8 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 TESTS_RUN=0
 TESTS_FAILED=0
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 expect() {
   local expected="$1" label="$2"
   shift 2
@@ -22,6 +22,7 @@ expect() {
 printf 'test-retrieve-and-verify-artifact\n'
 
 VALID_SHA="8f3c2e1a9b7d4f6c0a1b2c3d4e5f6a7b8c9d0e1f"
+readonly FAKE_APK_BYTES='fake apk bytes'
 
 make_valid_fixture() {
   local dir="$1"
@@ -38,7 +39,7 @@ make_valid_fixture() {
   "triggered_by": "zctiong-iss"
 }
 JSON
-  printf 'fake apk bytes' >"$dir/app-debug.apk"
+  printf '%s' "$FAKE_APK_BYTES" >"$dir/app-debug.apk"
 }
 
 # --- Happy path: valid metadata + a single binary artifact ---
@@ -93,28 +94,28 @@ fi
 # --- Missing source metadata fails closed ---
 missing_meta="$WORK/missing-meta"
 mkdir -p "$missing_meta"
-printf 'fake apk bytes' >"$missing_meta/app-debug.apk"
+printf '%s' "$FAKE_APK_BYTES" >"$missing_meta/app-debug.apk"
 expect 1 'exits non-zero when artifact-metadata.json is missing' "$SCRIPT" "$missing_meta"
 
 # --- Malformed (non-JSON) metadata fails closed ---
 malformed="$WORK/malformed"
 mkdir -p "$malformed"
 printf 'not json at all' >"$malformed/artifact-metadata.json"
-printf 'fake apk bytes' >"$malformed/app-debug.apk"
+printf '%s' "$FAKE_APK_BYTES" >"$malformed/app-debug.apk"
 expect 1 'exits non-zero when artifact-metadata.json is not valid JSON' "$SCRIPT" "$malformed"
 
 # --- Metadata with no commit_sha field fails closed ---
 no_sha="$WORK/no-sha"
 mkdir -p "$no_sha"
 echo '{"platform": "android"}' >"$no_sha/artifact-metadata.json"
-printf 'fake apk bytes' >"$no_sha/app-debug.apk"
+printf '%s' "$FAKE_APK_BYTES" >"$no_sha/app-debug.apk"
 expect 1 'exits non-zero when metadata has no commit_sha field' "$SCRIPT" "$no_sha"
 
 # --- Metadata with a malformed commit_sha value fails closed ---
 bad_sha="$WORK/bad-sha"
 mkdir -p "$bad_sha"
 echo '{"commit_sha": "not-a-real-sha"}' >"$bad_sha/artifact-metadata.json"
-printf 'fake apk bytes' >"$bad_sha/app-debug.apk"
+printf '%s' "$FAKE_APK_BYTES" >"$bad_sha/app-debug.apk"
 expect 1 'exits non-zero when commit_sha is not 40-char lowercase hex' "$SCRIPT" "$bad_sha"
 
 # --- Nonexistent artifact directory fails closed ---

@@ -60,10 +60,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            // SonarQube java:S4502 ("Disabling CSRF protections is security-sensitive")
+            // accepted risk — SCRUM-408. Disposition: SAFE.
+            //
             // CSRF protects against a browser automatically attaching ambient credentials
             // to a cross-site request. Cookies are attached automatically; an Authorization
             // header never is. With no cookies and no session there is nothing to forge,
             // so CSRF tokens would add ceremony without adding safety.
+            //
+            // Compensating control: this chain issues no cookie and creates no session
+            // (sessionCreationPolicy is STATELESS below), which is exactly the precondition
+            // this disposition depends on. That precondition is asserted, not just claimed —
+            // see SecurityChainTest#noSessionCookieIsEverIssued and its neighbouring tests.
+            // If a cookie- or session-based auth path is ever added to this backend, this
+            // disposition must be revisited before that lands.
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 

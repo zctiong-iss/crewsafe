@@ -27,6 +27,7 @@ import dispatchInbox from "./reducers/dispatchInboxSlice";
 import recommendations from "./reducers/recommendationsSlice";
 import wellbeing from "./reducers/wellbeingSlice";
 import policy from "./reducers/policySlice";
+import forecast from "./reducers/forecastSlice";
 
 const rootReducer = combineReducers({
   preferences,
@@ -43,6 +44,10 @@ const rootReducer = combineReducers({
   // Not persisted: which rules are in force is a fact the server owns, and a stale copy
   // rehydrated from disk could show a version that was superseded while the app was closed.
   policy,
+  // Not persisted: a forecast was already about the future when it was made, and rehydrating
+  // one from a previous session would present a prediction whose window has long closed as
+  // though it still described what is coming.
+  forecast,
   ui,
   profile,
   // Nested persist: this slice needs two of its fields kept and the rest discarded. See
