@@ -217,13 +217,13 @@ forbid '(^|[^a-z_])resource[[:space:]]+"aws_(vpc|subnet|nat_gateway|internet_gat
 
 # FR-015 (SCRUM-298). aws_iam_role gets its own check, separate from the
 # forbid() list above: this component legitimately creates only the web sync
-# role, SCRUM-271's backend deployment role, and SCRUM-303's mapping-publication
-# role, each a least-privilege CI
+# role, SCRUM-271's backend deployment role, SCRUM-303's mapping-publication
+# role, and SCRUM-373's ml-service deployment role, each a least-privilege CI
 # identity rather than a resource belonging to secrets-shared-dev. grep -E has no negative lookahead, so the exception
 # is expressed as a loop rather than folded into the pattern above.
 while IFS= read -r iam_role_line; do
   case "$iam_role_line" in
-  *'"web_sync"'*|*'"backend_deploy"'*|*'"cognito_mapping_publication"'*) ;;
+  *'"web_sync"'*|*'"backend_deploy"'*|*'"cognito_mapping_publication"'*|*'"ml_service_deploy"'*) ;;
   *)
     printf 'FAIL: %s declares an aws_iam_role resource outside the SCRUM-298 web_sync exception.\n  %s\n' \
       "$component_dir" \
