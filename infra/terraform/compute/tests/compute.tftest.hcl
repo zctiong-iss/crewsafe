@@ -1287,3 +1287,109 @@ run "web_published_contract" {
     error_message = "web_sync_role_arn must equal the sync role's own arn (contracts/terraform-outputs.md)."
   }
 }
+
+# ---------------------------------------------------------------------------
+# SCRUM-414 — remediate SonarQube terraform:S6258 (web bucket access logging)
+# and terraform:S5332 (public ALB listener clear-text transport, accepted risk)
+# ---------------------------------------------------------------------------
+
+run "web_access_logging_delivery" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web bucket's access logs must be delivered to the dedicated web_logs bucket, not itself (FR-001)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.bucket == aws_s3_bucket.web.id
+    error_message = "The logging configuration must be attached to the web bucket (FR-001)."
+  }
+}
+
+run "web_logs_bucket_privacy_and_encryption" {
+  command = apply
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.web_logs.block_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.block_public_policy &&
+      aws_s3_bucket_public_access_block.web_logs.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.restrict_public_buckets
+    )
+    error_message = "All four public-access-block flags must be true on the logging target bucket (FR-002)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.web_logs.rule[0].object_ownership == "BucketOwnerEnforced"
+    error_message = "The logging target bucket's object ownership must be BucketOwnerEnforced, disabling ACLs entirely (FR-002)."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_server_side_encryption_configuration.web_logs.rule) == 1
+    error_message = "The logging target bucket must have server-side encryption configured (FR-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_server_side_encryption_configuration.web_logs.rule :
+      rule.apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    ])
+    error_message = "The logging target bucket must use SSE-S3 (AES256), matching the web bucket's own established encryption pattern (research.md R-002)."
+  }
+}
+
+run "web_logs_bucket_lifecycle" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.web_logs.rule[0].expiration[0].days == var.web_access_log_expiration_days
+    error_message = "Access log objects must expire after var.web_access_log_expiration_days, so storage does not grow unbounded (FR-004)."
+  }
+}
+
+run "web_logs_bucket_policy_least_privilege" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal.Service == "logging.s3.amazonaws.com" &&
+      try(stmt.Condition.ArnLike["aws:SourceArn"], "") == aws_s3_bucket.web.arn &&
+      try(stmt.Condition.StringEquals["aws:SourceAccount"], "") == var.expected_account_id
+    ])
+    error_message = "The logging target bucket's policy must grant s3:PutObject only to the S3 log-delivery principal, scoped to the web bucket's own ARN (via ArnLike) and this account (via StringEquals) (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal != "*" && (try(stmt.Condition.ArnLike["aws:SourceArn"], "no-wildcard") != "*")
+    ])
+    error_message = "No statement in the logging target bucket's policy may use a wildcard principal or SourceArn (FR-003)."
+  }
+}
+
+run "http_listener_protocol_is_unchanged" {
+  command = apply
+
+  # Characterization test, not a new-behavior test: aws_lb_listener.public already
+  # serves HTTP for a documented, approved reason (no trusted cert can be issued for
+  # the AWS-owned ALB hostname; see the comment above the resource). This guard
+  # exists so a future change cannot silently "fix" the listener without a test
+  # failure flagging the regression (FR-006, SC-005).
+  assert {
+    condition     = aws_lb_listener.public.protocol == "HTTP"
+    error_message = "aws_lb_listener.public.protocol must remain HTTP; forcing HTTPS here is out of scope (FR-006) — see the design-rationale comment above the resource."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.port == 80
+    error_message = "aws_lb_listener.public.port must remain 80, unchanged by this feature (FR-006)."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
+    error_message = "aws_lb_listener.public's forwarding target must remain aws_lb_target_group.public, unchanged by this feature (FR-006)."
+  }
+}

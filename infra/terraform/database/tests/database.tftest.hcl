@@ -276,12 +276,14 @@ run "engine_log_is_exported_under_a_declared_retention" {
     error_message = "The engine log is not exported. A refused connection and a post-rotation authentication failure are otherwise observable only as a failed health check (FR-037)."
   }
 
-  # FR-038. The service creates this group implicitly on first export with NO
-  # expiry, so logs would accumulate and bill indefinitely. Declaring the group is
-  # the only way to own its retention.
+  # FR-038, SCRUM-414 FR-005. The service creates this group implicitly on first
+  # export with NO expiry, so logs would accumulate and bill indefinitely.
+  # Declaring the group is the only way to own its retention. >= 30 (not merely
+  # > 0) so a regression back to a short-but-nonzero value (SonarQube
+  # terraform:S6413) fails this test too.
   assert {
-    condition     = aws_cloudwatch_log_group.postgresql.retention_in_days > 0
-    error_message = "The log group has no explicit retention. An implicitly created group never expires (FR-038)."
+    condition     = aws_cloudwatch_log_group.postgresql.retention_in_days >= 30
+    error_message = "The log group's retention must be at least 30 days. An implicitly created group never expires (FR-038); a short explicit retention is insufficient for security investigation (SCRUM-414 FR-005, terraform:S6413)."
   }
 }
 

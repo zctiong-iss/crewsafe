@@ -257,3 +257,21 @@ variable "web_bucket_noncurrent_version_expiration_days" {
     error_message = "web_bucket_noncurrent_version_expiration_days must be a positive number of days."
   }
 }
+
+variable "web_access_log_expiration_days" {
+  description = <<-EOT
+    Days after which an access-log object in the web bucket's dedicated logging
+    target bucket is expired (SCRUM-414, terraform:S6258).
+
+    30 days matches the retention floor this same feature sets for the
+    PostgreSQL engine log group (FR-005), keeping both controls consistent and
+    satisfying SonarQube terraform:S6413's own documented compliant baseline
+    uniformly, without unbounded storage growth for a shared-dev environment.
+  EOT
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.web_access_log_expiration_days > 0
+    error_message = "web_access_log_expiration_days must be a positive number of days."
+  }
+}

@@ -320,6 +320,10 @@ resource "aws_lb_target_group" "public" {
 # HTTP is the documented temporary origin transport: no trusted certificate can
 # be issued for the AWS-owned ALB hostname. Its security group accepts only the
 # managed CloudFront prefix list, and all requests still reach backend authn/z.
+#
+# SonarQube terraform:S5332 (issue AZ_LiOshb-JeFb7z_1Fk) is accepted for this
+# same reason — SCRUM-414 formally marks that finding accepted rather than
+# open, so the codebase and the scanner's own state agree.
 #trivy:ignore:AWS-0054
 resource "aws_lb_listener" "public" {
   load_balancer_arn = aws_lb.public.arn
@@ -1041,6 +1045,118 @@ resource "aws_s3_bucket_lifecycle_configuration" "web" {
       noncurrent_days = var.web_bucket_noncurrent_version_expiration_days
     }
   }
+}
+
+# ---------------------------------------------------------------------------
+# Web bucket access-log target (SCRUM-414, terraform:S6258)
+#
+# Private, encrypted, ACLs disabled entirely — the same hardening pattern the
+# web bucket itself uses (research.md R-002). Not versioned: unlike the web
+# bucket, access-log objects are write-once and never overwritten in place, so
+# there is no noncurrent-version concept for a lifecycle rule to protect
+# against; the lifecycle rule below instead bounds total retention directly.
+# ---------------------------------------------------------------------------
+
+resource "aws_s3_bucket" "web_logs" {
+  bucket = "${local.name_prefix}-web-logs"
+}
+
+resource "aws_s3_bucket_ownership_controls" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# AWS-managed SSE-S3 (AES256), matching the web bucket's own accepted
+# exemption (research.md R-002) — access logs are operational metadata
+# (requester identity, source IP, request metadata), the same sensitivity
+# class as the web bucket's own already-public SPA content, so a dedicated
+# KMS key buys no confidentiality gain here either.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+# FR-002. All four flags true — no public ACL, no public policy, no exception.
+resource "aws_s3_bucket_public_access_block" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# FR-004 / research.md R-003. 30 days, matching the CloudWatch retention floor
+# this same feature sets for the PostgreSQL engine log group (FR-005).
+resource "aws_s3_bucket_lifecycle_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.web_access_log_expiration_days
+    }
+  }
+}
+
+# FR-003. Grants write access to exactly the S3 server-access-logging delivery
+# mechanism, scoped to this bucket and the web bucket's own ARN and account —
+# never a broader principal or resource scope (research.md R-001).
+#
+# jsonencode(), not data "aws_iam_policy_document" — this file's own header
+# comment already records why: mock_provider "aws" fabricates a random string
+# for that data source's .json attribute rather than rendering it, which fails
+# every test that plans this resource. The web bucket's own CloudFront-read
+# policy (below) already learned this the hard way; applying it here from the
+# start.
+locals {
+  web_logs_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.web_logs.arn}/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = aws_s3_bucket.web.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  policy = local.web_logs_bucket_policy
+}
+
+# FR-001. Delivers the web bucket's own access logs to the dedicated target
+# bucket above — never to itself.
+resource "aws_s3_bucket_logging" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-access-logs/"
 }
 
 # ---------------------------------------------------------------------------
