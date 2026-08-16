@@ -75,7 +75,7 @@ install_gitleaks() {
   trap "rm -rf '$tmp'" EXIT
 
   log "Downloading gitleaks ${GITLEAKS_VERSION}"
-  curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+  curl --proto "=https" --fail --silent --show-error --location --retry 3 --retry-delay 2 \
     --output "$tmp/$asset" "$url" || die "download failed: $url"
 
   log "Verifying SHA-256 checksum"

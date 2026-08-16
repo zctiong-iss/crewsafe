@@ -136,5 +136,20 @@ contains_in "mobile build command" "$MOBILE_WORKFLOW" "$NPM_BUILD"
 assert_order_after "$MOBILE_WORKFLOW" "mobile validation command order" "name: Mobile CI" \
   "$NPM_CI" "$NPM_LINT" "$NPM_TYPECHECK" "$NPM_BUILD"
 
+# --- SCRUM-419 supply-chain hardening assertions (githubactions:S6505) ---
+#
+# Every `npm ci` invocation in web-ci.yml (build-test job at line ~69, and the
+# deploy-staging job's combined "npm ci && npm run build" at line ~131) and in
+# mobile-ci.yml must disable lifecycle-script execution.
+web_ignore_scripts_count="$(rg -c -F -- 'npm ci --ignore-scripts' "$WEB_WORKFLOW" || true)"
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ "${web_ignore_scripts_count:-0}" -ge 2 ]]; then
+  pass "web npm ci disables lifecycle scripts in both jobs"
+else
+  fail "web npm ci disables lifecycle scripts in both jobs" "expected >=2 'npm ci --ignore-scripts' occurrences in $WEB_WORKFLOW, found ${web_ignore_scripts_count:-0}"
+fi
+contains_in "web deploy-staging build command hardened" "$WEB_WORKFLOW" 'npm ci --ignore-scripts && npm run build'
+contains_in "mobile npm ci disables lifecycle scripts" "$MOBILE_WORKFLOW" 'npm ci --ignore-scripts'
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

@@ -154,4 +154,16 @@ do
   rg -q -i -F -- "$needle" "$runbook"
 done
 
+
+# --- SCRUM-419 supply-chain hardening assertions (githubactions:S6506) ---
+#
+# Both Maestro CLI download call sites (Android and iOS signed-device paths)
+# follow redirects (-L/-fsSL) and must pin the protocol to HTTPS across every
+# hop, so a redirect cannot silently downgrade the transport to plaintext HTTP.
+maestro_https_pin_count="$(rg -c -F -- '--proto "=https"' "$workflow" || true)"
+if [[ "${maestro_https_pin_count:-0}" -lt 2 ]]; then
+  echo "FAIL: expected >=2 '--proto \"=https\"' occurrences (both Maestro CLI downloads) in $workflow, found ${maestro_https_pin_count:-0}" >&2
+  exit 1
+fi
+
 echo "test-mobsf-dynamic-scan-workflow.sh: all assertions passed"
