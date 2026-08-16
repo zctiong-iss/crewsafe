@@ -1,0 +1,1277 @@
+{
+  "approval": {
+    "accepted_trade_offs": [
+      "The planned 21-day post-freeze evaluation cannot finish before the university submission deadline.",
+      "Development and rolling-window evidence do not provide the same independence as a future untouched period.",
+      "The safety floor can delay a predicted decrease in WBGT and does not guarantee detection of a new heat rise."
+    ],
+    "approved_at": "2026-08-16",
+    "decision_owner": "Bryan Phang",
+    "evidence_reviewed": [
+      "Six-month chronological development comparison",
+      "Four pre-July expanding-window backtests",
+      "Checksum-pinned model artifacts and reviewed source commit"
+    ],
+    "purpose": "CrewSafe university-project staging demonstration only",
+    "review_status": "OWNER_ACCEPTED_STAGING_DEMO_EXCEPTION"
+  },
+  "approval_scope": "STAGING_DEMO_ONLY",
+  "approved_for_inference": true,
+  "production_approved": false,
+  "categorical_features": [
+    "station_id"
+  ],
+  "created_at": "2026-08-14T02:17:09.800074+00:00",
+  "dataset": {
+    "end_date": "2026-07-31",
+    "kind": "prepared_15_minute_features",
+    "manifest_sha256": "d4598259a04eaa140b91d9d1e917166f8cdb1d4bff28e263d560bdc6f0b68828",
+    "row_count": 409456,
+    "sha256": "743db27b878d70314d17d8af08aa35ee29beee47da438ac56ca29eb4b0d0bdf3",
+    "start_date": "2026-02-01"
+  },
+  "feature_version": "wbgt-features-1.2.0",
+  "horizons": {
+    "30": {
+      "artifact": "forecast-30m.joblib",
+      "artifact_sha256": "d3f4111b5f712821f9e63c73563b8dbb1303cecbeeae8ead8a947c57db32822f",
+      "interval_half_width": 1.4679840637618167,
+      "metrics": {
+        "candidate": {
+          "confusion_matrix": [
+            [
+              64581,
+              288,
+              20,
+              1
+            ],
+            [
+              1414,
+              398,
+              16,
+              0
+            ],
+            [
+              187,
+              237,
+              33,
+              1
+            ],
+            [
+              15,
+              43,
+              97,
+              4
+            ]
+          ],
+          "macro_f1": 0.35611634537283915,
+          "mae": 0.3551226342375105,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 1.6587187361407143,
+            "BELOW_31": 0.33086322347142266,
+            "FROM_31_TO_32": 0.882197344787072,
+            "FROM_32_TO_33": 1.2359715720633393
+          },
+          "mean_bias": 0.03754060055417198,
+          "recall_at_least_32": 0.2188006482982172,
+          "recall_at_least_33": 0.025157232704402517,
+          "rmse": 0.6117683028461793,
+          "sample_count": 67335
+        },
+        "persistence": {
+          "confusion_matrix": [
+            [
+              63815,
+              928,
+              133,
+              14
+            ],
+            [
+              957,
+              699,
+              156,
+              16
+            ],
+            [
+              110,
+              184,
+              133,
+              31
+            ],
+            [
+              10,
+              17,
+              36,
+              96
+            ]
+          ],
+          "macro_f1": 0.5659478544625375,
+          "mae": 0.42309200267320113,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 0.8911949685534593,
+            "BELOW_31": 0.40644937586685154,
+            "FROM_31_TO_32": 0.8373085339168491,
+            "FROM_32_TO_33": 0.96528384279476
+          },
+          "mean_bias": 0.00045295908517115573,
+          "recall_at_least_32": 0.47974068071312803,
+          "recall_at_least_33": 0.6037735849056604,
+          "rmse": 0.7171593385665045,
+          "sample_count": 67335
+        },
+        "ridge": {
+          "confusion_matrix": [
+            [
+              64447,
+              415,
+              24,
+              4
+            ],
+            [
+              1348,
+              446,
+              29,
+              5
+            ],
+            [
+              177,
+              219,
+              57,
+              5
+            ],
+            [
+              15,
+              39,
+              65,
+              40
+            ]
+          ],
+          "macro_f1": 0.4608026756246756,
+          "mae": 0.4074746612238928,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 1.4520194849556842,
+            "BELOW_31": 0.38367434841887926,
+            "FROM_31_TO_32": 0.9575216212528949,
+            "FROM_32_TO_33": 1.2215223206364614
+          },
+          "mean_bias": -0.014536515261388145,
+          "recall_at_least_32": 0.2706645056726094,
+          "recall_at_least_33": 0.25157232704402516,
+          "rmse": 0.6471953286448516,
+          "sample_count": 67335
+        },
+        "safety_floor": {
+          "confusion_matrix": [
+            [
+              63813,
+              930,
+              133,
+              14
+            ],
+            [
+              956,
+              700,
+              156,
+              16
+            ],
+            [
+              106,
+              188,
+              133,
+              31
+            ],
+            [
+              9,
+              18,
+              36,
+              96
+            ]
+          ],
+          "macro_f1": 0.5658830419994197,
+          "mae": 0.3833258297343156,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 0.8791462872679471,
+            "BELOW_31": 0.36746720401030936,
+            "FROM_31_TO_32": 0.7699559025369024,
+            "FROM_32_TO_33": 0.9149218939259985
+          },
+          "mean_bias": 0.1421817293163513,
+          "recall_at_least_32": 0.47974068071312803,
+          "recall_at_least_33": 0.6037735849056604,
+          "rmse": 0.6640105625913029,
+          "sample_count": 67335
+        }
+      },
+      "prediction_interval": {
+        "calibration_sample_count": 68971,
+        "calibration_window": "validation",
+        "final_test_coverage": 0.9488081978168857,
+        "method": "absolute validation residual quantile",
+        "target_coverage": 0.95
+      },
+      "selected_model": "hist-gradient-leaves-15-persistence-floor",
+      "training_seconds": 48.17982049996499,
+      "validation_trials": [
+        {
+          "complexity": "no fitted parameters; predicts that WBGT stays unchanged",
+          "fit_seconds": 0.0,
+          "hyperparameters": {},
+          "name": "persistence",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64973,
+                1042,
+                149,
+                24
+              ],
+              [
+                1061,
+                822,
+                167,
+                20
+              ],
+              [
+                138,
+                190,
+                193,
+                34
+              ],
+              [
+                15,
+                17,
+                46,
+                80
+              ]
+            ],
+            "macro_f1": 0.5581832574180869,
+            "mae": 0.4225674558872569,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.0291139240506326,
+              "BELOW_31": 0.40525472895388887,
+              "FROM_31_TO_32": 0.7826570048309178,
+              "FROM_32_TO_33": 0.9715315315315316
+            },
+            "mean_bias": 0.0009206768061939046,
+            "recall_at_least_32": 0.4950911640953717,
+            "recall_at_least_33": 0.5063291139240507,
+            "rmse": 0.7203694606889498,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.0
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.307036167010665,
+          "hyperparameters": {
+            "alpha": 0.1
+          },
+          "name": "ridge-alpha-0.1",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65556,
+                571,
+                54,
+                7
+              ],
+              [
+                1442,
+                580,
+                43,
+                5
+              ],
+              [
+                195,
+                278,
+                75,
+                7
+              ],
+              [
+                24,
+                38,
+                68,
+                28
+              ]
+            ],
+            "macro_f1": 0.4431558162540962,
+            "mae": 0.4086570006036329,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.4985305609192765,
+              "BELOW_31": 0.3856743223677566,
+              "FROM_31_TO_32": 0.8475204705315951,
+              "FROM_32_TO_33": 1.2024049317665615
+            },
+            "mean_bias": 0.0399075187913812,
+            "recall_at_least_32": 0.2496493688639551,
+            "recall_at_least_33": 0.17721518987341772,
+            "rmse": 0.6477878038811371,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.05611683300230652
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.2518562080222182,
+          "hyperparameters": {
+            "alpha": 1.0
+          },
+          "name": "ridge-alpha-1.0",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65556,
+                571,
+                54,
+                7
+              ],
+              [
+                1442,
+                580,
+                43,
+                5
+              ],
+              [
+                195,
+                278,
+                75,
+                7
+              ],
+              [
+                24,
+                38,
+                68,
+                28
+              ]
+            ],
+            "macro_f1": 0.4431558162540962,
+            "mae": 0.4086576956965079,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.4985055341382096,
+              "BELOW_31": 0.3856754479615777,
+              "FROM_31_TO_32": 0.8475110233362972,
+              "FROM_32_TO_33": 1.202399436942292
+            },
+            "mean_bias": 0.03991108173522996,
+            "recall_at_least_32": 0.2496493688639551,
+            "recall_at_least_33": 0.17721518987341772,
+            "rmse": 0.647788214659428,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.05652129196096212
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.1688380829873495,
+          "hyperparameters": {
+            "alpha": 10.0
+          },
+          "name": "ridge-alpha-10.0",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65559,
+                569,
+                53,
+                7
+              ],
+              [
+                1443,
+                579,
+                43,
+                5
+              ],
+              [
+                195,
+                278,
+                75,
+                7
+              ],
+              [
+                24,
+                37,
+                69,
+                28
+              ]
+            ],
+            "macro_f1": 0.4431109982446339,
+            "mae": 0.4086646725924134,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.4982680532135284,
+              "BELOW_31": 0.3856867217192452,
+              "FROM_31_TO_32": 0.8474179805361715,
+              "FROM_32_TO_33": 1.2023366200005987
+            },
+            "mean_bias": 0.03994549035264716,
+            "recall_at_least_32": 0.25105189340813466,
+            "recall_at_least_33": 0.17721518987341772,
+            "rmse": 0.6477926631147839,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.05196758301462978
+        },
+        {
+          "complexity": "gradient-boosted decision trees with at most 15 leaves per tree",
+          "fit_seconds": 5.018908332975116,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 15,
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-15",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                66019,
+                147,
+                20,
+                2
+              ],
+              [
+                1834,
+                222,
+                13,
+                1
+              ],
+              [
+                301,
+                230,
+                22,
+                2
+              ],
+              [
+                28,
+                51,
+                73,
+                6
+              ]
+            ],
+            "macro_f1": 0.3203269540024508,
+            "mae": 0.3653281770917408,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.7579624948366264,
+              "BELOW_31": 0.3314641561154063,
+              "FROM_31_TO_32": 1.0417682708932683,
+              "FROM_32_TO_33": 1.4844716077381912
+            },
+            "mean_bias": -0.012457822515114143,
+            "recall_at_least_32": 0.14446002805049088,
+            "recall_at_least_33": 0.0379746835443038,
+            "rmse": 0.6145015984582859,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.24846079101553187
+        },
+        {
+          "complexity": "gradient-boosted decision trees with at most 31 leaves per tree",
+          "fit_seconds": 6.0993593750172295,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 31,
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-31",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65910,
+                253,
+                21,
+                4
+              ],
+              [
+                1672,
+                381,
+                15,
+                2
+              ],
+              [
+                243,
+                278,
+                30,
+                4
+              ],
+              [
+                20,
+                56,
+                71,
+                11
+              ]
+            ],
+            "macro_f1": 0.36098057019704566,
+            "mae": 0.36734101171840866,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.6296250139603692,
+              "BELOW_31": 0.33700383208456103,
+              "FROM_31_TO_32": 0.9738461401947831,
+              "FROM_32_TO_33": 1.3638288627180146
+            },
+            "mean_bias": -0.0036443145705551483,
+            "recall_at_least_32": 0.16269284712482468,
+            "recall_at_least_33": 0.06962025316455696,
+            "rmse": 0.6190364216135016,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.34079887496773154
+        },
+        {
+          "complexity": "gradient-boosted decision trees whose prediction is never below the current WBGT",
+          "fit_seconds": 5.15059462498175,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 15,
+            "minimum_prediction": "current WBGT",
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-15-persistence-floor",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64973,
+                1042,
+                149,
+                24
+              ],
+              [
+                1058,
+                825,
+                167,
+                20
+              ],
+              [
+                138,
+                190,
+                193,
+                34
+              ],
+              [
+                15,
+                17,
+                46,
+                80
+              ]
+            ],
+            "macro_f1": 0.5584789365420031,
+            "mae": 0.38703180960904243,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.0129023959108634,
+              "BELOW_31": 0.3693597295993766,
+              "FROM_31_TO_32": 0.7533730742584651,
+              "FROM_32_TO_33": 0.9500330009960299
+            },
+            "mean_bias": 0.1220355178834953,
+            "recall_at_least_32": 0.4950911640953717,
+            "recall_at_least_33": 0.5063291139240507,
+            "rmse": 0.6643112063800973,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.25654675002442673
+        },
+        {
+          "complexity": "gradient-boosted decision trees whose prediction is never below the current WBGT",
+          "fit_seconds": 7.8990304169710726,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 31,
+            "minimum_prediction": "current WBGT",
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-31-persistence-floor",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64967,
+                1047,
+                150,
+                24
+              ],
+              [
+                1051,
+                832,
+                167,
+                20
+              ],
+              [
+                137,
+                189,
+                195,
+                34
+              ],
+              [
+                14,
+                18,
+                46,
+                80
+              ]
+            ],
+            "macro_f1": 0.5597029656113256,
+            "mae": 0.3887299541182876,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 0.9930608638279399,
+              "BELOW_31": 0.37147019369008105,
+              "FROM_31_TO_32": 0.7474696747731583,
+              "FROM_32_TO_33": 0.937042598681206
+            },
+            "mean_bias": 0.12839697991966312,
+            "recall_at_least_32": 0.49789621318373073,
+            "recall_at_least_33": 0.5063291139240507,
+            "rmse": 0.6681806936871852,
+            "sample_count": 68971
+          },
+          "validation_prediction_seconds": 0.32166720903478563
+        }
+      ]
+    },
+    "60": {
+      "artifact": "forecast-60m.joblib",
+      "artifact_sha256": "300dcdd2bc30331da0b97dbe69b8e654756f61466662479c1782a9d112bc77da",
+      "interval_half_width": 2.0,
+      "metrics": {
+        "candidate": {
+          "confusion_matrix": [
+            [
+              64573,
+              262,
+              14,
+              0
+            ],
+            [
+              1572,
+              242,
+              10,
+              0
+            ],
+            [
+              282,
+              159,
+              18,
+              0
+            ],
+            [
+              41,
+              55,
+              63,
+              0
+            ]
+          ],
+          "macro_f1": 0.30942463328965153,
+          "mae": 0.4893359175462192,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 2.260662599644062,
+            "BELOW_31": 0.46177604575218095,
+            "FROM_31_TO_32": 1.0490283605903044,
+            "FROM_32_TO_33": 1.5453493541597647
+          },
+          "mean_bias": 0.10356518194569118,
+          "recall_at_least_32": 0.13106796116504854,
+          "recall_at_least_33": 0.0,
+          "rmse": 0.8157860118306175,
+          "sample_count": 67291
+        },
+        "persistence": {
+          "confusion_matrix": [
+            [
+              63513,
+              1103,
+              193,
+              40
+            ],
+            [
+              1155,
+              512,
+              143,
+              14
+            ],
+            [
+              156,
+              187,
+              90,
+              26
+            ],
+            [
+              25,
+              28,
+              31,
+              75
+            ]
+          ],
+          "macro_f1": 0.48346317076306666,
+          "mae": 0.6409727898233047,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 1.450943396226415,
+            "BELOW_31": 0.6226711283134666,
+            "FROM_31_TO_32": 1.0676535087719299,
+            "FROM_32_TO_33": 1.2505446623093683
+          },
+          "mean_bias": 0.0011844080189029778,
+          "recall_at_least_32": 0.3592233009708738,
+          "recall_at_least_33": 0.4716981132075472,
+          "rmse": 1.0251728286429442,
+          "sample_count": 67291
+        },
+        "ridge": {
+          "confusion_matrix": [
+            [
+              64601,
+              226,
+              19,
+              3
+            ],
+            [
+              1640,
+              174,
+              10,
+              0
+            ],
+            [
+              314,
+              136,
+              9,
+              0
+            ],
+            [
+              46,
+              62,
+              46,
+              5
+            ]
+          ],
+          "macro_f1": 0.30490268948800636,
+          "mae": 0.5971485389641188,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 2.3673504970758,
+            "BELOW_31": 0.565182409448971,
+            "FROM_31_TO_32": 1.288877691012976,
+            "FROM_32_TO_33": 1.7513869883125717
+          },
+          "mean_bias": -0.04218737971252805,
+          "recall_at_least_32": 0.0970873786407767,
+          "recall_at_least_33": 0.031446540880503145,
+          "rmse": 0.8743818180893391,
+          "sample_count": 67291
+        },
+        "safety_floor": {
+          "confusion_matrix": [
+            [
+              63503,
+              1113,
+              193,
+              40
+            ],
+            [
+              1143,
+              524,
+              143,
+              14
+            ],
+            [
+              153,
+              190,
+              90,
+              26
+            ],
+            [
+              22,
+              30,
+              32,
+              75
+            ]
+          ],
+          "macro_f1": 0.4845400119648752,
+          "mae": 0.5598967821595615,
+          "mae_by_actual_band": {
+            "AT_LEAST_33": 1.388143333152188,
+            "BELOW_31": 0.54407846780229,
+            "FROM_31_TO_32": 0.9025431850833006,
+            "FROM_32_TO_33": 1.1462227673751832
+          },
+          "mean_bias": 0.2730846049568105,
+          "recall_at_least_32": 0.36084142394822005,
+          "recall_at_least_33": 0.4716981132075472,
+          "rmse": 0.9219352609777011,
+          "sample_count": 67291
+        }
+      },
+      "prediction_interval": {
+        "calibration_sample_count": 68908,
+        "calibration_window": "validation",
+        "final_test_coverage": 0.9488787505015529,
+        "method": "absolute validation residual quantile",
+        "target_coverage": 0.95
+      },
+      "selected_model": "hist-gradient-leaves-15-persistence-floor",
+      "training_seconds": 45.317175917036366,
+      "validation_trials": [
+        {
+          "complexity": "no fitted parameters; predicts that WBGT stays unchanged",
+          "fit_seconds": 0.0,
+          "hyperparameters": {},
+          "name": "persistence",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64654,
+                1211,
+                223,
+                37
+              ],
+              [
+                1240,
+                642,
+                165,
+                23
+              ],
+              [
+                207,
+                188,
+                121,
+                39
+              ],
+              [
+                24,
+                30,
+                45,
+                59
+              ]
+            ],
+            "macro_f1": 0.4698641534938083,
+            "mae": 0.6498200499216347,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.3765822784810129,
+              "BELOW_31": 0.6294260869565217,
+              "FROM_31_TO_32": 1.058888888888889,
+              "FROM_32_TO_33": 1.3470270270270268
+            },
+            "mean_bias": 0.0015092587217739586,
+            "recall_at_least_32": 0.3702664796633941,
+            "recall_at_least_33": 0.37341772151898733,
+            "rmse": 1.0555087865090769,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.0
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.226862917013932,
+          "hyperparameters": {
+            "alpha": 0.1
+          },
+          "name": "ridge-alpha-0.1",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65623,
+                463,
+                36,
+                3
+              ],
+              [
+                1739,
+                308,
+                19,
+                4
+              ],
+              [
+                336,
+                196,
+                22,
+                1
+              ],
+              [
+                36,
+                84,
+                33,
+                5
+              ]
+            ],
+            "macro_f1": 0.32562426060073,
+            "mae": 0.6077682062659052,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 2.077270656151722,
+              "BELOW_31": 0.5791286301627125,
+              "FROM_31_TO_32": 1.1247845713198517,
+              "FROM_32_TO_33": 1.6733298406442263
+            },
+            "mean_bias": 0.10519018053528398,
+            "recall_at_least_32": 0.08555399719495091,
+            "recall_at_least_33": 0.03164556962025317,
+            "rmse": 0.9063889204972233,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.0657871249713935
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.2655178330023773,
+          "hyperparameters": {
+            "alpha": 1.0
+          },
+          "name": "ridge-alpha-1.0",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65623,
+                463,
+                36,
+                3
+              ],
+              [
+                1739,
+                308,
+                19,
+                4
+              ],
+              [
+                336,
+                196,
+                22,
+                1
+              ],
+              [
+                36,
+                84,
+                33,
+                5
+              ]
+            ],
+            "macro_f1": 0.32562426060073,
+            "mae": 0.6077684235986758,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 2.0772485338869267,
+              "BELOW_31": 0.579129433432743,
+              "FROM_31_TO_32": 1.1247705024660812,
+              "FROM_32_TO_33": 1.673319890339636
+            },
+            "mean_bias": 0.10519140868821034,
+            "recall_at_least_32": 0.08555399719495091,
+            "recall_at_least_33": 0.03164556962025317,
+            "rmse": 0.9063891542343847,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.05814550002105534
+        },
+        {
+          "complexity": "linear model",
+          "fit_seconds": 1.4160135420388542,
+          "hyperparameters": {
+            "alpha": 10.0
+          },
+          "name": "ridge-alpha-10.0",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65623,
+                463,
+                36,
+                3
+              ],
+              [
+                1739,
+                308,
+                19,
+                4
+              ],
+              [
+                336,
+                196,
+                22,
+                1
+              ],
+              [
+                36,
+                84,
+                33,
+                5
+              ]
+            ],
+            "macro_f1": 0.32562426060073,
+            "mae": 0.6077715310600595,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 2.077025319391134,
+              "BELOW_31": 0.5791382181723937,
+              "FROM_31_TO_32": 1.1246362398355751,
+              "FROM_32_TO_33": 1.6732233670515257
+            },
+            "mean_bias": 0.10520553364622837,
+            "recall_at_least_32": 0.08555399719495091,
+            "recall_at_least_33": 0.03164556962025317,
+            "rmse": 0.9063923353246747,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.06588483299128711
+        },
+        {
+          "complexity": "gradient-boosted decision trees with at most 15 leaves per tree",
+          "fit_seconds": 5.328320125001483,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 15,
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-15",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                66026,
+                90,
+                9,
+                0
+              ],
+              [
+                1986,
+                79,
+                5,
+                0
+              ],
+              [
+                461,
+                88,
+                6,
+                0
+              ],
+              [
+                72,
+                73,
+                13,
+                0
+              ]
+            ],
+            "macro_f1": 0.26670034593253655,
+            "mae": 0.5177915491561095,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 2.465260910149786,
+              "BELOW_31": 0.47237765370291757,
+              "FROM_31_TO_32": 1.4269127348567083,
+              "FROM_32_TO_33": 1.9834002399760515
+            },
+            "mean_bias": 0.03433296622298369,
+            "recall_at_least_32": 0.02664796633941094,
+            "recall_at_least_33": 0.0,
+            "rmse": 0.8381014499380298,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.2740546659915708
+        },
+        {
+          "complexity": "gradient-boosted decision trees with at most 31 leaves per tree",
+          "fit_seconds": 6.499359459034167,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 31,
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-31",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                65952,
+                160,
+                13,
+                0
+              ],
+              [
+                1897,
+                166,
+                7,
+                0
+              ],
+              [
+                404,
+                141,
+                10,
+                0
+              ],
+              [
+                53,
+                71,
+                34,
+                0
+              ]
+            ],
+            "macro_f1": 0.2852032609148901,
+            "mae": 0.5210169277568285,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 2.257295210001534,
+              "BELOW_31": 0.48015229790918673,
+              "FROM_31_TO_32": 1.3383324320217338,
+              "FROM_32_TO_33": 1.8471405065897986
+            },
+            "mean_bias": 0.05231232757052322,
+            "recall_at_least_32": 0.061711079943899017,
+            "recall_at_least_33": 0.0,
+            "rmse": 0.8467789523866007,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.2861970000085421
+        },
+        {
+          "complexity": "gradient-boosted decision trees whose prediction is never below the current WBGT",
+          "fit_seconds": 5.5045764580136165,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 15,
+            "minimum_prediction": "current WBGT",
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-15-persistence-floor",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64654,
+                1211,
+                223,
+                37
+              ],
+              [
+                1239,
+                643,
+                165,
+                23
+              ],
+              [
+                207,
+                188,
+                121,
+                39
+              ],
+              [
+                24,
+                30,
+                45,
+                59
+              ]
+            ],
+            "macro_f1": 0.4699680014504626,
+            "mae": 0.5729034779482802,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.3621535097079882,
+              "BELOW_31": 0.5520149044938994,
+              "FROM_31_TO_32": 0.9885815742593306,
+              "FROM_32_TO_33": 1.2866003343248864
+            },
+            "mean_bias": 0.23513033612226655,
+            "recall_at_least_32": 0.3702664796633941,
+            "recall_at_least_33": 0.37341772151898733,
+            "rmse": 0.9333325128544618,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.23214133398141712
+        },
+        {
+          "complexity": "gradient-boosted decision trees whose prediction is never below the current WBGT",
+          "fit_seconds": 5.970702374994289,
+          "hyperparameters": {
+            "l2_regularization": 0.1,
+            "learning_rate": 0.08,
+            "max_leaf_nodes": 31,
+            "minimum_prediction": "current WBGT",
+            "random_state": 114
+          },
+          "name": "hist-gradient-leaves-31-persistence-floor",
+          "validation_metrics": {
+            "confusion_matrix": [
+              [
+                64645,
+                1220,
+                223,
+                37
+              ],
+              [
+                1231,
+                651,
+                165,
+                23
+              ],
+              [
+                206,
+                188,
+                122,
+                39
+              ],
+              [
+                23,
+                30,
+                46,
+                59
+              ]
+            ],
+            "macro_f1": 0.47096543014039377,
+            "mae": 0.5739269591160718,
+            "mae_by_actual_band": {
+              "AT_LEAST_33": 1.3293423870788916,
+              "BELOW_31": 0.5537928506514769,
+              "FROM_31_TO_32": 0.9744566866281054,
+              "FROM_32_TO_33": 1.2638652449779013
+            },
+            "mean_bias": 0.24344139205622234,
+            "recall_at_least_32": 0.37307152875175315,
+            "recall_at_least_33": 0.37341772151898733,
+            "rmse": 0.9392238838932523,
+            "sample_count": 68908
+          },
+          "validation_prediction_seconds": 0.2551712089916691
+        }
+      ]
+    }
+  },
+  "model_version": "wbgt-six-month-safety-floor-staging-demo-v1",
+  "numeric_features": [
+    "station_latitude",
+    "station_longitude",
+    "wbgt_t",
+    "wbgt_lag_15m",
+    "wbgt_lag_30m",
+    "wbgt_lag_45m",
+    "wbgt_lag_60m",
+    "wbgt_mean_30m",
+    "wbgt_min_30m",
+    "wbgt_max_30m",
+    "wbgt_slope_30m",
+    "wbgt_mean_60m",
+    "wbgt_min_60m",
+    "wbgt_max_60m",
+    "wbgt_slope_60m",
+    "wbgt_mean_120m",
+    "wbgt_min_120m",
+    "wbgt_max_120m",
+    "wbgt_slope_120m",
+    "air_temperature",
+    "air_temperature_freshness_minutes",
+    "air_temperature_missing",
+    "air_temperature_lag_15m",
+    "air_temperature_lag_30m",
+    "relative_humidity",
+    "relative_humidity_freshness_minutes",
+    "relative_humidity_missing",
+    "relative_humidity_lag_15m",
+    "relative_humidity_lag_30m",
+    "wind_speed",
+    "wind_speed_freshness_minutes",
+    "wind_speed_missing",
+    "wind_direction_freshness_minutes",
+    "wind_direction_missing",
+    "rainfall",
+    "rainfall_freshness_minutes",
+    "rainfall_missing",
+    "wind_direction_sin",
+    "wind_direction_cos",
+    "hour_sin",
+    "hour_cos",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "wbgt_missing_lag_count"
+  ],
+  "schema_version": 2,
+  "source_commit": "8df59f20b9b842752af3bbcee7a36961ecb27ed4",
+  "training": {
+    "random_seed": 114,
+    "selection_rule": "A candidate must beat persistence test MAE without reducing recall at WBGT >=32 or >=33; validation MAE breaks ties between accepted candidates."
+  }
+}

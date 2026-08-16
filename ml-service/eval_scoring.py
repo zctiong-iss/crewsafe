@@ -16,12 +16,11 @@ from typing import List
 from models import MitigationBatch, MitigationSuggestion
 from eval_scenarios import ExpectedAction
 
-# Mirrors backend/src/main/java/com/crewsafe/policy/domain/PolicyActionCode.java exactly.
-ALLOWED_ACTION_CODES = {
-    "STOP_WORK", "RESUME_WORK", "REST_10_MIN_HOURLY", "REST_15_MIN_HOURLY",
-    "HYDRATE_HOURLY", "HYDRATE_REGULARLY", "SHADE_RECOVERY",
-    "RESCHEDULE_HEAVY_WORK", "ROTATE_TO_LIGHT_DUTY", "CLOSE_MONITORING",
-}
+# Promoted to agent/validation.py (SCRUM-289), where it now gates real drafts rather than only
+# grading benchmark runs, and re-exported here so this module's public surface is unchanged.
+# One definition, so the set the benchmark measures against and the set production enforces
+# cannot drift into disagreeing about what a real action code is.
+from agent.validation import ALLOWED_ACTION_CODES  # noqa: F401  (re-export)
 
 
 def unsupported_action_rate(batch: MitigationBatch) -> float:

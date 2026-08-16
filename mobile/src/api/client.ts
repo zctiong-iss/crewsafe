@@ -10,7 +10,7 @@
  */
 import axios, { AxiosError, type AxiosRequestConfig, type AxiosInstance } from "axios";
 import { config } from "@/constants/config";
-import { ApiError, kindForStatus } from "./errors";
+import { ApiError, kindForStatus, toApiErrorCode } from "./errors";
 
 declare module "axios" {
   export interface AxiosRequestConfig {
@@ -116,6 +116,11 @@ function toApiError(error: unknown): ApiError {
     status,
     requestId,
     extractFieldErrors(data),
+    // Optional and omitted by the backend unless the failure has a named cause, so this is
+    // null on the overwhelming majority of errors and the status-derived message stands.
+    toApiErrorCode(
+      data && typeof data === "object" ? (data as Record<string, unknown>).code : undefined,
+    ),
   );
 }
 

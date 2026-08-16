@@ -13,6 +13,7 @@ on:
         options:
           - simulator
           - adhoc
+          - unsigned-device
         default: simulator
       build_android_aab:
         description: "Also build a debug-signed Android AAB (default: APK only)"
@@ -58,7 +59,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
@@ -75,7 +76,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Prebuild Android native project
-        run: npx expo prebuild --platform android --non-interactive
+        run: npx --offline --ignore-scripts expo prebuild --platform android --non-interactive
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug
@@ -165,7 +166,7 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Set staging auth mode
         if: ${{ inputs.auth_mode == 'cognito-password' }}
@@ -176,7 +177,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Prebuild iOS native project
-        run: npx expo prebuild --platform ios --non-interactive
+        run: npx --offline --ignore-scripts expo prebuild --platform ios --non-interactive
 
       - name: Resolve app version
         id: version
@@ -321,5 +322,75 @@ jobs:
         with:
           name: mobile-ios-adhoc-${{ github.sha }}
           path: ${{ runner.temp }}/ios-adhoc/export
+          retention-days: 14
+          if-no-files-found: error
+
+      # --- ios_profile: unsigned-device — a real ARM64 (-sdk iphoneos, not simulator) build
+      # with code signing fully disabled, packaged as a standard-structure .ipa (Payload/*.app
+      # zipped). No Apple Developer account, certificate, or provisioning profile of any kind.
+      #
+      # This exists specifically to unblock SCRUM-350's dynamic-scan Corellium path without
+      # paying for Apple Developer Program membership. Verified against MobSF's own source
+      # (mobsf/DynamicAnalyzer/views/ios/corellium_instance.py::setup_environment/
+      # appsync_ipa_install): when Corellium's installer rejects an IPA with "Please re-sign.",
+      # MobSF explicitly falls back to installing it via AppSync Unified -- a jailbreak tweak
+      # that bypasses iOS code-signature enforcement on jailbroken devices (which the Corellium
+      # trial device already is). A real Apple Distribution certificate is therefore not needed
+      # for this device-install path; only a correctly-structured .ipa is. This profile is not
+      # suitable for any device that isn't jailbroken (a normal/managed device would refuse to
+      # install it) -- it is scoped to the security-testing path only, never for distribution. ---
+
+      - name: Build iOS unsigned device app
+        if: ${{ inputs.ios_profile == 'unsigned-device' }}
+        run: |
+          WORKSPACE="$(find ios -maxdepth 1 -name '*.xcworkspace' | head -n1)"
+          xcodebuild build \
+            -workspace "$WORKSPACE" \
+            -scheme CrewSafe \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/ios-build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      # Standard .ipa layout is a zip with Payload/<AppName>.app/ at its root -- this is what
+      # every real .ipa (App Store or ad-hoc) actually is; the only thing missing here is a
+      # valid embedded code signature, which is exactly what the AppSync Unified fallback
+      # above is designed to handle.
+      - name: Package unsigned device IPA
+        if: ${{ inputs.ios_profile == 'unsigned-device' }}
+        run: |
+          APP_PATH="$(find "$RUNNER_TEMP/ios-build/Build/Products" -maxdepth 2 -name '*.app' | head -n1)"
+          [[ -n "$APP_PATH" ]] || { echo "::error::No .app product found under Build/Products"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ios-unsigned-device/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ios-unsigned-device/Payload/"
+          (cd "$RUNNER_TEMP/ios-unsigned-device" && zip -qr CrewSafe.ipa Payload)
+
+      - name: Stage and describe unsigned device IPA
+        if: ${{ inputs.ios_profile == 'unsigned-device' }}
+        env:
+          PLATFORM: ios
+          ARTIFACT_TYPE: unsigned-device-ipa
+          BUILD_PROFILE: ios-unsigned-device
+          APP_VERSION: ${{ steps.version.outputs.value }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TRIGGERED_BY: ${{ github.actor }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ios-unsigned-device-out"
+          mv "$RUNNER_TEMP/ios-unsigned-device/CrewSafe.ipa" "$RUNNER_TEMP/ios-unsigned-device-out/"
+          "$GITHUB_WORKSPACE/.github/scripts/mobile/write-artifact-metadata.sh" \
+            "$RUNNER_TEMP/ios-unsigned-device-out/artifact-metadata.json" \
+            "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unsigned device IPA artifact
+        if: ${{ inputs.ios_profile == 'unsigned-device' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: mobile-ios-unsigned-device-${{ github.sha }}
+          path: ${{ runner.temp }}/ios-unsigned-device-out
           retention-days: 14
           if-no-files-found: error

@@ -120,8 +120,11 @@ override_data {
   target = data.terraform_remote_state.ecr
   values = {
     outputs = {
-      repository_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/backend"
-      repository_arn = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/backend"
+      repository_url            = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/backend"
+      repository_arn            = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/backend"
+      ml_service_repository_url = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service"
+      ml_service_repository_arn = "arn:aws:ecr:ap-southeast-1:123456789012:repository/crewsafe/ml-service"
+      ml_service_push_role_arn  = "arn:aws:iam::123456789012:role/crewsafe-shared-dev-ecr-ml-service-push"
     }
   }
 }
@@ -131,6 +134,17 @@ override_data {
   values = {
     outputs = {
       domain_url = "https://crewsafe-shared-dev.auth.ap-southeast-1.amazoncognito.com"
+    }
+  }
+}
+
+# SCRUM-371 — the crewsafe-developers group this component attaches its new
+# grant to, published by developer-access-shared-dev (SCRUM-372).
+override_data {
+  target = data.terraform_remote_state.developer_access
+  values = {
+    outputs = {
+      developer_group_name = "crewsafe-developers"
     }
   }
 }
@@ -156,9 +170,10 @@ override_data {
 }
 
 variables {
-  expected_account_id = "123456789012"
-  account_alias       = "crewsafe-dev"
-  initial_image_tag   = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  expected_account_id          = "123456789012"
+  account_alias                = "crewsafe-dev"
+  initial_image_tag            = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678"
+  initial_ml_service_image_tag = "b2c3d4e5f60718293a4b5c6d7e8f90123456789a"
   # SCRUM-298: required, no default (FR-017, FR-022) — reuses the exact fixture
   # value infra/terraform/ecr/tests/ecr.tftest.hcl already established.
   github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
@@ -536,14 +551,130 @@ run "container_hardening" {
     error_message = "No volume should be declared. The only one this component ever needed was the /tmp scratch mount that Fargate cannot make writable for a non-root user."
   }
 
+  # SCRUM-373 — deliberately widened from "exactly one" to "exactly two": the
+  # ml-service container is a same-task sidecar (spec FR-003), not the
+  # out-of-band migration-step shape FR-011/FR-037 originally ruled out. The
+  # count stays closed at two so a THIRD container cannot quietly join later.
   assert {
-    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)) == 1
-    error_message = "Exactly one container. A sidecar is the usual shape of an out-of-band migration step (FR-011, FR-037)."
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)) == 2
+    error_message = "Exactly two containers: backend and its ml-service sidecar (spec FR-003). A third would need its own deliberate review (FR-011, FR-037)."
   }
 
   assert {
     condition     = length([for c in jsondecode(aws_ecs_task_definition.backend.container_definitions) : c if can(c.command)]) == 0
     error_message = "No command override — the image starts the application, and an override is how a migration gets run separately from the process serving traffic (FR-037)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-373 — the ml-service sidecar container (data-model.md)
+# ---------------------------------------------------------------------------
+
+run "ml_service_container_shape" {
+  command = apply
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].name == "ml-service"
+    error_message = "The second container must be named ml-service (data-model.md)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].image == "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/crewsafe/ml-service:${var.initial_ml_service_image_tag}"
+    error_message = "The ml-service image reference must be the ml-service repository URL joined with its own commit-SHA tag (research.md R-009)."
+  }
+
+  assert {
+    condition = tolist(jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].portMappings) == tolist([
+      { containerPort = 8000, protocol = "tcp" }
+    ])
+    error_message = "ml-service must listen on exactly port 8000/tcp and no other (spec FR-003)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].essential == true
+    error_message = "ml-service must be essential — a crash takes the whole task down, the accepted trade-off (spec Known trade-off)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].user == "1000"
+    error_message = "ml-service must run as the non-root user its image already defines (spec FR-004)."
+  }
+
+  assert {
+    condition     = length(jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].environment) == 0
+    error_message = "Plaintext container environment values must remain absent from the ml-service container, matching backend's own convention."
+  }
+
+  assert {
+    condition = sort([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].secrets : entry.name
+    ]) == sort(["WBGT_MODEL_MANIFEST", "WBGT_MODEL_MANIFEST_SHA256"])
+    error_message = "ml-service must receive exactly the two deferred model-manifest slots as secret references, nothing else (spec FR-008)."
+  }
+
+  assert {
+    condition = alltrue([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].secrets :
+      startswith(entry.valueFrom, "arn:aws:ssm:ap-southeast-1:123456789012:parameter/crewsafe/shared-dev/ml/")
+    ])
+    error_message = "Both ml-service secret references must resolve under the secrets component's published config_parameter_prefix (spec FR-008)."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].logConfiguration.logDriver == "awslogs"
+    error_message = "ml-service must ship stdout/stderr through the ECS awslogs driver, matching backend's convention."
+  }
+
+  assert {
+    condition     = jsondecode(aws_ecs_task_definition.backend.container_definitions)[1].logConfiguration.options["awslogs-group"] == aws_cloudwatch_log_group.ml_service.name
+    error_message = "ml-service must use its own, dedicated CloudWatch log group — never sharing backend's stream (spec FR-003)."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.ml_service.name != aws_cloudwatch_log_group.backend.name
+    error_message = "The two containers' log groups must be distinct, or an ml-service failure is indistinguishable from a backend one (spec User Story 3)."
+  }
+
+  assert {
+    condition     = length([for c in jsondecode(aws_ecs_task_definition.backend.container_definitions) : c if can(c.command)]) == 0
+    error_message = "Neither container may carry a command override."
+  }
+}
+
+# SC-004 — ml-service must stay unreachable from outside the task. No load
+# balancer, listener, or security-group rule may reference its port or name.
+run "ml_service_unreachable_from_outside" {
+  command = apply
+
+  assert {
+    condition     = !can(regex("ml-service", jsonencode(aws_lb_target_group.public))) && !can(regex("8000", jsonencode(aws_lb_target_group.public.health_check)))
+    error_message = "The public target group must not reference ml-service or its port (spec SC-004)."
+  }
+
+  assert {
+    condition     = aws_vpc_security_group_egress_rule.public_lb_to_app.to_port != 8000 && aws_vpc_security_group_ingress_rule.app_from_public_lb.to_port != 8000
+    error_message = "No security-group rule may open port 8000 — ml-service is reachable only over localhost inside the task (spec SC-004)."
+  }
+
+  assert {
+    condition = toset([
+      for attachment in aws_ecs_service.backend.load_balancer : attachment.container_name
+    ]) == toset(["backend"])
+    error_message = "Only the backend container may be attached to a load balancer target group (spec FR-003, SC-004)."
+  }
+}
+
+run "task_sizing" {
+  command = apply
+
+  assert {
+    condition     = aws_ecs_task_definition.backend.cpu == "1024"
+    error_message = "task_cpu must be re-sized to 1024 for both containers running together (spec FR-005, research.md R-007)."
+  }
+
+  assert {
+    condition     = aws_ecs_task_definition.backend.memory == "4096"
+    error_message = "task_memory must be re-sized to 4096 for both containers running together, with real headroom above the 2048 MiB floor Fargate allows at 1024 CPU (spec FR-005, research.md R-007)."
   }
 }
 
@@ -591,6 +722,98 @@ run "health_drives_traffic" {
   assert {
     condition     = length(aws_lb_listener.public.default_action) == 1
     error_message = "Exactly one default action (FR-018)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-371 — ECS Exec access to shared-dev RDS
+# ---------------------------------------------------------------------------
+
+run "ecs_exec_enabled" {
+  command = apply
+
+  assert {
+    condition     = aws_ecs_service.backend.enable_execute_command == true
+    error_message = "The backend service must opt into ECS Exec so a developer's session can host through it (spec FR-001)."
+  }
+}
+
+# contracts/rds-troubleshooting-grant.md is the audit surface this run block
+# holds the resource to. Decodes the actual attached policy JSON, never the
+# input local (037's R-009 finding, reused): a mock fabricates a data source's
+# .json attribute, so asserting against the local is the only way to test the
+# real configuration rather than invented data.
+run "developer_rds_troubleshooting_grant" {
+  command = apply
+
+  assert {
+    condition     = length(jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement) == 3
+    error_message = "The grant must hold exactly three statements: ExecIntoBackendTask, StartSessionToBackendTask, and ReadRdsManagedCredentialForTunnel (spec FR-005, research.md R-005 amendment)."
+  }
+
+  assert {
+    condition = sort([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Sid
+    ]) == sort(["ExecIntoBackendTask", "StartSessionToBackendTask", "ReadRdsManagedCredentialForTunnel"])
+    error_message = "The grant's three statements must be exactly these, no others (contracts/rds-troubleshooting-grant.md)."
+  }
+
+  assert {
+    condition = sort(flatten([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement : s.Action
+    ])) == sort(["ecs:ExecuteCommand", "secretsmanager:GetSecretValue", "ssm:StartSession"])
+    error_message = "The grant must total exactly ecs:ExecuteCommand, ssm:StartSession, and secretsmanager:GetSecretValue — no restatement of ViewOnlyAccess's existing coverage (spec FR-005, FR-006)."
+  }
+
+  # Resource is a JSON string on two statements and a JSON array on
+  # StartSessionToBackendTask (it needs both the task ARN and the SSM document
+  # ARN); normalize to a list before checking for a wildcard so neither shape
+  # is missed.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      alltrue([for r in try(tolist(s.Resource), [s.Resource]) : r != "*"])
+    ])
+    error_message = "No statement may use a resource wildcard — every action here supports scoping and FR-007 requires it, unlike the one ssmmessages exception on the secrets side (spec FR-007)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      strcontains(s.Resource, local.name_prefix)
+      if s.Sid == "ExecIntoBackendTask"
+    ])
+    error_message = "ExecIntoBackendTask must be scoped to this project's own ECS cluster/task pattern, not every task in the account (spec FR-007, research.md R-005)."
+  }
+
+  # Amendment (live-tested 2026-08-14): ssm:StartSession for ECS Exec
+  # port-forwarding is authorized against BOTH the task target and the SSM
+  # document — confirmed by a live AccessDeniedException naming exactly this
+  # document ARN when only the task ARN was granted (research.md R-005).
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      (
+        strcontains(join(",", s.Resource), local.name_prefix)
+        && strcontains(join(",", s.Resource), "document/AWS-StartPortForwardingSessionToRemoteHost")
+      )
+      if s.Sid == "StartSessionToBackendTask"
+    ])
+    error_message = "StartSessionToBackendTask must grant ssm:StartSession on both the backend task ARN pattern and the AWS-StartPortForwardingSessionToRemoteHost document ARN (research.md R-005 amendment)."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_group_policy.developers_rds_troubleshooting.policy).Statement :
+      strcontains(s.Resource, ":secret:rds!")
+      if s.Sid == "ReadRdsManagedCredentialForTunnel"
+    ])
+    error_message = "ReadRdsManagedCredentialForTunnel must be scoped to the RDS-managed secret's naming pattern, matching secrets/main.tf's own rds_managed_secret_arn_pattern (spec FR-007, Key Entities)."
+  }
+
+  assert {
+    condition     = aws_iam_group_policy.developers_rds_troubleshooting.group == "crewsafe-developers"
+    error_message = "Must attach to the group published by developer-access's remote state, never a hardcoded second group (contracts/developer-access-consumer-compliance.md rule 1)."
   }
 }
 
@@ -839,6 +1062,61 @@ run "mapping_publication_role_boundary" {
   }
 }
 
+# SCRUM-373 follow-up: ml-service's own out-of-band redeploy role, mirroring
+# backend_deploy's shape (same trust condition, same shared aws_ecs_service.backend
+# target — a second ECS service does not exist to scope this any narrower) but
+# scoped to the ml-service ECR repository rather than backend's.
+run "ml_service_deploy_role_boundary" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.ml_service_deploy.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The ml-service deploy role must trust only the exact main-branch GitHub OIDC subject."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecr:DescribeImages"]) &&
+      try(stmt.Resource, "") == local.ecr.ml_service_repository_arn
+    ])
+    error_message = "The ml-service deploy role must read image metadata only from the ml-service ECR repository, never the backend one."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecs:DescribeServices", "ecs:UpdateService"]) &&
+      try(stmt.Resource, "") == aws_ecs_service.backend.id
+    ])
+    error_message = "The ml-service deploy role's UpdateService grant must be scoped to the one shared backend service (no narrower target exists)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["iam:PassRole"]) &&
+      try(toset(stmt.Resource), toset([])) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
+    ])
+    error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
+  }
+
+  # Never a Terraform apply role - this deploy role stands alone from the
+  # reviewed plan/apply CI policies, matching backend_deploy's own boundary.
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      length([for a in stmt.Action : a if can(regex("^ssm:(Put|Delete)|^ecs:(DeleteService|DeregisterTaskDefinition)", a))]) == 0
+    ])
+    error_message = "The ml-service deploy role must never gain a write action beyond registering a task definition and updating the one service it targets."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # US1 — reach the deployed web app over a stable HTTPS origin, independent of
 # the backend's own domain
@@ -1007,5 +1285,146 @@ run "web_published_contract" {
   assert {
     condition     = output.web_sync_role_arn == aws_iam_role.web_sync.arn
     error_message = "web_sync_role_arn must equal the sync role's own arn (contracts/terraform-outputs.md)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-414 — remediate SonarQube terraform:S6258 (web bucket access logging)
+# and terraform:S5332 (public ALB listener clear-text transport, accepted risk)
+# ---------------------------------------------------------------------------
+
+run "web_access_logging_delivery" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web bucket's access logs must be delivered to the dedicated web_logs bucket, not itself (FR-001)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.bucket == aws_s3_bucket.web.id
+    error_message = "The logging configuration must be attached to the web bucket (FR-001)."
+  }
+}
+
+# terraform:S6258 also flags the web_logs bucket itself (it is an S3 bucket
+# with no access logging of its own): self-logging closes that gap without
+# introducing a third bucket, since the 30-day lifecycle already bounds
+# growth regardless of source.
+run "web_logs_bucket_self_logging" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket must have its own access logging configured, so it is not itself an unlogged S3 bucket (terraform:S6258)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket's own access logs must be delivered to itself (there is no third bucket) — this is a deliberate, bounded self-reference, not the recursive-loop risk the naive case would create, because it targets a distinct prefix and is subject to the same 30-day expiration."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_prefix != aws_s3_bucket_logging.web.target_prefix
+    error_message = "The web_logs bucket's self-logging prefix must differ from the web bucket's own log prefix, so the two object streams cannot collide."
+  }
+}
+
+run "web_logs_bucket_privacy_and_encryption" {
+  command = apply
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.web_logs.block_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.block_public_policy &&
+      aws_s3_bucket_public_access_block.web_logs.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.restrict_public_buckets
+    )
+    error_message = "All four public-access-block flags must be true on the logging target bucket (FR-002)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.web_logs.rule[0].object_ownership == "BucketOwnerEnforced"
+    error_message = "The logging target bucket's object ownership must be BucketOwnerEnforced, disabling ACLs entirely (FR-002)."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_server_side_encryption_configuration.web_logs.rule) == 1
+    error_message = "The logging target bucket must have server-side encryption configured (FR-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_server_side_encryption_configuration.web_logs.rule :
+      rule.apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    ])
+    error_message = "The logging target bucket must use SSE-S3 (AES256), matching the web bucket's own established encryption pattern (research.md R-002)."
+  }
+}
+
+run "web_logs_bucket_lifecycle" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.web_logs.rule[0].expiration[0].days == var.web_access_log_expiration_days
+    error_message = "Access log objects must expire after var.web_access_log_expiration_days, so storage does not grow unbounded (FR-004)."
+  }
+}
+
+run "web_logs_bucket_policy_least_privilege" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal.Service == "logging.s3.amazonaws.com" &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web.arn) &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web_logs.arn) &&
+      try(stmt.Condition.StringEquals["aws:SourceAccount"], "") == var.expected_account_id
+    ])
+    error_message = "The logging target bucket's policy must grant s3:PutObject to the S3 log-delivery principal, scoped (via ArnLike) to both source buckets that deliver to it — web and web_logs itself — and this account (via StringEquals) (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal != "*" && alltrue([
+        for arn in try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "no-wildcard")]) :
+        arn != "*"
+      ])
+    ])
+    error_message = "No statement in the logging target bucket's policy may use a wildcard principal or SourceArn (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      length(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")])) == 2
+    ])
+    error_message = "The logging target bucket's policy must scope SourceArn to exactly the two known delivering buckets — no additional, unaccounted-for source (FR-003)."
+  }
+}
+
+run "http_listener_protocol_is_unchanged" {
+  command = apply
+
+  # Characterization test, not a new-behavior test: aws_lb_listener.public already
+  # serves HTTP for a documented, approved reason (no trusted cert can be issued for
+  # the AWS-owned ALB hostname; see the comment above the resource). This guard
+  # exists so a future change cannot silently "fix" the listener without a test
+  # failure flagging the regression (FR-006, SC-005).
+  assert {
+    condition     = aws_lb_listener.public.protocol == "HTTP"
+    error_message = "aws_lb_listener.public.protocol must remain HTTP; forcing HTTPS here is out of scope (FR-006) — see the design-rationale comment above the resource."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.port == 80
+    error_message = "aws_lb_listener.public.port must remain 80, unchanged by this feature (FR-006)."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
+    error_message = "aws_lb_listener.public's forwarding target must remain aws_lb_target_group.public, unchanged by this feature (FR-006)."
   }
 }

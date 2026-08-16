@@ -52,6 +52,7 @@ package "Build and test" as build {
   artifact "Backend CI\nJava 21 · Maven verify" as backend_ci
   artifact "Web CI\nNode 22 · lint · test · build" as web_ci
   artifact "Mobile CI\nNode 22 · locale · test" as mobile_ci
+  artifact "ml-service CI\nPython · pytest" as mlservice_ci
 }
 
 package "Security gates" as security_gates {
@@ -63,21 +64,27 @@ package "Security gates" as security_gates {
 }
 
 package "Reviewed artifacts" as artifacts {
-  database "ECR\nimmutable + scan" as ecr_release
+  database "ECR\nbackend + web + ml-service\nimmutable + scan" as ecr_release
   database "S3\nversioned web bundle" as s3_release
   artifact "Plan bundle\nmetadata + lockfile" as tf_plan
   database "Remote state\nS3 · per-component keys" as tf_state
 }
 
 package "Controlled delivery" as delivery {
-  cloud "ECS staging\nbackend" as ecs_release
+  cloud "ECS staging\nbackend + ml-service sidecar" as ecs_release
   cloud "CloudFront + S3\nweb staging" as web_release
   cloud "Terraform Apply\nmain + confirmation" as tf_apply
   cloud "Security Hub\nredacted import" as sh_import
 }
 
+package "Staging verification" as verification {
+  artifact "Staging smoke\nauth + WBGT check" as smoke_staging
+  artifact "Authenticated DAST\nOWASP ZAP baseline" as dast_staging
+}
+
 package "OIDC roles" as roles {
   artifact "ECR push\nbackend" as role_ecr
+  artifact "ECR push\nml-service" as role_ecr_mlservice
   artifact "Web sync\nS3 + invalidation" as role_web
   artifact "Backend deploy\nECS service" as role_backend
   artifact "Terraform plan / apply\nstate + component" as role_tf
@@ -88,6 +95,7 @@ developer --> actions
 actions --> backend_ci
 actions --> web_ci
 actions --> mobile_ci
+actions --> mlservice_ci
 actions --> secret_scan
 actions --> sast
 actions --> image_scan
@@ -95,6 +103,7 @@ actions --> iac_scan
 actions --> gate_tests
 
 backend_ci --> image_scan
+mlservice_ci --> image_scan
 image_scan --> ecr_release
 ecr_release --> ecs_release
 web_ci --> s3_release
@@ -105,15 +114,22 @@ tf_apply --> tf_state
 sast --> sh_import
 
 actions --> role_ecr
+actions --> role_ecr_mlservice
 actions --> role_web
 actions --> role_backend
 actions --> role_tf
 actions --> role_sh
 role_ecr --> ecr_release
+role_ecr_mlservice --> ecr_release
 role_web --> s3_release
 role_backend --> ecs_release
 role_tf --> tf_apply
 role_sh --> sh_import
+
+ecs_release --> smoke_staging
+web_release --> smoke_staging
+ecs_release --> dast_staging
+web_release --> dast_staging
 
 note right of actions
   PR: build, test and scan.
@@ -135,6 +151,13 @@ end note
 note bottom of roles
   OIDC is short-lived and role-scoped.
   No long-lived cloud keys in CI.
+end note
+
+note bottom of verification
+  Runs after a successful staging deploy
+  (backend and web release workflows).
+  Evidence only: does not roll back
+  or block the release already made.
 end note
 
 legend right
@@ -185,6 +208,7 @@ package "Pull request gates" as pr_gates {
   rectangle "Backend\nMaven verify" as pr_backend
   rectangle "Web\nlint · type · test · build" as pr_web
   rectangle "Mobile\nlint · type · locale · test" as pr_mobile
+  rectangle "ml-service\npytest · Trivy" as pr_mlservice
   artifact "Secrets\ngitleaks" as pr_secrets
   artifact "SAST / SCA\nSonar Quality Gate" as pr_sast
   artifact "Terraform\nfmt · validate · test" as pr_tf
@@ -192,8 +216,9 @@ package "Pull request gates" as pr_gates {
 
 package "Main-branch promotion" as main_promotion {
   rectangle "Build immutable image\ncommit SHA + digest" as main_image
+  rectangle "Build ml-service image\ncommit SHA + digest" as main_mlservice_image
   rectangle "Sync static web\nS3 + CloudFront invalidate" as main_web
-  rectangle "Deploy backend\nECS service update" as main_backend
+  rectangle "Deploy backend\nECS service update\n(carries ml-service sidecar)" as main_backend
   rectangle "Apply infrastructure\nreviewed plan + confirmation" as main_tf
 }
 
@@ -206,13 +231,16 @@ package "Evidence and response" as evidence {
 }
 
 pr_backend --> main_image
+pr_mlservice --> main_mlservice_image
 pr_web --> main_web
 pr_backend --> main_backend
+main_mlservice_image --> main_backend
 pr_tf --> main_tf
 pr_secrets --> security_evidence
 pr_sast --> security_evidence
 pr_tf --> plan_evidence
 main_image --> summaries
+main_mlservice_image --> summaries
 main_web --> summaries
 main_backend --> summaries
 main_tf --> plan_evidence
@@ -241,6 +269,81 @@ legend right
   |<#ECEFF1>| CI stage |
   |<#F3E5F5>| Security / evidence |
   |<#FFF3E0>| Artifact / observability |
+endlegend
+
+newpage
+
+title CrewSafe SG — Manual Operational Workflows
+
+top to bottom direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 17
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam wrapWidth 180
+skinparam maxMessageSize 150
+skinparam nodesep 45
+skinparam ranksep 55
+skinparam ArrowColor #455A64
+
+skinparam rectangle {
+  BackgroundColor #ECEFF1
+  BorderColor #455A64
+  FontColor #263238
+  FontSize 17
+}
+skinparam artifact {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+  FontSize 17
+}
+
+actor "Developer / operator" as operator
+
+package "Mobile security testing\nmanual · main-ref gated" as mobile_security {
+  rectangle "Native build\nAndroid/iOS artifact" as mobile_build
+  rectangle "MobSF dynamic scan\nMaestro-driven sign-in flow" as mobsf_scan
+}
+
+package "Cognito operations\nmanual · main-ref gated" as cognito_ops {
+  rectangle "Mapping publication\nstaging app config" as cognito_mapping
+  rectangle "User administration\nallowlisted operations" as cognito_admin
+}
+
+operator --> mobile_build
+mobile_build --> mobsf_scan
+operator --> cognito_mapping
+operator --> cognito_admin
+
+note right of mobile_build
+  workflow_dispatch only.
+  Never runs on push or pull_request.
+  auth_mode=cognito-password builds a
+  staging-authenticated artifact for MobSF.
+  Never produces a store-ready artifact.
+end note
+
+note right of mobsf_scan
+  Findings recorded as CI evidence.
+  Non-blocking this iteration.
+end note
+
+note right of cognito_admin
+  Allowlisted operations only
+  (inspect, group membership, synthetic
+  worker lifecycle, forced sign-out, ...).
+  Every state change requires a typed
+  "<operation> <alias> <subject>" phrase.
+end note
+
+legend right
+  |= Style |= Meaning |
+  --> | Manual trigger or hand-off |
+  |<#ECEFF1>| Manual, main-only workflow |
+  |<#F3E5F5>| Security evidence |
 endlegend
 
 @enduml

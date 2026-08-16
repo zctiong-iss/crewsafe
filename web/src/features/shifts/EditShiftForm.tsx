@@ -18,7 +18,7 @@ type Action =
   | { status: "cancelled"; shift: Shift }
   | { status: "error"; message: string; requestId: string | null };
 
-export function EditShiftForm({ shift: initial }: { shift: Shift }) {
+export function EditShiftForm({ shift: initial }: Readonly<{ shift: Shift }>) {
   // The shift is stateful: roster edits (add/update/remove) replace it via setShift. The time
   // pickers keep their OWN state, seeded once from `initial`, so a roster change never resets an
   // unsaved time edit — and a time edit never touches the roster.
@@ -49,7 +49,7 @@ export function EditShiftForm({ shift: initial }: { shift: Shift }) {
       });
   };
 
-    function confirmCancel() {
+  function confirmCancel() {
     setAction({ status: "cancelling" });
     cancelShift(shift.siteId, shift.id, reason.trim())
       .then((cancelled) => setAction({ status: "cancelled", shift: cancelled }))
@@ -78,6 +78,14 @@ export function EditShiftForm({ shift: initial }: { shift: Shift }) {
       </AppShell>
     );
   }
+
+  // SCRUM-313 Sonar fix (S3358): the cancel section's original three states were a nested ternary.
+  // Suggested solution - To compute the state once with a flat if-chain, then render three sibling blocks below.
+  let cancelState: "locked" | "idle" | "confirming";
+  if (!cancellable) cancelState = "locked";
+  else if (confirming) cancelState = "confirming";
+  else cancelState = "idle";
+
 
   return (
     <AppShell title="Edit Shift">
@@ -116,13 +124,19 @@ export function EditShiftForm({ shift: initial }: { shift: Shift }) {
 
       <section className="shift-form__section" aria-label="Cancel shift">
         <h2 className="shift-form__section-title">Cancel This Shift</h2>
-        {!cancellable ? (
-          <p className="shift-form__note" role="status">
+          {cancelState === "locked" && (
+          // S6819: <output> IS the live-status element — it carries an implicit ARIA role of
+          // "status", so this reads identically to assistive tech, minus the smell.
+          <output className="shift-form__note">
             A {shift.status} shift can no longer be cancelled.
-          </p>
-        ) : !confirming ? (
+          </output>
+        )}
+
+        {cancelState === "idle" && (
           <button type="button" onClick={() => setConfirming(true)}>Cancel Shift</button>
-        ) : (
+        )}
+
+        {cancelState === "confirming" && (
           <div className="shift-form__cancel-confirm">
             <p className="shift-form__error">A record of this shift will still be kept for audit purposes. </p>
             <label htmlFor="cancel-reason">Reason for Cancelling Shift (for audit purposes)</label>
@@ -142,6 +156,7 @@ export function EditShiftForm({ shift: initial }: { shift: Shift }) {
                 disabled={action.status === "cancelling" || reason.trim() === ""}
                 onClick={confirmCancel}
               >
+                {/* A SINGLE ternary — allowed. S3358 only flags a ternary nested inside another. */}
                 {action.status === "cancelling" ? "Cancelling…" : "Confirm Shift Cancellation"}
               </button>
             </div>

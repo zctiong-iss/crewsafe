@@ -9,6 +9,7 @@ NGINX_CONF="$ROOT/web/nginx.conf"
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
+readonly OIDC_PERMISSION='id-token: write'
 
 cleanup() {
   local dir
@@ -19,12 +20,14 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 pass() {
-  printf '  ok   %s\n' "$1"
+  local label="$1"
+  printf '  ok   %s\n' "$label"
 }
 
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -99,7 +102,7 @@ workflow_policy_guard() {
   rg -q -F -- 'inputs.publish' "$path" || return 1
   rg -q -F -- 'default: false' "$path" || return 1
   rg -q -F -- 'contents: read' "$path" || return 1
-  rg -q -F -- 'id-token: write' "$path" || return 1
+  rg -q -F -- "$OIDC_PERMISSION" "$path" || return 1
   rg -q -F -- 'CREWSAFE_WEB_ECR_REPOSITORY_URL' "$path" || return 1
   rg -q -F -- 'CREWSAFE_WEB_ECR_PUSH_ROLE_ARN' "$path" || return 1
   rg -q -F -- '^[0-9]{12}\.dkr\.ecr\.${AWS_REGION}\.amazonaws\.com/crewsafe/web$' "$path" || return 1
@@ -140,7 +143,7 @@ mutate_fixture() {
       replace_fixture_text "$path" '{40}' '{39}'
       ;;
     missing-oidc)
-      replace_fixture_text "$path" 'id-token: write' 'id-token: read'
+      replace_fixture_text "$path" "$OIDC_PERMISSION" 'id-token: read'
       ;;
     non-main-manual)
       replace_fixture_text "$path" 'refs/heads/main' 'refs/heads/feature'
@@ -211,7 +214,7 @@ contains_in "manual publication requires true" "$WORKFLOW" 'inputs.publish'
 contains_in "web ECR URL variable is scoped" "$WORKFLOW" 'CREWSAFE_WEB_ECR_REPOSITORY_URL'
 contains_in "web ECR role variable is scoped" "$WORKFLOW" 'CREWSAFE_WEB_ECR_PUSH_ROLE_ARN'
 contains_in "publication has read permission" "$WORKFLOW" 'contents: read'
-contains_in "publication has OIDC permission" "$WORKFLOW" 'id-token: write'
+contains_in "publication has OIDC permission" "$WORKFLOW" "$OIDC_PERMISSION"
 contains_in "AWS credentials action is pinned" "$WORKFLOW" 'aws-actions/configure-aws-credentials@e6de'
 contains_in "publication uses web ECR login" "$WORKFLOW" 'aws ecr get-login-password'
 contains_in "publication builds web image" "$WORKFLOW" 'docker build'
@@ -227,7 +230,7 @@ not_contains_in "workflow has no static AWS secret key" "$WORKFLOW" 'AWS_SECRET_
 not_contains_in "workflow does not publish latest" "$WORKFLOW" ':latest'
 not_contains_in "workflow has no deployment path" "$WORKFLOW" 'aws ecs'
 not_contains_in "workflow has no continue-on-error" "$WORKFLOW" 'continue-on-error:'
-not_contains_in_build_test "validation job has no OIDC permission" 'id-token: write'
+not_contains_in_build_test "validation job has no OIDC permission" "$OIDC_PERMISSION"
 not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
 not_contains_in_build_test "validation job has no image push" 'docker push'
 

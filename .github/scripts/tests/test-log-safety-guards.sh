@@ -5,10 +5,11 @@ ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 TESTS_RUN=0
 TESTS_FAILED=0
 
-pass() { printf '  ok   %s\n' "$1"; }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 

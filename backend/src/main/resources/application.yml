@@ -142,14 +142,21 @@ app:
   # deployed Cognito the two naturally coincide.
 
   bedrock:
-    # Amazon Bedrock configuration for AI-driven mitigation generation (SCRUM-187 spike)
-    # Calls FastAPI endpoint which invokes Bedrock runtime
+    # Amazon Bedrock configuration for AI-driven mitigation generation.
+    # Calls the ml-service FastAPI endpoints, which invoke the Bedrock runtime.
     region: ${AWS_REGION:ap-southeast-1}
     bedrock-api-url: ${BEDROCK_API_URL:http://localhost:8000}
-    bedrock-timeout-ms: ${BEDROCK_TIMEOUT_MS:5000}
-    # Claude 3.5 Sonnet model ID for structured output support
-    model-id: ${BEDROCK_MODEL_ID:anthropic.claude-3-5-sonnet-20241022-v2:0}
-    max-tokens: ${BEDROCK_MAX_TOKENS:1024}
+    # 30s, not 5s: the SCRUM-287 benchmark measured a p95 of 10.4s end-to-end for
+    # the selected model (16.4s for sonnet-4-5), and that is before ml-service
+    # retries a throttled call. At 5s every draft timed out and silently fell back.
+    bedrock-timeout-ms: ${BEDROCK_TIMEOUT_MS:30000}
+    # Selected in SCRUM-287 against the §8.6 evaluation set. The cross-region
+    # inference-profile prefix (global.) is mandatory - this account rejects the
+    # bare anthropic.* form with a 400, since it has no on-demand throughput.
+    model-id: ${BEDROCK_MODEL_ID:global.anthropic.claude-haiku-4-5-20251001-v1:0}
+    # 1024 truncated every multi-worker plan mid-JSON during the benchmark; the
+    # largest scenario needed 1,508 output tokens.
+    max-tokens: ${BEDROCK_MAX_TOKENS:4096}
     temperature: ${BEDROCK_TEMPERATURE:0.7}
 
   forecast:

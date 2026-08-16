@@ -86,6 +86,67 @@ it("previews the 30-minute prediction only", async () => {
   expect(mockFetchSiteForecast).toHaveBeenCalledWith("site-1", 30);
 });
 
+/*
+ * The card omits the interval for space, so a fallback value would otherwise show here as a
+ * bare number indistinguishable from a model prediction. The tag is what stops that.
+ */
+it("tags a degraded forecast so it cannot read as a model prediction", async () => {
+  mockFetchSiteForecast.mockResolvedValue({
+    metric: "WBGT",
+    predictedValue: 32.8,
+    horizonMinutes: 30,
+    modelVersion: "trend-damped-1.0.0",
+    confidenceIntervalLower: 31.6,
+    confidenceIntervalUpper: 34.0,
+    generatedAt: "2026-08-14T01:00:00Z",
+    basis: "TREND",
+    inputAgeMinutes: 38,
+    degraded: true,
+  });
+
+  await renderCard();
+
+  await waitFor(() => expect(screen.getByText("forecast.basisTag.TREND")).toBeTruthy());
+});
+
+it("does not tag a clean model forecast", async () => {
+  mockFetchSiteForecast.mockResolvedValue({
+    metric: "WBGT",
+    predictedValue: 32.8,
+    horizonMinutes: 30,
+    modelVersion: "wbgt-lgbm-2026.02",
+    confidenceIntervalLower: 32.5,
+    confidenceIntervalUpper: 33.1,
+    generatedAt: "2026-08-14T01:00:00Z",
+    basis: "MODEL",
+    inputAgeMinutes: 4,
+    degraded: false,
+  });
+
+  await renderCard();
+
+  await waitFor(() => expect(screen.getByText("forecast.cardValue")).toBeTruthy());
+  expect(screen.queryByText("forecast.basisTag.MODEL")).toBeNull();
+});
+
+/* A backend predating the ladder omits these fields; that must render as it always did. */
+it("treats a response without basis fields as an ordinary forecast", async () => {
+  mockFetchSiteForecast.mockResolvedValue({
+    metric: "WBGT",
+    predictedValue: 32.8,
+    horizonMinutes: 30,
+    modelVersion: "wbgt-lgbm-2026.02",
+    confidenceIntervalLower: 32.5,
+    confidenceIntervalUpper: 33.1,
+    generatedAt: "2026-08-14T01:00:00Z",
+  });
+
+  await renderCard();
+
+  await waitFor(() => expect(screen.getByText("forecast.cardValue")).toBeTruthy());
+  expect(screen.queryByText("forecast.basisTag.TREND")).toBeNull();
+});
+
 it("collapses to one line when the model declines", async () => {
   mockFetchSiteForecast.mockRejectedValue(new ForecastUnavailableError());
 

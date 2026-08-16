@@ -17,15 +17,12 @@
  * @author Justin Chua
  */
 import { useState, type FC } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import { Pressable, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
 
 import AppText from "../texts/AppText";
+import AppCalendarPicker from "./AppCalendarPicker";
 import { useTheme } from "@/theme/ThemeProvider";
 import { formatDate } from "@/helpers/dateTime";
 
@@ -68,26 +65,10 @@ const AppDateField: FC<AppDateFieldProps> = ({
   locale,
 }) => {
   const theme = useTheme();
-  const [iosPickerOpen, setIosPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const hasError = Boolean(errorMessage);
 
   const current = toLocalDate(value);
-
-  const onPress = () => {
-    if (Platform.OS !== "android") {
-      setIosPickerOpen((open) => !open);
-      return;
-    }
-    // One dialog, unlike the datetime field's two. Dismissing it applies nothing.
-    DateTimePickerAndroid.open({
-      value: current,
-      mode: "date",
-      onChange: (event: DateTimePickerEvent, picked?: Date) => {
-        if (event.type !== "set" || !picked) return;
-        onChange(toIsoDate(picked));
-      },
-    });
-  };
 
   return (
     <View style={styles.wrapper}>
@@ -96,7 +77,7 @@ const AppDateField: FC<AppDateFieldProps> = ({
       </AppText>
 
       <Pressable
-        onPress={onPress}
+        onPress={() => setPickerOpen(true)}
         accessibilityRole="button"
         /* The error is read with the field rather than as a separate stop, matching
            AppTextInput and AppDateTimeField. */
@@ -118,16 +99,20 @@ const AppDateField: FC<AppDateFieldProps> = ({
         <Ionicons name="calendar-outline" size={s(20)} color={theme.colors.textSecondary} />
       </Pressable>
 
-      {Platform.OS === "ios" && iosPickerOpen ? (
-        <DateTimePicker
-          value={current}
-          mode="date"
-          display="spinner"
-          onChange={(_event: DateTimePickerEvent, picked?: Date) => {
-            if (picked) onChange(toIsoDate(picked));
-          }}
-        />
-      ) : null}
+      {/* `mode="date"` so no time is collected — see the header note on why a discarded
+          time is worse than no time. `toIsoDate` keeps the value in local calendar parts. */}
+      <AppCalendarPicker
+        visible={pickerOpen}
+        onCancel={() => setPickerOpen(false)}
+        onConfirm={(picked) => {
+          setPickerOpen(false);
+          onChange(toIsoDate(picked));
+        }}
+        initialValue={current}
+        mode="date"
+        locale={locale}
+        title={label}
+      />
 
       {hasError ? (
         <AppText variant="caption" tone="danger" style={styles.error}>

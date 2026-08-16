@@ -13,17 +13,48 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 /**
  * Unit tests for GlobalExceptionHandler.
  *
- * @author Surya Kumaraguru
+ * @author Surya Kumaraguru and Justin Chua
  */
 @ExtendWith(MockitoExtension.class)
 class GlobalExceptionHandlerTest {
 
     @InjectMocks
     private GlobalExceptionHandler handler;
+
+    /**
+     * The message stays generic — that rule is what keeps SQL fragments and class names off the
+     * wire — but the code must survive, because it is the only thing that lets a client tell two
+     * unrelated 409s apart.
+     */
+    @Test
+    void testHandleConflict_carriesTheCodeButNotTheMessage() {
+        ConflictException ex = new ConflictException(
+                "No active heat policy is configured for site 3f2a…", ErrorCode.NO_ACTIVE_POLICY);
+
+        ResponseEntity<ErrorResponse> response = handler.handleConflict(ex);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorCode.NO_ACTIVE_POLICY, response.getBody().code());
+        assertEquals("Request conflicts with the current state of the resource",
+                response.getBody().message());
+    }
+
+    /** An ordinary lost-write race names no code, and the generic 409 text is right for it. */
+    @Test
+    void testHandleConflict_omitsTheCodeWhenNoneWasNamed() {
+        ResponseEntity<ErrorResponse> response =
+                handler.handleConflict(new ConflictException("Already decided"));
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertNull(response.getBody().code());
+    }
 
     @Test
     void testHandleIllegalArgument_ApprovalNotFound() {

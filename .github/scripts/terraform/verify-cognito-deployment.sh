@@ -8,7 +8,8 @@ expected_state_key="${4:-crewsafe/cognito/shared-dev.tfstate}"
 expected_oidc_subject="${5:?exact GitHub OIDC main-branch subject}"
 
 fail() {
-  echo "::error::Shared Cognito deployment verification failed: $1" >&2
+  local message="$1"
+  echo "::error::Shared Cognito deployment verification failed: $message" >&2
   exit 1
 }
 

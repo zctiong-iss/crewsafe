@@ -2,7 +2,8 @@
 set -euo pipefail
 
 fail() {
-  printf 'Staging smoke configuration rejected: %s\n' "$1" >&2
+  local message="$1"
+  printf 'Staging smoke configuration rejected: %s\n' "$message" >&2
   exit 1
 }
 

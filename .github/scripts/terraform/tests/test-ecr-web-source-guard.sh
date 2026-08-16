@@ -18,7 +18,7 @@ assert_file "$apply_policy"
 assert_file "$runbook"
 
 # The web registry stays inside the existing component and state boundary.
-assert_contains "$main_tf" 'web_repository_name = "crewsafe/web"'
+assert_contains "$main_tf" 'web_repository_name        = "crewsafe/web"'
 assert_contains "$main_tf" 'resource "aws_ecr_repository" "web"'
 assert_contains "$main_tf" 'resource "aws_ecr_lifecycle_policy" "web"'
 assert_contains "$main_tf" 'resource "aws_iam_role" "web_ecr_push"'

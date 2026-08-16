@@ -12,11 +12,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.bedrock")
 public class BedrockProperties {
     private String region = "ap-southeast-1";
-    private String modelId = "anthropic.claude-3-5-sonnet-20241022-v2:0";
-    private int maxTokens = 1024;
+
+    /**
+     * Model selected in SCRUM-287 against the §8.6 evaluation set. The
+     * cross-region inference-profile prefix is mandatory: this AWS account has no
+     * on-demand throughput, so the bare {@code anthropic.*} form returns a 400.
+     */
+    private String modelId = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+
+    /** 1024 truncated every multi-worker plan mid-JSON during the SCRUM-287 benchmark. */
+    private int maxTokens = 4096;
+
     private double temperature = 0.7;
     private String bedrockApiUrl = "http://localhost:8000";
-    private int bedrockTimeoutMs = 5000;
+
+    /** Measured p95 for the selected model is 10.4s, before any throttling retry. */
+    private int bedrockTimeoutMs = 30000;
 
     public String getRegion() {
         return region;

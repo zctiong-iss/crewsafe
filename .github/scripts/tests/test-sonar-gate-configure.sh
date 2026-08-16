@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT="$REPO_ROOT/.github/scripts/security/configure-sonar-gate.sh"
 FIXTURES="$REPO_ROOT/.github/scripts/tests/fixtures/sonar-gate-configure"
+readonly REQUIRED_CHECKS_NO_OP='action=no_op target=required_status_checks.contexts'
 
 printf 'test-sonar-gate-configure\n'
 require_executable "$SCRIPT" "Sonar Quality Gate configurator"
@@ -33,7 +34,8 @@ mutating_call_count() {
 # API, not just the mock -- see the get_by_project fix). Guards against that
 # regressing silently behind a mock that never enforced it either.
 sonar_calls_missing_organization() {
-  awk 'BEGIN{RS="curl\n"} /sonarcloud\.io/ && !/organization=/ {c++} END{print c+0}' "$1"
+  local calls_log="$1"
+  awk 'BEGIN{RS="curl\n"} /sonarcloud\.io/ && !/organization=/ {c++} END{print c+0}' "$calls_log"
 }
 
 # assert_count <expected> <label> <actual>
@@ -91,7 +93,7 @@ assert_exit 0 "US1 AS2: converged re-run succeeds" run_configure "$out"
 assert_count "0" "US1 AS2: zero mutating calls" "$(mutating_call_count)"
 out_content="$(cat "$out")"
 assert_contains "$out_content" "action=no_op target=CrewSafe Security Gate" "US1 AS2: gate side logs no_op"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "US1 AS2: checks side logs no_op"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "US1 AS2: checks side logs no_op"
 assert_not_contains "$out_content" "action=condition_added" "US1 AS2: no condition_added on a true no-op"
 assert_not_contains "$out_content" "action=condition_updated" "US1 AS2: no condition_updated on a true no-op"
 
@@ -210,7 +212,7 @@ envs=(
 assert_exit 0 "New Code (unacceptable): run still completes (non-fatal)" run_configure "$out"
 out_content="$(cat "$out")"
 assert_contains "$out_content" "new_code_definition_warning target=REFERENCE_BRANCH" "New Code (unacceptable): warning is logged"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (unacceptable): run continues past the warning"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "New Code (unacceptable): run continues past the warning"
 
 # New Code endpoint not exposed on this SonarQube instance (observed live
 # against real SonarQube Cloud as a 404 "Unknown url" on both /list and
@@ -228,7 +230,7 @@ assert_exit 0 "New Code (endpoint 404): run still completes (non-fatal)" run_con
 out_content="$(cat "$out")"
 assert_contains "$out_content" "new_code_definition_check_unavailable" "New Code (endpoint 404): distinct unavailable warning is logged"
 assert_not_contains "$out_content" "new_code_definition_warning target=" "New Code (endpoint 404): not conflated with the wrong-value warning"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (endpoint 404): run continues past the warning"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "New Code (endpoint 404): run continues past the warning"
 
 # --- User Story 2 (T015): Acceptance Scenarios 1-3 ---------------------------
 
@@ -278,7 +280,7 @@ envs=(
 assert_exit 0 "US2 AS3: already-complete run succeeds" run_configure "$out"
 patch_calls="$(grep -c '^method=PATCH$' "$work/calls.log" || true)"
 assert_count "0" "US2 AS3: zero PATCH calls" "$patch_calls"
-assert_contains "$(cat "$out")" "action=no_op target=required_status_checks.contexts" "US2 AS3: Run Report logs no_op"
+assert_contains "$(cat "$out")" "$REQUIRED_CHECKS_NO_OP" "US2 AS3: Run Report logs no_op"
 
 # --- User Story 3 (T020): fail closed on missing/insufficiently-scoped -------
 
@@ -366,5 +368,69 @@ assert_exit 0 "SEC-003: full successful run for the token-leak check" run_config
 assert_not_contains "$(cat "$out")" "SUPER_SECRET_SONAR_TOKEN_XYZ" "SEC-003: SonarQube token never appears in output"
 assert_not_contains "$(cat "$out")" "SUPER_SECRET_GH_TOKEN_XYZ" "SEC-003: GitHub token never appears in output"
 assert_not_contains "$(cat "$work/calls.log")" "SUPER_SECRET" "SEC-003: neither token appears in the mock's call log"
+
+# --- SCRUM-403 (T002): declared_op default case ------------------------------
+#
+# declared_op's DECLARED_METRICS lookup had no default case (SonarQube
+# shelldre:S131, issue AZ_iU7JOycsaNSww1Wwa). Sourcing the script directly
+# (safe now that it's guarded behind `[[ "${BASH_SOURCE[0]}" == "${0}" ]]`,
+# so this source does not also run the network-calling configure_* flow)
+# lets these assertions call declared_op itself instead of going through a
+# whole subprocess run.
+#
+# declared_op is sourced into THIS shell, unlike the rest of the suite's
+# subprocess invocations -- its fail()-on-unrecognized-metric path calls
+# `exit`, which would kill the whole test runner if invoked directly. This
+# wrapper confines that exit to a subshell instead.
+# shellcheck source=../security/configure-sonar-gate.sh
+. "$SCRIPT"
+call_declared_op() { local metric="$1"; ( declared_op "$metric" ); }
+
+assert_declared_op() {
+  local metric="$1" expected="$2" actual
+  actual="$(declared_op "$metric")"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if [[ "$actual" == "$expected" ]]; then
+    _pass "SCRUM-403: declared_op($metric) unchanged"
+  else
+    _fail "SCRUM-403: declared_op($metric) unchanged" "expected $expected, got $actual"
+  fi
+}
+
+assert_declared_op new_security_rating "GT"
+assert_declared_op new_security_hotspots_reviewed "LT"
+assert_declared_op new_reliability_rating "GT"
+assert_declared_op new_sca_rating_vulnerability "GT"
+
+assert_exit 1 "SCRUM-403: declared_op exits non-zero for an unrecognized metric" call_declared_op not_a_real_metric
+declared_op_err="$(call_declared_op not_a_real_metric 2>&1 1>/dev/null || true)"
+assert_contains "$declared_op_err" "not_a_real_metric" "SCRUM-403: error names the unrecognized metric"
+
+# --- SCRUM-405: declared_error default case ----------------------------------
+#
+# declared_error's DECLARED_METRICS lookup had the identical gap as declared_op
+# (SonarQube shelldre:S131, issue AZ_iU7JOycsaNSww1Wwc), explicitly left out of
+# scope by SCRUM-403. Same sourcing/subshell rationale as declared_op above.
+call_declared_error() { local metric="$1"; ( declared_error "$metric" ); }
+
+assert_declared_error() {
+  local metric="$1" expected="$2" actual
+  actual="$(declared_error "$metric")"
+  TESTS_RUN=$((TESTS_RUN + 1))
+  if [[ "$actual" == "$expected" ]]; then
+    _pass "SCRUM-405: declared_error($metric) unchanged"
+  else
+    _fail "SCRUM-405: declared_error($metric) unchanged" "expected $expected, got $actual"
+  fi
+}
+
+assert_declared_error new_security_rating "3"
+assert_declared_error new_security_hotspots_reviewed "100"
+assert_declared_error new_reliability_rating "3"
+assert_declared_error new_sca_rating_vulnerability "3"
+
+assert_exit 1 "SCRUM-405: declared_error exits non-zero for an unrecognized metric" call_declared_error not_a_real_metric
+declared_error_err="$(call_declared_error not_a_real_metric 2>&1 1>/dev/null || true)"
+assert_contains "$declared_error_err" "not_a_real_metric" "SCRUM-405: error names the unrecognized metric"
 
 finish
