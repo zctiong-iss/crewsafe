@@ -6,14 +6,20 @@ WEB_WORKFLOW="$ROOT/.github/workflows/web-ci.yml"
 MOBILE_WORKFLOW="$ROOT/.github/workflows/mobile-ci.yml"
 TESTS_RUN=0
 TESTS_FAILED=0
+readonly NPM_CI='npm ci'
+readonly NPM_LINT='npm run lint'
+readonly NPM_TYPECHECK='npm run typecheck'
+readonly NPM_BUILD='npm run build'
 
 pass() {
-  printf '  ok   %s\n' "$1"
+  local label="$1"
+  printf '  ok   %s\n' "$label"
 }
 
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -113,22 +119,22 @@ contains_in "web workflow is independently named" "$WEB_WORKFLOW" 'name: Web CI'
 contains_in "web validation job uses backend shape" "$WEB_WORKFLOW" 'build-test:'
 contains_in "web validation job is named Build and Test" "$WEB_WORKFLOW" 'name: Build and Test'
 contains_in "web job uses web directory" "$WEB_WORKFLOW" 'working-directory: web'
-contains_in "web npm ci command" "$WEB_WORKFLOW" 'npm ci'
-contains_in "web lint command" "$WEB_WORKFLOW" 'npm run lint'
-contains_in "web typecheck command" "$WEB_WORKFLOW" 'npm run typecheck'
+contains_in "web npm ci command" "$WEB_WORKFLOW" "$NPM_CI"
+contains_in "web lint command" "$WEB_WORKFLOW" "$NPM_LINT"
+contains_in "web typecheck command" "$WEB_WORKFLOW" "$NPM_TYPECHECK"
 contains_in "web test command" "$WEB_WORKFLOW" 'npm test'
-contains_in "web build command" "$WEB_WORKFLOW" 'npm run build'
+contains_in "web build command" "$WEB_WORKFLOW" "$NPM_BUILD"
 assert_order_after "$WEB_WORKFLOW" "web validation command order" "name: Build and Test" \
-  'npm ci' 'npm run lint' 'npm run typecheck' 'npm test' 'npm run build'
+  "$NPM_CI" "$NPM_LINT" "$NPM_TYPECHECK" 'npm test' "$NPM_BUILD"
 
 contains_in "mobile job is independently named" "$MOBILE_WORKFLOW" 'name: Mobile CI'
 contains_in "mobile job uses mobile directory" "$MOBILE_WORKFLOW" 'working-directory: mobile'
-contains_in "mobile npm ci command" "$MOBILE_WORKFLOW" 'npm ci'
-contains_in "mobile lint command" "$MOBILE_WORKFLOW" 'npm run lint'
-contains_in "mobile typecheck command" "$MOBILE_WORKFLOW" 'npm run typecheck'
-contains_in "mobile build command" "$MOBILE_WORKFLOW" 'npm run build'
+contains_in "mobile npm ci command" "$MOBILE_WORKFLOW" "$NPM_CI"
+contains_in "mobile lint command" "$MOBILE_WORKFLOW" "$NPM_LINT"
+contains_in "mobile typecheck command" "$MOBILE_WORKFLOW" "$NPM_TYPECHECK"
+contains_in "mobile build command" "$MOBILE_WORKFLOW" "$NPM_BUILD"
 assert_order_after "$MOBILE_WORKFLOW" "mobile validation command order" "name: Mobile CI" \
-  'npm ci' 'npm run lint' 'npm run typecheck' 'npm run build'
+  "$NPM_CI" "$NPM_LINT" "$NPM_TYPECHECK" "$NPM_BUILD"
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

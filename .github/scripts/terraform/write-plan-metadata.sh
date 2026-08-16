@@ -5,7 +5,7 @@ lock="${2:?lock}"
 bundle="${3:?bundle}"
 mkdir -p "$bundle"
 cp "$plan" "$bundle/plan.tfplan"
-sha() { sha256sum "$1" | cut -d' ' -f1; }
+sha() { local file="$1"; sha256sum "$file" | cut -d' ' -f1; }
 jq -n \
   --argjson schema_version 2 --arg source_workflow "terraform-plan.yml" \
   --arg component "$COMPONENT" --arg operation "$OPERATION" --arg root "$ROOT" \

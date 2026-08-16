@@ -4,7 +4,8 @@
 set -euo pipefail
 
 fail() {
-  printf 'ERROR: ML-service smoke: %s\n' "$1" >&2
+  local message="$1"
+  printf 'ERROR: ML-service smoke: %s\n' "$message" >&2
   exit 1
 }
 
@@ -35,6 +36,9 @@ env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
 port="$(docker port "$CONTAINER" 8000/tcp | awk 'NR == 1 { print $NF }')"
 [[ "$port" =~ ^(127\.0\.0\.1|0\.0\.0\.0|localhost):[0-9]+$ ]] \
   || fail "container did not expose a loopback HTTP port"
+# S5332 accepted exception: $port is guarded above to 127.0.0.1/0.0.0.0/localhost only,
+# so this is a loopback-only smoke-test target, never reachable from outside this job --
+# not a real clear-text network exposure.
 BASE_URL="http://$port"
 
 health=''

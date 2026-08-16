@@ -5,6 +5,7 @@ source "$(dirname "$0")/helpers/test-helpers.sh"
 catalog="$ROOT/.github/terraform/components.json"
 schema="$ROOT/.github/terraform/components.schema.json"
 resolver="$ROOT/.github/scripts/terraform/resolve-component.sh"
+readonly MISSING_LOCKFILE_ACCEPTED='component with a missing lockfile was accepted'
 assert_file ".github/terraform/components.json"
 assert_file ".github/terraform/components.schema.json"
 assert_file ".github/scripts/terraform/resolve-component.sh"
@@ -54,37 +55,37 @@ jq empty "$schema"
 if [[ -f "$ROOT/infra/terraform/cognito/.terraform.lock.hcl" ]]; then
   "$resolver" cognito-shared-dev >/dev/null
 elif "$resolver" cognito-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/network/.terraform.lock.hcl" ]]; then
   "$resolver" network-shared-dev >/dev/null
 elif "$resolver" network-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/database/.terraform.lock.hcl" ]]; then
   "$resolver" database-shared-dev >/dev/null
 elif "$resolver" database-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/compute/.terraform.lock.hcl" ]]; then
   "$resolver" compute-shared-dev >/dev/null
 elif "$resolver" compute-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/ecr/.terraform.lock.hcl" ]]; then
   "$resolver" ecr-shared-dev >/dev/null
 elif "$resolver" ecr-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/securityhub-import/.terraform.lock.hcl" ]]; then
   "$resolver" securityhub-import-shared-dev >/dev/null
 elif "$resolver" securityhub-import-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if [[ -f "$ROOT/infra/terraform/developer-access/.terraform.lock.hcl" ]]; then
   "$resolver" developer-access-shared-dev >/dev/null
 elif "$resolver" developer-access-shared-dev >/dev/null 2>&1; then
-  fail "component with a missing lockfile was accepted"
+  fail "$MISSING_LOCKFILE_ACCEPTED"
 fi
 if "$resolver" ../escape >/dev/null 2>&1; then fail "path traversal accepted"; fi
 if "$resolver" unknown >/dev/null 2>&1; then fail "unknown component accepted"; fi

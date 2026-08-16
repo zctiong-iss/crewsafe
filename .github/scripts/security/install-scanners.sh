@@ -31,16 +31,18 @@ die() {
 install_dir="${1:-/usr/local/bin}"
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "required command not found: $1"
+  local cmd="$1"
+  command -v "$cmd" >/dev/null 2>&1 || die "required command not found: $cmd"
 }
 
 # Linux runners ship sha256sum; macOS ships shasum. Support both so the same
 # script verifies downloads in CI and on a developer workstation.
 sha256_of() {
+  local file="$1"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$1" | cut -d' ' -f1
+    sha256sum "$file" | cut -d' ' -f1
   elif command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$1" | cut -d' ' -f1
+    shasum -a 256 "$file" | cut -d' ' -f1
   else
     die "no SHA-256 tool found (need sha256sum or shasum)"
   fi

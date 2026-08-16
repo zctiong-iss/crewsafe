@@ -12,9 +12,10 @@ expected_account="${CREWSAFE_SECURITYHUB_ACCOUNT_ID:-}"
 safe_identifier='^[A-Za-z0-9_.:-]{1,160}$'
 safe_timestamp='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?Z$'
 sonar_timestamp='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]{1,9})?(Z|\+00:00|\+0000)$'
+readonly JQ_ISSUES_LENGTH='.issues | length'
 
-result() { printf 'SONAR_SECURITYHUB_RESULT=%s\n' "$1"; }
-fail() { result "FAILED reason=$1"; exit 1; }
+result() { local status="$1"; printf 'SONAR_SECURITYHUB_RESULT=%s\n' "$status"; }
+fail() { local reason="$1"; result "FAILED reason=$reason"; exit 1; }
 
 [[ -f "$config_file" ]] || fail CONFIG_MISSING
 jq -e 'type == "object" and (.enabled | type == "boolean")' "$config_file" >/dev/null \
@@ -76,7 +77,7 @@ jq -e 'type == "object" and (.total | type == "number") and (.issues | type == "
   || fail SONAR_RESPONSE_INVALID
 active_total="$(jq -r '.total' <<<"$active_json")"
 [[ "$active_total" =~ ^[0-9]+$ && "$active_total" -le 100 ]] || fail SONAR_PAGE_LIMIT
-[[ "$(jq '.issues | length' <<<"$active_json")" -le 100 ]] || fail SONAR_PAGE_LIMIT
+[[ "$(jq "$JQ_ISSUES_LENGTH" <<<"$active_json")" -le 100 ]] || fail SONAR_PAGE_LIMIT
 
 validate_issue() {
   local issue="$1" desired_status="$2" desired_resolution="${3:-}"
@@ -99,6 +100,7 @@ validate_issue() {
 }
 
 security_severity() {
+  local issue="$1"
   jq -r '
     if (.impacts? == null) then .severity
     elif (.impacts | type) == "array" then
@@ -107,7 +109,7 @@ security_severity() {
         elif index("HIGH") != null then "HIGH"
         else "" end)
     else "" end
-  ' <<<"$1"
+  ' <<<"$issue"
 }
 
 lookup_and_import() {
@@ -168,7 +170,7 @@ lookup_and_import() {
   else result "IMPORTED id=${id}"; fi
 }
 
-active_count="$(jq '.issues | length' <<<"$active_json")"
+active_count="$(jq "$JQ_ISSUES_LENGTH" <<<"$active_json")"
 for ((index=0; index<active_count; index++)); do
   issue="$(jq -c ".issues[$index]" <<<"$active_json")"
   validate_issue "$issue" OPEN || fail CANDIDATE_INVALID
@@ -180,10 +182,10 @@ done
 
 jq -e 'type == "object" and (.total | type == "number") and (.issues | type == "array") and (.issues | length <= 1)' <<<"$lifecycle_json" >/dev/null \
   || fail LIFECYCLE_RESPONSE_INVALID
-if [[ "$(jq '.issues | length' <<<"$lifecycle_json")" == 1 ]]; then
+if [[ "$(jq "$JQ_ISSUES_LENGTH" <<<"$lifecycle_json")" == 1 ]]; then
   issue="$(jq -c '.issues[0]' <<<"$lifecycle_json")"
   [[ "$(jq -r '.key' <<<"$issue")" == "$controlled_key" ]] || fail LIFECYCLE_KEY_DENIED
   validate_issue "$issue" RESOLVED FIXED || fail LIFECYCLE_INVALID
   lookup_and_import "$issue" ARCHIVED archive
 fi
-if [[ "$active_count" == 0 && "$(jq '.issues | length' <<<"$lifecycle_json")" == 0 ]]; then result 'REJECTED count=0'; fi
+if [[ "$active_count" == 0 && "$(jq "$JQ_ISSUES_LENGTH" <<<"$lifecycle_json")" == 0 ]]; then result 'REJECTED count=0'; fi

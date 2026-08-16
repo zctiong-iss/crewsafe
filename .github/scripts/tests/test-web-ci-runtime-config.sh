@@ -10,6 +10,7 @@ WORKFLOW="$ROOT/.github/workflows/web-ci.yml"
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
+readonly VALIDATE_STEP_NAME='name: Validate web build configuration'
 
 cleanup() {
   local dir
@@ -19,11 +20,12 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-pass() { printf '  ok   %s\n' "$1"; }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
 
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -77,7 +79,7 @@ web_build_config_guard() {
     for mapping in "${expected[@]}"; do
       [[ "$block" == *"$mapping"* ]] || return 1
     done
-    [[ "$block" == *'name: Validate web build configuration'* ]] || return 1
+    [[ "$block" == *"$VALIDATE_STEP_NAME"* ]] || return 1
     [[ "$block" == *'[[ "$WEB_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]]'* ]] || return 1
     [[ "$block" == *'[[ -n "$VITE_COGNITO_AUTHORITY" ]]'* ]] || return 1
     [[ "$block" == *'[[ -n "$VITE_COGNITO_CLIENT_ID" ]]'* ]] || return 1
@@ -86,10 +88,10 @@ web_build_config_guard() {
     [[ "$block" == *'[[ "$VITE_POST_LOGOUT_REDIRECT_URI" == "$WEB_BASE_URL/" ]]'* ]] || return 1
     [[ "$block" == *'[[ "$VITE_API_BASE_URL" =~ ^https://[a-z0-9]+\.cloudfront\.net$ ]]'* ]] || return 1
     if [[ "$job" == build-test ]]; then
-      assert_order_guard "$block" 'name: Validate web build configuration' 'run: npm run build' || return 1
+      assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'run: npm run build' || return 1
     else
-      assert_order_guard "$block" 'name: Validate web build configuration' 'npm ci && npm run build' || return 1
-      assert_order_guard "$block" 'name: Validate web build configuration' 'run: ./scripts/sync-static-site.sh' || return 1
+      assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'npm ci && npm run build' || return 1
+      assert_order_guard "$block" "$VALIDATE_STEP_NAME" 'run: ./scripts/sync-static-site.sh' || return 1
     fi
   done
 }
@@ -158,14 +160,14 @@ for job in build-test deploy-staging; do
   contains "$job has callback URL mapping" "$block" 'VITE_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/callback'
   contains "$job has logout URL mapping" "$block" 'VITE_POST_LOGOUT_REDIRECT_URI: ${{ vars.CREWSAFE_WEB_BASE_URL }}/'
   contains "$job has API base URL mapping" "$block" 'VITE_API_BASE_URL: ${{ vars.CREWSAFE_BACKEND_BASE_URL }}'
-  contains "$job validates configuration" "$block" 'name: Validate web build configuration'
+  contains "$job validates configuration" "$block" "$VALIDATE_STEP_NAME"
 done
 
 build_test_block="$(job_block "$WORKFLOW" build-test)"
 deploy_block="$(job_block "$WORKFLOW" deploy-staging)"
-assert_order "build-test validates before production build" "$build_test_block" 'name: Validate web build configuration' 'run: npm run build'
-assert_order "deploy validates before production build" "$deploy_block" 'name: Validate web build configuration' 'npm ci && npm run build'
-assert_order "deploy validates before S3 sync" "$deploy_block" 'name: Validate web build configuration' 'run: ./scripts/sync-static-site.sh'
+assert_order "build-test validates before production build" "$build_test_block" "$VALIDATE_STEP_NAME" 'run: npm run build'
+assert_order "deploy validates before production build" "$deploy_block" "$VALIDATE_STEP_NAME" 'npm ci && npm run build'
+assert_order "deploy validates before S3 sync" "$deploy_block" "$VALIDATE_STEP_NAME" 'run: ./scripts/sync-static-site.sh'
 
 TESTS_RUN=$((TESTS_RUN + 1))
 if web_build_config_guard "$WORKFLOW"; then

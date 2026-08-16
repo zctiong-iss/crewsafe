@@ -39,7 +39,8 @@ usage() {
 }
 
 fail() {
-  echo "start-mobsf-service.sh: $1" >&2
+  local message="$1"
+  echo "start-mobsf-service.sh: $message" >&2
   [[ -n "${container_id:-}" ]] && docker rm -f "$container_id" >/dev/null 2>&1 || true
   exit 1
 }
