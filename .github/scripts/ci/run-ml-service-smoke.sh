@@ -67,5 +67,13 @@ runtime_user="$(docker inspect --format '{{.Config.User}}' "$CONTAINER")"
 docker exec "$CONTAINER" sh -c \
   'test -r /app/requirements-runtime.txt && test ! -w /app/requirements-runtime.txt' \
   || fail "locked runtime requirements are missing or writable"
+docker exec "$CONTAINER" sh -c \
+  'test -r /app/model-bundle/staging-demo-v1/manifest.json \
+    && test ! -w /app/model-bundle/staging-demo-v1/manifest.json \
+    && test -r /app/model-bundle/staging-demo-v1/forecast-30m.joblib \
+    && test ! -w /app/model-bundle/staging-demo-v1/forecast-30m.joblib \
+    && test -r /app/model-bundle/staging-demo-v1/forecast-60m.joblib \
+    && test ! -w /app/model-bundle/staging-demo-v1/forecast-60m.joblib' \
+  || fail "reviewed staging model bundle is missing or writable"
 
-printf '%s\n' 'ML-service smoke: health, forecast, non-root runtime, and immutable dependency checks passed.'
+printf '%s\n' 'ML-service smoke: health, forecast, non-root runtime, immutable dependency, and model bundle checks passed.'

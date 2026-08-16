@@ -156,6 +156,44 @@ with `503 FORECAST_MODEL_UNAVAILABLE` rather than a stack trace, because
 `ForecastModelRegistry.from_environment()` (`ml-service/crewsafe_ml/inference.py:53`) treats
 `"unset"` as an unresolvable path.
 
+### 8.0 University-project staging demonstration exception
+
+On 16 August 2026, decision owner Bryan Phang accepted the checksum-pinned six-month candidate
+for the shared staging demonstration only because the normal 21-day post-freeze period cannot
+finish before submission. The exception is recorded in `ml-service/MODEL_CARD.md` and the
+bundle manifest. It does not claim production approval, does not alter the deterministic policy
+or human-approval boundaries, and keeps persistence as the fallback.
+
+The reviewed bundle is baked into the image at:
+
+```text
+/app/model-bundle/staging-demo-v1/manifest.json
+```
+
+Its expected manifest SHA-256 is:
+
+```text
+36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031
+```
+
+Activating this exact staging bundle requires an infrastructure-owner handoff after the model
+PR merges and its immutable image is published:
+
+1. Point the two SSM values at the in-image path and checksum above through the reviewed
+   `secrets` Plan → Apply workflow.
+2. Ensure `initial_ml_service_image_tag` names the newly published immutable image. Unlike the
+   backend image, this Terraform variable continues to govern the ML container on later task
+   revisions, so publishing an image or changing SSM alone cannot deploy the new bundle.
+3. Run the `compute` Plan → Apply workflow if the registered task definition does not yet name
+   that image, then perform the backend redeploy described in §3 so ECS starts a new task and
+   resolves the updated SSM values.
+4. Verify that a `/forecast` request with valid recent context returns
+   `wbgt-six-month-safety-floor-staging-demo-v1:...`; a request without context must still return
+   `baseline-1.0.0`.
+
+The normal production-evidence procedure below remains recorded for future use; the staging
+exception does not satisfy it.
+
 ### 8.1 The existing candidate — a different AWS account
 
 A trained candidate already exists, from a SageMaker Studio experiment. It is **not**

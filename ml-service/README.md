@@ -130,16 +130,20 @@ The `/forecast` response contract is unchanged. Existing clients may keep sendin
 `metric`, `horizon_minutes`, and `current_value`; without recent context the service
 returns the labelled `baseline-1.0.0` persistence result.
 
-To activate a trained WBGT model, deploy a reviewed bundle outside the container
-image and configure both values below. The manifest and each referenced artifact
-are checksum-verified before use. Never activate the development-only bundle while
-its model card or manifest contains an approval blocker. Training always writes
-`"approved_for_inference": false`; a reviewed promotion must change it to `true`
-and publish the checksum of that exact promoted manifest.
+The shared staging image contains one reviewed, checksum-pinned demonstration bundle
+at `model-bundle/staging-demo-v1`. Baking it into the image does not activate it by
+itself. ECS must still provide the exact path and manifest checksum below. The loader
+then verifies the manifest and both referenced artifacts before deserializing them.
+
+Training always writes `"approved_for_inference": false`. The bundled copy records a
+decision-owner exception for the university-project staging demonstration, an explicit
+`STAGING_DEMO_ONLY` scope, and `production_approved: false`. It must not be reused as
+production approval. Raw downloads, generated training folders, and unrelated model
+artifacts remain outside Git and outside the image.
 
 ```bash
-WBGT_MODEL_MANIFEST=/run/crewsafe-model/manifest.json
-WBGT_MODEL_MANIFEST_SHA256=<64-character-manifest-sha256>
+WBGT_MODEL_MANIFEST=/app/model-bundle/staging-demo-v1/manifest.json
+WBGT_MODEL_MANIFEST_SHA256=36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031
 ```
 
 A trained request adds optional `context` containing 2–16 ordered observations at
