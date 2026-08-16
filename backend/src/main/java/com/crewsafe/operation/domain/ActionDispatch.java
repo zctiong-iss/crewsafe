@@ -16,6 +16,7 @@ import java.util.UUID;
  * JPA entity for action dispatch - represents a specific action dispatched to an individual worker.
  *
  * @author Surya Kumaraguru
+ * @author Jemilin Beulah
  */
 @Entity
 @Table(name = "action_dispatch")
