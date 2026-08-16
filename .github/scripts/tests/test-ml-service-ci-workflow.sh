@@ -73,14 +73,20 @@ workflow_policy_guard() {
   contains "$path" 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' || return 1
   if grep -nE 'uses: .+@' "$path" | grep -Ev '@[0-9a-f]{40}$' >/dev/null; then return 1; fi
 
-  local verify_job publish_job
+  local verify_job publish_job resolve_job deploy_job
   verify_job="$(mktemp)"
   publish_job="$(mktemp)"
-  TMP_DIRS+=("$verify_job" "$publish_job")
+  resolve_job="$(mktemp)"
+  deploy_job="$(mktemp)"
+  TMP_DIRS+=("$verify_job" "$publish_job" "$resolve_job" "$deploy_job")
   job_block "$path" "verify-ml-service" "$verify_job"
   job_block "$path" "publish-image" "$publish_job"
+  job_block "$path" "resolve-existing-image" "$resolve_job"
+  job_block "$path" "deploy-staging" "$deploy_job"
   [[ -s "$verify_job" ]] || return 1
   [[ -s "$publish_job" ]] || return 1
+  [[ -s "$resolve_job" ]] || return 1
+  [[ -s "$deploy_job" ]] || return 1
 
   # verify-ml-service is test-and-scan only. It must never gain the ability
   # to touch a real AWS account, or a workflow meant only to verify a PR would
@@ -147,9 +153,51 @@ workflow_policy_guard() {
   contains "$publish_job" 'docker login' || return 1
   contains "$publish_job" 'docker push "$REPO:$SHA"' || return 1
   contains "$publish_job" 'image_digest=' || return 1
+  contains "$publish_job" '!inputs.redeploy' || return 1
   not_contains "$publish_job" 'AWS_ACCESS_KEY_ID' || return 1
   not_contains "$publish_job" 'AWS_SECRET_ACCESS_KEY' || return 1
   not_contains "$publish_job" 'continue-on-error:' || return 1
+
+  # resolve-existing-image (SCRUM-373 follow-up) never builds or pushes — it
+  # only proves a previously-published commit is a reachable main ancestor and
+  # resolves its already-pushed digest, mirroring backend-ci.yml's own job.
+  contains "$resolve_job" 'needs: verify-ml-service' || return 1
+  contains "$resolve_job" 'id-token: write' || return 1
+  contains "$resolve_job" "github.ref == 'refs/heads/main'" || return 1
+  contains "$resolve_job" 'inputs.redeploy && !inputs.publish' || return 1
+  contains "$resolve_job" "CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN != ''" || return 1
+  contains "$resolve_job" 'fetch-depth: 0' || return 1
+  contains "$resolve_job" 'Validate existing-image redeploy contract' || return 1
+  contains "$resolve_job" 'crewsafe-shared-dev-ml-service-deploy' || return 1
+  contains "$resolve_job" 'git cat-file -e' || return 1
+  contains "$resolve_job" 'git merge-base --is-ancestor' || return 1
+  contains "$resolve_job" 'configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' || return 1
+  contains "$resolve_job" 'mask-aws-account-id: true' || return 1
+  contains "$resolve_job" 'aws ecr describe-images' || return 1
+  not_contains "$resolve_job" 'docker build' || return 1
+  not_contains "$resolve_job" 'docker push' || return 1
+  not_contains "$resolve_job" 'AWS_ACCESS_KEY_ID' || return 1
+  not_contains "$resolve_job" 'AWS_SECRET_ACCESS_KEY' || return 1
+  not_contains "$resolve_job" 'continue-on-error:' || return 1
+
+  # deploy-staging (SCRUM-373 follow-up) only registers the resolved digest
+  # against the shared backend task family and force-deploys — it never
+  # touches the backend container's own image field (deploy-ml-service-staging.sh
+  # owns that guarantee; this job just wires the resolved outputs to it).
+  contains "$deploy_job" 'needs: resolve-existing-image' || return 1
+  contains "$deploy_job" 'id-token: write' || return 1
+  contains "$deploy_job" 'CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN' || return 1
+  contains "$deploy_job" 'CREWSAFE_BACKEND_ECS_CLUSTER_NAME' || return 1
+  contains "$deploy_job" 'CREWSAFE_BACKEND_ECS_SERVICE_NAME' || return 1
+  contains "$deploy_job" 'crewsafe-shared-dev-ml-service-deploy' || return 1
+  contains "$deploy_job" 'configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' || return 1
+  contains "$deploy_job" 'mask-aws-account-id: true' || return 1
+  contains "$deploy_job" 'deploy-ml-service-staging.sh' || return 1
+  not_contains "$deploy_job" 'docker build' || return 1
+  not_contains "$deploy_job" 'docker push' || return 1
+  not_contains "$deploy_job" 'AWS_ACCESS_KEY_ID' || return 1
+  not_contains "$deploy_job" 'AWS_SECRET_ACCESS_KEY' || return 1
+  not_contains "$deploy_job" 'continue-on-error:' || return 1
 
   return 0
 }

@@ -3,7 +3,16 @@
 **Components changed**: `ecr-shared-dev` (`infra/terraform/ecr`), `secrets-shared-dev`
 (`infra/terraform/secrets`), `compute-shared-dev` (`infra/terraform/compute`),
 `iam-policy-management-shared-dev` (`infra/terraform/iam-policy-management`),
-`.github/workflows/ml-service-ci.yml` · No new component, no new Terraform state.
+`.github/workflows/ml-service-ci.yml`, `.github/scripts/deploy/deploy-ml-service-staging.sh` ·
+No new component, no new Terraform state.
+
+**One-time CI configuration** (SCRUM-373 follow-up, once `compute-shared-dev` has applied the
+`ml_service_deploy_role_arn` output): set the non-secret GitHub repository variable
+`CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN` from that output. `CREWSAFE_BACKEND_ECS_CLUSTER_NAME`/
+`CREWSAFE_BACKEND_ECS_SERVICE_NAME` are reused as-is — `ml-service` and `backend` share the one
+ECS service. Mirrors `docs/runbooks/SCRUM-271-staging-release-deploy.md`'s equivalent step for
+`CREWSAFE_BACKEND_DEPLOY_ROLE_ARN`. Never use a Terraform plan/apply role, a local AWS CLI
+session, or static keys to deploy.
 
 This runbook covers what `ml-service` looks like once deployed, how it's coupled to `backend`'s
 own deploy/scale/crash lifecycle, how to redeploy or roll it back, and the real failures live
@@ -38,7 +47,8 @@ added.
 | Environment | Two secrets-only entries, `WBGT_MODEL_MANIFEST`/`WBGT_MODEL_MANIFEST_SHA256`, resolved from SSM (`/crewsafe/shared-dev/ml/model-manifest*`) — both currently the placeholder value `"unset"` (§8) |
 | Health check | The image's own `HEALTHCHECK` (`GET /health` via the standard-library HTTP client, `interval=10s timeout=5s start-period=10s retries=3`) |
 | Task sizing | `task_cpu = 1024` / `task_memory = 4096` (up from `512`/`1024` when the task ran `backend` alone) — reasoned headroom for both containers together, not a benchmarked figure (research.md R-007) |
-| IAM | No new task-role grant *for ml-service specifically* beyond the Bedrock statements — `backend`'s task role already covers both containers, since ECS grants task-level IAM per task, not per container |
+| IAM (runtime) | No new task-role grant *for ml-service specifically* beyond the Bedrock statements — `backend`'s task role already covers both containers, since ECS grants task-level IAM per task, not per container |
+| IAM (deploy) | A dedicated `ml_service_deploy` OIDC role (SCRUM-373 follow-up, §3.2) — scoped identically to `backend_deploy`'s `ecs:UpdateService` target (the one shared `aws_ecs_service.backend`), since ECS has no per-container IAM boundary to narrow it further |
 
 ## 2. Discover the running task
 
@@ -54,28 +64,58 @@ aws ecs describe-tasks --cluster crewsafe-shared-dev --tasks "$TASK_ID" \
 # expect two entries: backend and ml-service, both RUNNING / HEALTHY
 ```
 
-## 3. Applying a change — two steps, not one
+## 3. Applying a change
 
 `aws_ecs_service.backend` carries `lifecycle { ignore_changes = [task_definition, desired_count] }`
 — a deliberate, documented divergence (see `compute/main.tf`'s own "THE DECLARED DIVERGENCE"
 comment). **A `compute` Terraform apply only registers a new task-definition revision; it does not
 roll that revision onto the live service** (research.md R-011, discovered live during this
-feature's own implementation). Any change to `ml-service`'s container definition, image tag, or
-task sizing needs both of the following, in order:
+feature's own implementation). Which path applies depends on *what* changed.
 
-1. **Terraform apply** — `compute-shared-dev`, via the normal Plan → typed `APPLY` → Apply
-   sequence. Confirm the plan shows `aws_ecs_task_definition.backend` as an **in-place update**
-   registering a new revision — never a replacement.
+### 3.1 Anything other than just the ml-service image tag — the two-step Terraform path
+
+Container shape (port, hardening, log group), `WBGT_MODEL_MANIFEST`/`*_SHA256` values, task sizing,
+or the very first time `var.initial_ml_service_image_tag` is set all go through Terraform, in
+order:
+
+1. **Terraform apply** — `compute-shared-dev` (and/or `secrets-shared-dev` if the manifest values
+   changed too), via the normal Plan → typed `APPLY` → Apply sequence. Confirm the plan shows
+   `aws_ecs_task_definition.backend` as an **in-place update** registering a new revision — never a
+   replacement.
 2. **Backend redeploy** — GitHub Actions → **Backend CI** → **Run workflow**, with `redeploy: true`
    and `redeploy_image_tag` set to the commit SHA of the `backend` image currently running in
    `crewsafe-shared-dev` (no new backend code change is implied). This dispatches
    `deploy-backend-staging.sh`, which fetches the **current registered** task-definition revision
-   (now including step 1's `ml-service` container), rewrites only the `backend` container's
-   `image` field, registers a fresh revision, and force-deploys it — this is what actually carries
-   `ml-service` into the live service.
+   (now including step 1's changes), rewrites only the `backend` container's `image` field,
+   registers a fresh revision, and force-deploys it — this is what actually carries the change into
+   the live service.
 
 Skipping step 2 after step 1 is the single most likely way to see "the apply succeeded but nothing
 changed" — the registered revision exists, the running task doesn't reflect it yet.
+
+### 3.2 Just a newly published ml-service image — the CI-only redeploy path
+
+SCRUM-373 follow-up: rolling out a new `ml-service` image built by `ml-service-ci.yml`'s
+`publish-image` job no longer requires a `compute` apply to bump
+`var.initial_ml_service_image_tag` (the same R-011 lesson as backend's own `redeploy` path,
+applied to the sidecar). One dispatch:
+
+- GitHub Actions → **ML-service CI** → **Run workflow**, with `redeploy: true` and
+  `redeploy_image_tag` set to the already-published commit SHA (must be a reachable `main`
+  ancestor — `resolve-existing-image` proves this the same way backend's job does). This runs
+  `resolve-existing-image` (resolves the digest via the dedicated `ml_service_deploy` role, never
+  builds or pushes) then `deploy-staging` (dispatches `deploy-ml-service-staging.sh`, which fetches
+  the **current registered** task-definition revision, rewrites only the `ml-service` container's
+  `image` field, registers a fresh revision, and force-deploys — the `backend` container's image is
+  left untouched, the mirror image of §3.1 step 2).
+
+Use this path when nothing about `ml-service`'s container shape, task sizing, or the manifest
+values changed — only the image itself. `var.initial_ml_service_image_tag` in Terraform state is
+**not** updated by this path and will drift from what's actually running, the same accepted,
+documented divergence `backend`'s own `initial_image_tag` already lives with (§1's IAM row, and
+`compute/main.tf`'s "THE DECLARED DIVERGENCE" comment, cover why this is safe: `aws_ecs_service`
+already ignores `task_definition` drift, so a later `compute` apply cannot silently revert a
+CI-redeployed image — it only affects what a *future* apply would register from scratch).
 
 ## 4. Crash/lifecycle coupling with `backend`
 
@@ -181,12 +221,16 @@ PR merges and its immutable image is published:
 
 1. Point the two SSM values at the in-image path and checksum above through the reviewed
    `secrets` Plan → Apply workflow.
-2. Ensure `initial_ml_service_image_tag` names the newly published immutable image. Unlike the
-   backend image, this Terraform variable continues to govern the ML container on later task
-   revisions, so publishing an image or changing SSM alone cannot deploy the new bundle.
-3. Run the `compute` Plan → Apply workflow if the registered task definition does not yet name
-   that image, then perform the backend redeploy described in §3 so ECS starts a new task and
-   resolves the updated SSM values.
+2. Get the newly published immutable ml-service image running. Two ways, per §3:
+   - **If nothing about the container shape or task sizing changed** (the ordinary case for a
+     model-bundle-only update): dispatch **ML-service CI** → `redeploy: true` with
+     `redeploy_image_tag` set to the published commit SHA (§3.2). Faster, and does not touch
+     Terraform state.
+   - **Otherwise**, or to keep `var.initial_ml_service_image_tag` itself in sync with what's
+     running: run the `compute` Plan → Apply workflow with that variable set to the new image tag,
+     then perform the backend redeploy described in §3.1 so ECS starts a new task and resolves the
+     updated SSM values.
+3. Whichever path was used, confirm both containers reach `RUNNING`/`HEALTHY` again (§2).
 4. Verify that a `/forecast` request with valid recent context returns
    `wbgt-six-month-safety-floor-staging-demo-v1:...`; a request without context must still return
    `baseline-1.0.0`.
