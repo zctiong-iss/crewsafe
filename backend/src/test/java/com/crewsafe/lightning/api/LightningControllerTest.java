@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -124,8 +125,10 @@ class LightningControllerTest extends AbstractIntegrationTest {
 
     @Test
     void listsObservationsNewestFirst() throws Exception {
-        Instant older = Instant.now().minusSeconds(240);
-        Instant newer = Instant.now().minusSeconds(60);
+        // Truncated to seconds: Postgres timestamptz only keeps microsecond precision, so an
+        // in-memory Instant with a non-zero nanosecond tail never round-trips back equal.
+        Instant older = Instant.now().minusSeconds(240).truncatedTo(ChronoUnit.SECONDS);
+        Instant newer = Instant.now().minusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
         insertObservation(visibleSite.getId(), older, new BigDecimal("30.00"), WeatherQualityStatus.LIVE);
         insertObservation(visibleSite.getId(), newer, null, WeatherQualityStatus.LIVE);
 
