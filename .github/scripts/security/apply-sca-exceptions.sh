@@ -36,12 +36,14 @@ set -euo pipefail
 SONAR_API_HOST="https://api.sonarcloud.io"
 
 fail() {
-  printf 'ERROR: %s\n' "$1" >&2
+  local message="$1"
+  printf 'ERROR: %s\n' "$message" >&2
   exit 1
 }
 
 log_action() {
-  printf 'RUN_REPORT action=%s target=%s\n' "$1" "$2"
+  local action="$1" target="$2"
+  printf 'RUN_REPORT action=%s target=%s\n' "$action" "$target"
 }
 
 [[ $# -eq 1 ]] || fail "usage: apply-sca-exceptions.sh <exceptions-file>"

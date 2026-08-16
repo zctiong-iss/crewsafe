@@ -2,7 +2,8 @@
 set -euo pipefail
 
 fail() {
-  printf '%s\n' "$1" >&2
+  local message="$1"
+  printf '%s\n' "$message" >&2
   exit 1
 }
 
