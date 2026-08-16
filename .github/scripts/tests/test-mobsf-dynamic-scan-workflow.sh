@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
 workflow="$root/.github/workflows/mobsf-dynamic-scan.yml"
 runbook="$root/docs/runbooks/SCRUM-350-mobsf-dynamic-scanning.md"
+readonly SANITIZE_SCRIPT='sanitize-mobsf-report.sh'
 
 # A bare `! rg -q ...` does not trigger errexit on match (SC2251), so every "must not contain"
 # assertion below goes through this helper instead (mirrors test-mobile-native-build-workflow.sh).
@@ -32,7 +33,7 @@ for needle in \
   'synthetic-flow.android.yaml' \
   'evaluate-coverage-signal.sh' \
   'check-network-allowlist.sh' \
-  'sanitize-mobsf-report.sh' \
+  "$SANITIZE_SCRIPT" \
   'retention-days: 14' \
   '--arg platform "android"' \
   'api/v1/upload' \
@@ -55,7 +56,7 @@ echo "$mobsf_api_calls" | rg -q -F -- 'hash=${MOBSF_HASH}'
 assert_absent 'hash=\$\{ARTIFACT_SHA256\}' "$workflow" 'MobSF hash must not be this workflow-s own SHA-256'
 
 # sanitize-mobsf-report.sh must textually precede the upload-artifact step (SEC-003).
-sanitize_line="$(echo "$android_section" | rg -n -F -m1 -- 'sanitize-mobsf-report.sh' | cut -d: -f1)"
+sanitize_line="$(echo "$android_section" | rg -n -F -m1 -- "$SANITIZE_SCRIPT" | cut -d: -f1)"
 upload_line="$(echo "$android_section" | rg -n -F -m1 -- 'actions/upload-artifact' | cut -d: -f1)"
 [[ -n "$sanitize_line" && -n "$upload_line" && "$sanitize_line" -lt "$upload_line" ]] \
   || { echo "FAIL: sanitize-mobsf-report.sh does not precede actions/upload-artifact in android-dynamic-scan" >&2; exit 1; }
@@ -69,7 +70,7 @@ for needle in \
   'synthetic-flow.ios.yaml' \
   'evaluate-coverage-signal.sh' \
   'check-network-allowlist.sh' \
-  'sanitize-mobsf-report.sh' \
+  "$SANITIZE_SCRIPT" \
   'retention-days: 14' \
   '--arg platform "ios"'
 do
@@ -84,7 +85,7 @@ mobsf_line="$(echo "$ios_section" | rg -n -F -m1 -- 'start-mobsf-service.sh' | c
   || { echo "FAIL: check-ios-analyzer-availability.sh does not precede start-mobsf-service.sh in ios-dynamic-scan" >&2; exit 1; }
 
 # sanitize-mobsf-report.sh must also precede upload in the iOS job (SEC-003).
-ios_sanitize_line="$(echo "$ios_section" | rg -n -F -m1 -- 'sanitize-mobsf-report.sh' | cut -d: -f1)"
+ios_sanitize_line="$(echo "$ios_section" | rg -n -F -m1 -- "$SANITIZE_SCRIPT" | cut -d: -f1)"
 ios_upload_line="$(echo "$ios_section" | rg -n -F -m1 -- 'actions/upload-artifact' | cut -d: -f1)"
 [[ -n "$ios_sanitize_line" && -n "$ios_upload_line" && "$ios_sanitize_line" -lt "$ios_upload_line" ]] \
   || { echo "FAIL: sanitize-mobsf-report.sh does not precede actions/upload-artifact in ios-dynamic-scan" >&2; exit 1; }
@@ -111,7 +112,7 @@ assert_absent 'echo.*CORELLIUM_API_TOKEN' "$workflow" 'SEC-003 no Corellium toke
 
 # (e) sanitize-mobsf-report.sh precedes actions/upload-artifact everywhere in the file
 #     (whole-file regression guard, in addition to the per-job checks above).
-sanitize_count="$(rg -c -F -- 'sanitize-mobsf-report.sh' "$workflow")"
+sanitize_count="$(rg -c -F -- "$SANITIZE_SCRIPT" "$workflow")"
 upload_count="$(rg -c -F -- 'actions/upload-artifact' "$workflow")"
 [[ "$sanitize_count" -ge 2 && "$upload_count" -ge 2 ]] \
   || { echo "expected >=2 sanitize calls and >=2 uploads, found $sanitize_count/$upload_count" >&2; exit 1; }
@@ -137,7 +138,7 @@ sha256sum_check_count="$(rg -c -F -- 'sha256sum -c' "$workflow")"
 
 # --- Runbook content (FR-012, FR-013) ---
 
-test -f "$runbook" || { echo "missing $runbook" >&2; exit 1; }
+[[ -f "$runbook" ]] || { echo "missing $runbook" >&2; exit 1; }
 
 for needle in \
   'gh workflow run' \
@@ -152,5 +153,17 @@ for needle in \
 do
   rg -q -i -F -- "$needle" "$runbook"
 done
+
+
+# --- SCRUM-419 supply-chain hardening assertions (githubactions:S6506) ---
+#
+# Both Maestro CLI download call sites (Android and iOS signed-device paths)
+# follow redirects (-L/-fsSL) and must pin the protocol to HTTPS across every
+# hop, so a redirect cannot silently downgrade the transport to plaintext HTTP.
+maestro_https_pin_count="$(rg -c -F -- '--proto "=https"' "$workflow" || true)"
+if [[ "${maestro_https_pin_count:-0}" -lt 2 ]]; then
+  echo "FAIL: expected >=2 '--proto \"=https\"' occurrences (both Maestro CLI downloads) in $workflow, found ${maestro_https_pin_count:-0}" >&2
+  exit 1
+fi
 
 echo "test-mobsf-dynamic-scan-workflow.sh: all assertions passed"

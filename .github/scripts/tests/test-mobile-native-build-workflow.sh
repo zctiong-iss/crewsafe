@@ -56,6 +56,19 @@ do
   rg -q -F -- "$needle" "$workflow"
 done
 
+# --- SCRUM-419 supply-chain hardening assertions (githubactions:S6505/S8543) ---
+#
+# Both jobs' `npm ci` must disable lifecycle-script execution, and both jobs'
+# `npx expo prebuild` must be constrained to the already-locked local `expo`
+# install (no registry resolution) and must also disable lifecycle scripts.
+npm_ci_ignore_scripts_count="$(rg -c -F -- 'npm ci --ignore-scripts' "$workflow")"
+[[ "$npm_ci_ignore_scripts_count" -ge 2 ]] || {
+  echo "FAIL: expected >=2 'npm ci --ignore-scripts' occurrences (Android + iOS), found $npm_ci_ignore_scripts_count" >&2
+  exit 1
+}
+rg -q -F -- 'npx --offline --ignore-scripts expo prebuild --platform android --non-interactive' "$workflow"
+rg -q -F -- 'npx --offline --ignore-scripts expo prebuild --platform ios --non-interactive' "$workflow"
+
 # The ad-hoc profile must fail closed (FR-008): an explicit non-empty check followed by exit
 # 1 before any codesigning/xcodebuild archive step runs.
 rg -q -F -- '-z "$APPLE_DIST_CERTIFICATE_P12"' "$workflow"
@@ -121,7 +134,7 @@ assert_absent 'github.head_ref' "$workflow" 'SEC-002 checkout pinning' -F
 # propagate as a failed run (FR-007, FR-012).
 assert_absent 'continue-on-error: true' "$workflow" 'FR-007/FR-012 fail-closed on compile failure' -F
 
-test -f "$runbook" || { echo "missing $runbook" >&2; exit 1; }
+[[ -f "$runbook" ]] || { echo "missing $runbook" >&2; exit 1; }
 
 for needle in \
   'gh workflow run' \

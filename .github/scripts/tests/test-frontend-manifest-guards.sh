@@ -6,12 +6,14 @@ TESTS_RUN=0
 TESTS_FAILED=0
 
 pass() {
-  printf '  ok   %s\n' "$1"
+  local label="$1"
+  printf '  ok   %s\n' "$label"
 }
 
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -51,10 +53,11 @@ assert_script_equals() {
 }
 
 assert_json_file() {
+  local manifest="$1"
   node -e '
     const fs = require("node:fs");
     JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-  ' "$1"
+  ' "$manifest"
 }
 
 assert_no_publish_or_deploy_script() {

@@ -25,10 +25,11 @@ grep -Fq 'CrewSafeGitHubTerraformIamPolicyApply' "$bootstrap_readme" \
   || fail "bootstrap README must name the dedicated apply permission policy"
 
 render() {
+  local template_path="$1"
   sed \
     -e "s/<ACCOUNT_ID>/${account_id}/g" \
     -e "s#<GITHUB_OIDC_MAIN_SUBJECT>#${oidc_subject}#g" \
-    "$1"
+    "$template_path"
 }
 
 trust="$(render "$bootstrap_root/trust-policy.json.tftpl")"
@@ -59,7 +60,7 @@ for role_kind in plan apply; do
     --arg apply_role "$normal_apply_role" \
     --arg execution_plan_role "$plan_role" \
     --arg execution_apply_role "$apply_role" \
-    --argjson role_kind "$([ "$role_kind" = plan ] && echo '"plan"' || echo '"apply"')" \
+    --argjson role_kind "$([[ "$role_kind" = plan ]] && echo '"plan"' || echo '"apply"')" \
     '(.Version == "2012-10-17")
      and ([.Statement[] | select(.Effect == "Allow") | .Action
            | if type == "array" then .[] else . end]

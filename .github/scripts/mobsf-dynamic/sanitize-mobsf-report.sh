@@ -30,7 +30,8 @@ shift 2
 known_secrets=("$@")
 
 fail() {
-  echo "sanitize-mobsf-report.sh: $1" >&2
+  local message="$1"
+  echo "sanitize-mobsf-report.sh: $message" >&2
   rm -f "$output_path"
   exit 1
 }

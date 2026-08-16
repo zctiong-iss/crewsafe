@@ -9,8 +9,8 @@ TESTS_FAILED=0
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 
 check() {
   local label="$1"
@@ -19,7 +19,7 @@ check() {
   if "$@"; then pass "$label"; else fail "$label"; fi
 }
 
-contains() { grep -q -F -- "$2" "$1"; }
+contains() { local file="$1" needle="$2"; grep -q -F -- "$needle" "$file"; }
 
 sast_block() {
   local workflow="${1:-$WORKFLOW}"
@@ -75,7 +75,8 @@ PY
 }
 
 reject_report() {
-  ! validate_report "$1" >/dev/null 2>&1
+  local report="$1"
+  ! validate_report "$report" >/dev/null 2>&1
 }
 
 has_read_only_permission() {
@@ -83,7 +84,8 @@ has_read_only_permission() {
 }
 
 sast_has_no_aws_credential_action() {
-  ! grep -q 'configure-aws-credentials' <<<"$1"
+  local sast="$1"
+  ! grep -q 'configure-aws-credentials' <<<"$sast"
 }
 
 workflow_contract_holds() {
@@ -113,11 +115,13 @@ sonar_contract_holds() {
 }
 
 reject_workflow_contract() {
-  ! workflow_contract_holds "$1"
+  local workflow="$1"
+  ! workflow_contract_holds "$workflow"
 }
 
 reject_sonar_contract() {
-  ! sonar_contract_holds "$1"
+  local properties="$1"
+  ! sonar_contract_holds "$properties"
 }
 
 valid_report="$TMP_DIR/valid.xml"

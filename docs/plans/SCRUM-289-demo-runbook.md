@@ -41,12 +41,24 @@ INFO:app:Bedrock startup: ✓ Bedrock model access confirmed in region=ap-southe
 
 Backend health: <http://localhost:8080/actuator/health>.
 
-## Step 3 — give the site a heat policy (once per fresh database)
+## Step 3 — give the site a heat policy — **no longer needed** (SCRUM-432)
 
-**This is the step that catches people out.** `V9`'s seeding INSERT is commented out and `V12`
-carried forward from that empty table, so a fresh database has *no* policy version for any
-site, and the endpoint correctly refuses with a 409 (it will not decide what a worker must do
-using thresholds nobody signed off on).
+**This used to be the step that caught everyone out, and it is now done for you.** Every site
+starts on the MOM national baseline (`MOM-WBGT-2026.1`): `V17` backfills sites that already
+existed, and `DemoDataSeeder` activates the same baseline for any site created afterwards. A
+fresh database can draft a plan immediately.
+
+Historically `V9`'s seeding INSERT was commented out and `V12` carried forward from that empty
+table, so `policy_version` was born empty — which meant `PolicyEngineService` threw, the draft
+endpoint answered 409, and a site produced no recommendations at all until someone typed twelve
+thresholds in by hand.
+
+Skip to step 4 unless you specifically want to test a **stricter-than-MOM** policy. The seeded
+baseline is a normal, supersedable version, so the API below still works for that — create a new
+version and it becomes the ACTIVE one. The seed is never re-applied over a policy that exists.
+
+<details>
+<summary>Creating a custom policy version (only if you want to override the baseline)</summary>
 
 Do it through the real Safety Manager API — the first version a site gets auto-activates:
 
@@ -75,7 +87,10 @@ curl -sX POST "http://localhost:8080/api/v1/sites/$SITE_ID/policy-versions" \
 
 Field names verified against `PolicyVersionController.PolicyVersionCreateRequest`. All twelve
 thresholds are required and each must be ≥ 15; `wbgtEmergencyStop` must be between 20 and 40.
-`notes` is the only optional field.
+`notes` is the only optional field. Use a different `versionLabel` from the seeded
+`MOM-WBGT-2026.1` so the two are distinguishable in the audit trail.
+
+</details>
 
 ## Step 4 — make sure there is something to assess
 

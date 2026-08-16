@@ -8,8 +8,8 @@ trap 'rm -rf "$WORK"' EXIT INT TERM
 TESTS_RUN=0
 TESTS_FAILED=0
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 expect() {
   local expected="$1" label="$2"
   shift 2
@@ -20,7 +20,8 @@ expect() {
 }
 run_with_env() {
   # run_with_env <metadata_path> <summary_path> [env assignments already exported by caller]
-  "$SCRIPT" "$1" "$2"
+  local metadata_path="$1" summary_path="$2"
+  "$SCRIPT" "$metadata_path" "$summary_path"
 }
 
 printf 'test-mobile-artifact-metadata\n'

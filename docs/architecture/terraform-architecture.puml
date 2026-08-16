@@ -46,6 +46,7 @@ cloud "Cognito\nOAuth clients" as cognito
 package "Web edge" as web_edge {
   cloud "CloudFront web\nHTTPS" as web_cf
   database "S3 web bucket\nprivate · OAC" as web_bucket
+  database "S3 web_logs\naccess logs · 30d" as web_logs
 }
 
 package "API edge" as api_edge {
@@ -69,6 +70,7 @@ browser --> cognito
 client --> cognito
 browser --> web_cf
 web_cf --> web_bucket
+web_bucket --> web_logs
 browser --> api_cf
 client --> api_cf
 api_cf --> alb
@@ -101,6 +103,12 @@ end note
 note right of rds
   Ingress: app SG → TCP 5432.
   No egress rule.
+end note
+
+note bottom of web_logs
+  Server access logging (SonarQube S6258).
+  Least-privilege delivery policy scoped
+  to the web bucket's own ARN.
 end note
 
 legend right
@@ -243,6 +251,7 @@ package "Terraform roots" as roots {
   rectangle "ECR\necr/shared-dev.tfstate" as tf_ecr
   rectangle "Compute\ncompute/shared-dev.tfstate" as tf_compute
   rectangle "IAM policy mgmt\niam-policy-management/shared-dev.tfstate" as tf_iam
+  rectangle "Developer access\ndeveloper-access/shared-dev.tfstate" as tf_developer_access
   rectangle "SecurityHub import\nsecurityhub-import/shared-dev.tfstate" as tf_importer
 }
 
@@ -268,6 +277,7 @@ ci --> tf_database
 ci --> tf_ecr
 ci --> tf_compute
 ci --> tf_iam
+ci --> tf_developer_access
 ci --> tf_importer
 state_backend ..> tf_state
 
@@ -279,6 +289,12 @@ end note
 
 note bottom of tf_iam
   Managed CI policy bindings.
+  No runtime dependency.
+end note
+
+note bottom of tf_developer_access
+  Read-only IAM users/group
+  (AWS-managed ViewOnlyAccess).
   No runtime dependency.
 end note
 

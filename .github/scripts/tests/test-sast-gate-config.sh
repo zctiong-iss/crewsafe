@@ -40,7 +40,8 @@ check() {
 # certain constructs are avoided, and a naive grep would match the explanation
 # and report the very thing it is asserting against.
 without_comments() {
-  sed -e 's/[[:space:]]*#.*$//' "$1"
+  local file="$1"
+  sed -e 's/[[:space:]]*#.*$//' "$file"
 }
 
 sast_block() {

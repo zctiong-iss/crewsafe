@@ -16,8 +16,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 
 check() {
   local label="$1"
@@ -26,8 +26,8 @@ check() {
   if "$@"; then pass "$label"; else fail "$label"; fi
 }
 
-contains() { grep -q -F -- "$2" "$1"; }
-not_contains() { ! grep -q -F -- "$2" "$1"; }
+contains() { local file="$1" needle="$2"; grep -q -F -- "$needle" "$file"; }
+not_contains() { local file="$1" needle="$2"; ! grep -q -F -- "$needle" "$file"; }
 
 ordered() {
   local file="$1"

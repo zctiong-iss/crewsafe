@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT="$REPO_ROOT/.github/scripts/security/configure-sonar-gate.sh"
 FIXTURES="$REPO_ROOT/.github/scripts/tests/fixtures/sonar-gate-configure"
+readonly REQUIRED_CHECKS_NO_OP='action=no_op target=required_status_checks.contexts'
 
 printf 'test-sonar-gate-configure\n'
 require_executable "$SCRIPT" "Sonar Quality Gate configurator"
@@ -33,7 +34,8 @@ mutating_call_count() {
 # API, not just the mock -- see the get_by_project fix). Guards against that
 # regressing silently behind a mock that never enforced it either.
 sonar_calls_missing_organization() {
-  awk 'BEGIN{RS="curl\n"} /sonarcloud\.io/ && !/organization=/ {c++} END{print c+0}' "$1"
+  local calls_log="$1"
+  awk 'BEGIN{RS="curl\n"} /sonarcloud\.io/ && !/organization=/ {c++} END{print c+0}' "$calls_log"
 }
 
 # assert_count <expected> <label> <actual>
@@ -91,7 +93,7 @@ assert_exit 0 "US1 AS2: converged re-run succeeds" run_configure "$out"
 assert_count "0" "US1 AS2: zero mutating calls" "$(mutating_call_count)"
 out_content="$(cat "$out")"
 assert_contains "$out_content" "action=no_op target=CrewSafe Security Gate" "US1 AS2: gate side logs no_op"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "US1 AS2: checks side logs no_op"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "US1 AS2: checks side logs no_op"
 assert_not_contains "$out_content" "action=condition_added" "US1 AS2: no condition_added on a true no-op"
 assert_not_contains "$out_content" "action=condition_updated" "US1 AS2: no condition_updated on a true no-op"
 
@@ -210,7 +212,7 @@ envs=(
 assert_exit 0 "New Code (unacceptable): run still completes (non-fatal)" run_configure "$out"
 out_content="$(cat "$out")"
 assert_contains "$out_content" "new_code_definition_warning target=REFERENCE_BRANCH" "New Code (unacceptable): warning is logged"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (unacceptable): run continues past the warning"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "New Code (unacceptable): run continues past the warning"
 
 # New Code endpoint not exposed on this SonarQube instance (observed live
 # against real SonarQube Cloud as a 404 "Unknown url" on both /list and
@@ -228,7 +230,7 @@ assert_exit 0 "New Code (endpoint 404): run still completes (non-fatal)" run_con
 out_content="$(cat "$out")"
 assert_contains "$out_content" "new_code_definition_check_unavailable" "New Code (endpoint 404): distinct unavailable warning is logged"
 assert_not_contains "$out_content" "new_code_definition_warning target=" "New Code (endpoint 404): not conflated with the wrong-value warning"
-assert_contains "$out_content" "action=no_op target=required_status_checks.contexts" "New Code (endpoint 404): run continues past the warning"
+assert_contains "$out_content" "$REQUIRED_CHECKS_NO_OP" "New Code (endpoint 404): run continues past the warning"
 
 # --- User Story 2 (T015): Acceptance Scenarios 1-3 ---------------------------
 
@@ -278,7 +280,7 @@ envs=(
 assert_exit 0 "US2 AS3: already-complete run succeeds" run_configure "$out"
 patch_calls="$(grep -c '^method=PATCH$' "$work/calls.log" || true)"
 assert_count "0" "US2 AS3: zero PATCH calls" "$patch_calls"
-assert_contains "$(cat "$out")" "action=no_op target=required_status_checks.contexts" "US2 AS3: Run Report logs no_op"
+assert_contains "$(cat "$out")" "$REQUIRED_CHECKS_NO_OP" "US2 AS3: Run Report logs no_op"
 
 # --- User Story 3 (T020): fail closed on missing/insufficiently-scoped -------
 
