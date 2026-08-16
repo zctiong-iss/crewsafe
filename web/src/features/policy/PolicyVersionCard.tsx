@@ -28,7 +28,8 @@ function formatEffectiveDate(effectiveDate: string): string {
 }
 
 export function PolicyVersionCard({ version, activeVersion, canWrite, isActivating, onActivate }: {
-  version: PolicyVersion;
+  /** Omits siteId so the company-wide default (siteId null) fits this prop too — this card never reads it. */
+  version: Omit<PolicyVersion, "siteId">;
   /** The version currently ACTIVE for this site, if any — named in the activate confirmation. */
   activeVersion: PolicyVersion | null;
   canWrite: boolean;

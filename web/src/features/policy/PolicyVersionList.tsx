@@ -6,7 +6,10 @@ import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { ApiError, messageFor } from "@/api/errors";
-import { activatePolicyVersion, fetchPolicyVersions, type PolicyVersion } from "@/api/policy";
+import {
+  activatePolicyVersion, fetchEffectivePolicyVersion, fetchPolicyVersions,
+  type EffectivePolicyVersion, type PolicyVersion,
+} from "@/api/policy";
 import { useCurrentUser } from "@/auth/useAuth";
 import { PolicyVersionCard } from "./PolicyVersionCard";
 import "./PolicyVersionList.css";
@@ -21,6 +24,11 @@ type Activate =
   | { status: "activating"; versionId: string }
   | { status: "error"; message: string; requestId: string | null };
 
+type DefaultPolicy =
+  | { status: "idle" }
+  | { status: "loaded"; version: EffectivePolicyVersion }
+  | { status: "error" };
+
 function toApiError(error: unknown): ApiError {
   return error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
 }
@@ -30,6 +38,7 @@ export function PolicyVersionList({ siteId, siteSwitcher }: { siteId: string; si
   const canWrite = user.role === "SAFETY_MANAGER" || user.role === "ADMIN";
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [activate, setActivate] = useState<Activate>({ status: "idle" });
+  const [defaultPolicy, setDefaultPolicy] = useState<DefaultPolicy>({ status: "idle" });
 
   useEffect(() => {
     let active = true;
@@ -42,6 +51,21 @@ export function PolicyVersionList({ siteId, siteSwitcher }: { siteId: string; si
       });
     return () => { active = false; };
   }, [siteId]);
+
+  // A site with nothing of its own is still governed by the company-wide default
+  // (PolicyEngineService's fallback) — fetched only for that case, so a site that has
+  // configured its own catalogue never pays for a request it has no use for.
+  useEffect(() => {
+    if (load.status !== "loaded" || load.versions.length > 0) {
+      setDefaultPolicy({ status: "idle" });
+      return;
+    }
+    let active = true;
+    fetchEffectivePolicyVersion(siteId)
+      .then((version) => active && setDefaultPolicy({ status: "loaded", version }))
+      .catch(() => active && setDefaultPolicy({ status: "error" }));
+    return () => { active = false; };
+  }, [siteId, load]);
 
   const refetch = () => {
     fetchPolicyVersions(siteId)
@@ -78,13 +102,22 @@ export function PolicyVersionList({ siteId, siteSwitcher }: { siteId: string; si
       )}
 
       {load.status === "loaded" && load.versions.length === 0 && (
-        <EmptyState
-          headline="No policy versions yet"
-          body={canWrite
-            ? "Configure the site's first heat policy version to get started."
-            : "No heat policy has been configured for this site yet. Ask your safety manager."}
-          action={createButton}
-        />
+        <div className="policy-list">
+          {defaultPolicy.status === "loaded" && (
+            <section aria-label="Default policy in effect">
+              <p className="policy-list__default-heading">
+                Recommendations for this site are governed by this default until one is configured:
+              </p>
+              <PolicyVersionCard
+                version={defaultPolicy.version}
+                activeVersion={null}
+                canWrite={false}
+                isActivating={false}
+                onActivate={() => {}}
+              />
+            </section>
+          )}
+        </div>
       )}
 
       {load.status === "loaded" && load.versions.length > 0 && (() => {

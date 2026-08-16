@@ -1,7 +1,7 @@
 /** @author Jemilin Beulah, Tang Chee Seng */
 
 import { http, HttpResponse } from "msw";
-import type { PolicyVersion } from "@/api/policy";
+import type { EffectivePolicyVersion, PolicyVersion } from "@/api/policy";
 import type { LightningObservation, LightningRisk } from "@/api/lightning";
 
 const BASE = "http://localhost:8080";   // matching VITE_API_BASE_URL stubbed in setup.ts
@@ -57,6 +57,16 @@ const SITE_2_ACTIVE_POLICY_VERSION: PolicyVersion = {
 const POLICY_VERSIONS_BY_SITE: Record<string, PolicyVersion[]> = {
   "site-1": [ACTIVE_POLICY_VERSION, DRAFT_POLICY_VERSION, SUPERSEDED_POLICY_VERSION],
   "site-2": [SITE_2_ACTIVE_POLICY_VERSION],
+};
+
+// The company-wide default (siteId null) PolicyEngineService falls back to for a site with
+// no catalogue of its own — mirrors V16's seeded row.
+const DEFAULT_POLICY_VERSION: EffectivePolicyVersion = {
+  id: "policy-company-default", siteId: null, versionLabel: "MOM-WBGT-2026-DEFAULT",
+  source: "MOM Work-Rest Guidelines 2026 (company-wide default)", effectiveDate: "2026-01-01", status: "ACTIVE",
+  ...POLICY_THRESHOLDS, wbgtEmergencyStop: 33, notes: "Company-wide fallback for a site with no policy of its own.",
+  createdBy: null, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+  activatedAt: "2026-01-01T00:00:00Z", supersededAt: null,
 };
 
 // site-1 is CLEAR with two ticks (one with a distant strike, one with none), so tests can
@@ -178,6 +188,12 @@ http.get(`${BASE}/api/v1/sites/:siteId/policy-versions/active`, ({ params }) => 
   return found
     ? HttpResponse.json(found)
     : HttpResponse.json(errorBody("Not Found", "No active policy version for this site."), { status: 404 });
+}),
+
+http.get(`${BASE}/api/v1/sites/:siteId/policy-versions/effective`, ({ params }) => {
+  const own = (POLICY_VERSIONS_BY_SITE[params.siteId as string] ?? [])
+    .find((v) => v.status === "ACTIVE");
+  return HttpResponse.json(own ?? DEFAULT_POLICY_VERSION);
 }),
 
 http.post(`${BASE}/api/v1/sites/:siteId/policy-versions`, async ({ params, request }) => {

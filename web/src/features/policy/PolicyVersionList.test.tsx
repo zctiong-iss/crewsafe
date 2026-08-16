@@ -148,12 +148,37 @@ describe("PolicyVersionList", () => {
     expect(screen.queryByText("Draft")).not.toBeInTheDocument();
   });
 
-  it("shows an empty state with a create action when the site has no versions", async () => {
+  it("offers the create action when the site has no versions", async () => {
     asSafetyManager();
     server.use(http.get("*/api/v1/sites/:siteId/policy-versions", () => HttpResponse.json([])));
     renderApp();
-    expect(await screen.findByText("No policy versions yet")).toBeInTheDocument();
-    expect(screen.getAllByRole("link", { name: "Create New Version" }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole("link", { name: "Create New Version" })).toBeInTheDocument();
+  });
+
+  it("shows the company-wide default, read-only, when the site has no versions of its own", async () => {
+    asSafetyManager();
+    server.use(
+      http.get("*/api/v1/sites/:siteId/policy-versions", () => HttpResponse.json([])),
+      http.get("*/api/v1/sites/:siteId/policy-versions/effective", () =>
+        HttpResponse.json({
+          id: "policy-company-default", siteId: null, versionLabel: "MOM-WBGT-2026-DEFAULT",
+          source: "MOM Work-Rest Guidelines 2026 (company-wide default)", effectiveDate: "2026-01-01",
+          status: "ACTIVE",
+          wbgtThresholdUnacclimatisedLight: 25, wbgtThresholdUnacclimatisedModerate: 24, wbgtThresholdUnacclimatisedHeavy: 23,
+          wbgtThresholdPartialLight: 26, wbgtThresholdPartialModerate: 25, wbgtThresholdPartialHeavy: 24,
+          wbgtThresholdFullLight: 28, wbgtThresholdFullModerate: 27, wbgtThresholdFullHeavy: 26,
+          wbgtEmergencyStop: 33, notes: "Company-wide fallback.", createdBy: null,
+          createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z",
+          activatedAt: "2026-01-01T00:00:00Z", supersededAt: null,
+        }),
+      ),
+    );
+    renderApp();
+
+    expect(await screen.findByText("MOM-WBGT-2026-DEFAULT")).toBeInTheDocument();
+    expect(screen.getByText(/company-wide fallback/i)).toBeInTheDocument();
+    // Active by construction (not DRAFT), so no activate control is offered for it.
+    expect(screen.queryByRole("button", { name: "Activate this version" })).not.toBeInTheDocument();
   });
 
   it("shows an error state when the catalogue fails to load", async () => {

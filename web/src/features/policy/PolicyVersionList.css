@@ -26,6 +26,12 @@
   margin: 0;
 }
 
+.policy-list__default-heading {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin: 0 0 var(--space-2);
+}
+
 .policy-card {
   padding: var(--space-4);
   display: flex;

@@ -167,6 +167,32 @@ class PolicyVersionControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void getEffectiveVersion_noSiteVersion_fallsBackToCompanyDefault() throws Exception {
+        // V16 seeds one company-wide default (siteId null) as ACTIVE; siteA has configured
+        // nothing of its own, so /effective must resolve to it instead of 404ing.
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/policy-versions/effective")
+                        .header("Authorization", "Bearer " + safetyManagerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.siteId").doesNotExist())
+                .andExpect(jsonPath("$.versionLabel").value("MOM-WBGT-2026-DEFAULT"));
+    }
+
+    @Test
+    void getEffectiveVersion_siteHasOwnVersion_prefersItOverCompanyDefault() throws Exception {
+        mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/policy-versions")
+                        .header("Authorization", "Bearer " + safetyManagerAToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequestBody("MOM-WBGT-2026.1"))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/policy-versions/effective")
+                        .header("Authorization", "Bearer " + safetyManagerAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.siteId").value(siteA.getId().toString()))
+                .andExpect(jsonPath("$.versionLabel").value("MOM-WBGT-2026.1"));
+    }
+
+    @Test
     void duplicateVersionLabel_returns409() throws Exception {
         mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/policy-versions")
                         .header("Authorization", "Bearer " + safetyManagerAToken)

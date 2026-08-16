@@ -83,3 +83,19 @@ export function activatePolicyVersion(siteId: string, versionId: string): Promis
     method: "POST",
   });
 }
+
+/**
+ * A version returned by `/policy-versions/effective` — either the site's own (siteId set,
+ * identical shape to {@link PolicyVersion}) or the company-wide default, which has no site.
+ */
+export type EffectivePolicyVersion = Omit<PolicyVersion, "siteId"> & { siteId: string | null };
+
+/**
+ * The version actually governing recommendations for a site right now: its own if it has
+ * configured one, otherwise the company-wide default (siteId null) PolicyEngineService falls
+ * back to. Unlike {@link fetchActivePolicyVersion}, this does not need the not-found fallback
+ * dance — the default makes a 404 practically unreachable.
+ */
+export function fetchEffectivePolicyVersion(siteId: string): Promise<EffectivePolicyVersion> {
+  return apiFetch<EffectivePolicyVersion>(`/api/v1/sites/${siteId}/policy-versions/effective`);
+}
