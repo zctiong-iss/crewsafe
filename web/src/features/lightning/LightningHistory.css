@@ -7,23 +7,21 @@
   max-width: var(--content-max);
 }
 
-/* ---- Current State Card --------------------------------------------- */
+/* ---- Current State Card ----------------------------------------------
+   Surface (background/border/radius/shadow) comes from the global .card class applied
+   alongside this one in JSX; only layout and the left-edge state accent live here. */
 .lightning-history__risk-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   align-items: flex-start;
-  background-color: var(--surface);
-  border: 1px solid var(--line);
   border-left: 8px solid var(--status-none);
-  border-radius: var(--radius);
   padding: var(--space-4);
-  box-shadow: var(--shadow-card);
 }
 .lightning-history__risk-card--clear      { border-left-color: var(--status-ok); }
 .lightning-history__risk-card--advisory   { border-left-color: var(--band-moderate); background: var(--band-moderate-wash); }
 .lightning-history__risk-card--stop_work  { border-left-color: var(--band-high); background: var(--band-high); }
-.lightning-history__risk-card--stop_work .lightning-history__risk-detail { color: #ffffff; }
+.lightning-history__risk-card--stop_work .lightning-history__risk-detail { color: var(--action-ink); }
 
 .lightning-history__risk-detail {
   margin: 0;
@@ -45,15 +43,12 @@
 .lightning-state--none      { background: var(--status-none-wash);    color: var(--status-none); }
 .lightning-state--clear     { background: var(--status-ok-wash);      color: var(--status-ok); }
 .lightning-state--advisory  { background: var(--band-moderate-wash);  color: var(--band-moderate); }
-.lightning-state--stop_work { background: var(--band-extreme);        color: #ffffff; }
+.lightning-state--stop_work { background: var(--band-extreme);        color: var(--action-ink); }
 
-/* ---- Observation History Table --------------------------------------- */
+/* ---- Observation History Table -----------------------------------------
+   Surface comes from the global .card class applied alongside this one in JSX; layout only. */
 .lightning-history__table-card {
-  background-color: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
   padding: var(--space-5);
-  box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

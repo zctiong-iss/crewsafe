@@ -68,26 +68,28 @@ export function PolicyVersionCard({ version, activeVersion, canWrite, isActivati
 
       {open && (
         <div className="policy-card__detail">
-          <table className="policy-card__thresholds">
-            <thead>
-              <tr>
-                <th>Acclimatisation</th>
-                <th>Light</th>
-                <th>Moderate</th>
-                <th>Heavy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {THRESHOLD_GROUPS.map((group) => (
-                <tr key={group.level}>
-                  <td className="policy-card__level">{group.level}</td>
-                  <td>{version[group.light]}°C</td>
-                  <td>{version[group.moderate]}°C</td>
-                  <td>{version[group.heavy]}°C</td>
+          <div className="policy-card__thresholds-scroll">
+            <table className="policy-card__thresholds">
+              <thead>
+                <tr>
+                  <th>Acclimatisation</th>
+                  <th>Light</th>
+                  <th>Moderate</th>
+                  <th>Heavy</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {THRESHOLD_GROUPS.map((group) => (
+                  <tr key={group.level}>
+                    <td className="policy-card__level">{group.level}</td>
+                    <td>{version[group.light]}°C</td>
+                    <td>{version[group.moderate]}°C</td>
+                    <td>{version[group.heavy]}°C</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <p className="policy-card__stop">
             Emergency stop <strong>{version.wbgtEmergencyStop}°C</strong> — no work above this,

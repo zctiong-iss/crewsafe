@@ -54,7 +54,7 @@ function StrikeDistance({ km }: { km: number | null }) {
 function RiskCard({ risk }: { risk: LightningRisk | null }) {
   if (risk === null)
     return (
-      <div className="lightning-history__risk-card lightning-history__risk-card--none">
+      <div className="lightning-history__risk-card card lightning-history__risk-card--none">
         <span className="lightning-state lightning-state--none">No data</span>
         <p className="lightning-history__risk-detail">
           No lightning has been ingested for this site yet.
@@ -63,7 +63,7 @@ function RiskCard({ risk }: { risk: LightningRisk | null }) {
     );
 
   return (
-    <div className={`lightning-history__risk-card lightning-history__risk-card--${risk.state.toLowerCase()}`}>
+    <div className={`lightning-history__risk-card card lightning-history__risk-card--${risk.state.toLowerCase()}`}>
       <span className={`lightning-state lightning-state--${risk.state.toLowerCase()}`}>
         {STATE_LABEL[risk.state]}
       </span>
@@ -124,7 +124,7 @@ export function LightningHistory({ siteId, siteSwitcher }: { siteId: string; sit
               body="Readings will appear here automatically once NEA ingestion starts for this site."
             />
           ) : (
-            <section className="lightning-history__table-card" aria-label="Lightning observation history">
+            <section className="lightning-history__table-card card" aria-label="Lightning observation history">
               <h2 className="lightning-history__table-title">Recent readings</h2>
               <div className="lightning-history__table-scroll">
                 <table className="lightning-history__table">

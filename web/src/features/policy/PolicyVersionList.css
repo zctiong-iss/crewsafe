@@ -92,6 +92,9 @@
   gap: var(--space-3);
 }
 
+.policy-card__thresholds-scroll {
+  overflow-x: auto;
+}
 .policy-card__thresholds {
   width: 100%;
   border-collapse: collapse;
@@ -162,14 +165,15 @@
   color: var(--ink);
   cursor: pointer;
 }
-.policy-card__confirm-yes {
-  background: var(--action) !important;
-  border-color: var(--action) !important;
-  color: var(--action-ink) !important;
+.policy-card__confirm-actions .policy-card__confirm-yes {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
 }
 .policy-card__confirm-actions button:disabled { opacity: 0.6; cursor: default; }
 
-/* Pills: status only, no intensity scale here. */
+/* Policy status tones — layer on the shared base .pill (design/pill.css). FILLED wash per
+   the STATE role; status is the primary signal on a policy card. No intensity scale here. */
 .pill--policy-active     { background: var(--status-ok-wash);      color: var(--status-ok); }
 .pill--policy-draft      { background: var(--status-waiting-wash); color: var(--status-waiting); }
 .pill--policy-superseded { background: var(--status-none-wash);    color: var(--status-none); }

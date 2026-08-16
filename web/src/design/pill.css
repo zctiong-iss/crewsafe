@@ -1,0 +1,54 @@
+/*
+ * Shared pill/chip grammar. One shape, three roles — lifted out of ShiftList.css's `.pill`
+ * base rule so shifts, plans, policy (and any future consumer) render one visual language.
+ *
+ * STATE     = filled.   Reserved for a status actively asking for a decision right now.
+ * ATTRIBUTE = outlined. Classifies the item (Required/Suggested, work intensity).
+ * ENTITY    = neutral, ALWAYS bordered. Names an identity (a worker). No semantic colour —
+ *             the border carries the chip's edge if the fill is ever dropped, so never rely
+ *             on fill alone to read this role.
+ *
+ * Base shape below is byte-identical to the former ShiftList.css `.pill` rule, so lifting it
+ * here changes nothing about how existing shift pills render. Feature-specific tones
+ * (.pill--planned, .pill--policy-active, .pill--intensity-*) stay in their feature stylesheets
+ * and layer on top of this base — they only need to be defined after this file in cascade order.
+ */
+.pill {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+/* STATE — filled wash. Feature-specific tones (e.g. .pill--planned) define their own colour;
+   .pill--state is a shared instance of the role for a consumer with no tone of its own yet. */
+.pill--state {
+  background: var(--status-waiting-wash);
+  color: var(--status-waiting);
+}
+
+/* ATTRIBUTE — outlined, transparent fill. */
+.pill--attribute {
+  background: transparent;
+  border: 1.5px solid;
+}
+.pill--attribute-required {
+  /* Borrows --band-high (hazard-band red) as the danger tone — no --danger token yet.
+     Reconcile onto a real --danger when tokens.css clears CVD review. */
+  color: var(--band-high);
+  border-color: var(--band-high);
+}
+.pill--attribute-suggested {
+  color: var(--ink-secondary);
+  border-color: var(--ink-secondary);
+}
+
+/* ENTITY — neutral fill, always bordered. No --surfaceAlt on web; --surface-sunken is the
+   nearest analog (the warm-stone recessed-panel tone already used for inputs). */
+.pill--entity {
+  background: var(--surface-sunken);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+}
