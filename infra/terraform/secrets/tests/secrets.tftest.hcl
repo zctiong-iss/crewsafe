@@ -166,8 +166,8 @@ run "entry_shape" {
 
   # Eight, not thirteen: a value earns an entry only where the deployment must
   # differ from the application's own default (FR-001, research.md R-008). The
-  # two ml/model-manifest* entries (SCRUM-373, FR-008) are deliberately empty
-  # rather than absent — see the dedicated deferred_model_manifest_slots run
+  # two ml/model-manifest* entries (SCRUM-373, FR-008) are always declared
+  # explicitly rather than absent — see the dedicated model_manifest_slots run
   # block below.
   assert {
     condition     = length(aws_ssm_parameter.config) == 8
@@ -208,15 +208,14 @@ run "entry_shape" {
   }
 }
 
-# SCRUM-373, FR-008 — the model-manifest configuration is declared but left
-# unset: no reviewed, approved_for_inference bundle currently exists to
-# activate (spec Clarifications). ForecastModelRegistry.from_environment()
-# treats an absent/empty WBGT_MODEL_MANIFEST as "no model configured" and
-# falls back to the persistence baseline — not an error path — so an empty
-# String parameter is deliberately indistinguishable from "unset" to the
-# application, while still being a real Terraform resource a future promotion
-# can update by value only.
-run "deferred_model_manifest_slots" {
+# SCRUM-373, FR-008 — the model-manifest configuration slot. Originally
+# declared holding the placeholder value "unset" (SSM rejects an actually-
+# empty string — found live, secrets-shared-dev apply, 2026-08-15); promoted
+# by SCRUM-114 (2026-08-16) to the checksum-pinned staging-demo bundle
+# (ml-service/MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md
+# #8.0) — the shared university-project staging demonstration only, not a
+# production approval.
+run "model_manifest_slots" {
   command = apply
 
   assert {
@@ -229,20 +228,28 @@ run "deferred_model_manifest_slots" {
     error_message = "A configuration slot for WBGT_MODEL_MANIFEST_SHA256 must exist (FR-008)."
   }
 
-  # "unset", not "": AWS SSM PutParameter rejects an actually-empty string
-  # (found live, secrets-shared-dev apply, 2026-08-15). "unset" is the
-  # AWS-API-legal placeholder that still means "no bundle is approved for
-  # inference yet" (FR-008) — see main.tf's comment for why this is
-  # behaviorally equivalent to a true empty value from ml-service's own
-  # perspective, modulo one harmless extra startup log line.
+  # Must be an absolute, in-image path — ForecastModelRegistry.from_environment()
+  # (ml-service/crewsafe_ml/inference.py) resolves this value with
+  # Path(value).resolve(strict=True), which resolves a relative path against
+  # the process's own cwd, not image root. A relative value here would fail
+  # silently (the same safe fallback "unset" took), not loudly, which is
+  # exactly the mistake this assertion exists to catch before it ships.
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == "unset"
-    error_message = "The model-manifest slot must hold the 'unset' placeholder in this issue — no bundle is approved for inference yet, and SSM rejects an empty string (FR-008)."
+    condition     = startswith(aws_ssm_parameter.config["ml/model-manifest"].value, "/")
+    error_message = "ml/model-manifest must be an absolute in-image path, or ForecastModelRegistry resolves it against the wrong working directory and silently fails to load (FR-008)."
+  }
+
+  # Pinned to the exact reviewed staging-demo bundle path/checksum
+  # (ml-service/MODEL_CARD.md), so an accidental edit changes this test's
+  # expectation rather than silently shipping a different, unreviewed bundle.
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == "/app/model-bundle/staging-demo-v1/manifest.json"
+    error_message = "ml/model-manifest must point at the reviewed staging-demo bundle path baked into the ml-service image (FR-008)."
   }
 
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == "unset"
-    error_message = "The model-manifest-sha256 slot must hold the 'unset' placeholder in this issue, for the same reason (FR-008)."
+    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == "36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031"
+    error_message = "ml/model-manifest-sha256 must match the reviewed staging-demo manifest's own checksum (FR-008)."
   }
 }
 
