@@ -1,7 +1,11 @@
 package com.crewsafe.lightning.api;
 
 import com.crewsafe.common.error.ResourceNotFoundException;
+import com.crewsafe.lightning.domain.LightningObservation;
+import com.crewsafe.lightning.repository.LightningObservationRepository;
 import com.crewsafe.lightning.risk.LightningRiskDerivationService;
+import com.crewsafe.weather.domain.WeatherQualityStatus;
+import com.crewsafe.weather.domain.WeatherSource;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -34,6 +39,7 @@ import java.util.UUID;
  * no freshness while costing battery on a phone that has to last an outdoor shift.
  *
  * @author Justin Chua
+ * @author Jemilin Beulah
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/lightning")
@@ -41,6 +47,7 @@ import java.util.UUID;
 public class LightningController {
 
     private final LightningRiskDerivationService riskDerivation;
+    private final LightningObservationRepository observations;
     private final Clock clock;
 
     /**
@@ -58,6 +65,25 @@ public class LightningController {
         LightningRiskResponse response = riskDerivation.deriveForSite(siteId, clock.instant())
                 .map(payload -> LightningRiskResponse.from(siteId, payload))
                 .orElseThrow(() -> new ResourceNotFoundException("No lightning data ingested for site " + siteId));
+
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * The raw ingestion ticks behind the derived state above, newest first, for the lightning
+     * history tab. Unlike {@link #getLightningRisk}, an empty list is a normal answer here —
+     * this is a history view, not a stop-work surface, so "nothing ingested yet" and "nothing
+     * ingested recently" both just render as an empty table rather than needing a 404.
+     */
+    @GetMapping("/observations")
+    @PreAuthorize("@siteAccess.canAccess(#siteId)")
+    public ResponseEntity<List<LightningObservationResponse>> getLightningObservations(
+            @PathVariable UUID siteId) {
+        List<LightningObservationResponse> response = observations
+                .findTop20BySiteIdOrderByObservedAtDesc(siteId)
+                .stream()
+                .map(LightningObservationResponse::from)
+                .toList();
 
         return ResponseEntity.ok(response);
     }
@@ -90,6 +116,31 @@ public class LightningController {
                     payload.observedAt(),
                     payload.validUntil(),
                     payload.freshness());
+        }
+    }
+
+    /** One ingestion tick, as stored — not derived, unlike {@link LightningRiskResponse}. */
+    public record LightningObservationResponse(
+            UUID id,
+            UUID siteId,
+            /** Null when NEA reported no strikes that tick — a valid outcome, not a missing value. */
+            BigDecimal nearestStrikeKm,
+            Instant nearestStrikeAt,
+            Instant observedAt,
+            Instant ingestedAt,
+            WeatherSource source,
+            WeatherQualityStatus qualityStatus) {
+
+        static LightningObservationResponse from(LightningObservation observation) {
+            return new LightningObservationResponse(
+                    observation.getId(),
+                    observation.getSiteId(),
+                    observation.getNearestStrikeKm(),
+                    observation.getNearestStrikeAt(),
+                    observation.getObservedAt(),
+                    observation.getIngestedAt(),
+                    observation.getSource(),
+                    observation.getQualityStatus());
         }
     }
 }

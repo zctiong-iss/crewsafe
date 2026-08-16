@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
+/** @author Tang Chee Seng, Jemilin Beulah (with assistance from Claude and ChatGPT) */
 
 import { describe, expect, it } from "vitest";
 import {
@@ -70,6 +70,14 @@ describe("decodeConditionsSnapshot", () => {
     expect(decoded.snapshot.lightning).toBeNull();
     expect(decoded.snapshot.activeShift).toBeNull();
     expect(decoded.warnings).toEqual([]);
+  });
+
+  it("accepts a null nearestStrikeKm on a CLEAR lightning state", () => {
+    const decoded = decodeConditionsSnapshot(encode((value) => {
+      child(value, "lightning").nearestStrikeKm = null;
+    }));
+
+    expect(decoded.snapshot.lightning?.nearestStrikeKm).toBeNull();
   });
 
   it.each([

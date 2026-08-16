@@ -1,0 +1,112 @@
+/** @author Jemilin Beulah */
+
+/* Create-policy-version form layout. Structure/logic live in CreatePolicyVersionForm.tsx. */
+.policy-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 640px;
+}
+
+.policy-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.policy-form__section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  margin: 0 0 var(--space-1);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+.policy-form__hint {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.policy-form label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+.policy-form input,
+.policy-form textarea {
+  font: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--ink);
+}
+.policy-form input:focus-visible,
+.policy-form textarea:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 1px;
+}
+
+/* Each threshold group carries the .card utility (global.css) — add only layout here. */
+.policy-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.policy-form__row legend {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  padding: 0 var(--space-2);
+}
+.policy-form__threshold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.policy-form__error {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+.policy-form__note {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.policy-form__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  cursor: pointer;
+}
+.policy-form__back:hover { background: var(--surface-sunken); }
+
+.policy-form__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.policy-form__actions button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--action-ink);
+  cursor: pointer;
+}
+.policy-form__actions button:disabled { opacity: 0.6; cursor: default; }
