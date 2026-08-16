@@ -22,6 +22,18 @@ public interface WeatherObservationRepository extends JpaRepository<WeatherObser
     List<WeatherObservation> findTop9BySiteIdOrderByObservedAtDesc(UUID siteId);
 
     /**
+     * A wider window than {@link #findTop9BySiteIdOrderByObservedAtDesc}, for the forecast
+     * ladder.
+     *
+     * <p>Nine rows is exactly two hours at a perfect 15-minute cadence, which leaves no room for
+     * a missed delivery: one absent reading and the window no longer holds enough history to
+     * work with. Twenty-four rows covers the same two hours even when a third of the cycles are
+     * missing, and lets the lower tiers reach back for a real observation when the model tier
+     * cannot be satisfied at all.
+     */
+    List<WeatherObservation> findTop24BySiteIdOrderByObservedAtDesc(UUID siteId);
+
+    /**
      * Atomically inserts one observation or reports that its logical identity already
      * exists. PostgreSQL's conflict handling makes this safe across threads and instances;
      * a check-then-save sequence could not provide that guarantee.

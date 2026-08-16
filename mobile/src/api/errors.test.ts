@@ -4,8 +4,10 @@
  * The error taxonomy the UI branches on — 401 vs 403 is the distinction that matters most
  * (see the file's own header comment). Asserts every status-to-kind mapping and that
  * `messageKeyFor`/`isApiError` are simple, total functions.
+ *
+ * @author Justin Chua
  */
-import { ApiError, isApiError, kindForStatus, messageKeyFor } from "./errors";
+import { ApiError, isApiError, kindForStatus, messageKeyFor, toApiErrorCode } from "./errors";
 
 describe("kindForStatus", () => {
   it.each([
@@ -27,6 +29,40 @@ describe("messageKeyFor", () => {
     const error = new ApiError("unauthenticated", "HTTP 401", 401, "req-1");
     expect(messageKeyFor(error)).toBe("errors.unauthenticated");
   });
+
+  /*
+   * The regression this whole code path exists for. Both of AgentDraftService's refusals are
+   * 409s, so before `code` a supervisor on a site with no heat policy was told "Someone else
+   * changed this first. Reload and try again." — advice that can never work, because no
+   * amount of reloading activates a policy version.
+   */
+  it("prefers a named code over the status-derived kind", () => {
+    const error = new ApiError("conflict", "HTTP 409", 409, "req-1", {}, "NO_ACTIVE_POLICY");
+    expect(messageKeyFor(error)).toBe("errors.codes.NO_ACTIVE_POLICY");
+  });
+
+  it("falls back to the kind when no code was named", () => {
+    const error = new ApiError("conflict", "HTTP 409", 409, "req-1");
+    expect(messageKeyFor(error)).toBe("errors.conflict");
+  });
+});
+
+describe("toApiErrorCode", () => {
+  it.each(["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"] as const)("accepts %s", (code) => {
+    expect(toApiErrorCode(code)).toBe(code);
+  });
+
+  /*
+   * An unrecognised code must not become `errors.codes.<something>`, which would resolve to a
+   * missing translation and show the raw key to a user. A build that predates a new backend
+   * code degrades to the status message instead.
+   */
+  it.each([["FUTURE_CODE"], [""], [null], [undefined], [42], [{}]])(
+    "rejects %p as unknown",
+    (value) => {
+      expect(toApiErrorCode(value)).toBeNull();
+    },
+  );
 });
 
 describe("isApiError", () => {

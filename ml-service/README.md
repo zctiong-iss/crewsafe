@@ -101,11 +101,11 @@ evaluate that exact checksum-pinned bundle without retraining it:
 
 ```bash
 python -m crewsafe_ml.evaluate_approval \
-  --model-manifest artifacts/wbgt-six-month-safety-floor-dev-v1/manifest.json \
-  --model-manifest-sha256 <64-character-manifest-sha256> \
-  --features data/approval-2026-08/weather_features_15min.csv \
-  --feature-manifest data/approval-2026-08/manifest.json \
-  --output artifacts/approval-2026-08.json
+  --model-manifest artifacts/wbgt-six-month-frozen-candidate-v2/manifest.json \
+  --model-manifest-sha256 ad0a3ba2f1a7e587ceaa7333c8bf65afe6535c0b31f0d15cb9028ca41e3b9359 \
+  --features data/approval-2026-08-15-to-2026-09-04/weather_features_15min.csv \
+  --feature-manifest data/approval-2026-08-15-to-2026-09-04/manifest.json \
+  --output artifacts/approval-2026-08-15-to-2026-09-04-v2.json
 ```
 
 The default evidence window is at least 21 complete days. The report checks that
@@ -115,6 +115,10 @@ requires no loss of recall at 32°C
 or 33°C. It is evidence for a human review, not an automatic unlock. A report
 also stays blocked when the model was produced from an unreviewable `dirty`
 source commit or the new period contains no high-risk examples.
+
+The exact download command, dates, and human-review checks for this frozen
+candidate are in
+[`docs/runbooks/SCRUM-114-model-approval.md`](../docs/runbooks/SCRUM-114-model-approval.md).
 
 The current six-month development evaluation, intended use, uncertainty,
 limitations, per-band errors, and retraining triggers are recorded in
