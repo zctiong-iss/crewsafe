@@ -7,6 +7,9 @@ import com.crewsafe.identity.domain.UserStatus;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CognitoProperties;
+import com.crewsafe.policy.domain.MomHeatPolicyDefaults;
+import com.crewsafe.policy.domain.PolicyVersionStatus;
+import com.crewsafe.policy.repository.PolicyVersionRepository;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -20,6 +23,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,8 +54,10 @@ public class DemoDataSeeder implements ApplicationRunner {
     private final AppUserRepository users;
     private final SiteRepository sites;
     private final SiteMembershipRepository memberships;
+    private final PolicyVersionRepository policyVersions;
     private final CognitoProperties cognitoProperties;
     private final ObjectMapper objectMapper;
+    private final Clock clock;
 
     @Override
     @Transactional
@@ -74,9 +81,38 @@ public class DemoDataSeeder implements ApplicationRunner {
         log.info("demo_data_reconciled users={} sites=2", mappings.size());
     }
 
+    /**
+     * Creates the site if missing, and guarantees it has an ACTIVE heat policy either way.
+     *
+     * <p>The policy half is not cosmetic seeding (SCRUM-432). Without an ACTIVE
+     * {@code policy_version}, {@code PolicyEngineService} throws, the draft endpoint answers 409,
+     * and the site produces no recommendations, no mandatory rest and no hydration controls at
+     * all — the heat-safety feature is simply inert. V17 backfills the sites that exist when it
+     * runs; this covers the ones created afterwards, which is why the default belongs here and
+     * not only in a migration.
+     *
+     * <p>Applied on the existing-site path too, not just on creation: a database migrated before
+     * V17, or one whose site was made some other way, would otherwise stay inert forever.
+     */
     private Site findOrCreateSite(String name, BigDecimal latitude, BigDecimal longitude) {
-        return sites.findByName(name)
+        Site site = sites.findByName(name)
                 .orElseGet(() -> sites.save(new Site(name, latitude, longitude)));
+        ensureActivePolicy(site);
+        return site;
+    }
+
+    /**
+     * Never overwrites a configured policy — a site that already has an ACTIVE version keeps it,
+     * whatever its thresholds. {@code uq_policy_version_active_per_site} (V12) would reject a
+     * second ACTIVE row anyway; checking first makes this a no-op rather than a startup crash.
+     */
+    private void ensureActivePolicy(Site site) {
+        if (policyVersions.findBySiteIdAndStatus(site.getId(), PolicyVersionStatus.ACTIVE).isPresent()) {
+            return;
+        }
+        policyVersions.save(MomHeatPolicyDefaults.activeVersionFor(site.getId(), LocalDate.now(clock)));
+        log.info("demo_data_seeded_default_policy site_id={} version={}",
+                site.getId(), MomHeatPolicyDefaults.VERSION_LABEL);
     }
 
     private AppUser reconcileIdentity(DemoUserMapping mapping) {
