@@ -22,6 +22,11 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+const hostedUiDomain = required(
+  "VITE_COGNITO_HOSTED_UI_DOMAIN",
+  import.meta.env.VITE_COGNITO_HOSTED_UI_DOMAIN,
+);
+
 export const authConfig: UserManagerSettings = {
   authority: required("VITE_COGNITO_AUTHORITY", import.meta.env.VITE_COGNITO_AUTHORITY),
   client_id: required("VITE_COGNITO_CLIENT_ID", import.meta.env.VITE_COGNITO_CLIENT_ID),
@@ -32,6 +37,18 @@ export const authConfig: UserManagerSettings = {
   // tokens in the URL fragment, where they land in browser history and referrer headers.
   response_type: "code",
   scope: "openid email profile",
+
+  // jagregory/cognito-local's discovery document carries only issuer/jwks_uri — no
+  // authorization_endpoint or token_endpoint, both required by the OIDC spec and by
+  // oidc-client-ts to build a sign-in redirect at all. Real Cognito's discovery document
+  // already has both, at exactly this hosted-UI-relative shape, so seeding them here is a
+  // no-op against AWS (metadataSeed only fills what the fetched discovery didn't provide)
+  // and the one thing that makes sign-in reachable against the local emulator.
+  metadataSeed: {
+    authorization_endpoint: `${hostedUiDomain}/oauth2/authorize`,
+    token_endpoint: `${hostedUiDomain}/oauth2/token`,
+    revocation_endpoint: `${hostedUiDomain}/oauth2/revoke`,
+  },
 
   /*
    * sessionStorage, not localStorage.
@@ -68,11 +85,6 @@ export const authConfig: UserManagerSettings = {
 export const apiBaseUrl: string = required(
   "VITE_API_BASE_URL",
   import.meta.env.VITE_API_BASE_URL,
-);
-
-const hostedUiDomain = required(
-  "VITE_COGNITO_HOSTED_UI_DOMAIN",
-  import.meta.env.VITE_COGNITO_HOSTED_UI_DOMAIN,
 );
 
 /**

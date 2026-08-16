@@ -51,19 +51,24 @@ function managerThatSignsIn() {
 
 describe("returning from Cognito", () => {
   it("lands the user in the app, not back on the sign-in screen", async () => {
+    // A fresh Response per call, not a shared instance: AuthProvider's mount effect and
+    // CallbackPage's completeSignIn() both call resolveSession() independently, and a
+    // Response body can only be read once — reusing one here made this test's outcome
+    // depend on which of those two calls happened to read the body first.
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            id: "u-1",
-            username: "supervisor1",
-            displayName: "Aisyah",
-            role: "SUPERVISOR",
-            siteIds: [],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: "u-1",
+              username: "supervisor1",
+              displayName: "Aisyah",
+              role: "SUPERVISOR",
+              siteIds: [],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
       ),
     );
 

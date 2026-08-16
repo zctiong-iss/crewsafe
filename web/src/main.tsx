@@ -29,6 +29,7 @@ import "@fontsource/lexend/700.css";
 
 
 import "@/design/global.css";
+import "@/design/pill.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");

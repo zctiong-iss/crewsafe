@@ -129,6 +129,24 @@ public class PolicyVersionController {
     }
 
     /**
+     * The version actually governing recommendations for this site right now — its own if it
+     * has configured one, otherwise the company-wide default {@link
+     * com.crewsafe.policy.service.PolicyEngineService} falls back to. A default response has
+     * {@code siteId: null} and is not editable through this API: there is no
+     * create/activate target for it, unlike {@link #getActiveVersion}, which stays strictly
+     * site-scoped and 404s when the site has configured nothing of its own.
+     */
+    @GetMapping("/effective")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<PolicyVersionResponse> getEffectiveVersion(@PathVariable UUID siteId) {
+        PolicyVersion effective = policyVersionService.getEffective(siteId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No policy configured for site " + siteId + " and no company default is active"));
+
+        return ResponseEntity.ok(PolicyVersionResponse.from(effective));
+    }
+
+    /**
      * Configures a new policy version. Becomes the site's active policy immediately if it is
      * the site's first version ever configured; otherwise it is created as a DRAFT that a
      * subsequent {@link #activateVersion} call puts into force.

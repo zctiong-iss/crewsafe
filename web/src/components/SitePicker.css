@@ -1,0 +1,29 @@
+/** @author Jemilin Beulah */
+
+.site-picker {
+  font: inherit;
+  font-size: var(--text-sm);
+}
+
+.site-picker--single {
+  color: var(--ink-muted);
+  margin-top: var(--space-1);
+}
+
+select.site-picker {
+  padding: var(--space-1) var(--space-6) var(--space-1) var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--ink);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%230f2540" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right var(--space-2) center;
+}
+
+select.site-picker:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 1px;
+}

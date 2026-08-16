@@ -1,0 +1,179 @@
+/** @author Jemilin Beulah */
+
+/* Policy version catalogue + card + status pills. Grammar matches ShiftList.css: status
+   pills FILL, using the same --status-* washes (ACTIVE=ok, DRAFT=waiting, SUPERSEDED=none). */
+.policy-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max);
+}
+
+.policy-list__create {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.policy-list__create:hover { background: var(--action-hover); }
+
+.policy-list__error {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.policy-list__default-heading {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin: 0 0 var(--space-2);
+}
+
+.policy-card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.policy-card.policy-card--active     { border-left: 8px solid var(--status-ok); background: var(--status-ok-wash); }
+.policy-card.policy-card--draft      { border-left: 8px solid var(--status-waiting); }
+.policy-card.policy-card--superseded { border-left: 8px solid var(--status-none); }
+
+.policy-card__summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.policy-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.policy-card__source {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-1);
+}
+.policy-card__label {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  margin: 0;
+}
+.policy-card__date {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: var(--space-1) 0 0;
+}
+
+.policy-card__disclosure {
+  align-self: flex-start;
+  margin-top: var(--space-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--action);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.policy-card__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.policy-card__thresholds-scroll {
+  overflow-x: auto;
+}
+.policy-card__thresholds {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.policy-card__thresholds th {
+  text-align: left;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+.policy-card__thresholds td {
+  padding: var(--space-2);
+}
+.policy-card__level {
+  font-weight: var(--weight-medium);
+  color: var(--ink);
+}
+
+.policy-card__stop {
+  font-size: var(--text-sm);
+  color: var(--band-high);
+  margin: 0;
+}
+.policy-card__notes {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin: 0;
+}
+
+.policy-card__activate {
+  align-self: flex-start;
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--action);
+  background: var(--action-quiet);
+  color: var(--action);
+  cursor: pointer;
+}
+.policy-card__activate:disabled { opacity: 0.6; cursor: default; }
+
+.policy-card__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+}
+.policy-card__confirm p { margin: 0; font-size: var(--text-sm); }
+.policy-card__confirm-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.policy-card__confirm-actions button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.policy-card__confirm-actions .policy-card__confirm-yes {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
+}
+.policy-card__confirm-actions button:disabled { opacity: 0.6; cursor: default; }
+
+/* Policy status tones — layer on the shared base .pill (design/pill.css). FILLED wash per
+   the STATE role; status is the primary signal on a policy card. No intensity scale here. */
+.pill--policy-active     { background: var(--status-ok-wash);      color: var(--status-ok); }
+.pill--policy-draft      { background: var(--status-waiting-wash); color: var(--status-waiting); }
+.pill--policy-superseded { background: var(--status-none-wash);    color: var(--status-none); }
