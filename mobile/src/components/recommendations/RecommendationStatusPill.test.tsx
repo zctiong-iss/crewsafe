@@ -45,6 +45,16 @@ it("labels a SUPERSEDED recommendation as superseded, not as approved", async ()
   expect(queryByText("recommendations.decidedApproved")).toBeNull();
 });
 
+it("labels an AUTO_DISPATCHED recommendation distinctly, not as approved", async () => {
+  // Same regression class as DRAFT/SUPERSEDED: AUTO_DISPATCHED (SCRUM-440) is a legal backend
+  // status with no Approval row behind it either, so a fall-through here would render it green
+  // "Approved" too -- misleading in the opposite direction from SUPERSEDED, since this plan
+  // genuinely is in effect, just never through a supervisor's decision.
+  const { queryByText } = await render(<RecommendationStatusPill status="AUTO_DISPATCHED" />);
+  expect(queryByText("recommendations.statusAutoDispatched")).not.toBeNull();
+  expect(queryByText("recommendations.decidedApproved")).toBeNull();
+});
+
 it("labels a plain approval as approved", async () => {
   const { queryByText } = await render(
     <RecommendationStatusPill status="APPROVED" decision="APPROVED" />,

@@ -47,11 +47,21 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
    */
   const superseded = status === "SUPERSEDED";
 
+  /*
+   * SCRUM-440: a lightning-immediate or WBGT-max stop-work skipped approval entirely and was
+   * already dispatched to workers. Also not a decision — same non-fall-through treatment as
+   * SUPERSEDED — but `danger`, not the muted grey the other two non-actionable states use: a
+   * stop-work already in effect is not a plan quietly receding into history, it is the most
+   * severe thing this screen can show, and the colour should say so even though there is
+   * nothing left for the supervisor to tap.
+   */
+  const autoDispatched = status === "AUTO_DISPATCHED";
+
   // Filled only while pending: that is the one state asking someone to do something. A draft is
   // not yet asking anything, and a list of decided plans should recede rather than keep shouting.
   const color = pending
     ? theme.colors.warningFill
-    : rejected
+    : rejected || autoDispatched
       ? theme.colors.danger
       : draft || superseded
         ? theme.colors.textSecondary
@@ -65,9 +75,11 @@ const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, d
         ? t("recommendations.statusDraft")
         : superseded
           ? t("recommendations.statusSuperseded")
-          : decision === "EDITED"
-            ? t("recommendations.decidedEdited")
-            : t("recommendations.decidedApproved");
+          : autoDispatched
+            ? t("recommendations.statusAutoDispatched")
+            : decision === "EDITED"
+              ? t("recommendations.decidedEdited")
+              : t("recommendations.decidedApproved");
 
   return (
     <View
