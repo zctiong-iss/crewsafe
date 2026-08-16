@@ -17,8 +17,9 @@ require_executable "$REPORT" "report-findings.sh"
 tmp="$(make_tmpdir)"
 
 write_findings() {
-  printf '%s' "$2" >"$tmp/$1"
-  printf '%s' "$tmp/$1"
+  local name="$1" content="$2"
+  printf '%s' "$content" >"$tmp/$name"
+  printf '%s' "$tmp/$name"
 }
 
 # --- blocking finding -------------------------------------------------------

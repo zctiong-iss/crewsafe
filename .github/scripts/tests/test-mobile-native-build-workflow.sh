@@ -121,7 +121,7 @@ assert_absent 'github.head_ref' "$workflow" 'SEC-002 checkout pinning' -F
 # propagate as a failed run (FR-007, FR-012).
 assert_absent 'continue-on-error: true' "$workflow" 'FR-007/FR-012 fail-closed on compile failure' -F
 
-test -f "$runbook" || { echo "missing $runbook" >&2; exit 1; }
+[[ -f "$runbook" ]] || { echo "missing $runbook" >&2; exit 1; }
 
 for needle in \
   'gh workflow run' \

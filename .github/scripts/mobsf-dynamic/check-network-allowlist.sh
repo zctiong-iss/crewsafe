@@ -17,7 +17,8 @@ usage() {
 }
 
 fail() {
-  echo "check-network-allowlist.sh: $1" >&2
+  local message="$1"
+  echo "check-network-allowlist.sh: $message" >&2
   exit 1
 }
 

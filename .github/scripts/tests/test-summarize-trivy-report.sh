@@ -7,9 +7,10 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 TESTS_RUN=0
 TESTS_FAILED=0
+readonly TEST_REVISION='revision'
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 expect() {
   local expected="$1" label="$2"
   shift 2
@@ -52,15 +53,15 @@ else
   fail 'summary uses the backend title'
 fi
 
-expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' 'revision' 'Untrusted title'
+expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" 'Untrusted title'
 
 printf '{not-json}\n' >"$report"
-expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' 'revision'
+expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION"
 
 : >"$report"
-expect 1 'rejects empty report' "$SCRIPT" "$report" "$summary" 'image' 'revision'
+expect 1 'rejects empty report' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION"
 
-expect 1 'rejects missing report' "$SCRIPT" "$WORK/missing.json" "$summary" 'image' 'revision'
+expect 1 'rejects missing report' "$SCRIPT" "$WORK/missing.json" "$summary" 'image' "$TEST_REVISION"
 
 printf '%s tests, %s failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

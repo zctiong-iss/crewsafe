@@ -23,12 +23,14 @@ set -euo pipefail
 SONAR_HOST="https://sonarcloud.io"
 
 fail() {
-  printf 'ERROR: %s\n' "$1" >&2
+  local message="$1"
+  printf 'ERROR: %s\n' "$message" >&2
   exit 1
 }
 
 log_action() {
-  printf 'RUN_REPORT action=%s\n' "$1"
+  local action="$1"
+  printf 'RUN_REPORT action=%s\n' "$action"
 }
 
 [[ -n "${SONAR_TOKEN:-}" ]] || fail "SONAR_TOKEN is not set"

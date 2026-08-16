@@ -34,10 +34,11 @@ CALL_LOG="$TEST_TMP/calls.log"
 cleanup() { rm -rf "$TEST_TMP"; }
 trap cleanup EXIT INT TERM
 
-pass() { printf '  ok   %s\n' "$1"; }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -259,6 +260,9 @@ if [[ -x "$VALIDATOR" ]]; then
   run_validator_capture valid-web TRIGGER_COMPONENT=web
   TESTS_RUN=$((TESTS_RUN + 1)); [[ "$VALIDATOR_STATUS" == 0 ]] && pass "validator accepts web configuration" || fail "validator accepts web configuration"
 
+  # S5332 accepted exception: example.invalid is an RFC 6761 reserved test domain, used
+  # here only as a synthetic non-HTTPS fixture to prove the validator rejects it -- never a
+  # real network call.
   run_validator_capture bad-origin WEB_BASE_URL=http://example.invalid APPROVED_WEB_BASE_URL=http://example.invalid
   TESTS_RUN=$((TESTS_RUN + 1)); [[ "$VALIDATOR_STATUS" != 0 ]] && pass "validator rejects non-HTTPS origin" || fail "validator rejects non-HTTPS origin"
   assert_not_in_dir "bad-origin output excludes password" "$TEST_TMP" "$SMOKE_PASSWORD"

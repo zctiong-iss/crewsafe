@@ -78,7 +78,8 @@ summary_out="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 # Newlines and carriage returns are stripped (they end a workflow command), and
 # ':' is replaced with a lookalike so no '::' sequence can survive.
 sanitize() {
-  printf '%s' "$1" | tr -d '\n\r' | sed 's/:/\xef\xb9\x95/g'
+  local value="$1"
+  printf '%s' "$value" | tr -d '\n\r' | sed 's/:/\xef\xb9\x95/g'
 }
 
 emit_annotations() {
