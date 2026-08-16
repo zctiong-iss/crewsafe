@@ -19,10 +19,14 @@ _HARNESS_TMPDIRS=()
 
 # --- output -----------------------------------------------------------------
 
-_pass() { printf '  ok   %s\n' "$1"; }
+_pass() {
+  local label="$1"
+  printf '  ok   %s\n' "$label"
+}
 _fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -133,7 +137,8 @@ new_repo() {
 
 # commit_file <repo> <relative path> <content> [message]
 commit_file() {
-  local repo="$1" path="$2" content="$3" msg="${4:-add $2}"
+  local repo="$1" path="$2" content="$3"
+  local msg="${4:-add $path}"
   mkdir -p "$(dirname "$repo/$path")"
   printf '%s\n' "$content" >"$repo/$path"
   git -C "$repo" add "$path"

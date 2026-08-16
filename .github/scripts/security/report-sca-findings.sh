@@ -37,7 +37,8 @@ set -euo pipefail
 SONAR_API_HOST="https://api.sonarcloud.io"
 
 warn() {
-  printf 'WARN: %s\n' "$1" >&2
+  local message="$1"
+  printf 'WARN: %s\n' "$message" >&2
 }
 
 [[ -n "${SONAR_TOKEN:-}" ]] || { warn "SONAR_TOKEN is not set; skipping findings report"; exit 0; }

@@ -185,7 +185,7 @@ jobs:
 
       - name: Install Maestro CLI
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+          curl --proto "=https" -fsSL -o "$RUNNER_TEMP/maestro.zip" \
             "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip"
           echo "${MAESTRO_ZIP_SHA256}  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"
@@ -564,7 +564,7 @@ jobs:
       - name: Install Maestro CLI
         if: env.analyzer_environment == 'ios-signed-device'
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+          curl --proto "=https" -fsSL -o "$RUNNER_TEMP/maestro.zip" \
             "https://github.com/mobile-dev-inc/Maestro/releases/download/${MAESTRO_VERSION}/maestro.zip"
           echo "${MAESTRO_ZIP_SHA256}  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro"

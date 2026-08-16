@@ -10,8 +10,8 @@ mkdir -p "$BIN"
 TESTS_RUN=0
 TESTS_FAILED=0
 
-pass() { printf '  ok   %s\n' "$1"; }
-fail() { printf '  FAIL %s\n' "$1"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
+pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
+fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
 
 cat >"$BIN/docker" <<'DOCKER'
 #!/usr/bin/env bash

@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT="$REPO_ROOT/.github/scripts/security/import-sonar-securityhub.sh"
 FIXTURES="$REPO_ROOT/.github/scripts/tests/fixtures/sonar-securityhub"
+readonly BATCH_IMPORT_CALL="securityhub batch-import-findings"
 
 printf 'test-sonar-securityhub-import\n'
 require_executable "$SCRIPT" "Sonar Security Hub importer"
@@ -75,7 +76,7 @@ assert_contains "$summary" "crewsafe/sonarcloud/zctiong-iss_crewsafe/SAFE-OPEN-1
 assert_not_contains "$summary" "synthetic-test-token" "token is redacted"
 assert_not_contains "$summary" "message" "raw Sonar text is excluded"
 calls="$(cat "$work/calls.log")"
-assert_contains "$calls" "securityhub batch-import-findings" "custom finding is submitted"
+assert_contains "$calls" "$BATCH_IMPORT_CALL" "custom finding is submitted"
 assert_contains "$calls" "impactSeverities=BLOCKER,HIGH" "active query uses software-quality severity filter"
 assert_not_contains "$calls" "&severities=BLOCKER,HIGH" "active query does not use legacy type severity filter"
 assert_contains "$calls" '"providerLabel":"HIGH"' "MQR security impact maps to ASFF severity label"
@@ -110,7 +111,7 @@ printf '{"Findings":[{"Id":"crewsafe/sonarcloud/zctiong-iss_crewsafe/SAFE-OPEN-1
 findings="$findings_with_source_url"
 assert_exit 0 "existing finding with SourceUrl is not rewritten" run_import "$repair_input" "$empty" "$import_ok" "$out"
 assert_contains "$(cat "$out")" "UNCHANGED" "complete finding remains unchanged"
-assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "complete finding does not trigger a repair import"
+assert_not_contains "$(cat "$work/calls.log")" "$BATCH_IMPORT_CALL" "complete finding does not trigger a repair import"
 
 jq '.sonarHostUrl = "https://hostile.invalid"' "$valid_config" >"$config"
 assert_exit 1 "hostile origin is denied before any network call" run_import "$valid" "$empty" "$import_ok" "$out"
@@ -121,23 +122,23 @@ cp "$valid_config" "$config"
 prefix_timestamp="$work/prefix-timestamp.json"
 jq '.valid | .issues[0].creationDate = "prefix-2026-08-08T00:00:00Z"' "$FIXTURES/active-cases.json" >"$prefix_timestamp"
 assert_exit 1 "timestamp prefix is rejected before import" run_import "$prefix_timestamp" "$empty" "$import_ok" "$out"
-assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "prefix timestamp is never imported"
+assert_not_contains "$(cat "$work/calls.log")" "$BATCH_IMPORT_CALL" "prefix timestamp is never imported"
 
 suffix_timestamp="$work/suffix-timestamp.json"
 jq '.valid | .issues[0].updateDate = "2026-08-08T00:01:00Z-suffix"' "$FIXTURES/active-cases.json" >"$suffix_timestamp"
 assert_exit 1 "timestamp suffix is rejected before import" run_import "$suffix_timestamp" "$empty" "$import_ok" "$out"
-assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "suffix timestamp is never imported"
+assert_not_contains "$(cat "$work/calls.log")" "$BATCH_IMPORT_CALL" "suffix timestamp is never imported"
 
 non_utc_timestamp="$work/non-utc-timestamp.json"
 jq '.valid | .issues[0].updateDate = "2026-08-08T01:01:00+0100"' "$FIXTURES/active-cases.json" >"$non_utc_timestamp"
 assert_exit 1 "non-UTC timestamp offset is rejected before import" run_import "$non_utc_timestamp" "$empty" "$import_ok" "$out"
-assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "non-UTC timestamp is never imported"
+assert_not_contains "$(cat "$work/calls.log")" "$BATCH_IMPORT_CALL" "non-UTC timestamp is never imported"
 
 assert_exit 1 "invalid candidate fails closed" run_import "$invalid" "$empty" "$import_ok" "$out"
 assert_not_contains "$(cat "$out")" "source.java" "unsafe source text is not echoed"
 
 assert_exit 1 "ineligible MQR security impact fails closed" run_import "$invalid_impact" "$empty" "$import_ok" "$out"
-assert_not_contains "$(cat "$work/calls.log")" "securityhub batch-import-findings" "ineligible MQR impact is never imported"
+assert_not_contains "$(cat "$work/calls.log")" "$BATCH_IMPORT_CALL" "ineligible MQR impact is never imported"
 
 assert_exit 1 "partial batch is not success" run_import "$valid" "$empty" "$import_partial" "$out"
 assert_contains "$(cat "$out")" "FAILED_PARTIAL" "partial failure is labelled"

@@ -34,7 +34,8 @@ JSON
 }
 
 tooling_failure() {
-  echo "evaluate-coverage-signal.sh: $1" >&2
+  local message="$1"
+  echo "evaluate-coverage-signal.sh: $message" >&2
   write_outcome "tooling-failure" "false" "0"
   exit 1
 }

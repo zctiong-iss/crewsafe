@@ -6,6 +6,9 @@ WORKFLOW="$ROOT/.github/workflows/backend-ci.yml"
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
+readonly DOCKER_BUILD_CMD='docker build'
+readonly DOCKER_PUSH_CMD='docker push'
+readonly TRIVY_ACTION='aquasecurity/trivy-action'
 
 cleanup() {
   local dir
@@ -15,10 +18,14 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-pass() { printf '  ok   %s\n' "$1"; }
+pass() {
+  local label="$1"
+  printf '  ok   %s\n' "$label"
+}
 fail() {
-  printf '  FAIL %s\n' "$1"
-  [[ $# -gt 1 ]] && printf '       %s\n' "$2"
+  local label="$1" detail="${2:-}"
+  printf '  FAIL %s\n' "$label"
+  [[ $# -gt 1 ]] && printf '       %s\n' "$detail"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 }
 
@@ -91,11 +98,11 @@ workflow_policy_guard() {
   rg -q -F -- 'inputs.publish' "$path" || return 1
   rg -q -F -- 'contents: read' "$path" || return 1
   rg -q -F -- 'id-token: write' "$path" || return 1
-  rg -q -F -- 'docker build' "$path" || return 1
+  rg -q -F -- "$DOCKER_BUILD_CMD" "$path" || return 1
   rg -q -F -- 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' "$path" || return 1
   rg -q -F -- 'severity: HIGH,CRITICAL' "$path" || return 1
   rg -q -F -- "exit-code: '0'" "$path" || return 1
-  rg -q -F -- 'docker push' "$path" || return 1
+  rg -q -F -- "$DOCKER_PUSH_CMD" "$path" || return 1
   # SCRUM-270 US1: the pushed image's digest MUST be captured, validated,
   # and surfaced as job outputs -- FR-001/FR-002.
   rg -q -F -- 'RepoDigests' "$path" || return 1
@@ -116,7 +123,7 @@ workflow_policy_guard() {
   # The scan step must precede AWS-credentialed steps -- a blocking/failed
   # scan must never reach a credentialed step (SEC-001).
   local scan_line creds_line validate_line
-  scan_line="$(rg -n -m 1 -F -- 'aquasecurity/trivy-action' "$path" | cut -d: -f1)"
+  scan_line="$(rg -n -m 1 -F -- "$TRIVY_ACTION" "$path" | cut -d: -f1)"
   creds_line="$(rg -n -m 1 -F -- 'configure-aws-credentials' "$path" | cut -d: -f1)"
   [[ -n "$scan_line" && -n "$creds_line" && "$scan_line" -lt "$creds_line" ]] || return 1
   # SCRUM-270 (SEC-001): the contract-validation step must also precede any
@@ -155,7 +162,7 @@ redeploy_policy_guard() {
   ' "$path")"
   [[ "$block" == *'needs: build-test'* ]] || return 1
   [[ "$block" == *'ecr:DescribeImages'* || "$block" == *'describe-images'* ]] || return 1
-  [[ "$block" != *'docker build'* && "$block" != *'docker push'* ]] || return 1
+  [[ "$block" != *"$DOCKER_BUILD_CMD"* && "$block" != *"$DOCKER_PUSH_CMD"* ]] || return 1
   return 0
 }
 
@@ -268,7 +275,7 @@ contains_in "manual redeploy input exists" "$WORKFLOW" 'redeploy:'
 contains_in "redeploy resolves an existing image job" "$WORKFLOW" 'resolve-existing-image:'
 
 # --- US1 AS1/AS2 (T013): report-only scan step present, correctly configured
-contains_in "publication builds backend image" "$WORKFLOW" 'docker build'
+contains_in "publication builds backend image" "$WORKFLOW" "$DOCKER_BUILD_CMD"
 contains_in "publication scans image" "$WORKFLOW" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25'
 contains_in "scan uses HIGH,CRITICAL severity" "$WORKFLOW" 'severity: HIGH,CRITICAL'
 contains_in "scan is vulnerability-only" "$WORKFLOW" 'scanners: vuln'
@@ -277,16 +284,16 @@ contains_in "scan writes the JSON report" "$WORKFLOW" 'output: trivy-backend-rep
 contains_in "scan does not ignore unfixed findings" "$WORKFLOW" 'ignore-unfixed: false'
 contains_in "scan is report-only (FR-001)" "$WORKFLOW" "exit-code: '0'"
 not_contains_in "scan is not blocking yet (FR-001a is a separate follow-up)" "$WORKFLOW" "exit-code: '1'"
-contains_in "publication pushes image" "$WORKFLOW" 'docker push'
+contains_in "publication pushes image" "$WORKFLOW" "$DOCKER_PUSH_CMD"
 not_contains_in "workflow has no static AWS access key" "$WORKFLOW" 'AWS_ACCESS_KEY_ID'
 not_contains_in "workflow has no static AWS secret key" "$WORKFLOW" 'AWS_SECRET_ACCESS_KEY'
 not_contains_in "workflow has no continue-on-error" "$WORKFLOW" 'continue-on-error:'
 not_contains_in_build_test "validation job has no OIDC permission" 'id-token: write'
 not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
-not_contains_in_build_test "validation job has no image push" 'docker push'
+not_contains_in_build_test "validation job has no image push" "$DOCKER_PUSH_CMD"
 
 assert_order "build -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
-  'docker build' 'aquasecurity/trivy-action' 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' 'docker push' 'RepoDigests'
+  "$DOCKER_BUILD_CMD" "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
 
 # --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
 contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
@@ -309,7 +316,7 @@ contains_in "publication validates the repository pattern" "$WORKFLOW" 'crewsafe
 contains_in "publication validates the push role pattern" "$WORKFLOW" 'crewsafe-shared-dev-ecr-push'
 contains_in "publication validates the commit SHA shape" "$WORKFLOW" '^[0-9a-f]{40}$'
 assert_order "contract validation precedes build" "$WORKFLOW" \
-  'Validate backend publication contract' 'docker build'
+  'Validate backend publication contract' "$DOCKER_BUILD_CMD"
 
 # --- SCRUM-269 US3 (T034): ignorefile prep precedes the scan step ---------
 contains_in "ignorefile prep step references the source exceptions file" "$WORKFLOW" \
@@ -317,7 +324,7 @@ contains_in "ignorefile prep step references the source exceptions file" "$WORKF
 contains_in "ignorefile prep step invokes filter-trivyignore.sh" "$WORKFLOW" \
   'filter-trivyignore.sh'
 assert_order "ignorefile prep precedes the scan step" "$WORKFLOW" \
-  'filter-trivyignore.sh' 'aquasecurity/trivy-action'
+  'filter-trivyignore.sh' "$TRIVY_ACTION"
 contains_in "scan step passes the active ignorefile via trivyignores" "$WORKFLOW" \
   'trivyignores: .trivyignore-active-backend'
 contains_in "scan summary uses the shared redacted helper" "$WORKFLOW" \
@@ -325,7 +332,7 @@ contains_in "scan summary uses the shared redacted helper" "$WORKFLOW" \
 contains_in "scan summary writes to the GitHub job summary" "$WORKFLOW" \
   'GITHUB_STEP_SUMMARY'
 assert_order "scan precedes summary" "$WORKFLOW" \
-  'aquasecurity/trivy-action' 'Summarize backend image scan'
+  "$TRIVY_ACTION" 'Summarize backend image scan'
 
 TESTS_RUN=$((TESTS_RUN + 1))
 if workflow_policy_guard "$WORKFLOW"; then

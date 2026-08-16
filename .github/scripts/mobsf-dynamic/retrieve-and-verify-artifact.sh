@@ -21,7 +21,8 @@ usage() {
 }
 
 fail() {
-  echo "retrieve-and-verify-artifact.sh: $1" >&2
+  local message="$1"
+  echo "retrieve-and-verify-artifact.sh: $message" >&2
   exit 1
 }
 
