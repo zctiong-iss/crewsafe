@@ -23,6 +23,8 @@ from .safe_paths import confined_existing_file, read_json_object, sha256_file
 
 DEFAULT_MINIMUM_UNTOUCHED_DAYS = 21
 MODEL_MANIFEST_SCHEMA_VERSION = 2
+MODEL_MANIFEST_LABEL = "model manifest"
+UNTOUCHED_FEATURE_DATASET_LABEL = "untouched feature dataset"
 
 
 class ApprovalEvaluationError(ValueError):
@@ -46,12 +48,12 @@ def evaluate_frozen_candidate(
     model_manifest_file = confined_existing_file(
         model_manifest_path,
         workspace_root,
-        label="model manifest",
+        label=MODEL_MANIFEST_LABEL,
     )
     feature_file = confined_existing_file(
         feature_path,
         workspace_root,
-        label="untouched feature dataset",
+        label=UNTOUCHED_FEATURE_DATASET_LABEL,
     )
     feature_manifest_file = confined_existing_file(
         feature_manifest_path,
@@ -67,7 +69,7 @@ def evaluate_frozen_candidate(
         read_json_object(
             model_manifest_file,
             workspace_root,
-            label="model manifest",
+            label=MODEL_MANIFEST_LABEL,
         )
     )
     feature_manifest = dict(
@@ -220,7 +222,7 @@ def _verify_expected_checksum(
     actual_checksum = sha256_file(
         manifest_path,
         workspace_root,
-        label="model manifest",
+        label=MODEL_MANIFEST_LABEL,
     )
     if actual_checksum != expected_checksum.lower():
         raise ApprovalEvaluationError("model manifest checksum does not match")
@@ -253,7 +255,7 @@ def _validate_feature_manifest(
     if not isinstance(expected_checksum, str) or expected_checksum != sha256_file(
         feature_path,
         workspace_root,
-        label="untouched feature dataset",
+        label=UNTOUCHED_FEATURE_DATASET_LABEL,
     ):
         raise ApprovalEvaluationError("untouched feature dataset checksum does not match")
     if prepared.get("feature_version") != FEATURE_VERSION:
@@ -290,41 +292,89 @@ def _candidate_predictions(
     features: pd.DataFrame,
     workspace_root: Path,
 ) -> np.ndarray:
+    configuration = _horizon_configuration(model_manifest, horizon_minutes)
+    selected_model = _selected_model_name(configuration)
+    if selected_model == "persistence":
+        predictions = features["wbgt_t"].to_numpy(dtype=float)
+    else:
+        artifact_path = _verified_model_artifact(
+            configuration,
+            bundle_directory,
+            horizon_minutes,
+            workspace_root,
+        )
+        predictions = _load_model_predictions(artifact_path, features)
+
+    return _validate_predictions(predictions, expected_row_count=len(features))
+
+
+def _horizon_configuration(
+    model_manifest: Mapping[str, Any],
+    horizon_minutes: int,
+) -> Mapping[str, Any]:
     horizons = model_manifest["horizons"]
     configuration = horizons.get(str(horizon_minutes))
     if not isinstance(configuration, Mapping):
         raise ApprovalEvaluationError(
             f"model manifest is missing horizon {horizon_minutes}"
         )
+    return configuration
+
+
+def _selected_model_name(configuration: Mapping[str, Any]) -> str:
     selected_model = configuration.get("selected_model")
     if not isinstance(selected_model, str) or not selected_model:
         raise ApprovalEvaluationError("model manifest selected_model is invalid")
-    if selected_model == "persistence":
-        predictions = features["wbgt_t"].to_numpy(dtype=float)
-    else:
-        artifact_name = configuration.get("artifact")
-        if not isinstance(artifact_name, str) or Path(artifact_name).name != artifact_name:
-            raise ApprovalEvaluationError("model artifact name is invalid")
-        artifact_path = confined_existing_file(
-            bundle_directory / artifact_name,
-            workspace_root,
-            label=f"{horizon_minutes}-minute model artifact",
-        )
-        if artifact_path.parent != bundle_directory:
-            raise ApprovalEvaluationError("model artifact escaped its bundle directory")
-        expected_checksum = configuration.get("artifact_sha256")
-        if not isinstance(expected_checksum, str) or expected_checksum != sha256_file(
-            artifact_path,
-            workspace_root,
-            label=f"{horizon_minutes}-minute model artifact",
-        ):
-            raise ApprovalEvaluationError("model artifact checksum does not match")
-        try:
-            model = joblib.load(artifact_path)
-            predictions = np.asarray(model.predict(features), dtype=float)
-        except Exception as error:
-            raise ApprovalEvaluationError("model artifact evaluation failed") from error
-    if predictions.shape != (len(features),) or not np.isfinite(predictions).all():
+    return selected_model
+
+
+def _verified_model_artifact(
+    configuration: Mapping[str, Any],
+    bundle_directory: Path,
+    horizon_minutes: int,
+    workspace_root: Path,
+) -> Path:
+    artifact_name = configuration.get("artifact")
+    if not isinstance(artifact_name, str) or Path(artifact_name).name != artifact_name:
+        raise ApprovalEvaluationError("model artifact name is invalid")
+
+    artifact_label = f"{horizon_minutes}-minute model artifact"
+    artifact_path = confined_existing_file(
+        bundle_directory / artifact_name,
+        workspace_root,
+        label=artifact_label,
+    )
+    if artifact_path.parent != bundle_directory:
+        raise ApprovalEvaluationError("model artifact escaped its bundle directory")
+
+    expected_checksum = configuration.get("artifact_sha256")
+    actual_checksum = sha256_file(
+        artifact_path,
+        workspace_root,
+        label=artifact_label,
+    )
+    if not isinstance(expected_checksum, str) or expected_checksum != actual_checksum:
+        raise ApprovalEvaluationError("model artifact checksum does not match")
+    return artifact_path
+
+
+def _load_model_predictions(
+    artifact_path: Path,
+    features: pd.DataFrame,
+) -> np.ndarray:
+    try:
+        model = joblib.load(artifact_path)
+        return np.asarray(model.predict(features), dtype=float)
+    except Exception as error:
+        raise ApprovalEvaluationError("model artifact evaluation failed") from error
+
+
+def _validate_predictions(
+    predictions: np.ndarray,
+    *,
+    expected_row_count: int,
+) -> np.ndarray:
+    if predictions.shape != (expected_row_count,) or not np.isfinite(predictions).all():
         raise ApprovalEvaluationError("model produced invalid evaluation predictions")
     if np.any((predictions < 0) | (predictions > 60)):
         raise ApprovalEvaluationError("model produced out-of-range WBGT predictions")
