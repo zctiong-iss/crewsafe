@@ -15,6 +15,7 @@ import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { ConditionsPage } from "@/features/conditions/ConditionsPage";
 import { EditShiftPage } from "@/features/shifts/EditShiftPage";
+import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 
 /**
  * Routes are chosen by auth state, not guarded per-route.
@@ -106,7 +107,11 @@ export function App() {
           {/* Every nav destination resolves to something. A link that 404s reads as a bug;
               a page that says "not built yet" reads as a roadmap. */}
           {NAVIGATION.filter(
-            (item) => item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions",
+            (item) => 
+              item.to !== "/" && 
+              item.to !== "/shifts" && 
+              item.to !== "/conditions" &&
+              item.to !== "/approvals",
           ).map((item) => (
             <Route
               key={item.to}
@@ -148,6 +153,14 @@ export function App() {
             element={
               <RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}>
                 <EditShiftPage />
+              </RoleRoute>
+            }
+          />
+          <Route
+            path="/approvals"
+            element={
+              <RoleRoute roles={rolesForRoute("/approvals")}>
+                <ApprovalsPage />
               </RoleRoute>
             }
           />

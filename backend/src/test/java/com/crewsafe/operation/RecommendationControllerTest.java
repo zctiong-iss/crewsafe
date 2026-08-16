@@ -1,5 +1,26 @@
 package com.crewsafe.operation;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.crewsafe.AbstractIntegrationTest;
 import com.crewsafe.common.audit.AuditEventRepository;
 import com.crewsafe.common.audit.AuditEventType;
@@ -11,6 +32,7 @@ import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
+import com.crewsafe.operation.repository.ApprovalRepository;
 import com.crewsafe.operation.repository.RecommendationRepository;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
@@ -20,27 +42,6 @@ import com.crewsafe.shift.repository.ShiftRepository;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.ResultActions;
-
-import java.math.BigDecimal;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * SCRUM-119: a supervisor reads a shift's AI-drafted recommendations and records an
@@ -64,6 +65,7 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
     @Autowired private RecommendationRepository recommendations;
     @Autowired private ActionDispatchRepository actionDispatches;
     @Autowired private AuditEventRepository auditEvents;
+    @Autowired private ApprovalRepository approvals;
 
     private Site siteA;
     private Shift shiftA;
@@ -271,7 +273,22 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
         postJson(recommendationsUrl(shiftA) + "/" + r.getId() + "/decision", supervisorAToken,
                         decisionBody("REJECTED", null, null))
                 .andExpect(status().isBadRequest());
+
+        assertThat(approvals.findByRecommendationId(r.getId())).isEmpty();
     }
+
+    @Test
+    void rejectingWithWhitespaceOnlyReasonIsBadRequest() throws Exception {
+    Recommendation r = recommendation(shiftA, DRAFT_PLAN);
+
+    postJson(
+            recommendationsUrl(shiftA) + "/" + r.getId() + "/decision",
+            supervisorAToken,
+            decisionBody("REJECTED", " \t\n ", null))
+            .andExpect(status().isBadRequest());
+
+    assertThat(approvals.findByRecommendationId(r.getId())).isEmpty();
+}
 
     @Test
     void supervisorRejectsARecommendationWithReason() throws Exception {
