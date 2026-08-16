@@ -137,11 +137,12 @@ class ApprovalEvaluationTest(unittest.TestCase):
             manifest = read_json(manifest_path)
             manifest[HORIZONS_KEY]["30"][ARTIFACT_KEY] = "../forecast-30m.joblib"
             write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
 
             with self.assertRaisesRegex(ApprovalEvaluationError, "artifact name"):
                 evaluate_frozen_candidate(
                     model_manifest_path=manifest_path,
-                    expected_model_manifest_sha256=sha256(manifest_path),
+                    expected_model_manifest_sha256=manifest_checksum,
                     feature_path=feature_path,
                     feature_manifest_path=feature_manifest_path,
                     workspace_root=root,
@@ -154,11 +155,12 @@ class ApprovalEvaluationTest(unittest.TestCase):
             manifest = read_json(manifest_path)
             manifest[HORIZONS_KEY]["30"][ARTIFACT_SHA256_KEY] = "0" * 64
             write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
 
             with self.assertRaisesRegex(ApprovalEvaluationError, "artifact checksum"):
                 evaluate_frozen_candidate(
                     model_manifest_path=manifest_path,
-                    expected_model_manifest_sha256=sha256(manifest_path),
+                    expected_model_manifest_sha256=manifest_checksum,
                     feature_path=feature_path,
                     feature_manifest_path=feature_manifest_path,
                     workspace_root=root,
@@ -181,11 +183,12 @@ class ApprovalEvaluationTest(unittest.TestCase):
             joblib.dump(model, artifact_path)
             manifest[HORIZONS_KEY]["30"][ARTIFACT_SHA256_KEY] = sha256(artifact_path)
             write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
 
             with self.assertRaisesRegex(ApprovalEvaluationError, "out-of-range"):
                 evaluate_frozen_candidate(
                     model_manifest_path=manifest_path,
-                    expected_model_manifest_sha256=sha256(manifest_path),
+                    expected_model_manifest_sha256=manifest_checksum,
                     feature_path=feature_path,
                     feature_manifest_path=feature_manifest_path,
                     workspace_root=root,
