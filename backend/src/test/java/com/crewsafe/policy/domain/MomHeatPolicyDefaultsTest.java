@@ -161,13 +161,13 @@ class MomHeatPolicyDefaultsTest {
     private static List<BigDecimal> thresholdsInMigration() throws IOException {
         String sql = Files.readString(MIGRATION);
         Matcher block = Pattern
-                .compile("(?s)'ACTIVE',\\s*(.*?)'Seeded automatically")
+                .compile("(?s)'ACTIVE',\\s*+(.*?)'Seeded automatically")
                 .matcher(sql);
         assertThat(block.find())
                 .as("could not locate V17's threshold block; did the migration's shape change?")
                 .isTrue();
 
-        Matcher numbers = Pattern.compile("(\\d+\\.\\d+)").matcher(block.group(1));
+        Matcher numbers = Pattern.compile("(\\d++\\.\\d++)").matcher(block.group(1));
         List<BigDecimal> found = new ArrayList<>();
         while (numbers.find()) {
             found.add(new BigDecimal(numbers.group(1)));
