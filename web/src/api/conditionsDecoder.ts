@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
+/** @author Tang Chee Seng, Jemilin Beulah (with assistance from Claude and ChatGPT) */
 // Key Purpose: To act as a runtime validation boundary for weather conditions data received from the API.
 
 import type {
@@ -126,7 +126,9 @@ function lightning(value: unknown): LightningRiskPayload | null {
   const item = record(value, "lightning");
   return {
     state: member(item.state, LIGHTNING_STATES, "lightning.state"),
-    nearestStrikeKm: finiteNumber(item.nearestStrikeKm, "lightning.nearestStrikeKm", 0),
+    nearestStrikeKm: item.nearestStrikeKm === null
+      ? null
+      : finiteNumber(item.nearestStrikeKm, "lightning.nearestStrikeKm", 0),
     observedAt: timestamp(item.observedAt, "lightning.observedAt"),
     validUntil: timestamp(item.validUntil, "lightning.validUntil"),
     freshness: member(item.freshness, FRESHNESS_VALUES, "lightning.freshness"),

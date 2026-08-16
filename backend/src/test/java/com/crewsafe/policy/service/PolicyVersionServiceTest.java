@@ -280,5 +280,29 @@ class PolicyVersionServiceTest {
 
             assertThat(service.getActive(siteId)).contains(active);
         }
+
+        @Test
+        @DisplayName("getEffective prefers the site's own ACTIVE version over the company default")
+        void getEffectivePrefersSitesOwnVersion() {
+            PolicyVersion ownVersion = validDraft().id(UUID.randomUUID()).status(PolicyVersionStatus.ACTIVE).build();
+            when(policyVersions.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.of(ownVersion));
+
+            assertThat(service.getEffective(siteId)).contains(ownVersion);
+            verify(policyVersions, never()).findBySiteIdIsNullAndStatus(any());
+        }
+
+        @Test
+        @DisplayName("getEffective falls back to the company default when the site has none of its own")
+        void getEffectiveFallsBackToDefault() {
+            PolicyVersion companyDefault = validDraft().id(UUID.randomUUID())
+                    .status(PolicyVersionStatus.ACTIVE).build();
+            when(policyVersions.findBySiteIdAndStatus(siteId, PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
+            when(policyVersions.findBySiteIdIsNullAndStatus(PolicyVersionStatus.ACTIVE))
+                    .thenReturn(Optional.of(companyDefault));
+
+            assertThat(service.getEffective(siteId)).contains(companyDefault);
+        }
     }
 }

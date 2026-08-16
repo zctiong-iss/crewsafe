@@ -136,17 +136,9 @@
   }
 }
 
-/* Pills ---------------------------------------------------------------- */
-.pill {
-  display: inline-block;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-semibold);
-  white-space: nowrap;
-}
-
-/* Status: FILLED wash. */
+/* Pills ------------------------------------------------------------------
+   Base .pill shape now lives in design/pill.css, shared across features.
+   Status: FILLED wash. */
 .pill--planned { background: var(--status-waiting-wash); color: var(--status-waiting); }
 .pill--active  { background: var(--status-ok-wash);      color: var(--status-ok); }
 .pill--closed  { background: var(--status-none-wash);    color: var(--status-none); }

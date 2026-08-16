@@ -35,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration tests for ActionDispatchController - tests API endpoints and access control.
  *
  * @author Surya Kumaraguru
+ * @author Jemilin Beulah
  */
 @AutoConfigureMockMvc
 class ActionDispatchControllerTest extends AbstractIntegrationTest {

@@ -1,4 +1,5 @@
-/** @author Tang Chee Seng (with assistance from Claude & Gemini) */
+/** @author Jemilin Beulah, Tang Chee Seng */
+import type { ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { type subscribeToConditions } from "@/api/conditionsStream";
@@ -36,9 +37,11 @@ function rangeWarningMessage(
 export function ConditionsPanel({
   siteId,
   subscribe,
+  siteSwitcher,
 }: {
   siteId: string;
   subscribe?: typeof subscribeToConditions;
+  siteSwitcher?: ReactNode;
 }) {
   const {
     snapshot,
@@ -50,14 +53,14 @@ export function ConditionsPanel({
 
   if (connectionState === "connecting" && snapshot === null)
     return (
-      <AppShell title="Conditions" subtitle="Real-time site conditions & weather monitoring">
+      <AppShell title="Conditions" subtitle="Real-time site conditions & weather monitoring" siteSwitcher={siteSwitcher}>
         <p className="conditions-panel__loading" role="status">Connecting to live conditions...</p>
       </AppShell>
     );
 
   if (connectionState === "closed")
     return (
-      <AppShell title="Conditions" subtitle="Real-time site conditions & weather monitoring">
+      <AppShell title="Conditions" subtitle="Real-time site conditions & weather monitoring" siteSwitcher={siteSwitcher}>
         <EmptyState
           headline="Live conditions unavailable"
           body="Your session may have expired. Sign in again to resume the live feed."
@@ -74,7 +77,7 @@ export function ConditionsPanel({
     : "Stale";
 
   return (
-    <AppShell title="Conditions" subtitle="Real-time site conditions, WBGT heat stress & trend monitoring">
+    <AppShell title="Conditions" subtitle="Real-time site conditions, WBGT heat stress & trend monitoring" siteSwitcher={siteSwitcher}>
       <section className="conditions-panel" aria-label="Site conditions">
         {stopWorkActive && snapshot?.lightning && (
           <StopWorkBanner lightning={snapshot.lightning} />
