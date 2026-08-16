@@ -189,6 +189,7 @@ jobs:
           # that already exist. With them: graph 95%, validation 100%, fallback 95%.
           python -m coverage run -m pytest test_forecast.py
           python -m coverage run --append -m pytest tests
+          python -m coverage run --append -m pytest test_agent_graph.py test_bedrock_client.py test_app_error_handling.py
           python -m coverage run --append -m pytest test_agent_graph.py test_bedrock_client.py test_app_bind.py
           python -m coverage xml -o coverage.xml
 
