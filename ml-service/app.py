@@ -263,13 +263,40 @@ async def openapi_schema():
     return app.openapi()
 
 
+def dev_server_bind() -> tuple[str, int]:
+    """Address the `python app.py` developer runner binds to (SCRUM-401, python:S8392).
+
+    Loopback by default. This path is the developer convenience documented in README.md - it
+    is NOT how the container starts, which is the Dockerfile's own
+    `CMD [... --host 0.0.0.0 ...]`. Binding 0.0.0.0 here published a developer's laptop
+    service to every network that laptop was attached to, for no benefit whatsoever: the
+    caller is that same laptop.
+
+    The container keeps 0.0.0.0 deliberately, and must. Docker's `-p` port publishing only
+    reaches a process bound to all interfaces inside the container, so loopback there would
+    break the CI smoke test (`.github/scripts/ci/run-ml-service-smoke.sh` publishes the port
+    and curls it from outside). Its compensating controls are the container network boundary
+    and, in ECS, having no ALB target group, listener rule, or security-group ingress at all -
+    ml-service is unreachable from outside the task by design (SCRUM-373).
+
+    Override only when something genuinely outside this host must connect - typically a backend
+    in Docker Compose reaching ml-service on the host, since `host.docker.internal` arrives on
+    a non-loopback interface.
+
+    Extracted from the `__main__` block below purely so the safe default is assertable; a
+    hardcoded literal inside `if __name__ == "__main__"` cannot be regression-tested.
+    """
+    return os.getenv("ML_SERVICE_HOST", "127.0.0.1"), int(os.getenv("ML_SERVICE_PORT", "8000"))
+
+
 if __name__ == "__main__":
     import uvicorn
 
+    bind_host, bind_port = dev_server_bind()
     uvicorn.run(
         "app:app",
-        host="0.0.0.0",
-        port=8000,
+        host=bind_host,
+        port=bind_port,
         reload=True,
         log_level="info",
     )
