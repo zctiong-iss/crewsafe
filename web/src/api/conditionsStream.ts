@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
+/** @author Tang Chee Seng, Jemilin Beulah (with assistance from Claude and ChatGPT) */
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { apiBaseUrl } from "@/auth/authConfig";
 import { currentAccessToken } from "./client";
@@ -21,7 +21,7 @@ export type LightningRiskState = "CLEAR" | "ADVISORY" | "STOP_WORK";
 
 export interface LightningRiskPayload {
   state: LightningRiskState;
-  nearestStrikeKm: number;
+  nearestStrikeKm: number | null;
   observedAt: string;
   validUntil: string;
   freshness: WeatherFreshness;
