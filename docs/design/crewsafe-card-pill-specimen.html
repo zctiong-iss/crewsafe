@@ -1,0 +1,584 @@
+<title>CrewSafe Card & Pill Specimen</title>
+<!--
+  CrewSafe — Card & Pill Design Language Specimen (Doc #4 of the design-system set)
+  Fully self-contained. No external fonts, no CDN, no network requests.
+  In-app this is Lexend via --font-ui; a system font stack is used here to stay self-contained.
+-->
+<style>
+  :root {
+    /* ---- Real CrewSafe web tokens (web/src/design/tokens.css) ---- */
+    --canvas: #f0ece6;
+    --surface: #ffffff;
+    --surface-sunken: #f5f2ec;
+    --navy: #0f2540;
+    --ink: #0f2540;
+    --ink-secondary: #475569;
+    --ink-muted: #64748b;
+    --line: #ddd8d0;
+    --line-strong: #c5bfb5;
+    --action: #1d4ed8;
+    --action-ink: #ffffff;
+    --action-quiet: #eff4ff;
+    --band-high: #dc2626;
+    --status-ok: #15803d;       --status-ok-wash: #e3f5e9;
+    --status-waiting: #ea913f;  --status-waiting-wash: #fdf0d5;
+    --status-none: #64748b;     --status-none-wash: #f0ece6;
+    --intensity-heavy: #b91c1c;
+    --radius-pill: 999px;
+    --radius-lg: 12px;
+    --radius-sm: 4px;
+    --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem; --space-5: 1.5rem;
+    --text-xs: 0.6875rem; --text-sm: 0.8125rem; --text-base: 0.9375rem; --text-lg: 1.125rem;
+    --weight-medium: 500; --weight-semibold: 600; --weight-bold: 700;
+    --shadow-card: 0 1px 2px rgb(15 37 64 / 0.05), 0 1px 3px rgb(15 37 64 / 0.04);
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding: var(--space-5) var(--space-3) 4rem;
+  }
+
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ---- Page header ---- */
+  .page-header {
+    margin-bottom: var(--space-5);
+    padding: 0 var(--space-2);
+  }
+
+  .page-header h1 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+    font-weight: var(--weight-bold);
+    color: var(--navy);
+    letter-spacing: -0.01em;
+  }
+
+  .page-header p {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--ink-secondary);
+    max-width: 62ch;
+    line-height: 1.5;
+  }
+
+  /* ---- Section / panel scaffolding ---- */
+  section.panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-5);
+  }
+
+  section.panel h2 {
+    margin: 0 0 2px;
+    font-size: var(--text-lg);
+    font-weight: var(--weight-semibold);
+    color: var(--navy);
+  }
+
+  .section-number {
+    display: inline-block;
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    color: var(--ink-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+  }
+
+  .caption {
+    margin: 4px 0 var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--ink-secondary);
+    line-height: 1.5;
+    max-width: 68ch;
+  }
+
+  .subcaption {
+    margin: var(--space-2) 0 0;
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+    line-height: 1.5;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .demo-block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .demo-label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* ============================================================
+     PILL / CHIP BASE — the three-role taxonomy
+     ============================================================ */
+
+  .pill {
+    display: inline-block;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+    line-height: 1.6;
+  }
+
+  /* Role 1 — STATE pill: FILLED */
+  .pill-state {
+    background: var(--pill-bg, var(--status-none-wash));
+    color: var(--pill-fg, var(--status-none));
+  }
+
+  .pill-state.is-waiting {
+    background: var(--status-waiting-wash);
+    color: var(--status-waiting);
+  }
+
+  /* Role 2 — ATTRIBUTE pill: OUTLINED */
+  .pill-attribute {
+    background: transparent;
+    border: 1.5px solid var(--pill-fg, var(--ink-secondary));
+    color: var(--pill-fg, var(--ink-secondary));
+  }
+
+  .pill-attribute.is-required { --pill-fg: var(--band-high); }
+  .pill-attribute.is-suggested { --pill-fg: var(--ink-secondary); }
+  .pill-attribute.is-heavy { --pill-fg: var(--intensity-heavy); }
+
+  /* Role 3 — ENTITY chip: NEUTRAL, always bordered */
+  .chip-entity {
+    display: inline-block;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-pill);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    white-space: nowrap;
+    line-height: 1.6;
+    background: var(--surface-sunken);
+    border: 1px solid var(--line-strong);
+    color: var(--ink);
+  }
+
+  .chip-entity.is-overflow {
+    color: var(--ink-muted);
+    font-weight: var(--weight-medium);
+  }
+
+  /* ============================================================
+     Section 2 — chip overflow row
+     ============================================================ */
+
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* ============================================================
+     Section 3 — progressive disclosure card
+     ============================================================ */
+
+  .mitigation-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-4);
+  }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  @media (max-width: 620px) {
+    .compare-grid { grid-template-columns: 1fr; }
+  }
+
+  .compare-col-label {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-bold);
+    color: var(--ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+
+  .mitigation-title {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+    line-height: 1.4;
+  }
+
+  .mitigation-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: var(--space-2) 0;
+  }
+
+  .mitigation-timing {
+    font-size: var(--text-sm);
+    color: var(--ink-secondary);
+  }
+
+  .mitigation-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: var(--space-2) 0;
+  }
+
+  details.disclosure {
+    margin-top: var(--space-2);
+  }
+
+  details.disclosure > summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--action);
+    padding: 4px 0;
+    user-select: none;
+  }
+
+  details.disclosure > summary::-webkit-details-marker { display: none; }
+
+  details.disclosure > summary::after {
+    content: " ⌄";
+  }
+
+  details.disclosure[open] > summary::after {
+    content: " ⌃";
+  }
+
+  .detail-block {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px dashed var(--line);
+    font-size: var(--text-sm);
+    color: var(--ink-secondary);
+    line-height: 1.6;
+  }
+
+  .detail-row {
+    margin-bottom: 6px;
+  }
+
+  .detail-row:last-child { margin-bottom: 0; }
+
+  .detail-key {
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+  }
+
+  code.rule-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: var(--text-xs);
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 1px 5px;
+  }
+
+  /* second copy — force-expanded, non-interactive, for the "expanded" reference column */
+  .force-expanded > .detail-block { display: block; }
+
+  /* ============================================================
+     Section 4 — press-to-fill danger action
+     ============================================================ */
+
+  .btn {
+    font-family: var(--font-ui);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    padding: 8px var(--space-4);
+    border-radius: var(--radius-sm);
+    border: 1.5px solid transparent;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+
+  .btn-approve {
+    background: var(--action);
+    color: var(--action-ink);
+    border-color: var(--action);
+  }
+
+  .btn-approve:hover {
+    background: #1a43c0;
+    border-color: #1a43c0;
+  }
+
+  .btn-reject {
+    background: var(--surface);
+    color: var(--band-high);
+    border-color: var(--band-high);
+  }
+
+  .btn-reject:hover,
+  .btn-reject:focus-visible {
+    background: var(--band-high);
+    color: var(--action-ink);
+    border-color: var(--band-high);
+  }
+
+  .danger-note {
+    margin-top: var(--space-3);
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+    background: var(--surface-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: var(--space-2) var(--space-3);
+    line-height: 1.5;
+  }
+
+  /* ============================================================
+     Section 5 — long-content guardrail
+     ============================================================ */
+
+  .guardrail-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: var(--space-4);
+    max-width: 320px;
+  }
+
+  .guardrail-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: var(--space-2);
+  }
+
+  .guardrail-row:last-child { margin-bottom: 0; }
+
+  .wrap-safe {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    font-size: var(--text-sm);
+    color: var(--ink-secondary);
+    line-height: 1.5;
+  }
+
+  /* ---- Footer / legend ---- */
+  footer.legend {
+    padding: var(--space-4) var(--space-2) 0;
+    font-size: var(--text-xs);
+    color: var(--ink-muted);
+    line-height: 1.6;
+    border-top: 1px solid var(--line);
+    margin-top: var(--space-5);
+  }
+
+  footer.legend strong {
+    color: var(--ink-secondary);
+  }
+
+  /* Responsive safety */
+  @media (max-width: 400px) {
+    section.panel { padding: var(--space-3); }
+    .btn { padding: 8px var(--space-3); }
+  }
+</style>
+
+<div class="page">
+
+  <header class="page-header">
+    <h1>CrewSafe — Card &amp; Pill Specimen</h1>
+    <p>Visual reference for the three-role pill taxonomy, progressive disclosure, and press-to-fill. Both platforms accept against this.</p>
+  </header>
+
+  <!-- ============================================================
+       SECTION 1 — The three pill roles
+       ============================================================ -->
+  <section class="panel">
+    <span class="section-number">01</span>
+    <h2>The three pill roles</h2>
+    <p class="caption">Every pill or chip in CrewSafe is exactly one of three roles. The fill style itself tells you which role you're looking at, before you even read the label.</p>
+
+    <div class="demo-block" style="margin-bottom: var(--space-4);">
+      <span class="demo-label">State pill — filled</span>
+      <div class="row">
+        <span class="pill pill-state is-waiting">Awaiting decision</span>
+      </div>
+      <p class="subcaption">FILLED — reserved for a status actively asking for a decision now.</p>
+    </div>
+
+    <div class="demo-block" style="margin-bottom: var(--space-4);">
+      <span class="demo-label">Attribute pill — outlined</span>
+      <div class="row">
+        <span class="pill pill-attribute is-required">Required</span>
+        <span class="pill pill-attribute is-suggested">Suggested</span>
+        <span class="pill pill-attribute is-heavy">Heavy</span>
+      </div>
+      <p class="subcaption">OUTLINED — classifies the item.</p>
+    </div>
+
+    <div class="demo-block">
+      <span class="demo-label">Entity chip — neutral, bordered</span>
+      <div class="row">
+        <span class="chip-entity">J. Tan</span>
+        <span class="chip-entity">R. Kumar</span>
+      </div>
+      <p class="subcaption">NEUTRAL, always bordered — names an identity, never carries semantic colour.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SECTION 2 — Entity-chip +N overflow
+       ============================================================ -->
+  <section class="panel">
+    <span class="section-number">02</span>
+    <h2>Entity-chip +N overflow</h2>
+    <div class="chip-row">
+      <span class="chip-entity">J. Tan</span>
+      <span class="chip-entity">R. Kumar</span>
+      <span class="chip-entity">M. Yusof</span>
+      <span class="chip-entity">A. Lee</span>
+      <span class="chip-entity is-overflow">+2</span>
+    </div>
+    <p class="caption" style="margin-top: var(--space-3); margin-bottom: 0;">Long worker lists overflow to +N rather than an unbounded row.</p>
+  </section>
+
+  <!-- ============================================================
+       SECTION 3 — Progressive disclosure card
+       ============================================================ -->
+  <section class="panel">
+    <span class="section-number">03</span>
+    <h2>Progressive-disclosure card — summary vs. expanded</h2>
+    <p class="caption">Summary always visible; detail (the evidence) expands on demand. Same card, two states — click the summary control on the right to see it happen live.</p>
+
+    <div class="compare-grid">
+
+      <!-- Collapsed reference column -->
+      <div class="demo-block" style="width:100%;">
+        <span class="compare-col-label">Collapsed (reference)</span>
+        <div class="mitigation-card">
+          <h3 class="mitigation-title">Rest 15 minutes without a break</h3>
+          <div class="mitigation-meta-row">
+            <span class="pill pill-attribute is-required">Required</span>
+          </div>
+          <p class="mitigation-timing">15 min · every hour</p>
+          <div class="mitigation-chips">
+            <span class="chip-entity">J. Tan</span>
+            <span class="chip-entity">R. Kumar</span>
+            <span class="chip-entity">M. Yusof</span>
+          </div>
+          <details class="disclosure">
+            <summary>Show details</summary>
+          </details>
+        </div>
+      </div>
+
+      <!-- Live interactive column -->
+      <div class="demo-block" style="width:100%;">
+        <span class="compare-col-label">Expanded (click to toggle) →</span>
+        <div class="mitigation-card">
+          <h3 class="mitigation-title">Rest 15 minutes without a break</h3>
+          <div class="mitigation-meta-row">
+            <span class="pill pill-attribute is-required">Required</span>
+          </div>
+          <p class="mitigation-timing">15 min · every hour</p>
+          <div class="mitigation-chips">
+            <span class="chip-entity">J. Tan</span>
+            <span class="chip-entity">R. Kumar</span>
+            <span class="chip-entity">M. Yusof</span>
+          </div>
+          <details class="disclosure" open>
+            <summary>Show details</summary>
+            <div class="detail-block">
+              <div class="detail-row"><span class="detail-key">Reason:</span> Unacclimatised worker performing heavy-intensity work above the caution WBGT threshold.</div>
+              <div class="detail-row"><span class="detail-key">Rule:</span> <code class="rule-code">UNACCLIMATISED_HEAVY_WORK_RULE</code></div>
+              <div class="detail-row"><span class="detail-key">Expected effect:</span> Reduces core temperature accumulation, lowering heat-strain risk before the next work block.</div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SECTION 4 — Press-to-fill danger
+       ============================================================ -->
+  <section class="panel">
+    <span class="section-number">04</span>
+    <h2>Press-to-fill danger</h2>
+    <p class="caption">Destructive actions are outlined at rest and fill with danger on engage (hover here = web; press on mobile). Hover the Reject button.</p>
+
+    <div class="row">
+      <button class="btn btn-approve" type="button">Approve</button>
+      <button class="btn btn-reject" type="button">Reject</button>
+    </div>
+
+    <p class="danger-note">This borrows <code class="rule-code">--band-high</code> as the danger tone because CrewSafe has no dedicated <code class="rule-code">--danger</code> token yet — pending CVD (colour-vision-deficiency) review.</p>
+  </section>
+
+  <!-- ============================================================
+       SECTION 5 — Long-content guardrail
+       ============================================================ -->
+  <section class="panel">
+    <span class="section-number">05</span>
+    <h2>Long-content guardrail</h2>
+    <p class="caption">Rule codes and rationale strings wrap inside their row rather than overflow the card or force horizontal scroll — the same guardrail enforced by the merge-blocker gate.</p>
+
+    <div class="guardrail-card">
+      <div class="guardrail-row">
+        <span class="detail-key" style="font-size: var(--text-sm);">Rule:</span>
+        <code class="rule-code wrap-safe">EXTREMELY_HIGH_WBGT_UNACCLIMATISED_HEAVY_INTENSITY_WORK_SUSPENSION_RULE_V2</code>
+      </div>
+      <div class="guardrail-row">
+        <span class="detail-key" style="font-size: var(--text-sm);">Rationale:</span>
+        <span class="wrap-safe">WorksiteAssessment recorded a WBGT reading in the Extremely High band while an unacclimatised crew member was assigned heavy-intensity work with no scheduled rest break in the preceding sixty minutes, exceeding the exposure ceiling defined for this work-rest category and site elevation profile.</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="legend">
+    <strong>Legend.</strong> Colour is always paired with a text label (CVD safety) — no pill or chip relies on colour alone to communicate meaning.
+    Danger tone borrows <code class="rule-code">--band-high</code> pending a real <code class="rule-code">--danger</code> token.
+    Filled = state (needs a decision). Outlined = attribute (classifies). Neutral bordered = entity (names, never coloured).
+  </footer>
+
+</div>

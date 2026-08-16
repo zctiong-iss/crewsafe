@@ -1,12 +1,17 @@
-/** @author Tang Chee Seng (with assistance from Claude) */
-import { useCurrentUser } from "@/auth/useAuth";
+/** @author Jemilin Beulah, Tang Chee Seng */
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
+import { SitePicker } from "@/components/SitePicker";
+import { useSelectedSite } from "@/site/useSelectedSite";
+import { type subscribeToConditions } from "@/api/conditionsStream";
 import { ConditionsPanel } from "./ConditionsPanel";
 
-export function ConditionsPage() {
-  const user = useCurrentUser();
-  const siteId = user.siteIds[0];
+/**
+ * @param subscribe Overrides the live SSE transport. Only ever passed in tests — production
+ * always takes {@link ConditionsPanel}'s own default, exactly as before this prop existed.
+ */
+export function ConditionsPage({ subscribe }: { subscribe?: typeof subscribeToConditions } = {}) {
+  const { siteId } = useSelectedSite();
 
   if (!siteId)
     return (
@@ -18,5 +23,5 @@ export function ConditionsPage() {
       </AppShell>
     );
 
-  return <ConditionsPanel siteId={siteId} />;
+  return <ConditionsPanel siteId={siteId} subscribe={subscribe} siteSwitcher={<SitePicker />} />;
 }

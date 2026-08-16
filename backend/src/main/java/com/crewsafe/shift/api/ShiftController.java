@@ -176,10 +176,10 @@ public class ShiftController {
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody CancelShiftRequest request) {
 
-        return shiftService.cancelShift(siteId, principal.getId(), shiftId, request.reason())
-                .map(shift -> ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())))
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        Shift shift = shiftService.cancelShift(siteId, principal.getId(), shiftId, request.reason())
+            .orElseThrow(() -> noSuchShift(siteId, shiftId));
+            return ResponseEntity.ok(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
+
     }
 
     @PostMapping("/{shiftId}/assignments")

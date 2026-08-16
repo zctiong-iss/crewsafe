@@ -16,6 +16,10 @@ import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { ConditionsPage } from "@/features/conditions/ConditionsPage";
 import { EditShiftPage } from "@/features/shifts/EditShiftPage";
 import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
+import { PolicyPage } from "@/features/policy/PolicyPage";
+import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
+import { LightningPage } from "@/features/lightning/LightningPage";
+import { SiteProvider } from "@/site/SiteProvider";
 
 /**
  * Routes are chosen by auth state, not guarded per-route.
@@ -97,77 +101,69 @@ export function App() {
 
     case "signed-in":
       return (
-        <Routes>
-          {callbackRoute}
-          <Route
-            path="/"
-            element={<RoleRoute roles={rolesForRoute("/")}><HomePage /></RoleRoute>}
-          />
-
-          {/* Every nav destination resolves to something. A link that 404s reads as a bug;
-              a page that says "not built yet" reads as a roadmap. */}
-          {NAVIGATION.filter(
-            (item) => 
-              item.to !== "/" && 
-              item.to !== "/shifts" && 
-              item.to !== "/conditions" &&
-              item.to !== "/approvals",
-          ).map((item) => (
+        <SiteProvider>
+          <Routes>
+            {callbackRoute}
             <Route
-              key={item.to}
-              path={item.to}
-              element={
-                <RoleRoute roles={rolesForRoute(item.to)}>
-                  <PlaceholderPage title={item.label} />
-                </RoleRoute>
-              }
+              path="/"
+              element={<RoleRoute roles={rolesForRoute("/")}><HomePage /></RoleRoute>}
             />
-          ))}
 
-          <Route
-            path="/shifts/new"
-            element={
-              <RoleRoute 
-                roles={rolesForRoute("/shifts/new")}>
-                  <CreateShiftPage />
-              </RoleRoute>}
-          />
-          <Route
-            path="/shifts"
-            element={
-              <RoleRoute 
-                roles={rolesForRoute("/shifts")}>
-                  <ShiftsPage />
-              </RoleRoute>}
-          />
-          <Route
-            path="/conditions"
-            element={
-              <RoleRoute 
-                roles={rolesForRoute("/conditions")}>
-                  <ConditionsPage />
-              </RoleRoute>}
-          />
-          <Route
-            path="/shifts/:shiftId/edit"
-            element={
-              <RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}>
-                <EditShiftPage />
-              </RoleRoute>
-            }
-          />
-          <Route
-            path="/approvals"
-            element={
-              <RoleRoute roles={rolesForRoute("/approvals")}>
-                <ApprovalsPage />
-              </RoleRoute>
-            }
-          />
+            {/* Every nav destination resolves to something. A link that 404s reads as a bug;
+                a page that says "not built yet" reads as a roadmap. */}
+            {NAVIGATION.filter(
+              (item) =>
+                item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
+                item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning",
+            ).map((item) => (
+              <Route
+                key={item.to}
+                path={item.to}
+                element={
+                  <RoleRoute roles={rolesForRoute(item.to)}>
+                    <PlaceholderPage title={item.label} />
+                  </RoleRoute>
+                }
+              />
+            ))}
 
-          {/* Replace a placeholder only when its real guarded route lands in this same change. */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route
+              path="/shifts/new"
+              element={<RoleRoute roles={rolesForRoute("/shifts/new")}><CreateShiftPage /></RoleRoute>}
+            />
+            <Route
+              path="/shifts"
+              element={<RoleRoute roles={rolesForRoute("/shifts")}><ShiftsPage /></RoleRoute>}
+            />
+            <Route
+              path="/shifts/:shiftId/edit"
+              element={<RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}><EditShiftPage /></RoleRoute>}
+            />
+            <Route
+              path="/conditions"
+              element={<RoleRoute roles={rolesForRoute("/conditions")}><ConditionsPage /></RoleRoute>}
+            />
+            <Route
+              path="/approvals"
+              element={<RoleRoute roles={rolesForRoute("/approvals")}><ApprovalsPage /></RoleRoute>}
+            />
+            <Route
+              path="/policy/new"
+              element={<RoleRoute roles={rolesForRoute("/policy/new")}><CreatePolicyVersionPage /></RoleRoute>}
+            />
+            <Route
+              path="/policy"
+              element={<RoleRoute roles={rolesForRoute("/policy")}><PolicyPage /></RoleRoute>}
+            />
+            <Route
+              path="/lightning"
+              element={<RoleRoute roles={rolesForRoute("/lightning")}><LightningPage /></RoleRoute>}
+            />
+
+            {/* Replace a placeholder only when its real guarded route lands in this same change. */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </SiteProvider>
       );
   }
 }

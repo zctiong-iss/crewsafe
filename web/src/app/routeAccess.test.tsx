@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng (with assistance from Claude and ChatGPT) */
+/** @author Jemilin Beulah, Tang Chee Seng */
 
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
@@ -55,6 +55,26 @@ describe("direct route access", () => {
 
   it("redirects an administrator away from approvals", async () => {
     renderAt("/approvals", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
+  });
+
+  it.each(ROLES.slice(1))("allows %s to open the heat policy catalogue", async (role) => {
+    renderAt("/policy", role);
+    expect(await screen.findByRole("heading", { name: "Heat Policy" })).toBeInTheDocument();
+  });
+
+  it("redirects a worker away from the heat policy catalogue", async () => {
+    renderAt("/policy", "WORKER");
+    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
+  });
+
+  it.each(["SAFETY_MANAGER", "ADMIN"] as Role[])("allows %s to open policy version creation", async (role) => {
+    renderAt("/policy/new", role);
+    expect(await screen.findByRole("heading", { name: "Create Policy Version" })).toBeInTheDocument();
+  });
+
+  it("redirects a supervisor away from policy version creation", async () => {
+    renderAt("/policy/new", "SUPERVISOR");
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 });
