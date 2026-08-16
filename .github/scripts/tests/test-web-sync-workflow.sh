@@ -258,6 +258,8 @@ contains_in "has read permission" "$WORKFLOW" 'contents: read'
 contains_in "has OIDC permission" "$WORKFLOW" 'id-token: write'
 contains_in "AWS credentials action is pinned" "$WORKFLOW" 'aws-actions/configure-aws-credentials@e6de'
 contains_in "checkout action is pinned" "$WORKFLOW" 'actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd'
+# SCRUM-419 (githubactions:S6505): the dependency install must disable lifecycle scripts.
+contains_in "npm ci disables lifecycle scripts" "$WORKFLOW" 'npm ci --ignore-scripts'
 contains_in "reuses build-test's own npm steps" "$WORKFLOW" 'npm run build'
 contains_in "runs lint" "$WORKFLOW" 'npm run lint'
 contains_in "runs typecheck" "$WORKFLOW" 'npm run typecheck'

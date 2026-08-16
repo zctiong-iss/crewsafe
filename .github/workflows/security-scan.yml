@@ -232,7 +232,7 @@ jobs:
 
       - name: Install web dependencies for analysis
         working-directory: web
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Generate web coverage
         working-directory: web
@@ -269,7 +269,7 @@ jobs:
 
       - name: Install mobile dependencies for coverage
         working-directory: mobile
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Generate mobile coverage
         working-directory: mobile
@@ -471,6 +471,15 @@ jobs:
       # Added web tests for SCRUM-311 (Security enhancements for front-end)
       - name: Web runtime configuration self-tests
         run: .github/scripts/tests/test-web-ci-runtime-config.sh
+
+      # SCRUM-419: wired in the same change that adds this test, not as a follow-up -- see
+      # this job's own documented history of guard tests written but not wired in until a
+      # later PR (SCRUM-346, SCRUM-350, SCRUM-351).
+      - name: Security-scan dependency-install hardening self-tests
+        run: .github/scripts/tests/test-security-scan-dependency-install.sh
+
+      - name: Install-scanners transport hardening self-tests
+        run: .github/scripts/tests/test-install-scanners.sh
 
       - name: Manual web sync workflow self-tests
         run: .github/scripts/tests/test-web-sync-workflow.sh
