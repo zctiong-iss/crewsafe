@@ -120,6 +120,14 @@ app:
       # How long an idle SSE connection is held open before the client must reconnect.
       emitter-timeout: ${ACTION_DISPATCH_STREAM_EMITTER_TIMEOUT:5m}
 
+  shift:
+    activation:
+      # SCRUM-441: flips PLANNED shifts to ACTIVE once startsAt passes. Opt in per
+      # environment, same reasoning as app.weather.ingestion.enabled.
+      enabled: ${SHIFT_ACTIVATION_ENABLED:false}
+      initial-delay: ${SHIFT_ACTIVATION_INITIAL_DELAY:5s}
+      interval: ${SHIFT_ACTIVATION_INTERVAL:30s}
+
   # app.cognito.* is deliberately absent from this file. Every value is required (see the
   # @NotBlank/@NotEmpty constraints on CognitoProperties), so leaving them undefined here
   # means a deployment that forgets one fails at startup with a validation error naming the

@@ -45,6 +45,10 @@ public final class AuditEventType {
      * as a record (SCRUM-255). */
     public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
 
+    /** A PLANNED shift was auto-activated by the scheduler once its start time passed
+     * (SCRUM-441). System-triggered — actorId is null, the same as {@link #ACTION_LATE}. */
+    public static final String SHIFT_ACTIVATED = "SHIFT_ACTIVATED";
+
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
      * through this event's originating endpoint. */

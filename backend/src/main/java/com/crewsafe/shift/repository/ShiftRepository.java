@@ -33,6 +33,9 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
      */
     Optional<Shift> findFirstBySiteIdAndStatusOrderByStartsAtDesc(UUID siteId, ShiftStatus status);
 
+    /** Powers the SCRUM-441 activation sweep: shifts of a given status whose start time has passed. */
+    List<Shift> findByStatusAndStartsAtLessThanEqual(ShiftStatus status, Instant now);
+
     @Query("""
             SELECT shift FROM Shift shift
             WHERE shift.startsAt <= :now AND shift.endsAt > :now
