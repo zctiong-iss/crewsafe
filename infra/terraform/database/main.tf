@@ -153,7 +153,7 @@ resource "aws_db_parameter_group" "main" {
 
 resource "aws_cloudwatch_log_group" "postgresql" {
   name              = "/aws/rds/instance/${local.name_prefix}/postgresql"
-  retention_in_days = 7
+  retention_in_days = 30
 }
 
 # ---------------------------------------------------------------------------
