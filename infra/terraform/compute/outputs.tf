@@ -72,3 +72,8 @@ output "backend_deploy_role_arn" {
   description = "Dedicated GitHub OIDC role for SCRUM-271 backend release deployment; never use a Terraform apply role."
   value       = aws_iam_role.backend_deploy.arn
 }
+
+output "ml_service_deploy_role_arn" {
+  description = "Dedicated GitHub OIDC role for SCRUM-373 ml-service sidecar release deployment; never use a Terraform apply role. Scoped identically to backend_deploy_role_arn's ecs:UpdateService target (the one shared aws_ecs_service.backend) - see main.tf's comment on aws_iam_role.ml_service_deploy for why a separate role still exists despite that shared scope."
+  value       = aws_iam_role.ml_service_deploy.arn
+}

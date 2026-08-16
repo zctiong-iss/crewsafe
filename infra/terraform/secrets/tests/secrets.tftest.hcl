@@ -166,8 +166,8 @@ run "entry_shape" {
 
   # Eight, not thirteen: a value earns an entry only where the deployment must
   # differ from the application's own default (FR-001, research.md R-008). The
-  # two ml/model-manifest* entries (SCRUM-373, FR-008) are deliberately empty
-  # rather than absent — see the dedicated deferred_model_manifest_slots run
+  # two ml/model-manifest* entries (SCRUM-373, FR-008) are always declared
+  # explicitly rather than absent — see the dedicated model_manifest_slots run
   # block below.
   assert {
     condition     = length(aws_ssm_parameter.config) == 8
@@ -208,15 +208,14 @@ run "entry_shape" {
   }
 }
 
-# SCRUM-373, FR-008 — the model-manifest configuration is declared but left
-# unset: no reviewed, approved_for_inference bundle currently exists to
-# activate (spec Clarifications). ForecastModelRegistry.from_environment()
-# treats an absent/empty WBGT_MODEL_MANIFEST as "no model configured" and
-# falls back to the persistence baseline — not an error path — so an empty
-# String parameter is deliberately indistinguishable from "unset" to the
-# application, while still being a real Terraform resource a future promotion
-# can update by value only.
-run "deferred_model_manifest_slots" {
+# SCRUM-373, FR-008 — the model-manifest configuration slot. Originally
+# declared holding the placeholder value "unset" (SSM rejects an actually-
+# empty string — found live, secrets-shared-dev apply, 2026-08-15); promoted
+# by SCRUM-114 (2026-08-16) to the checksum-pinned staging-demo bundle
+# (ml-service/MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md
+# #8.0) — the shared university-project staging demonstration only, not a
+# production approval.
+run "model_manifest_slots" {
   command = apply
 
   assert {
@@ -229,14 +228,28 @@ run "deferred_model_manifest_slots" {
     error_message = "A configuration slot for WBGT_MODEL_MANIFEST_SHA256 must exist (FR-008)."
   }
 
+  # Must be an absolute, in-image path — ForecastModelRegistry.from_environment()
+  # (ml-service/crewsafe_ml/inference.py) resolves this value with
+  # Path(value).resolve(strict=True), which resolves a relative path against
+  # the process's own cwd, not image root. A relative value here would fail
+  # silently (the same safe fallback "unset" took), not loudly, which is
+  # exactly the mistake this assertion exists to catch before it ships.
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == ""
-    error_message = "The model-manifest slot must be empty in this issue — no bundle is approved for inference yet (FR-008)."
+    condition     = startswith(aws_ssm_parameter.config["ml/model-manifest"].value, "/")
+    error_message = "ml/model-manifest must be an absolute in-image path, or ForecastModelRegistry resolves it against the wrong working directory and silently fails to load (FR-008)."
+  }
+
+  # Pinned to the exact reviewed staging-demo bundle path/checksum
+  # (ml-service/MODEL_CARD.md), so an accidental edit changes this test's
+  # expectation rather than silently shipping a different, unreviewed bundle.
+  assert {
+    condition     = aws_ssm_parameter.config["ml/model-manifest"].value == "/app/model-bundle/staging-demo-v1/manifest.json"
+    error_message = "ml/model-manifest must point at the reviewed staging-demo bundle path baked into the ml-service image (FR-008)."
   }
 
   assert {
-    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == ""
-    error_message = "The model-manifest-sha256 slot must be empty in this issue (FR-008)."
+    condition     = aws_ssm_parameter.config["ml/model-manifest-sha256"].value == "36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031"
+    error_message = "ml/model-manifest-sha256 must match the reviewed staging-demo manifest's own checksum (FR-008)."
   }
 }
 
@@ -307,7 +320,7 @@ run "iam_boundary" {
   # the original "exactly one per role, the rds! pattern" invariant SCRUM-174
   # established). Two families are permitted: the service-managed database
   # credential (FR-029, cannot be pinned by ARN — the service names it and it
-  # does not exist until the database does) and the two Bedrock model grants
+  # does not exist until the database does) and the four Bedrock model grants
   # (FR-006, contracts/bedrock-invoke-grant.md — a Bedrock model ARN carries no
   # "crewsafe" segment either, being an AWS/Anthropic-owned or account-scoped
   # resource, not one this component names). Every other resource ARN mentions
@@ -320,8 +333,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
-    ]) == 4
-    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the two Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
+    ]) == 6
+    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the four Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
   }
 
   assert {
@@ -335,10 +348,15 @@ run "iam_boundary" {
     error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path nor a Bedrock model ARN (SC-014, FR-029, FR-006)."
   }
 
-  # FR-006 — exactly two Bedrock statements, one per model identifier
-  # (contracts/bedrock-invoke-grant.md), each granting only bedrock:InvokeModel,
-  # never bedrock:*, never merged into one statement (a list Resource would
-  # break the strcontains() checks above — research.md R-006).
+  # FR-006 — exactly four Bedrock statements: one for the Sonnet
+  # mitigation-generation model, and three for the Haiku access-verification
+  # model (the inference-profile ARN, plus BOTH representations of the
+  # underlying foundation-model ARN AWS's authorization check has each
+  # independently required across separate live calls — confirmed
+  # 2026-08-15, research.md R-005, Rounds 1 through 3). Each grants only
+  # bedrock:InvokeModel, never bedrock:*, never merged into one statement (a
+  # list Resource would break the strcontains() checks above — research.md
+  # R-006).
   assert {
     condition = length([
       for s in concat(
@@ -346,8 +364,33 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if length([for a in s.Action : a if startswith(a, "bedrock:")]) > 0
-    ]) == 2
-    error_message = "There must be exactly two statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
+    ]) == 4
+    error_message = "There must be exactly four statements granting a bedrock: action (FR-006, contracts/bedrock-invoke-grant.md)."
+  }
+
+  # Confirmed live 2026-08-15, across three rounds: the underlying
+  # foundation-model ARN a cross-region "global." inference profile is
+  # authorized against does not consistently resolve to one canonical
+  # resource shape — both the calling-region-scoped form and the region-less
+  # form (arn:aws:bedrock:::foundation-model/...) have each independently
+  # been the one a live AccessDeniedException named, on different calls for
+  # the same model. Both statements must be present.
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.task.policy).Statement :
+      s.Resource == "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      if s.Sid == "InvokeBedrockAccessVerificationFoundationModel"
+    ])
+    error_message = "InvokeBedrockAccessVerificationFoundationModel must be scoped to the region-scoped foundation-model ARN — confirmed live (research.md R-005, Round 1 and Round 3)."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.task.policy).Statement :
+      s.Resource == "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      if s.Sid == "InvokeBedrockAccessVerificationFoundationModelGlobal"
+    ])
+    error_message = "InvokeBedrockAccessVerificationFoundationModelGlobal must be scoped to the region-less global foundation-model ARN — confirmed live (research.md R-005, Round 2) and per AWS's global-cross-region-inference IAM doc."
   }
 
   assert {

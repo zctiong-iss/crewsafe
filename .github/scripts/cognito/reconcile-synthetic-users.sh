@@ -269,6 +269,10 @@ while IFS= read -r declaration; do
         --user-pool-id "$pool" --username "$username" >/dev/null
       result "$key" "$live_sub" disabled
       ;;
+    *)
+      echo "::error::Unsupported synthetic lifecycle operation in per-user loop: $operation" >&2
+      exit 1
+      ;;
   esac
 done < <(jq -c '.users[]' <<<"$selected")
 

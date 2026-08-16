@@ -4,6 +4,7 @@ import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.common.error.ErrorCode;
 import com.crewsafe.forecast.service.ForecastUnavailableException;
 import com.crewsafe.forecast.service.SiteForecastService;
 import com.crewsafe.lightning.api.LightningRiskPayload;
@@ -73,7 +74,7 @@ import static org.mockito.Mockito.when;
  * that <em>every</em> path ends with a persisted PENDING_APPROVAL recommendation. A supervisor
  * pressing "generate" during a heat event must never receive an error instead of a plan.
  *
- * @author Abu Bakar
+ * @author Abu Bakar and Justin Chua
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -233,7 +234,8 @@ class AgentDraftServiceTest {
     void forecastSurvivesAnUnreachableMlService() {
         when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
-                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW)));
+                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
+                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false)));
         when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("connection refused"));
 
         Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
@@ -339,7 +341,8 @@ class AgentDraftServiceTest {
     void realForecastIsSentToMlService() {
         when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
-                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW)));
+                new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
+                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false)));
         stubDraft(validModelPlan(), false, MODEL_ID);
 
         service.generate(SITE_ID, SHIFT_ID, ACTOR_ID);
@@ -438,7 +441,9 @@ class AgentDraftServiceTest {
 
         assertThatThrownBy(() -> service.generate(SITE_ID, SHIFT_ID, ACTOR_ID))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("No usable WBGT reading");
+                .hasMessageContaining("No usable WBGT reading")
+                .extracting(e -> ((ConflictException) e).getCode())
+                .isEqualTo(ErrorCode.NO_USABLE_WBGT);
         verify(agentDraftClient, never()).draft(any());
     }
 
@@ -468,7 +473,12 @@ class AgentDraftServiceTest {
 
         assertThatThrownBy(() -> service.generate(SITE_ID, SHIFT_ID, ACTOR_ID))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("No active heat policy");
+                .hasMessageContaining("No active heat policy")
+                // The code is what makes this reach the supervisor as "ask a Safety Manager to
+                // activate a policy version" instead of the generic 409's "reload and try again",
+                // which is advice that cannot work — reloading never creates a policy version.
+                .extracting(e -> ((ConflictException) e).getCode())
+                .isEqualTo(ErrorCode.NO_ACTIVE_POLICY);
         verify(agentDraftClient, never()).draft(any());
     }
 

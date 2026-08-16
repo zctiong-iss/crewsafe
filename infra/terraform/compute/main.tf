@@ -320,6 +320,10 @@ resource "aws_lb_target_group" "public" {
 # HTTP is the documented temporary origin transport: no trusted certificate can
 # be issued for the AWS-owned ALB hostname. Its security group accepts only the
 # managed CloudFront prefix list, and all requests still reach backend authn/z.
+#
+# SonarQube terraform:S5332 (issue AZ_LiOshb-JeFb7z_1Fk) is accepted for this
+# same reason — SCRUM-414 formally marks that finding accepted rather than
+# open, so the codebase and the scanner's own state agree.
 #trivy:ignore:AWS-0054
 resource "aws_lb_listener" "public" {
   load_balancer_arn = aws_lb.public.arn
@@ -887,6 +891,45 @@ resource "aws_iam_role_policy" "backend_deploy" {
   })
 }
 
+# SCRUM-373 follow-up: redeploying an already-published ml-service image must
+# not require bumping var.initial_ml_service_image_tag through a Terraform
+# apply (research.md R-011's same lesson, applied to the sidecar container).
+# A dedicated role, not a reuse of backend_deploy: ECS grants IAM at the
+# service level, not per container, so this role's ecs:UpdateService grant is
+# scoped to the exact same aws_ecs_service.backend.id backend_deploy already
+# holds — reusing that role would add no isolation, only ambiguity about which
+# workflow is actually responsible for a given deploy. Matches the precedent
+# cognito_mapping_publication already set below for the identical reasoning.
+resource "aws_iam_role" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = "arn:aws:iam::${var.expected_account_id}:oidc-provider/token.actions.githubusercontent.com" }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = { StringEquals = {
+        "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        "token.actions.githubusercontent.com:sub" = var.github_oidc_main_subject
+      } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ml_service_deploy" {
+  name = "${local.name_prefix}-ml-service-deploy"
+  role = aws_iam_role.ml_service_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = "${local.ecr.ml_service_repository_arn}" },
+      { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = aws_ecs_service.backend.id },
+      { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } }
+    ]
+  })
+}
+
 # SCRUM-303: publishing the application-user mapping changes which signed Cognito
 # subjects can enter CrewSafe. It must therefore never share the ordinary backend
 # deployment role. This OIDC role can write exactly the one runtime parameter and
@@ -1002,6 +1045,132 @@ resource "aws_s3_bucket_lifecycle_configuration" "web" {
       noncurrent_days = var.web_bucket_noncurrent_version_expiration_days
     }
   }
+}
+
+# ---------------------------------------------------------------------------
+# Web bucket access-log target (SCRUM-414, terraform:S6258)
+#
+# Private, encrypted, ACLs disabled entirely — the same hardening pattern the
+# web bucket itself uses (research.md R-002). Not versioned: unlike the web
+# bucket, access-log objects are write-once and never overwritten in place, so
+# there is no noncurrent-version concept for a lifecycle rule to protect
+# against; the lifecycle rule below instead bounds total retention directly.
+# ---------------------------------------------------------------------------
+
+resource "aws_s3_bucket" "web_logs" {
+  bucket = "${local.name_prefix}-web-logs"
+}
+
+resource "aws_s3_bucket_ownership_controls" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# AWS-managed SSE-S3 (AES256), matching the web bucket's own accepted
+# exemption (research.md R-002) — access logs are operational metadata
+# (requester identity, source IP, request metadata), the same sensitivity
+# class as the web bucket's own already-public SPA content, so a dedicated
+# KMS key buys no confidentiality gain here either.
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+# FR-002. All four flags true — no public ACL, no public policy, no exception.
+resource "aws_s3_bucket_public_access_block" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# FR-004 / research.md R-003. 30 days, matching the CloudWatch retention floor
+# this same feature sets for the PostgreSQL engine log group (FR-005).
+resource "aws_s3_bucket_lifecycle_configuration" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.web_access_log_expiration_days
+    }
+  }
+}
+
+# FR-003. Grants write access to exactly the S3 server-access-logging delivery
+# mechanism, scoped to this bucket and to the account and the two buckets that
+# deliver logs into it — web (FR-001) and web_logs itself (terraform:S6258
+# below) — never a broader principal or resource scope (research.md R-001).
+#
+# jsonencode(), not data "aws_iam_policy_document" — this file's own header
+# comment already records why: mock_provider "aws" fabricates a random string
+# for that data source's .json attribute rather than rendering it, which fails
+# every test that plans this resource. The web bucket's own CloudFront-read
+# policy (below) already learned this the hard way; applying it here from the
+# start.
+locals {
+  web_logs_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.web_logs.arn}/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = [aws_s3_bucket.web.arn, aws_s3_bucket.web_logs.arn]
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+  policy = local.web_logs_bucket_policy
+}
+
+# FR-001. Delivers the web bucket's own access logs to the dedicated target
+# bucket above — never to itself.
+resource "aws_s3_bucket_logging" "web" {
+  bucket = aws_s3_bucket.web.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-access-logs/"
+}
+
+# terraform:S6258 flags web_logs too: it is itself an S3 bucket, and an
+# unlogged one is exactly the finding this whole feature exists to close.
+# Self-logging (source == target) closes the gap without a third bucket —
+# a distinct prefix keeps the two object streams apart, and the 30-day
+# lifecycle above already bounds total growth regardless of which bucket a
+# given log object came from, so this does not create unbounded recursion.
+resource "aws_s3_bucket_logging" "web_logs" {
+  bucket = aws_s3_bucket.web_logs.id
+
+  target_bucket = aws_s3_bucket.web_logs.id
+  target_prefix = "web-logs-bucket-access-logs/"
 }
 
 # ---------------------------------------------------------------------------

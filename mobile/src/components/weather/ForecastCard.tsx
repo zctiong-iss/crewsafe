@@ -67,6 +67,13 @@ export default function ForecastCard({ siteId }: { siteId: string }) {
           ? t("forecast.cardError")
           : t("common.loading");
 
+  // Only the server decides this. `degraded` is authoritative; `basis` names which fallback.
+  const basis = state.status === "ready" ? state.forecast?.basis : undefined;
+  const degradedTag =
+    state.status === "ready" && state.forecast?.degraded && basis && basis !== "MODEL"
+      ? t(`forecast.basisTag.${basis}`)
+      : null;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -90,6 +97,17 @@ export default function ForecastCard({ siteId }: { siteId: string }) {
           <AppText variant="body" tone="secondary" style={styles.summary}>
             {summary}
           </AppText>
+          {/*
+            A degraded forecast is labelled even at this size. The card deliberately omits the
+            interval for space, which means a fallback value would otherwise appear here as a
+            bare number indistinguishable from a model prediction — the one thing the ladder
+            must never allow. The tag is short enough to fit where the range is not.
+          */}
+          {degradedTag ? (
+            <AppText variant="caption" tone="secondary" style={styles.tag}>
+              {degradedTag}
+            </AppText>
+          ) : null}
         </View>
         <AppText variant="body" tone="secondary">
           {t("forecast.cardOpen")}
@@ -116,6 +134,9 @@ const styles = StyleSheet.create({
     minWidth: s(180),
   },
   summary: {
+    marginTop: vs(2),
+  },
+  tag: {
     marginTop: vs(2),
   },
 });

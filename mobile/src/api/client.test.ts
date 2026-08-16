@@ -11,6 +11,8 @@
  * is retrieved afterward via `jest.requireMock` — `import`-derived requires are hoisted by
  * Babel above ordinary top-level statements, so an outer `const` the factory closes over is
  * still `undefined` at the moment `./client`'s own top-level `axios.create()` call runs.
+ *
+ * @author Justin Chua
  */
 jest.mock("axios", () => {
   const captured: {
@@ -122,6 +124,39 @@ describe("response error mapping", () => {
         },
       }),
     ).rejects.toMatchObject({ fieldErrors: { versionLabel: "must be unique" } });
+  });
+
+  it("carries a recognised error code off the response body", async () => {
+    await expect(
+      axiosMock.__captured.responseRejected({
+        response: {
+          status: 409,
+          headers: {},
+          data: { error: "Conflict", message: "…", code: "NO_ACTIVE_POLICY" },
+        },
+      }),
+    ).rejects.toMatchObject({ kind: "conflict", code: "NO_ACTIVE_POLICY" });
+  });
+
+  /*
+   * A code this build does not know must land as null rather than being passed through, so
+   * `messageKeyFor` falls back to the status message instead of producing a translation key
+   * that resolves to nothing. This is what lets the backend add codes without shipping mobile.
+   */
+  it("drops an unrecognised error code rather than passing it through", async () => {
+    await expect(
+      axiosMock.__captured.responseRejected({
+        response: { status: 409, headers: {}, data: { code: "SOME_FUTURE_CODE" } },
+      }),
+    ).rejects.toMatchObject({ kind: "conflict", code: null });
+  });
+
+  it("leaves the code null when the body names none", async () => {
+    await expect(
+      axiosMock.__captured.responseRejected({
+        response: { status: 409, headers: {}, data: { error: "Conflict" } },
+      }),
+    ).rejects.toMatchObject({ code: null });
   });
 
   it("wraps a non-axios error as a generic server failure", async () => {

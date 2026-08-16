@@ -1,27 +1,26 @@
 /**
  * A date-and-time field.
  *
- * The two platforms want opposite shapes and the library reflects that: Android is
- * imperative (`DateTimePickerAndroid.open`, one dialog per component, so date and time are
- * two dialogs chained), iOS is declarative (render the picker, it appears inline). Wrapping
- * both here means the form never has to know.
- *
  * A shift needs a date *and* a time — a picker that only collects one is how you end up
  * with a shift that starts at midnight because nobody was asked.
+ *
+ * ── ONE PICKER, BOTH PLATFORMS ──────────────────────────────────────────────────────────
+ * This used to wrap `@react-native-community/datetimepicker`, which meant two shapes: Android
+ * imperative (`DateTimePickerAndroid.open`, one dialog per mode, so date and time were two
+ * chained dialogs) and iOS declarative. `AppCalendarPicker` collects both in one panel on
+ * both platforms, so the chaining — and the half-answered state it created when someone
+ * dismissed the second dialog — is gone. See that component for why the library was dropped.
  *
  * @author Justin Chua
  */
 import { useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import type { FC } from "react";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
 
 import AppText from "../texts/AppText";
+import AppCalendarPicker from "./AppCalendarPicker";
 import { useTheme } from "@/theme/ThemeProvider";
 import { formatDateTime } from "@/helpers/dateTime";
 
@@ -44,43 +43,12 @@ const AppDateTimeField: FC<AppDateTimeFieldProps> = ({
   locale,
 }) => {
   const theme = useTheme();
-  const [iosPickerOpen, setIosPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const hasError = Boolean(errorMessage);
 
   // Opening with "now" rather than an arbitrary epoch: a supervisor planning a shift is
   // almost always working from today.
   const current = value ?? new Date();
-
-  const openAndroid = () => {
-    DateTimePickerAndroid.open({
-      value: current,
-      mode: "date",
-      onChange: (dateEvent: DateTimePickerEvent, pickedDate?: Date) => {
-        if (dateEvent.type !== "set" || !pickedDate) return;
-
-        // Chained, not nested in one dialog: Android's picker does one mode at a time.
-        // Dismissing the time step leaves the date unapplied, which is the right outcome —
-        // a half-answered question should not commit half an answer.
-        DateTimePickerAndroid.open({
-          value: pickedDate,
-          mode: "time",
-          is24Hour: true,
-          onChange: (timeEvent: DateTimePickerEvent, pickedTime?: Date) => {
-            if (timeEvent.type !== "set" || !pickedTime) return;
-
-            const combined = new Date(pickedDate);
-            combined.setHours(pickedTime.getHours(), pickedTime.getMinutes(), 0, 0);
-            onChange(combined);
-          },
-        });
-      },
-    });
-  };
-
-  const onPress = () => {
-    if (Platform.OS === "android") openAndroid();
-    else setIosPickerOpen((open) => !open);
-  };
 
   return (
     <View style={styles.wrapper}>
@@ -89,7 +57,7 @@ const AppDateTimeField: FC<AppDateTimeFieldProps> = ({
       </AppText>
 
       <Pressable
-        onPress={onPress}
+        onPress={() => setPickerOpen(true)}
         accessibilityRole="button"
         // The error is read with the field rather than as a separate stop, the same way
         // AppTextInput handles it.
@@ -112,16 +80,18 @@ const AppDateTimeField: FC<AppDateTimeFieldProps> = ({
         <Ionicons name="calendar-outline" size={s(20)} color={theme.colors.textSecondary} />
       </Pressable>
 
-      {Platform.OS === "ios" && iosPickerOpen ? (
-        <DateTimePicker
-          value={current}
-          mode="datetime"
-          display="spinner"
-          onChange={(_event: DateTimePickerEvent, picked?: Date) => {
-            if (picked) onChange(picked);
-          }}
-        />
-      ) : null}
+      <AppCalendarPicker
+        visible={pickerOpen}
+        onCancel={() => setPickerOpen(false)}
+        onConfirm={(picked) => {
+          setPickerOpen(false);
+          onChange(picked);
+        }}
+        initialValue={current}
+        mode="datetime"
+        locale={locale}
+        title={label}
+      />
 
       {hasError ? (
         <AppText variant="caption" tone="danger" style={styles.error}>

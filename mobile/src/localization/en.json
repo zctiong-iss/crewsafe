@@ -22,7 +22,11 @@
     "server": "Something went wrong on our end. Try again in a moment.",
     "network": "Cannot reach CrewSafe. Check your connection and try again.",
     "configMissing": "The app is not configured. Missing: {{keys}}",
-    "unknown": "Something went wrong. Try again."
+    "unknown": "Something went wrong. Try again.",
+    "codes": {
+      "NO_ACTIVE_POLICY": "This site has no active heat policy, so a plan cannot be drafted. Ask a Safety Manager to activate a policy version.",
+      "NO_USABLE_WBGT": "There is no usable WBGT reading for this site yet, so a plan cannot be drafted. Try again once a reading arrives."
+    }
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -271,7 +275,7 @@
     "model": "Model {{version}}",
     "generatedAt": "Forecast made {{time}}",
     "unavailableTitle": "No forecast right now",
-    "unavailableBody": "The model only forecasts from recent, live readings on a steady 15-minute cadence. Recent weather for this site is missing, delayed or simulated, so no prediction is being made. The current reading is unaffected.",
+    "unavailableBody": "This site has no usable reading recent enough to forecast from, or conditions are changing too fast to give a useful range. The current reading is unaffected.",
     "noBandNote": "No risk band is shown for a forecast. Bands are decided by the heat policy on the server, and one has not yet been evaluated for predicted values.",
     "cardTitle": "Forecast",
     "cardValue_one": "{{value}}°C predicted in {{count}} minute",
@@ -279,7 +283,19 @@
     "cardUnavailable": "No forecast right now",
     "cardError": "Forecast could not be loaded",
     "cardOpen": "View",
-    "cardAccessibilityLabel": "View the WBGT forecast"
+    "cardAccessibilityLabel": "View the WBGT forecast",
+    "basisTag": {
+      "MODEL_IMPUTED": "Gap filled",
+      "TREND": "Trend estimate",
+      "PERSISTENCE": "Last reading"
+    },
+    "basisNote": {
+      "MODEL_IMPUTED": "A missing reading was filled in before the model ran. The likely range is wider to reflect that.",
+      "TREND": "Not enough recent readings for the model, so this projects the recent trend. Treat it as indicative and read the range, not the number.",
+      "PERSISTENCE": "This carries the last reading forward, because no recent trend could be established. Treat it as a rough guide only."
+    },
+    "inputAge_one": "From a reading {{count}} minute old",
+    "inputAge_other": "From a reading {{count}} minutes old"
   },
   "inbox": {
     "emptyTitle": "Nothing to acknowledge",
@@ -589,5 +605,16 @@
       "ordering": "Within each level, light must be at least moderate, and moderate at least heavy.",
       "checkFields": "Check the fields above."
     }
+  },
+  "datePicker": {
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
+    "time": "Time",
+    "hourUp": "Later by one hour",
+    "hourDown": "Earlier by one hour",
+    "minuteUp": "Later by five minutes",
+    "minuteDown": "Earlier by five minutes",
+    "hourInput": "Hour",
+    "minuteInput": "Minute"
   }
 }

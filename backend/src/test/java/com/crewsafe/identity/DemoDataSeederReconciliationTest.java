@@ -18,7 +18,17 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import com.crewsafe.policy.domain.MomHeatPolicyDefaults;
+import com.crewsafe.policy.domain.PolicyVersion;
+import com.crewsafe.policy.domain.PolicyVersionStatus;
+import com.crewsafe.policy.repository.PolicyVersionRepository;
+import org.junit.jupiter.api.DisplayName;
+import org.mockito.ArgumentCaptor;
+
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,8 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +52,7 @@ class DemoDataSeederReconciliationTest {
 
     private static final String BISHAN_NAME = "Bishan Park Landscaping";
     private static final String CAMPUS_NAME = "NUS Campus Maintenance";
+    private static final Instant SEED_INSTANT = Instant.parse("2026-08-16T00:00:00Z");
     private static final String FIRST_SUB = "00000000-0000-0000-0000-000000000001";
     private static final String SECOND_SUB = "00000000-0000-0000-0000-000000000002";
 
@@ -51,6 +64,9 @@ class DemoDataSeederReconciliationTest {
 
     @Mock
     private SiteMembershipRepository memberships;
+
+    @Mock
+    private PolicyVersionRepository policyVersions;
 
     private final CognitoProperties properties = new CognitoProperties();
     private final Map<String, AppUser> usersByUsername = new HashMap<>();
@@ -97,7 +113,8 @@ class DemoDataSeederReconciliationTest {
             return null;
         }).when(memberships).deleteAll(any(List.class));
 
-        seeder = new DemoDataSeeder(users, sites, memberships, properties, new ObjectMapper());
+        seeder = new DemoDataSeeder(users, sites, memberships, policyVersions, properties,
+                new ObjectMapper(), Clock.fixed(SEED_INSTANT, ZoneOffset.UTC));
     }
 
     @Test
@@ -297,5 +314,71 @@ class DemoDataSeederReconciliationTest {
                   "desiredStatus":"preserve"
                 }]
                 """.formatted(FIRST_SUB);
+    }
+
+    // ----------------------------------------------------------------------------------
+    // The default heat policy (SCRUM-432)
+    //
+    // V17 backfills the sites that exist when it runs. These cover the ones created after it,
+    // which is the half a migration alone cannot reach — without it, every site made from now on
+    // would be born inert: no ACTIVE policy version means PolicyEngineService throws, the draft
+    // endpoint answers 409, and the site produces no rest or hydration controls at all.
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("A site with no policy is given the MOM baseline, ACTIVE, so the engine can run")
+    void seedsTheDefaultPolicyForASiteThatHasNone() {
+        properties.setDemoUsersJson("[]");
+        when(policyVersions.findBySiteIdAndStatus(any(), eq(PolicyVersionStatus.ACTIVE)))
+                .thenReturn(Optional.empty());
+
+        seeder.run(null);
+
+        ArgumentCaptor<PolicyVersion> saved = ArgumentCaptor.forClass(PolicyVersion.class);
+        verify(policyVersions, times(2)).save(saved.capture());
+
+        assertThat(saved.getAllValues())
+                .as("both demo sites must end up with a policy, not just the first")
+                .hasSize(2)
+                .allSatisfy(version -> {
+                    assertThat(version.getStatus()).isEqualTo(PolicyVersionStatus.ACTIVE);
+                    assertThat(version.getVersionLabel())
+                            .isEqualTo(MomHeatPolicyDefaults.VERSION_LABEL);
+                    assertThat(version.getWbgtEmergencyStop())
+                            .isEqualByComparingTo(MomHeatPolicyDefaults.EMERGENCY_STOP);
+                    assertThat(version.getCreatedBy())
+                            .as("nobody signed this off; null is what marks it as system-provided")
+                            .isNull();
+                });
+    }
+
+    @Test
+    @DisplayName("A site that already has an ACTIVE policy keeps it — the default never overwrites")
+    void doesNotOverwriteAConfiguredPolicy() {
+        properties.setDemoUsersJson("[]");
+        when(policyVersions.findBySiteIdAndStatus(any(), eq(PolicyVersionStatus.ACTIVE)))
+                .thenReturn(Optional.of(PolicyVersion.builder().build()));
+
+        seeder.run(null);
+
+        // The whole point of the guard. A site running stricter-than-MOM thresholds must not have
+        // them quietly replaced by the national baseline on the next application start.
+        verify(policyVersions, never()).save(any(PolicyVersion.class));
+    }
+
+    @Test
+    @DisplayName("Re-running the seeder does not stack a second policy on the same site")
+    void isIdempotentAcrossRestarts() {
+        properties.setDemoUsersJson("[]");
+        // First start: no policy, so one is created. Second start: the repository now reports it.
+        when(policyVersions.findBySiteIdAndStatus(any(), eq(PolicyVersionStatus.ACTIVE)))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(PolicyVersion.builder().build()));
+
+        seeder.run(null);
+        seeder.run(null);
+
+        verify(policyVersions, times(2)).save(any(PolicyVersion.class));
     }
 }

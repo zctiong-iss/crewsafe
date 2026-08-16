@@ -59,10 +59,12 @@ locals {
   # Eight entries. A value earns one only where the deployed environment must
   # differ from the default the application already carries (FR-001, research.md
   # R-008), or (the two ml/model-manifest* entries, SCRUM-373) where the
-  # application has no default at all and the slot is deliberately declared
-  # empty rather than omitted (FR-008). The server port, the weather freshness
-  # thresholds, the ingestion interval, and the external weather API base URL
-  # all keep their application defaults and are deliberately absent.
+  # application has no default at all and the slot is declared explicitly
+  # rather than omitted (FR-008 — SSM rejects an actually-empty string, which
+  # is why the slot could never simply be absent-by-default). The server port,
+  # the weather freshness thresholds, the ingestion interval, and the external
+  # weather API base URL all keep their application defaults and are
+  # deliberately absent.
   #
   # Two more entries live under this prefix but are declared elsewhere, because
   # their values do not exist until the component that produces them does (FR-031):
@@ -76,17 +78,28 @@ locals {
     "spring/profiles-active"    = "staging"
     "weather/ingestion-enabled" = "true"
 
-    # SCRUM-373 (FR-008) — deliberately empty, not absent and not omitted. The
-    # only trained WBGT model artifact that exists today (a SageMaker
-    # experiment output) is not approved for inference, so there is nothing to
-    # activate in this issue. ForecastModelRegistry.from_environment()
-    # (ml-service/crewsafe_ml/inference.py) treats an empty/absent
-    # WBGT_MODEL_MANIFEST as "no model configured" and falls back to the
-    # persistence baseline - not an error path. Declaring the slot now (rather
-    # than adding it only in the follow-up that promotes a model) means that
-    # follow-up is a parameter VALUE change, not a task-definition change.
-    "ml/model-manifest"        = ""
-    "ml/model-manifest-sha256" = ""
+    # SCRUM-373 (FR-008) declared this slot with the placeholder value
+    # "unset" — NOT an empty string, since AWS SSM PutParameter rejects ""
+    # outright ("Member must have length greater than or equal to 1" — found
+    # live, secrets-shared-dev apply, 2026-08-15). That let the follow-up that
+    # actually promotes a model be a parameter VALUE change only, never a
+    # task-definition change — exactly what is happening here.
+    #
+    # SCRUM-114 (2026-08-16): promoted to the checksum-pinned staging-demo
+    # bundle, per decision owner Bryan Phang's time-limited exception
+    # (ml-service/MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md
+    # #8.0) — the shared university-project staging demonstration only, NOT a
+    # production approval. The path below must be absolute
+    # (/app/model-bundle/..., matching ml-service/Dockerfile's WORKDIR /app):
+    # ForecastModelRegistry.from_environment() (ml-service/crewsafe_ml/
+    # inference.py) calls Path(value).resolve(strict=True), and a relative
+    # value resolves against the process's cwd, not image root — silently
+    # landing on model_configuration_failed=True (the same safe-fallback path
+    # "unset" took) rather than failing loudly. The full untouched-period
+    # review (docs/runbooks/SCRUM-114-model-approval.md) is still pending and
+    # still required before any production promotion.
+    "ml/model-manifest"        = "/app/model-bundle/staging-demo-v1/manifest.json"
+    "ml/model-manifest-sha256" = "36ffe8e14f50025358dc633a6d331ea4583e3d378b3e72fc6bcaba7c66207031"
   }
 
   config_parameter_descriptions = {
@@ -96,8 +109,8 @@ locals {
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
-    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. Deliberately empty: no model bundle is approved_for_inference yet. A future promotion updates this value only - no task-definition change. Never a secret; the manifest path and checksum are not sensitive."
-    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. Deliberately empty alongside it; ForecastModelRegistry.from_environment() requires both or neither to be set meaningfully."
+    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
+    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
   }
 }
 
@@ -286,12 +299,21 @@ locals {
         Resource = "*"
       },
       {
-        # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID, defaulting to
-        # this exact identifier) is sent as a fixed value on every
-        # POST /mitigations call - never caller-supplied, since ml-service is
-        # reachable only from backend inside the task (spec SEC-001). A single-
-        # region foundation-model ARN, confirmed against this repository's own
-        # SCRUM-187 spike runbook (docs/runbooks/SCRUM-187-bedrock-spike.md).
+        # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID) is sent as a
+        # fixed value on every POST /mitigations call - never caller-supplied,
+        # since ml-service is reachable only from backend inside the task
+        # (spec SEC-001). A single-region foundation-model ARN, confirmed
+        # against this repository's own SCRUM-187 spike runbook
+        # (docs/runbooks/SCRUM-187-bedrock-spike.md).
+        #
+        # NOT the current default: BedrockProperties.java's own default
+        # (SCRUM-287) is the "global." Haiku profile granted below, not this
+        # Sonnet identifier - confirmed live 2026-08-15 (a real
+        # /bedrock/suggest call invoked Haiku, not Sonnet). This grant is kept
+        # because BEDROCK_MODEL_ID is operator-configurable without a
+        # Terraform change (spec Assumptions); switching back to Sonnet stays
+        # denied-by-default everywhere except this one pinned identifier if it
+        # ever is.
         Sid      = "InvokeMitigationSuggestionModel"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
@@ -300,16 +322,56 @@ locals {
       {
         # ml-service/bedrock_client.py's hardcoded health-check model, invoked
         # by GET /bedrock/access (backend's TestBedrockController/
-        # BedrockApiClient). A cross-region system-defined inference profile
-        # (the "global." prefix) - the profile ARN below is this issue's
-        # starting grant; research.md R-005 flags that AWS may also require the
-        # underlying regional foundation-model ARN(s) the profile can route to,
-        # confirmed by tasks.md's live verification step, not by static
-        # research alone.
+        # BedrockApiClient). A "global." cross-region system-defined inference
+        # profile. AWS's own documentation for this feature
+        # (docs.aws.amazon.com/bedrock/latest/userguide/global-cross-region-inference.html,
+        # "IAM policy requirements for global cross-Region inference") is
+        # explicit that this needs a THREE-PART policy, not one grant: this
+        # profile-ARN statement, plus the two foundation-model statements
+        # that follow. Two live AccessDeniedExceptions on 2026-08-15
+        # (secrets-shared-dev; research.md R-005) independently rediscovered
+        # this the hard way before the doc was found — see those two
+        # statements for the exact failure each one fixes.
         Sid      = "InvokeBedrockAccessVerificationProfile"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
         Resource = "arn:aws:bedrock:${var.aws_region}:${var.expected_account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
+      },
+      {
+        # Part 2 of 3 (see the profile statement above): the "Regional FM"
+        # grant AWS's global-cross-region-inference doc requires alongside
+        # the profile ARN. Confirmed live 2026-08-15 (secrets-shared-dev,
+        # research.md R-005, Round 1): without this, a real call is denied
+        # with an AccessDeniedException naming exactly this ARN, even with
+        # the profile statement already granted.
+        #
+        # This is also the model backend/mitigation/ai/bedrock/
+        # BedrockProperties.java's app.bedrock.model-id actually defaults to
+        # (SCRUM-287) — the same "global." Haiku profile used for the
+        # /bedrock/access check, not the Sonnet identifier
+        # docs/runbooks/SCRUM-187-bedrock-spike.md's earlier spike assumed.
+        Sid      = "InvokeBedrockAccessVerificationFoundationModel"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
+      },
+      {
+        # Part 3 of 3 (see the profile statement above): the "global FM"
+        # grant — no Region, no account-id segment, "intentional and
+        # required for the cross-Region functionality" per AWS's own doc.
+        # This is what actually enables routing to a Region other than the
+        # caller's own. Confirmed live 2026-08-15 (secrets-shared-dev,
+        # research.md R-005, Round 2): a real /bedrock/suggest mitigation
+        # call, made after the Regional-FM statement above was applied and
+        # confirmed, was denied with an AccessDeniedException naming this
+        # exact ARN instead. Both this and the Regional-FM statement above
+        # are required together — dropping either one reproduces the
+        # matching live denial (this repo tried exactly that, twice, before
+        # finding AWS's three-part-policy requirement documented).
+        Sid      = "InvokeBedrockAccessVerificationFoundationModelGlobal"
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0"
       },
     ])
   }

@@ -1062,6 +1062,61 @@ run "mapping_publication_role_boundary" {
   }
 }
 
+# SCRUM-373 follow-up: ml-service's own out-of-band redeploy role, mirroring
+# backend_deploy's shape (same trust condition, same shared aws_ecs_service.backend
+# target — a second ECS service does not exist to scope this any narrower) but
+# scoped to the ml-service ECR repository rather than backend's.
+run "ml_service_deploy_role_boundary" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role.ml_service_deploy.assume_role_policy).Statement :
+      stmt.Action == "sts:AssumeRoleWithWebIdentity" &&
+      try(stmt.Condition.StringEquals["token.actions.githubusercontent.com:sub"], "") == var.github_oidc_main_subject
+    ])
+    error_message = "The ml-service deploy role must trust only the exact main-branch GitHub OIDC subject."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecr:DescribeImages"]) &&
+      try(stmt.Resource, "") == local.ecr.ml_service_repository_arn
+    ])
+    error_message = "The ml-service deploy role must read image metadata only from the ml-service ECR repository, never the backend one."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecs:DescribeServices", "ecs:UpdateService"]) &&
+      try(stmt.Resource, "") == aws_ecs_service.backend.id
+    ])
+    error_message = "The ml-service deploy role's UpdateService grant must be scoped to the one shared backend service (no narrower target exists)."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["iam:PassRole"]) &&
+      try(toset(stmt.Resource), toset([])) == toset([local.secrets.task_execution_role_arn, local.secrets.task_role_arn]) &&
+      try(stmt.Condition.StringEquals["iam:PassedToService"], "") == "ecs-tasks.amazonaws.com"
+    ])
+    error_message = "Task-role passing must be limited to the existing backend execution and task roles for ECS tasks."
+  }
+
+  # Never a Terraform apply role - this deploy role stands alone from the
+  # reviewed plan/apply CI policies, matching backend_deploy's own boundary.
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_role_policy.ml_service_deploy.policy).Statement :
+      length([for a in stmt.Action : a if can(regex("^ssm:(Put|Delete)|^ecs:(DeleteService|DeregisterTaskDefinition)", a))]) == 0
+    ])
+    error_message = "The ml-service deploy role must never gain a write action beyond registering a task definition and updating the one service it targets."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # US1 — reach the deployed web app over a stable HTTPS origin, independent of
 # the backend's own domain
@@ -1230,5 +1285,146 @@ run "web_published_contract" {
   assert {
     condition     = output.web_sync_role_arn == aws_iam_role.web_sync.arn
     error_message = "web_sync_role_arn must equal the sync role's own arn (contracts/terraform-outputs.md)."
+  }
+}
+
+# ---------------------------------------------------------------------------
+# SCRUM-414 — remediate SonarQube terraform:S6258 (web bucket access logging)
+# and terraform:S5332 (public ALB listener clear-text transport, accepted risk)
+# ---------------------------------------------------------------------------
+
+run "web_access_logging_delivery" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web bucket's access logs must be delivered to the dedicated web_logs bucket, not itself (FR-001)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web.bucket == aws_s3_bucket.web.id
+    error_message = "The logging configuration must be attached to the web bucket (FR-001)."
+  }
+}
+
+# terraform:S6258 also flags the web_logs bucket itself (it is an S3 bucket
+# with no access logging of its own): self-logging closes that gap without
+# introducing a third bucket, since the 30-day lifecycle already bounds
+# growth regardless of source.
+run "web_logs_bucket_self_logging" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket must have its own access logging configured, so it is not itself an unlogged S3 bucket (terraform:S6258)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_bucket == aws_s3_bucket.web_logs.id
+    error_message = "The web_logs bucket's own access logs must be delivered to itself (there is no third bucket) — this is a deliberate, bounded self-reference, not the recursive-loop risk the naive case would create, because it targets a distinct prefix and is subject to the same 30-day expiration."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.web_logs.target_prefix != aws_s3_bucket_logging.web.target_prefix
+    error_message = "The web_logs bucket's self-logging prefix must differ from the web bucket's own log prefix, so the two object streams cannot collide."
+  }
+}
+
+run "web_logs_bucket_privacy_and_encryption" {
+  command = apply
+
+  assert {
+    condition = (
+      aws_s3_bucket_public_access_block.web_logs.block_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.block_public_policy &&
+      aws_s3_bucket_public_access_block.web_logs.ignore_public_acls &&
+      aws_s3_bucket_public_access_block.web_logs.restrict_public_buckets
+    )
+    error_message = "All four public-access-block flags must be true on the logging target bucket (FR-002)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.web_logs.rule[0].object_ownership == "BucketOwnerEnforced"
+    error_message = "The logging target bucket's object ownership must be BucketOwnerEnforced, disabling ACLs entirely (FR-002)."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_server_side_encryption_configuration.web_logs.rule) == 1
+    error_message = "The logging target bucket must have server-side encryption configured (FR-002)."
+  }
+
+  assert {
+    condition = anytrue([
+      for rule in aws_s3_bucket_server_side_encryption_configuration.web_logs.rule :
+      rule.apply_server_side_encryption_by_default[0].sse_algorithm == "AES256"
+    ])
+    error_message = "The logging target bucket must use SSE-S3 (AES256), matching the web bucket's own established encryption pattern (research.md R-002)."
+  }
+}
+
+run "web_logs_bucket_lifecycle" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.web_logs.rule[0].expiration[0].days == var.web_access_log_expiration_days
+    error_message = "Access log objects must expire after var.web_access_log_expiration_days, so storage does not grow unbounded (FR-004)."
+  }
+}
+
+run "web_logs_bucket_policy_least_privilege" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal.Service == "logging.s3.amazonaws.com" &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web.arn) &&
+      contains(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")]), aws_s3_bucket.web_logs.arn) &&
+      try(stmt.Condition.StringEquals["aws:SourceAccount"], "") == var.expected_account_id
+    ])
+    error_message = "The logging target bucket's policy must grant s3:PutObject to the S3 log-delivery principal, scoped (via ArnLike) to both source buckets that deliver to it — web and web_logs itself — and this account (via StringEquals) (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      stmt.Principal != "*" && alltrue([
+        for arn in try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "no-wildcard")]) :
+        arn != "*"
+      ])
+    ])
+    error_message = "No statement in the logging target bucket's policy may use a wildcard principal or SourceArn (FR-003)."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_s3_bucket_policy.web_logs.policy).Statement :
+      length(try(tolist(stmt.Condition.ArnLike["aws:SourceArn"]), [try(stmt.Condition.ArnLike["aws:SourceArn"], "")])) == 2
+    ])
+    error_message = "The logging target bucket's policy must scope SourceArn to exactly the two known delivering buckets — no additional, unaccounted-for source (FR-003)."
+  }
+}
+
+run "http_listener_protocol_is_unchanged" {
+  command = apply
+
+  # Characterization test, not a new-behavior test: aws_lb_listener.public already
+  # serves HTTP for a documented, approved reason (no trusted cert can be issued for
+  # the AWS-owned ALB hostname; see the comment above the resource). This guard
+  # exists so a future change cannot silently "fix" the listener without a test
+  # failure flagging the regression (FR-006, SC-005).
+  assert {
+    condition     = aws_lb_listener.public.protocol == "HTTP"
+    error_message = "aws_lb_listener.public.protocol must remain HTTP; forcing HTTPS here is out of scope (FR-006) — see the design-rationale comment above the resource."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.port == 80
+    error_message = "aws_lb_listener.public.port must remain 80, unchanged by this feature (FR-006)."
+  }
+
+  assert {
+    condition     = aws_lb_listener.public.default_action[0].target_group_arn == aws_lb_target_group.public.arn
+    error_message = "aws_lb_listener.public's forwarding target must remain aws_lb_target_group.public, unchanged by this feature (FR-006)."
   }
 }
