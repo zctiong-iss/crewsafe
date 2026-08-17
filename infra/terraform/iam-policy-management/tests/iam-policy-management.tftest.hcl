@@ -59,12 +59,14 @@ run "compute_s3_policy_binding_contract" {
   }
 
   assert {
-    condition = contains(keys(output.policy_bindings), "compute-s3-plan")
+    condition = (
+      contains(keys(output.policy_bindings), "compute-s3-plan")
       && contains(keys(output.policy_bindings), "compute-s3-apply")
       && output.policy_bindings["compute-s3-plan"].policy_name == "crewsafe-terraform-compute-s3-plan-policy"
       && output.policy_bindings["compute-s3-apply"].policy_name == "crewsafe-terraform-compute-s3-apply-policy"
       && output.policy_bindings["compute-s3-plan"].target_role_name == "CrewSafeGitHubTerraformPlanRole"
       && output.policy_bindings["compute-s3-apply"].target_role_name == "CrewSafeGitHubTerraformApplyRole"
+    )
     error_message = "The policy-management root must expose deterministic compute-s3 plan/apply bindings attached to the normal Terraform roles."
   }
 }
