@@ -33,11 +33,13 @@ override_data {
   target = data.terraform_remote_state.cognito
   values = {
     outputs = {
-      issuer_uri       = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000"
-      jwks_uri         = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000/.well-known/jwks.json"
-      web_client_id    = "webclientid0000000000000000"
-      mobile_client_id = "mobileclientid000000000000"
-      cli_client_id    = "cliclientid0000000000000000"
+      issuer_uri        = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000"
+      jwks_uri          = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000/.well-known/jwks.json"
+      web_client_id     = "webclientid0000000000000000"
+      mobile_client_id  = "mobileclientid000000000000"
+      cli_client_id     = "cliclientid0000000000000000"
+      user_pool_id      = "ap-southeast-1_TEST00000"
+      user_pool_arn     = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TEST00000"
     }
   }
 }
@@ -164,13 +166,14 @@ run "entry_shape" {
     error_message = "The secret must be named inside this component's naming scope, or the read policy will not reach it (FR-004)."
   }
 
-  # Nine, not thirteen: a value earns an entry only where the deployment must
+  # Ten, not fourteen: a value earns an entry only where the deployment must
   # differ from the application's own default (FR-001, research.md R-008). The
   # two ml/model-manifest* entries (SCRUM-373, FR-008) are always declared
   # explicitly rather than absent — see the dedicated model_manifest_slots run
-  # block below.
+  # block below. cognito-admin/user-pool-id (ADR 0018) is the tenth: the pool id
+  # CognitoUserProvisioningService.AdminCreateUser targets.
   assert {
-    condition     = length(aws_ssm_parameter.config) == 9
+    condition     = length(aws_ssm_parameter.config) == 10
     error_message = "The configuration entry set changed. Adding one is fine; restating an application default is not (FR-001)."
   }
 
@@ -327,14 +330,16 @@ run "iam_boundary" {
   # SC-014 — a named, closed allow-list of grants reaching outside this
   # component's naming scope (generalized by SCRUM-373, research.md R-006, from
   # the original "exactly one per role, the rds! pattern" invariant SCRUM-174
-  # established). Two families are permitted: the service-managed database
+  # established). Three families are permitted: the service-managed database
   # credential (FR-029, cannot be pinned by ARN — the service names it and it
-  # does not exist until the database does) and the four Bedrock model grants
+  # does not exist until the database does), the four Bedrock model grants
   # (FR-006, contracts/bedrock-invoke-grant.md — a Bedrock model ARN carries no
   # "crewsafe" segment either, being an AWS/Anthropic-owned or account-scoped
-  # resource, not one this component names). Every other resource ARN mentions
-  # the project scope; the wildcard statements are excluded here and asserted
-  # separately by SC-016.
+  # resource, not one this component names), and the one Cognito user pool grant
+  # (ADR 0018 — the pool is owned by the separate cognito-shared-dev component,
+  # so its ARN is not "crewsafe"-scoped either). Every other resource ARN
+  # mentions the project scope; the wildcard statements are excluded here and
+  # asserted separately by SC-016.
   assert {
     condition = length([
       for s in concat(
@@ -342,8 +347,8 @@ run "iam_boundary" {
         jsondecode(aws_iam_role_policy.task.policy).Statement
       ) : s.Sid
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
-    ]) == 6
-    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, plus the four Bedrock model grants on the task role, is permitted (SC-014, FR-029, FR-006)."
+    ]) == 7
+    error_message = "The number of grants reaching outside this component's naming scope changed. Exactly one rds! grant per role, the four Bedrock model grants, and the one Cognito user pool grant on the task role, is permitted (SC-014, FR-029, FR-006, ADR 0018)."
   }
 
   assert {
@@ -351,10 +356,10 @@ run "iam_boundary" {
       for s in concat(
         jsondecode(aws_iam_role_policy.task_execution.policy).Statement,
         jsondecode(aws_iam_role_policy.task.policy).Statement
-      ) : strcontains(s.Resource, ":secret:rds!") || strcontains(s.Resource, ":bedrock:")
+      ) : strcontains(s.Resource, ":secret:rds!") || strcontains(s.Resource, ":bedrock:") || strcontains(s.Resource, ":userpool/")
       if s.Resource != "*" && !strcontains(s.Resource, "crewsafe")
     ])
-    error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path nor a Bedrock model ARN (SC-014, FR-029, FR-006)."
+    error_message = "A grant reaches outside this component's naming scope and is neither the rds! service-managed credential path, a Bedrock model ARN, nor the Cognito user pool ARN (SC-014, FR-029, FR-006, ADR 0018)."
   }
 
   # FR-006 — exactly four Bedrock statements: one for the Sonnet

@@ -147,6 +147,15 @@ locals {
     LIGHTNING_INGESTION_ENABLED = "${local.secrets.config_parameter_prefix}/lightning/ingestion-enabled"
     CORS_ALLOWED_ORIGINS        = aws_ssm_parameter.cors_allowed_origins.name
     APP_COGNITO_DEMO_USERS_JSON = aws_ssm_parameter.demo_users_json.name
+
+    # ADR 0018 — CognitoUserProvisioningService's AdminCreateUser target. The IAM
+    # grant that actually authorizes the call lives on the task role in
+    # infra/terraform/secrets (ProvisionInvitedUserAccounts) — this is only the pool
+    # id value, not a credential. app.cognito-admin.enabled defaults false in the
+    # application itself (CognitoAdminProperties) regardless of this value being
+    # present; flipping it on is a deliberate follow-up once both this and that IAM
+    # grant are confirmed applied.
+    APP_COGNITO_ADMIN_USER_POOL_ID = "${local.secrets.config_parameter_prefix}/cognito-admin/user-pool-id"
   }
 
   # The trailing "::" is load-bearing, not cosmetic. The format is
