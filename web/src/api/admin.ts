@@ -29,6 +29,9 @@ export interface AdminUser {
   id: string;
   username: string;
   cognitoSub: string;
+  /** Set only when this account was provisioned via AdminCreateUser (ADR 0018) — null for
+   * one registered by binding an already-existing Cognito identity. */
+  email: string | null;
   displayName: string;
   role: Role;
   status: UserStatus;
@@ -37,10 +40,15 @@ export interface AdminUser {
   updatedAt: string;
 }
 
-/** Mirrors AdminUserController.UserRegisterRequest field for field. */
+/** Mirrors AdminUserController.UserRegisterRequest field for field. Exactly one of
+ * cognitoSub/email is expected; username is required with cognitoSub and ignored with
+ * email (the resolved username is the email itself); password is required with email,
+ * ignored with cognitoSub — see UserAdminService.register's javadoc. */
 export interface UserRegisterRequest {
-  username: string;
-  cognitoSub: string;
+  username?: string;
+  cognitoSub?: string;
+  email?: string;
+  password?: string;
   displayName: string;
   role: Role;
   siteIds: string[];
@@ -80,8 +88,9 @@ export function fetchAdminUsers(): Promise<AdminUser[]> {
   return apiFetch<AdminUser[]>("/api/v1/admin/users");
 }
 
-/** Registers a local app_user row for a Cognito identity that already exists — see
- * AdminUserController's javadoc. Never creates the Cognito identity itself. */
+/** Registers a local app_user row — either bound to an already-existing Cognito identity
+ * (cognitoSub) or provisioned fresh (email, via AdminCreateUser — ADR 0018). See
+ * AdminUserController's javadoc. */
 export function registerUser(body: UserRegisterRequest): Promise<AdminUser> {
   return apiFetch<AdminUser>("/api/v1/admin/users", { method: "POST", body: JSON.stringify(body) });
 }

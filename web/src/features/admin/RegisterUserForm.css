@@ -57,6 +57,19 @@
   margin: 0;
 }
 
+.register-form__mode-toggle {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--action);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .register-form__error {
   color: var(--band-high);
   font-size: var(--text-sm);

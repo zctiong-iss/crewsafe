@@ -6,7 +6,7 @@ import type { Role } from "@/api/identity";
 import { ApiError, messageFor } from "@/api/errors";
 import { fetchAdminSites, registerUser, type AdminSite, type AdminUser, type UserRegisterRequest } from "@/api/admin";
 import { roleLabel } from "@/app/navigation";
-import { validateUserRegistration, type FieldErrors } from "./validateUserRegistration";
+import { validateUserRegistration, type FieldErrors, type RegistrationMode } from "./validateUserRegistration";
 import "./RegisterUserForm.css";
 
 const ROLES: readonly Role[] = ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"];
@@ -17,13 +17,38 @@ type Submit =
   | { status: "error"; message: string; requestId: string | null };
 
 /**
- * Registers a local app_user row for a Cognito identity that already exists — the admin
- * pastes in a cognitoSub obtained however accounts are created today (AWS Console, or the
- * SCRUM-190 CI pipeline). This form never talks to Cognito itself.
+ * This endpoint's specific error codes (ErrorCode.java), mapped before falling back to the
+ * generic, kind-keyed messageFor — kept local to this form rather than added to messageFor
+ * itself, which is shared, app-wide infrastructure with no business knowing about one
+ * endpoint's error vocabulary.
+ */
+function messageForRegisterUser(error: ApiError): string {
+  switch (error.code) {
+    case "COGNITO_PROVISIONING_DISABLED":
+      return "Inviting by email isn't enabled in this environment yet. Use \"I already have a Cognito identity\" instead, or ask engineering.";
+    case "EMAIL_ALREADY_REGISTERED_IN_COGNITO":
+      return "Cognito already has an identity under this email — someone already invited it. Bind that existing identity's sub instead.";
+    default:
+      return messageFor(error);
+  }
+}
+
+/**
+ * Registers a local app_user row. Two ways to identify the Cognito side, one at a time:
+ * inviting by email (default — the backend calls AdminCreateUser directly with a password
+ * the admin sets, ADR 0018) or binding an already-existing identity by its sub (the
+ * SCRUM-190 synthetic-identity case, or any account created out-of-band).
+ *
+ * Only the cognitoSub path asks for a separate username: on the email path, there's nothing
+ * for it to name that the email doesn't already name, so UserAdminService.register sets
+ * app_user.username = email directly and this form never collects one.
  */
 export function RegisterUserForm({ onRegistered }: { onRegistered: (user: AdminUser) => void }) {
   const [sites, setSites] = useState<AdminSite[]>([]);
+  const [mode, setMode] = useState<RegistrationMode>("email");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [cognitoSub, setCognitoSub] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<Role | "">("");
@@ -52,25 +77,33 @@ export function RegisterUserForm({ onRegistered }: { onRegistered: (user: AdminU
     });
   };
 
+  const switchMode = (next: RegistrationMode) => {
+    setMode(next);
+    setErrors({});
+  };
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const draft: Partial<UserRegisterRequest> = {
-      username,
-      cognitoSub,
+      username: mode === "cognitoSub" ? username : undefined,
+      email: mode === "email" ? email : undefined,
+      password: mode === "email" ? password : undefined,
+      cognitoSub: mode === "cognitoSub" ? cognitoSub : undefined,
       displayName,
       role: role || undefined,
     };
-    const found = validateUserRegistration(draft);
+    const found = validateUserRegistration(draft, mode);
     setErrors(found);
     if (Object.keys(found).length > 0 || !role) return;
 
     const body: UserRegisterRequest = {
-      username: username.trim(),
-      cognitoSub: cognitoSub.trim(),
       displayName: displayName.trim(),
       role,
       siteIds: [...siteIds],
+      ...(mode === "email"
+        ? { email: email.trim(), password }
+        : { username: username.trim(), cognitoSub: cognitoSub.trim() }),
     };
 
     setSubmit({ status: "submitting" });
@@ -78,32 +111,74 @@ export function RegisterUserForm({ onRegistered }: { onRegistered: (user: AdminU
       .then((user) => onRegistered(user))
       .catch((error: unknown) => {
         const apiError = error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
-        setSubmit({ status: "error", message: messageFor(apiError), requestId: apiError.requestId });
+        if (apiError.code === "USERNAME_ALREADY_REGISTERED") {
+          // The email path has no visible username field — the conflict is on the email itself.
+          const field = mode === "email" ? "email" : "username";
+          setErrors((prev) => ({ ...prev, [field]: "This is already registered — try a different one." }));
+          setSubmit({ status: "idle" });
+          return;
+        }
+        setSubmit({ status: "error", message: messageForRegisterUser(apiError), requestId: apiError.requestId });
       });
   };
 
   return (
     <form className="register-form" onSubmit={handleSubmit}>
-      <label htmlFor="register-username">Username</label>
-      <input
-        id="register-username"
-        type="text"
-        maxLength={64}
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="e.g. jane.tan"
-      />
-      {errors.username && <p className="register-form__error" role="alert">{errors.username}</p>}
+      {mode === "email" ? (
+        <>
+          <label htmlFor="register-email">Email</label>
+          <input
+            id="register-email"
+            type="email"
+            maxLength={254}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="jane.tan@synthetic.crewsafe.invalid"
+          />
+          {errors.email && <p className="register-form__error" role="alert">{errors.email}</p>}
 
-      <label htmlFor="register-sub">Cognito sub</label>
-      <input
-        id="register-sub"
-        type="text"
-        value={cognitoSub}
-        onChange={(e) => setCognitoSub(e.target.value)}
-        placeholder="The sub for an identity already created in Cognito"
-      />
-      {errors.cognitoSub && <p className="register-form__error" role="alert">{errors.cognitoSub}</p>}
+          <label htmlFor="register-password">Password</label>
+          <input
+            id="register-password"
+            type="password"
+            maxLength={99}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="12+ characters, with upper, lower, a number, and a symbol"
+          />
+          {errors.password && <p className="register-form__error" role="alert">{errors.password}</p>}
+
+          <button type="button" className="register-form__mode-toggle" onClick={() => switchMode("cognitoSub")}>
+            Already have a Cognito identity for this person?
+          </button>
+        </>
+      ) : (
+        <>
+          <label htmlFor="register-username">Username</label>
+          <input
+            id="register-username"
+            type="text"
+            maxLength={64}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="e.g. jane.tan"
+          />
+          {errors.username && <p className="register-form__error" role="alert">{errors.username}</p>}
+
+          <label htmlFor="register-sub">Cognito sub</label>
+          <input
+            id="register-sub"
+            type="text"
+            value={cognitoSub}
+            onChange={(e) => setCognitoSub(e.target.value)}
+            placeholder="The sub for an identity already created in Cognito"
+          />
+          {errors.cognitoSub && <p className="register-form__error" role="alert">{errors.cognitoSub}</p>}
+          <button type="button" className="register-form__mode-toggle" onClick={() => switchMode("email")}>
+            Invite a brand-new person by email instead
+          </button>
+        </>
+      )}
 
       <label htmlFor="register-display-name">Display name</label>
       <input

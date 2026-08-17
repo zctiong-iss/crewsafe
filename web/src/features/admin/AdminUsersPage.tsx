@@ -100,6 +100,11 @@ export function AdminUsersPage() {
                     <p className="admin-list__meta">
                       {user.username} · <span className={`pill pill--attribute admin-list__status-${user.status.toLowerCase()}`}>{user.status}</span>
                     </p>
+                    {/* Registering by email sets username = email server-side (US-30) — showing
+                        both lines here would just repeat the same address twice. */}
+                    {user.email && user.email !== user.username && (
+                      <p className="admin-list__meta">{user.email}</p>
+                    )}
                     <p className="admin-list__meta">{siteNames || "No sites assigned"}</p>
                   </div>
 
