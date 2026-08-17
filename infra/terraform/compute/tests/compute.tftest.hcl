@@ -535,8 +535,8 @@ run "alb_logs_bucket_self_logging" {
       stmt
       if stmt.Sid == "S3ServerAccessLogsPolicy"
       && stmt.Effect == "Allow"
-      && stmt.Principal.Service == "logging.s3.amazonaws.com"
-      && stmt.Condition.ArnLike["aws:SourceArn"] == aws_s3_bucket.alb_logs.arn
+      && try(stmt.Principal.Service, null) == "logging.s3.amazonaws.com"
+      && try(stmt.Condition.ArnLike["aws:SourceArn"], null) == aws_s3_bucket.alb_logs.arn
     ]) == 1
     error_message = "The alb_logs bucket's self-logging delivery grant must be scoped to exactly logging.s3.amazonaws.com and this bucket's own ARN — no wildcard principal or resource."
   }
