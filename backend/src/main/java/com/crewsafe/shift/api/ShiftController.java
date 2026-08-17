@@ -208,9 +208,10 @@ public class ShiftController {
     @PostMapping("/{shiftId}/assignments")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ShiftAssignmentCreateRequest request) {
 
-        Shift shift = shiftService.addAssignment(siteId, shiftId, request.toInput())
+        Shift shift = shiftService.addAssignment(siteId, principal.getId(), shiftId, request.toInput())
                 .orElseThrow(() -> noSuchShift(siteId, shiftId));
 
         return ResponseEntity.status(HttpStatus.CREATED)

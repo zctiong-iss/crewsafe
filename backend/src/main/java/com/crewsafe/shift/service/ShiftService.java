@@ -60,7 +60,10 @@ public class ShiftService {
     /**
      * {@code assignmentInputs} may be empty — a shift can be created unstaffed and staffed
      * later via {@link #addAssignment}. Emits {@link AuditEventType#SHIFT_CREATED} exactly
-     * once per call, regardless of how many assignments were given.
+     * once per call, regardless of how many assignments were given, plus one
+     * {@link AuditEventType#SHIFT_ASSIGNMENT_ADDED} per assignment (SCRUM-452) — staffing a
+     * worker onto a shift is the same fact whether it happens here or later through
+     * {@link #addAssignment}, and the audit trail has to show both the same way.
      */
     @Transactional
     public Shift createShift(UUID siteId, UUID actorId, Instant startsAt, Instant endsAt,
@@ -73,8 +76,9 @@ public class ShiftService {
 
         for (AssignmentInput input : assignmentInputs) {
             guardAgainstDoubleBooking(input.workerId(), startsAt, endsAt);
-            assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
-                    input.intensity(), input.acclimatisationDay()));
+            recordAssignmentAdded(actorId, shift.getId(),
+                    assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
+                            input.intensity(), input.acclimatisationDay())));
         }
 
         UUID shiftId = shift.getId();
@@ -347,14 +351,46 @@ public class ShiftService {
 
     /** Empty when no shift with this id exists under this site — the caller renders 404. */
     @Transactional
-    public Optional<Shift> addAssignment(UUID siteId, UUID shiftId, AssignmentInput input) {
+    public Optional<Shift> addAssignment(UUID siteId, UUID actorId, UUID shiftId, AssignmentInput input) {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             assertEditable(shift);
             guardAgainstDoubleBooking(input.workerId(), shift.getStartsAt(), shift.getEndsAt());
-            assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
-                    input.intensity(), input.acclimatisationDay()));
+            recordAssignmentAdded(actorId, shift.getId(),
+                    assignments.save(new ShiftAssignment(shift.getId(), input.workerId(), input.taskName(),
+                            input.intensity(), input.acclimatisationDay())));
             return shift;
         });
+    }
+
+    /**
+     * One {@link AuditEventType#SHIFT_ASSIGNMENT_ADDED} for a worker being put on a shift,
+     * from either staffing path (SCRUM-452).
+     *
+     * <p>The detail names the intensity and the acclimatisation state rather than only the
+     * ids, because those are the two facts that decide what heat obligations the worker is
+     * owed — an inspector reading this row should not have to join back to
+     * {@code shift_assignment} to find out what the person was actually put to work on. A
+     * null acclimatisation day is stated as "fully acclimatised" rather than omitted: that
+     * is what null means here (see the column's own note in V3), and a silently missing
+     * clause reads as lost data instead of the positive claim it actually is.
+     */
+    private void recordAssignmentAdded(UUID actorId, UUID shiftId, ShiftAssignment assignment) {
+        UUID assignmentId = assignment.getId();
+        StringBuilder detail = new StringBuilder()
+                .append("Assigned worker ").append(assignment.getWorkerId())
+                .append(" to shift ").append(shiftId)
+                .append(" (intensity ").append(assignment.getIntensity())
+                .append(assignment.getAcclimatisationDay() == null
+                        ? ", fully acclimatised"
+                        : ", acclimatisation day " + assignment.getAcclimatisationDay());
+
+        if (assignment.getTaskName() != null && !assignment.getTaskName().isBlank()) {
+            detail.append(", task ").append(assignment.getTaskName());
+        }
+        String recorded = detail.append(')').toString();
+
+        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_ADDED,
+                "SHIFT_ASSIGNMENT", assignmentId, recorded));
     }
 
     /**
