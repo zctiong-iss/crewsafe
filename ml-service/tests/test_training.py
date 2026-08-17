@@ -84,6 +84,13 @@ class TrainingTest(unittest.TestCase):
                 self.assertGreaterEqual(horizon_manifest["training_seconds"], 0)
                 self.assertEqual(8, len(horizon_manifest["validation_trials"]))
                 self.assertIn("safety_floor", horizon_manifest["metrics"])
+                self.assertIsInstance(horizon_manifest["shap_drivers"], list)
+                self.assertTrue(
+                    all(
+                        {"feature", "mean_abs_shap"} == set(driver)
+                        for driver in horizon_manifest["shap_drivers"]
+                    )
+                )
                 self.assertTrue(
                     all(
                         "hyperparameters" in trial and "validation_metrics" in trial

@@ -7,3 +7,10 @@ coverage==7.15.0
 httpx2==2.10.0
 pytest==8.3.5
 pytest-asyncio==0.24.0
+
+# SHAP driver importance (SCRUM-152), computed offline in crewsafe_ml/training.py
+# only - never imported by app.py or anything the Dockerfile installs, so it
+# belongs here (test/dev deps) rather than requirements-runtime.in. Keeps
+# shap's transitive deps (numba/llvmlite - common CVE sources) out of the
+# Trivy-scanned deployed container entirely.
+shap==0.52.0

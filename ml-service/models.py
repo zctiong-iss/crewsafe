@@ -259,3 +259,66 @@ class ModelStatus(BaseModel):
         default_factory=dict,
         description="Evaluation metrics per horizon (keys '30'/'60'), from the model manifest",
     )
+
+
+class ShapDriver(BaseModel):
+    """One input feature's mean absolute SHAP contribution for a horizon."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    feature: str = Field(..., description="Feature name (one-hot/indicator columns collapsed)")
+    mean_abs_shap: float = Field(..., description="Mean absolute SHAP value across the validation sample")
+
+
+class HorizonCalibration(BaseModel):
+    """Whether the stated confidence interval matches real-world coverage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_coverage: float = Field(..., description="Coverage the interval was calibrated to, e.g. 0.95")
+    final_test_coverage: float = Field(
+        ..., description="Actual coverage measured on the held-out test window"
+    )
+    calibration_sample_count: int = Field(
+        ..., description="Validation samples used to calibrate the interval"
+    )
+
+
+class ModelCardHorizon(BaseModel):
+    """Explainability and reliability data for one forecast horizon."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shap_drivers: List[ShapDriver] = Field(
+        default_factory=list,
+        description="Top drivers by mean absolute SHAP value, most important first",
+    )
+    shap_computed: bool = Field(
+        ..., description="False when this model bundle predates SHAP computation or has no tree to explain"
+    )
+    calibration: Optional[HorizonCalibration] = Field(
+        None, description="Stated-vs-actual confidence interval coverage, when available"
+    )
+    mae_by_actual_band: dict[str, Optional[float]] = Field(
+        ..., description="Mean absolute error grouped by actual WBGT risk band"
+    )
+
+
+class ModelCard(BaseModel):
+    """Explainability and reliability report for the configured model (SCRUM-152)."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "model_version": "baseline-1.0.0",
+                "horizons": {},
+            }
+        },
+    )
+
+    model_version: str = Field(..., description="Currently configured model bundle version")
+    horizons: dict[str, ModelCardHorizon] = Field(
+        default_factory=dict,
+        description="Model card data per horizon (keys '30'/'60')",
+    )
