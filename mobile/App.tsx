@@ -29,31 +29,36 @@ import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 import { I18nextProvider } from "react-i18next";
 import * as SplashScreen from "expo-splash-screen";
-import {
-  useFonts,
-  Gelasio_400Regular,
-  Gelasio_500Medium,
-  Gelasio_600SemiBold,
-  Gelasio_700Bold,
-} from "@expo-google-fonts/gelasio";
-import {
-  NotoSansTamil_400Regular,
-  NotoSansTamil_500Medium,
-  NotoSansTamil_600SemiBold,
-  NotoSansTamil_700Bold,
-} from "@expo-google-fonts/noto-sans-tamil";
-import {
-  NotoSansBengali_400Regular,
-  NotoSansBengali_500Medium,
-  NotoSansBengali_600SemiBold,
-  NotoSansBengali_700Bold,
-} from "@expo-google-fonts/noto-sans-bengali";
-import {
-  NotoSansMyanmar_400Regular,
-  NotoSansMyanmar_500Medium,
-  NotoSansMyanmar_600SemiBold,
-  NotoSansMyanmar_700Bold,
-} from "@expo-google-fonts/noto-sans-myanmar";
+import { useFonts } from "expo-font";
+
+/*
+ * Imported per WEIGHT, not from the package root.
+ *
+ * Each @expo-google-fonts package re-exports all NINE weights from its index, and every
+ * one of those requires its own .ttf — so a root import bundles all nine whether or not
+ * they are used. The app uses four. Measured on an Android export: 6.3 MB of fonts, of
+ * which 3.5 MB were weights nothing references. Subpath imports pull exactly the four.
+ */
+import { Lexend_400Regular } from "@expo-google-fonts/lexend/400Regular";
+import { Lexend_500Medium } from "@expo-google-fonts/lexend/500Medium";
+import { Lexend_600SemiBold } from "@expo-google-fonts/lexend/600SemiBold";
+import { Lexend_700Bold } from "@expo-google-fonts/lexend/700Bold";
+import { NotoSansTamil_400Regular } from "@expo-google-fonts/noto-sans-tamil/400Regular";
+import { NotoSansTamil_500Medium } from "@expo-google-fonts/noto-sans-tamil/500Medium";
+import { NotoSansTamil_600SemiBold } from "@expo-google-fonts/noto-sans-tamil/600SemiBold";
+import { NotoSansTamil_700Bold } from "@expo-google-fonts/noto-sans-tamil/700Bold";
+import { NotoSansBengali_400Regular } from "@expo-google-fonts/noto-sans-bengali/400Regular";
+import { NotoSansBengali_500Medium } from "@expo-google-fonts/noto-sans-bengali/500Medium";
+import { NotoSansBengali_600SemiBold } from "@expo-google-fonts/noto-sans-bengali/600SemiBold";
+import { NotoSansBengali_700Bold } from "@expo-google-fonts/noto-sans-bengali/700Bold";
+import { NotoSansMyanmar_400Regular } from "@expo-google-fonts/noto-sans-myanmar/400Regular";
+import { NotoSansMyanmar_500Medium } from "@expo-google-fonts/noto-sans-myanmar/500Medium";
+import { NotoSansMyanmar_600SemiBold } from "@expo-google-fonts/noto-sans-myanmar/600SemiBold";
+import { NotoSansMyanmar_700Bold } from "@expo-google-fonts/noto-sans-myanmar/700Bold";
+import { NotoSansDevanagari_400Regular } from "@expo-google-fonts/noto-sans-devanagari/400Regular";
+import { NotoSansDevanagari_500Medium } from "@expo-google-fonts/noto-sans-devanagari/500Medium";
+import { NotoSansDevanagari_600SemiBold } from "@expo-google-fonts/noto-sans-devanagari/600SemiBold";
+import { NotoSansDevanagari_700Bold } from "@expo-google-fonts/noto-sans-devanagari/700Bold";
 
 import { persistor, store } from "@/store/store";
 import i18n from "@/localization/i18n";
@@ -79,14 +84,16 @@ export default function App() {
    * outright on a site phone with no connection — which is the operating condition, not an
    * edge case. The cost is a larger bundle and a slightly slower cold start, paid once.
    *
-   * Gelasio covers Latin. Tamil, Bengali and Myanmar have no glyphs in it at all, so each
-   * gets its Noto family — see `styles/fonts.ts` for how one is chosen per language.
+   * Lexend covers Latin only — it publishes just the latin, latin-ext and vietnamese subsets.
+   * Tamil, Bengali, Myanmar and Devanagari have no glyphs in it at all, so each gets its Noto
+   * family. Simplified Chinese deliberately gets none and falls through to the system's CJK
+   * face; see `styles/fonts.ts` for that decision and for how a family is chosen per language.
    */
   const [fontsLoaded, fontError] = useFonts({
-    Gelasio_400Regular,
-    Gelasio_500Medium,
-    Gelasio_600SemiBold,
-    Gelasio_700Bold,
+    Lexend_400Regular,
+    Lexend_500Medium,
+    Lexend_600SemiBold,
+    Lexend_700Bold,
 
     NotoSansTamil_400Regular,
     NotoSansTamil_500Medium,
@@ -102,6 +109,11 @@ export default function App() {
     NotoSansMyanmar_500Medium,
     NotoSansMyanmar_600SemiBold,
     NotoSansMyanmar_700Bold,
+
+    NotoSansDevanagari_400Regular,
+    NotoSansDevanagari_500Medium,
+    NotoSansDevanagari_600SemiBold,
+    NotoSansDevanagari_700Bold,
   });
 
   // A font that fails to load must not hold the splash forever — the app is still usable
@@ -110,9 +122,9 @@ export default function App() {
 
   useEffect(() => {
     if (fontError) {
-      // Worth more than a shrug now that four families load here: in Latin the fallback is
-      // merely a different serif, but for Tamil, Bengali or Myanmar it is the difference
-      // between readable text and tofu.
+      // Worth more than a shrug now that five families load here: in Latin the fallback is
+      // merely a different sans, but for Tamil, Bengali, Myanmar or Devanagari it is the
+      // difference between readable text and tofu.
       console.warn("A font failed to load; falling back to the system face.", fontError);
     }
   }, [fontError]);
