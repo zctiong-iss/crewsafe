@@ -46,7 +46,7 @@ cloud "Cognito\nOAuth clients" as cognito
 package "Web edge" as web_edge {
   cloud "CloudFront web\nHTTPS" as web_cf
   database "S3 web bucket\nprivate · OAC" as web_bucket
-  database "S3 web_logs\naccess logs · 30d" as web_logs
+  database "S3 web_logs\nS3 access logs · 30d" as web_logs
 }
 
 package "API edge" as api_edge {
@@ -63,8 +63,10 @@ package "VPC · 2 AZ" as vpc {
   rectangle "NAT gateway\nsingle AZ" as nat
 }
 
-cloud "NEA weather API" as weather
+cloud "NEA weather + lightning API" as weather
 cloud "Bedrock\nClaude models" as bedrock
+database "S3 alb_logs\nALB access logs · 30d" as alb_logs
+database "S3 cloudfront_logs\nCloudFront access logs · 30d" as cloudfront_logs
 
 browser --> cognito
 client --> cognito
@@ -74,6 +76,9 @@ web_bucket --> web_logs
 browser --> api_cf
 client --> api_cf
 api_cf --> alb
+api_cf --> cloudfront_logs
+web_cf --> cloudfront_logs
+alb --> alb_logs
 alb --> ecs
 ecs --> rds
 ecs --> nat
@@ -109,6 +114,18 @@ note bottom of web_logs
   Server access logging (SonarQube S6258).
   Least-privilege delivery policy scoped
   to the web bucket's own ARN.
+end note
+
+note bottom of cloudfront_logs
+  Shared by backend and web distributions
+  with separate prefixes. CloudFront's
+  ACL delivery is the intentional exception
+  to the stack's ACL-free S3 buckets.
+end note
+
+note bottom of alb_logs
+  ALB access logging with 30-day
+  lifecycle and bounded self-logging.
 end note
 
 legend right
@@ -168,7 +185,7 @@ cloud "Bedrock\nClaude models" as bedrock
 
 package "Backend dependencies" as runtime {
   rectangle "ECS task\nbackend + ml-service sidecar" as ecs_platform
-  database "ECR\nbackend + web + ml-service\nimmutable · scan on push" as ecr
+  database "ECR\nbackend + web + ml-service\nimmutable · scan + Inspector" as ecr
   database "SSM\nruntime config" as ssm
   database "Secrets Manager\nweather + RDS creds\n+ Bedrock InvokeModel grant" as secrets
   artifact "CloudWatch\napp + DB + ml-service logs" as logs
@@ -196,6 +213,12 @@ note right of ecs_platform
   Release workflow owns revision.
   ml-service sidecar: essential,
   task-coupled, localhost-only.
+end note
+
+note bottom of logs
+  Compute also owns ALB, CloudFront,
+  web-bucket and log-bucket targets;
+  each access-log stream is bounded.
 end note
 
 note right of importer
@@ -285,10 +308,14 @@ note right of tf_state
   One key per root.
   Bootstrap creates the bucket;
   other roots use remote state.
+  State access logs use a 30-day
+  access-logs/ lifecycle prefix.
 end note
 
 note bottom of tf_iam
   Managed CI policy bindings.
+  Includes separate compute-s3 plan/apply
+  bindings for web and log buckets.
   No runtime dependency.
 end note
 
