@@ -1,6 +1,6 @@
 # SCRUM-TBD — Mobile Card & Pill Redesign (implementation plan)
 
-**Status:** Phases 1–2 complete — awaiting real Jira keys
+**Status:** Phases 1–3 complete — awaiting real Jira keys
 **Branch:** `feat/scrum-tbd-mobile-card-pill-redesign`
 **Canon:** [ADR-0017](../adr/0017-card-pill-design-language.md) · [Design language (Doc 1)](../design/crewsafe-card-pill-design-language.md)
 **Backlog CSV:** `~/OneDrive/Desktop/crewsafe-mobile-card-pill-redesign-jira.csv`
@@ -154,6 +154,71 @@ Raised as **SCRUM-TBD-52/53/54** so the centring gets a deliberate call.
 
 Consequently TBD-35's acceptance criterion "grep finds no remaining hand-rolled pill" is **not
 yet met** — it is met for the five catalogued pills and blocked on TBD-52 for the sixth.
+
+---
+
+## Phase 3 — what shipped (2026-08-17)
+
+| Ticket | Outcome |
+|---|---|
+| TBD-38/39/40 | **`Disclosure` extracted**, 9 tests. `MitigationRow` refactored onto it — 113 tests pass with **no assertion changes**. |
+| TBD-41/42 | `ShiftListScreen` crew toggle rewired onto `Disclosure` (controlled). **First-ever test coverage**, 6 tests. |
+| TBD-43 | **Conversion declined.** Safety surfaces gated instead — 112 cases. |
+| TBD-46 | **Conversion declined.** Gate coverage deferred to TBD-57. |
+| TBD-49/50/51 | Open items closed out; **D1 found to be wrong about mobile** (TBD-55). |
+
+**Verification:** `tsc` clean · eslint 0 errors · **70 suites / 1169 tests green** · guardrail
+gate **480 cases** · all 7 locales in parity.
+
+### It is `Disclosure`, not `DisclosureCard`
+
+§7 names the contract `DisclosureCard`. The `summary`/`detail` split is right and is kept; the
+*card* is not. Both call sites are already inside a card — `MitigationRow` is a row within one,
+`ShiftListScreen`'s toggle sits in a list cell that is one — so a second card surface would have
+meant a nested border in high contrast. What is genuinely shared is the disclosure contract:
+the toggle, its accessible name, and the rule that detail does not mount while closed.
+
+It also needed a **controlled** mode that §7 does not specify. `ShiftListScreen`'s rows live in a
+`FlatList`, which unmounts them on scroll — self-held state would forget which crews were open
+the moment a supervisor scrolled past and back.
+
+### Two conversions were declined, and this is the main finding of Phase 3
+
+The plan assumed the safety, inbox and wellbeing cards wanted progressive disclosure. Reading
+them, they do not — and the arguments against are already written into the components:
+
+- **`LightningBanner`** — "a banner that quietly vanished would be read as permission by a worker
+  who simply looked away for a minute". A collapsible stop-work warning *is* that failure with a
+  control attached.
+- **`WbgtCard`** — its `stopWorkOverride` line is, with `features.heatGuidanceCard` off, the only
+  place the app states FR-12a in words. SCRUM-260 already removed a 45% dim from this card because
+  a dimmed card reads as "loading" as readily as "superseded"; an expand is a stronger version of
+  that same bug.
+- **`HeatGuidance`** — §7.1 requires the suspension to be *visible*, not discoverable, and the
+  actions stay beside it so a worker sees what resumes.
+- **`CrewWellbeingRow`** — "the absent row is the important one". Its whole purpose is showing the
+  worker who has logged *nothing*.
+- **`WellbeingLogCard`** — "two buttons and nothing else", by explicit design.
+
+TBD-43's own acceptance criteria said no safety-critical text may move behind a disclosure.
+Applied honestly, there is nothing left on these that may move. **ADR-0017 §3 scopes progressive
+disclosure to plan judgement** — "the evidence hides behind an expand, revealed only when a
+supervisor judges the plan" — not to every card in the app.
+
+What the tickets bought instead is proof the surfaces survive the gate: 112 cases across large
+text, high contrast and the three tall-line-box scripts, which nothing previously checked. Three
+of those cases are regression guards asserting the safety text is **not** behind a control, so a
+future well-meant tidy-up fails CI.
+
+### D1 does not describe the shipped app
+
+ADR-0017 records D1 as locked: *"Lexend everywhere (web + mobile Latin)"*. Web ships Lexend.
+**Mobile ships Gelasio and contains zero references to Lexend.** ADR-0012, which D1 cites, is
+web-only by its own text.
+
+Left unresolved on purpose — a typeface is the design team's call. Raised as **TBD-55/56**. Note
+that "restoring" D1 would touch every screen and invalidate the `LINE_HEIGHT_RATIO` of 1.35 that
+`fonts.ts` tunes specifically to Gelasio's ascenders.
 
 ---
 

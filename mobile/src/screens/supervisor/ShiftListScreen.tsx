@@ -28,7 +28,7 @@ import AppSwitch from "@/components/inputs/AppSwitch";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import ShiftStatusPill from "@/components/shifts/ShiftStatusPill";
-import ExpandChevron from "@/components/feedback/ExpandChevron";
+import Disclosure from "@/components/common/Disclosure";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadShifts, siteSelected } from "@/store/reducers/shiftsSlice";
@@ -259,32 +259,24 @@ export default function ShiftListScreen() {
                 {t("shifts.unstaffed")}
               </AppText>
             ) : (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityState={{ expanded: expandedShiftIds.has(item.id) }}
-                /* The words moved into the chevron, and a chevron announces nothing. Without
-                   this the control would read as an unlabelled button to a screen reader. */
-                accessibilityLabel={
-                  expandedShiftIds.has(item.id) ? t("shifts.hideCrew") : t("shifts.showCrew")
-                }
-                onPress={() => toggleCrew(item.id)}
+              /*
+               * CONTROLLED, deliberately. These rows live in a `FlatList`, which unmounts them
+               * on scroll — a `Disclosure` holding its own state would forget which crews were
+               * open the moment a supervisor scrolled past and back. The `Set` lives on the
+               * screen for that reason, and `extraData` below depends on it too.
+               */
+              <Disclosure
+                open={expandedShiftIds.has(item.id)}
+                onToggle={() => toggleCrew(item.id)}
+                label={() => t("shifts.assignmentCount", { count: item.assignments.length })}
+                accessibilityLabel={(open) => (open ? t("shifts.hideCrew") : t("shifts.showCrew"))}
+                // Scaled with the text setting: an icon that stays 18px while the line beside
+                // it grows to 1.5× stops looking like part of the same control.
+                chevronSize={s(18) * theme.fontScale}
+                chevronColor={theme.colors.textPrimary}
                 style={styles.crewToggle}
               >
-                <AppText variant="caption" tone="secondary">
-                  {t("shifts.assignmentCount", { count: item.assignments.length })}
-                </AppText>
-                <ExpandChevron
-                  expanded={expandedShiftIds.has(item.id)}
-                  // Scaled with the text setting: an icon that stays 18px while the line beside
-                  // it grows to 1.5× stops looking like part of the same control.
-                  size={s(18) * theme.fontScale}
-                  color={theme.colors.textPrimary}
-                />
-              </TouchableOpacity>
-            )}
-
-            {expandedShiftIds.has(item.id)
-              ? item.assignments.map((assignment) => (
+                {item.assignments.map((assignment) => (
                   <View
                     key={assignment.id}
                     style={[styles.crewRow, { borderTopColor: theme.colors.border }]}
@@ -306,8 +298,9 @@ export default function ShiftListScreen() {
                         : ""}
                     </AppText>
                   </View>
-                ))
-              : null}
+                ))}
+              </Disclosure>
+            )}
           </TouchableOpacity>
         )}
       />

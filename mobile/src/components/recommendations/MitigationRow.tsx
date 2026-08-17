@@ -12,14 +12,14 @@
  *
  * @author Justin Chua
  */
-import { useState, type FC } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import type { FC } from "react";
+import { StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
 import AppText from "@/components/texts/AppText";
 import Pill from "@/components/common/Pill";
-import ExpandChevron from "@/components/feedback/ExpandChevron";
+import Disclosure from "@/components/common/Disclosure";
 import { formatTime } from "@/helpers/dateTime";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Mitigation } from "@/types/domain";
@@ -184,8 +184,6 @@ const MitigationDetail: FC<{
   workerNameFor?: (workerId: string) => string;
 }> = ({ mitigation, workerNameFor }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
-  const [open, setOpen] = useState(false);
 
   /* Absent OR empty means the whole shift — the server has expressed it both ways. */
   const appliesToAll = mitigation.appliesTo === null || mitigation.appliesTo.length === 0;
@@ -198,7 +196,8 @@ const MitigationDetail: FC<{
   const shown = names.slice(0, MAX_WORKER_CHIPS);
   const overflow = names.length - shown.length;
 
-  const detailLabel = open ? t("recommendations.hideDetails") : t("recommendations.showDetails");
+  const detailLabel = (open: boolean) =>
+    open ? t("recommendations.hideDetails") : t("recommendations.showDetails");
 
   return (
     <>
@@ -215,22 +214,9 @@ const MitigationDetail: FC<{
         )}
       </View>
 
-      {/* The chevron announces nothing on its own, so the label carries the accessible name. */}
-      <Pressable
-        onPress={() => setOpen((value) => !value)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
-        accessibilityLabel={detailLabel}
-        hitSlop={8}
-        style={styles.disclosure}
-      >
-        <AppText variant="caption" tone="secondary">
-          {detailLabel}
-        </AppText>
-        <ExpandChevron expanded={open} size={s(16)} color={theme.colors.textSecondary} />
-      </Pressable>
-
-      {open ? (
+      {/* Uncontrolled: this row is the only thing that cares whether it is open, and it does
+          not live in a virtualised list. */}
+      <Disclosure label={detailLabel} accessibilityLabel={detailLabel}>
         <View>
           {mitigation.rationale ? (
             <View style={styles.detail}>
@@ -265,7 +251,7 @@ const MitigationDetail: FC<{
             </View>
           ) : null}
         </View>
-      ) : null}
+      </Disclosure>
     </>
   );
 };
@@ -290,15 +276,6 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: s(6),
     marginTop: vs(6),
-  },
-  disclosure: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: s(6),
-    marginTop: vs(6),
-    // A full touch target regardless of text size — the row's own height is caption-sized and
-    // would otherwise shrink below the tappable minimum.
-    minHeight: 44,
   },
   removed: {
     opacity: 0.6,

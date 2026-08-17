@@ -111,6 +111,35 @@ actually solved the measurement bug; the clamp was belt-and-braces. Asserted acr
 cases in the real longest Tamil and Burmese strings. **The gate cannot prove the wrap paints
 inside the fill — that check stays human.**
 
+**5. D1 does not describe the shipped mobile app.** (Phase 3 — needs a decision)
+
+D1 is recorded above as a locked decision: *"Lexend everywhere (web + mobile Latin; mobile keeps
+per-script Noto for Tamil/Bengali/Myanmar)"*. Checked against the code:
+
+| | Typeface | Evidence |
+|---|---|---|
+| Web | **Lexend** ✅ | `web/src/design/tokens.css` `--font-ui`, `@fontsource/lexend` in `main.tsx` |
+| Mobile Latin | **Gelasio**, not Lexend ❌ | `mobile/src/styles/fonts.ts`, `@expo-google-fonts/gelasio` |
+| Mobile Tamil/Bengali/Myanmar | per-script Noto ✅ | `familyFor()` in `fonts.ts` |
+
+There is **no Lexend anywhere in `mobile/`** — zero references in source or dependencies. ADR-0012,
+which D1 cites, is web-only by its own text: it decides `--font-ui`, loads `@fontsource`, and edits
+`tokens.css`. It never mentions mobile.
+
+So the "everywhere" half of D1 was never implemented on mobile, and the ADR presents it as settled.
+That is the dangerous shape: a future implementer either assumes mobile is already Lexend, or
+"restores" the locked decision by swapping Gelasio out — a change that would touch every screen and
+the `LINE_HEIGHT_RATIO` of 1.35 that is explicitly tuned to Gelasio's ascenders.
+
+**This is not resolved here** — picking a typeface is the design team's call, not a refactor's.
+Raised as SCRUM-TBD-55. Either D1 is corrected to say "Lexend on web, Gelasio on mobile", or a real
+migration is planned and estimated.
+
+**Open item 3 is consequently moot for mobile.** ADR-0012's unverified tabular-figures claim is a
+`font-variant-numeric` concern about Lexend on the web. Mobile does not use Lexend and React Native
+does not support `font-variant-numeric` the way CSS does, so nothing on mobile depends on it. The
+item remains open **for web only**.
+
 **Open item 4 in Doc 1 §8.5 was already solved.** The plan called for a new locale key-parity
 test; `mobile/scripts/check-locale-parity.mjs` already existed, already ran in CI, and is
 strictly more thorough (it also checks `{{placeholder}}` parity and detects wrong-script text).
