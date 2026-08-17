@@ -107,6 +107,7 @@ public class AgentDraftService {
     private final AgentDraftClient agentDraftClient;
     private final DeterministicPlanBuilder deterministicPlans;
     private final RecommendationRepository recommendations;
+    private final RecommendationService recommendationService;
     private final AuditService audit;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -121,6 +122,10 @@ public class AgentDraftService {
      */
     @Transactional
     public Optional<Recommendation> generate(UUID siteId, UUID shiftId, UUID actorId) {
+        return doGenerate(siteId, shiftId, actorId);
+    }
+
+    private Optional<Recommendation> doGenerate(UUID siteId, UUID shiftId, UUID actorId) {
         Optional<Shift> found = shifts.findByIdAndSiteId(shiftId, siteId);
         if (found.isEmpty()) {
             return Optional.empty();
@@ -161,6 +166,17 @@ public class AgentDraftService {
         RecommendationEvidence evidence = evidence(
                 latestWeather, decision, draft.forecastWbgt30m(), lightningState, observedWbgt);
 
+        // SCRUM-440: a lightning-immediate stop-work or a WBGT-max mandatory stop-work skips
+        // supervisor approval entirely, per the team's four-rule alert policy -- whether this
+        // draft was auto-triggered or a supervisor pressed "Generate" themselves and it turned
+        // out to be one of these two. Checked here, not against the persisted plan later:
+        // decision.isEmergencyStop() and lightningState are live at draft time and this is the
+        // only place both are still in hand -- neither survives into the persisted Recommendation
+        // row, so a model-suggested STOP_WORK that was never actually mandatory cannot be
+        // mistaken for one after the fact.
+        boolean autoDispatch = lightningState == LightningRiskState.STOP_WORK
+                || (decision != null && decision.isEmergencyStop());
+
         Recommendation saved = recommendations.save(Recommendation.builder()
                 .id(UUID.randomUUID())
                 .shiftId(shiftId)
@@ -169,7 +185,8 @@ public class AgentDraftService {
                 // status pill falls through to rendering an unknown status as a green "Approved" —
                 // a plan nobody has approved would display as approved. The enum value exists for
                 // historical rows; nothing new may be written with it.
-                .status(Recommendation.RecommendationStatus.PENDING_APPROVAL)
+                .status(autoDispatch ? Recommendation.RecommendationStatus.AUTO_DISPATCHED
+                        : Recommendation.RecommendationStatus.PENDING_APPROVAL)
                 .draftPlan(serialise(new MitigationSuggestion.Batch(draft.mitigations())))
                 .rationale(draft.rationale())
                 .evidence(serialiseEvidence(evidence))
@@ -177,14 +194,50 @@ public class AgentDraftService {
                 .createdAt(now)
                 .build());
 
-        log.info("recommendation_drafted shift_id={} mitigations={} model_version={} fallback_reason={}",
-                shiftId, draft.mitigations().size(), draft.modelVersion(), draft.fallbackReason());
+        log.info("recommendation_drafted shift_id={} mitigations={} model_version={} fallback_reason={} "
+                        + "auto_dispatch={}",
+                shiftId, draft.mitigations().size(), draft.modelVersion(), draft.fallbackReason(), autoDispatch);
 
         UUID recommendationId = saved.getId();
-        afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
-                recommendationId, auditDetail(draft)));
+        if (autoDispatch) {
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, "RECOMMENDATION",
+                    recommendationId, auditDetail(draft)));
+            afterCommit(() -> recommendationService.autoDispatch(saved, actorId, draft.mitigations()));
+        } else {
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
+                    recommendationId, auditDetail(draft)));
+        }
 
         return Optional.of(saved);
+    }
+
+    /**
+     * The auto-trigger's entry point (SCRUM-291): supersedes whichever recommendation is
+     * currently open for this shift, then drafts a new one exactly as {@link #generate} would
+     * for a supervisor, with a null actor recording that this draft was system-triggered — the
+     * same convention {@code ShiftService#activateDueShifts} uses for {@code SHIFT_ACTIVATED}.
+     *
+     * <p>Dedup, not stacking: a shift's conditions can change again before anyone has looked at
+     * the last draft, and the old one is now describing conditions that no longer hold. Callers
+     * are expected to have already checked the shift-state guard — this method does not
+     * re-derive it, the same way {@link #generate} does not re-check who is allowed to call it.
+     */
+    @Transactional
+    public Optional<Recommendation> generateAuto(UUID siteId, UUID shiftId) {
+        supersedeOpenRecommendation(shiftId);
+        return doGenerate(siteId, shiftId, null);
+    }
+
+    private void supersedeOpenRecommendation(UUID shiftId) {
+        recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                shiftId, Recommendation.RecommendationStatus.PENDING_APPROVAL).ifPresent(existing -> {
+            existing.setStatus(Recommendation.RecommendationStatus.SUPERSEDED);
+            recommendations.save(existing);
+
+            UUID existingId = existing.getId();
+            afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, "RECOMMENDATION",
+                    existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
+        });
     }
 
     /**

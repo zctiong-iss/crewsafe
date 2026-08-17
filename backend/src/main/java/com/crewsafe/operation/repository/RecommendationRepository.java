@@ -19,4 +19,14 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
 
     /** Scopes a recommendation lookup to its shift, so an id from another shift reads as 404. */
     Optional<Recommendation> findByIdAndShiftId(UUID id, UUID shiftId);
+
+    /**
+     * Powers the SCRUM-291 auto-trigger's dedup guard. {@code findFirst}, not a unique query --
+     * nothing before this ticket enforced at most one open {@code PENDING_APPROVAL} per shift,
+     * so a pre-existing shift could in principle carry more than one; ordering by
+     * {@code createdAt} descending means only the newest is ever superseded, which is the one
+     * a supervisor would actually be looking at.
+     */
+    Optional<Recommendation> findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+            UUID shiftId, Recommendation.RecommendationStatus status);
 }

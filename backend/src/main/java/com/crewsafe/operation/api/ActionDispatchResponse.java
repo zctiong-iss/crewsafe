@@ -20,6 +20,8 @@ import java.util.UUID;
 @Builder
 public class ActionDispatchResponse {
     private UUID id;
+    private UUID recommendationId;
+    /** Null for a stop-work dispatched automatically with no supervisor decision (SCRUM-440). */
     private UUID approvalId;
     private UUID workerId;
     private String actionCode;
@@ -36,7 +38,8 @@ public class ActionDispatchResponse {
     public static ActionDispatchResponse fromEntity(ActionDispatch dispatch) {
         return ActionDispatchResponse.builder()
                 .id(dispatch.getId())
-                .approvalId(dispatch.getApproval().getId())
+                .recommendationId(dispatch.getRecommendation().getId())
+                .approvalId(dispatch.getApproval() == null ? null : dispatch.getApproval().getId())
                 .workerId(dispatch.getWorker().getId())
                 .actionCode(dispatch.getActionCode())
                 .instruction(dispatch.getInstruction())

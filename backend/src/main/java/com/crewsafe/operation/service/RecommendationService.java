@@ -157,19 +157,8 @@ public class RecommendationService {
         }
 
         return recommendations.findByIdAndShiftId(recommendationId, shiftId).map(recommendation -> {
-            if (approvals.findByRecommendationId(recommendationId).isPresent()) {
-                throw new ConflictException("Recommendation " + recommendationId + " already has a decision");
-            }
-
-            if (decision == Approval.ApprovalDecision.EDITED && (editedPlan == null || editedPlan.isEmpty())) {
-                throw new BadRequestException("editedPlan is required when decision is EDITED");
-            }
-            if (decision == Approval.ApprovalDecision.REJECTED && (reason == null || reason.isBlank())) {
-                throw new BadRequestException("reason is required when decision is REJECTED");
-            }
-            if (decision == Approval.ApprovalDecision.EDITED) {
-                assertActionCodesAreKnown(editedPlan);
-            }
+            assertCanDecide(recommendationId, recommendation);
+            assertDecisionInputsValid(decision, reason, editedPlan);
 
             AppUser approver = users.findById(actorId)
                     .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + actorId));
@@ -190,13 +179,8 @@ public class RecommendationService {
                     : Recommendation.RecommendationStatus.APPROVED);
             recommendations.save(recommendation);
 
-            String eventType = switch (decision) {
-                case APPROVED -> AuditEventType.RECOMMENDATION_APPROVED;
-                case REJECTED -> AuditEventType.RECOMMENDATION_REJECTED;
-                case EDITED -> AuditEventType.RECOMMENDATION_EDITED;
-            };
             UUID savedId = saved.getId();
-            afterCommit(() -> audit.record(actorId, eventType, "RECOMMENDATION", recommendationId,
+            afterCommit(() -> audit.record(actorId, auditEventTypeFor(decision), "RECOMMENDATION", recommendationId,
                     "Recommendation " + decision.name().toLowerCase() + " (approval " + savedId + ")"));
 
             if (decision != Approval.ApprovalDecision.REJECTED) {
@@ -208,6 +192,52 @@ public class RecommendationService {
 
             return saved;
         });
+    }
+
+    /**
+     * A recommendation can be decided on exactly once, and never once superseded.
+     *
+     * <p>The duplicate-decision check cannot rely on {@code recommendation.status} alone —
+     * {@code APPROVED}/{@code REJECTED} are also reachable by a race between two requests
+     * before either has committed — so it still checks for an existing {@link Approval} row
+     * directly. {@code SUPERSEDED} has no {@link Approval} row to find (SCRUM-291), so it needs
+     * its own check: without one, a supervisor could approve and dispatch a plan drafted under
+     * conditions that have since changed, exactly what superseding it was meant to prevent.
+     */
+    private void assertCanDecide(UUID recommendationId, Recommendation recommendation) {
+        if (approvals.findByRecommendationId(recommendationId).isPresent()) {
+            throw new ConflictException("Recommendation " + recommendationId + " already has a decision");
+        }
+        if (recommendation.getStatus() == Recommendation.RecommendationStatus.SUPERSEDED) {
+            throw new ConflictException("Recommendation " + recommendationId + " was superseded by a newer draft "
+                    + "and can no longer be decided on");
+        }
+        if (recommendation.getStatus() == Recommendation.RecommendationStatus.AUTO_DISPATCHED) {
+            throw new ConflictException("Recommendation " + recommendationId
+                    + " was auto-dispatched without approval and can no longer be decided on");
+        }
+    }
+
+    /** Which fields are required depends on the value of {@code decision}, so request-shape validation alone cannot check this. */
+    private void assertDecisionInputsValid(Approval.ApprovalDecision decision, String reason,
+                                            List<MitigationSuggestion> editedPlan) {
+        if (decision == Approval.ApprovalDecision.EDITED && (editedPlan == null || editedPlan.isEmpty())) {
+            throw new BadRequestException("editedPlan is required when decision is EDITED");
+        }
+        if (decision == Approval.ApprovalDecision.REJECTED && (reason == null || reason.isBlank())) {
+            throw new BadRequestException("reason is required when decision is REJECTED");
+        }
+        if (decision == Approval.ApprovalDecision.EDITED) {
+            assertActionCodesAreKnown(editedPlan);
+        }
+    }
+
+    private String auditEventTypeFor(Approval.ApprovalDecision decision) {
+        return switch (decision) {
+            case APPROVED -> AuditEventType.RECOMMENDATION_APPROVED;
+            case REJECTED -> AuditEventType.RECOMMENDATION_REJECTED;
+            case EDITED -> AuditEventType.RECOMMENDATION_EDITED;
+        };
     }
 
     /**
@@ -256,6 +286,38 @@ public class RecommendationService {
             for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
                 actionDispatchService.dispatchAction(approval.getId(), workerId, dispatchCode,
                         mitigation.action(), actingPrincipal);
+            }
+        }
+    }
+
+    /**
+     * The SCRUM-440 counterpart to {@link #fanOutDispatches}: fans out every mitigation on an
+     * auto-dispatched recommendation's plan (the mandatory {@code STOP_WORK} and whatever
+     * accompanies it, e.g. {@code CLOSE_MONITORING}) with no {@link Approval} and no acting
+     * supervisor -- there was no decision to fan out from, only a drafted plan a lightning
+     * strike or a WBGT-max breach already made mandatory.
+     *
+     * <p>Called from {@code AgentDraftService}'s {@code afterCommit} callback, same reasoning
+     * as {@link #fanOutDispatches}: a dispatch failing for one worker must never undo the
+     * recommendation already having been persisted as {@code AUTO_DISPATCHED}.
+     */
+    void autoDispatch(Recommendation recommendation, UUID actorId, List<MitigationSuggestion> mitigations) {
+        if (mitigations.isEmpty()) {
+            return;
+        }
+
+        List<UUID> shiftWorkerIds = shiftAssignments.findByShiftId(recommendation.getShiftId()).stream()
+                .map(ShiftAssignment::getWorkerId)
+                .distinct()
+                .toList();
+
+        for (MitigationSuggestion mitigation : mitigations) {
+            String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
+                    .orElse(AI_MITIGATION_ACTION_CODE);
+
+            for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
+                actionDispatchService.autoDispatchAction(recommendation, actorId, workerId, dispatchCode,
+                        mitigation.action());
             }
         }
     }
