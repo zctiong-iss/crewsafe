@@ -25,7 +25,7 @@ export function AuthNotice({
   reference,
   busy = false,
   tone = "neutral",
-}: {
+}: Readonly<{
   title: string;
   body: ReactNode;
   action?: AuthNoticeAction;
@@ -34,7 +34,7 @@ export function AuthNotice({
   reference?: string | null;
   busy?: boolean;
   tone?: "neutral" | "warning";
-}) {
+}>) {
   return (
     <main className="auth-notice">
       <div className={`auth-notice__panel auth-notice__panel--${tone}`}>

@@ -38,11 +38,11 @@ export function ConditionsPanel({
   siteId,
   subscribe,
   siteSwitcher,
-}: {
+}: Readonly<{
   siteId: string;
   subscribe?: typeof subscribeToConditions;
   siteSwitcher?: ReactNode;
-}) {
+}>) {
   const {
     snapshot,
     connectionState,

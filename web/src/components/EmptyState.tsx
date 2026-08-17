@@ -15,11 +15,11 @@ export function EmptyState({
   headline,
   body,
   action,
-}: {
+}: Readonly<{
   headline: string;
   body: ReactNode;
   action?: ReactNode;
-}) {
+}>) {
   return (
     <div className="empty-state">
       <h2 className="empty-state__headline">{headline}</h2>

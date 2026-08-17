@@ -11,7 +11,7 @@ import "./Wordmark.css";
  * element in the app, and it is decorative only in the sense that it is small: the
  * gradient is the real risk scale from tokens.css, not an arbitrary brand colour.
  */
-export function Wordmark({ tone = "light" }: { tone?: "light" | "dark" }) {
+export function Wordmark({ tone = "light" }: Readonly<{ tone?: "light" | "dark" }>) {
   return (
     <div className={`wordmark wordmark--${tone}`}>
       <span className="wordmark__glyph" aria-hidden="true">
