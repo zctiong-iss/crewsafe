@@ -218,6 +218,39 @@ http.post(`${BASE}/api/v1/sites/:siteId/policy-versions/:versionId/activate`, ({
   return HttpResponse.json({ ...version, status: "ACTIVE", activatedAt: "2026-08-13T00:00:00Z" });
 }),
 
+// Site forecast (SCRUM-434 fallback panel): a healthy live-model reading by default.
+http.get(`${BASE}/api/v1/sites/:siteId/weather/forecast`, () =>
+  HttpResponse.json({
+    predictedValue: 31.4,
+    horizonMinutes: 30,
+    modelVersion: "wbgt-1.2.0",
+    confidenceIntervalLower: 30.9,
+    confidenceIntervalUpper: 31.9,
+    generatedAt: "2026-08-16T08:00:00Z",
+    basis: "MODEL",
+    inputAgeMinutes: 8,
+    degraded: false,
+  }),
+),
+
+// Deployed-model status (SCRUM-434 accuracy panel): approved, one 30-min horizon.
+http.get(`${BASE}/api/v1/ml/model-status`, () =>
+  HttpResponse.json({
+    modelVersion: "wbgt-1.2.0",
+    approvedForInference: true,
+    approvalBlocker: null,
+    horizons: {
+      "30": {
+        mae: 0.42, rmse: 0.61, meanBias: -0.05, macroF1: 0.78,
+        recallAtLeast32: 0.91, recallAtLeast33: 0.88,
+        maeByActualBand: { "<31": 0.3, "31–32": 0.45, "≥33": 0.7 },
+        confusionMatrix: [[10, 1], [2, 8]],
+        sampleCount: 500,
+      },
+    },
+  }),
+),
+
 http.get(`${BASE}/api/v1/sites/:siteId/lightning`, ({ params }) => {
   const risk = LIGHTNING_RISK_BY_SITE[params.siteId as string];
   return risk
