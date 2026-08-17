@@ -627,5 +627,16 @@
     "minuteDown": "Earlier by five minutes",
     "hourInput": "Hour",
     "minuteInput": "Minute"
+  },
+  "oversight": {
+    "tabTitle": "Oversight",
+    "title": "Oversight",
+    "showPlans": "Plans",
+    "hidePlans": "Hide plans",
+    "showPlansFor": "Show plans for {{site}}",
+    "hidePlansFor": "Hide plans for {{site}}",
+    "noPlans": "No plans drafted for this site yet.",
+    "awaitingCount_one": "{{count}} awaiting",
+    "awaitingCount_other": "{{count}} awaiting"
   }
 }

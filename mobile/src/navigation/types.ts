@@ -67,6 +67,25 @@ export type SupervisorTabParamList = {
   ProfileTab: undefined;
 };
 
+/**
+ * A safety manager's tabs (SCRUM-TBD-90).
+ *
+ * No ShiftsTab: a manager oversees sites they do not run, and `ShiftController`'s write
+ * endpoints refuse the role outright, so the tab would offer controls the server answers 403
+ * to. Oversight takes its place.
+ */
+export type SafetyManagerTabParamList = {
+  OversightTab: undefined;
+  ConcernsTab: undefined;
+  RecommendationsTab: undefined;
+  WeatherTab: undefined;
+  ProfileTab: undefined;
+};
+
+export type OversightStackParamList = {
+  Oversight: undefined;
+};
+
 /* ---------------------------- Shared ----------------------------- */
 
 export type WeatherStackParamList = {

@@ -14,6 +14,7 @@ import MyShiftScreen from "@/screens/worker/MyShiftScreen";
 import InboxScreen from "@/screens/worker/InboxScreen";
 import WeatherScreen from "@/screens/weather/WeatherScreen";
 import ForecastScreen from "@/screens/weather/ForecastScreen";
+import OversightScreen from "@/screens/safety/OversightScreen";
 import ShiftListScreen from "@/screens/supervisor/ShiftListScreen";
 import ShiftDetailScreen from "@/screens/supervisor/ShiftDetailScreen";
 import CreateShiftScreen from "@/screens/supervisor/CreateShiftScreen";
@@ -33,6 +34,7 @@ import type {
   InboxStackParamList,
   MyShiftStackParamList,
   ProfileStackParamList,
+  OversightStackParamList,
   RecommendationsStackParamList,
   ShiftsStackParamList,
   WeatherStackParamList,
@@ -110,6 +112,30 @@ export function InboxStack() {
 }
 
 /* ------------------------------ Supervisor: Shifts ------------------------------ */
+
+const OversightStackNavigator = createNativeStackNavigator<OversightStackParamList>();
+
+/**
+ * The safety manager's site-and-plans view (SCRUM-TBD-90).
+ *
+ * A single screen with no detail route, deliberately: a manager reads plans, and the decision
+ * screen behind `RecommendationDetail` exists to approve, edit or reject — all three of which
+ * `RecommendationDetailScreen` already refuses this role with a read-only notice. Routing them
+ * there would offer a journey that ends in "you cannot do this".
+ */
+export function OversightStack() {
+  const { t } = useTranslation();
+
+  return (
+    <OversightStackNavigator.Navigator screenOptions={useScreenOptions()}>
+      <OversightStackNavigator.Screen
+        name="Oversight"
+        component={OversightScreen}
+        options={{ title: t("oversight.title") }}
+      />
+    </OversightStackNavigator.Navigator>
+  );
+}
 
 const ShiftsStackNavigator = createNativeStackNavigator<ShiftsStackParamList>();
 

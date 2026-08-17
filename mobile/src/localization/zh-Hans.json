@@ -626,5 +626,16 @@
     "minuteDown": "提前五分钟",
     "hourInput": "小时",
     "minuteInput": "分钟"
+  },
+  "oversight": {
+    "tabTitle": "监管",
+    "title": "监管",
+    "showPlans": "计划",
+    "hidePlans": "隐藏计划",
+    "showPlansFor": "显示 {{site}} 的计划",
+    "hidePlansFor": "隐藏 {{site}} 的计划",
+    "noPlans": "此工地尚未生成计划。",
+    "awaitingCount_one": "{{count}} 项待处理",
+    "awaitingCount_other": "{{count}} 项待处理"
   }
 }

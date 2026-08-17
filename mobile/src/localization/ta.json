@@ -627,5 +627,16 @@
     "minuteDown": "ஐந்து நிமிடம் முந்தி",
     "hourInput": "மணி",
     "minuteInput": "நிமிடம்"
+  },
+  "oversight": {
+    "tabTitle": "மேற்பார்வை",
+    "title": "மேற்பார்வை",
+    "showPlans": "திட்டங்கள்",
+    "hidePlans": "திட்டங்களை மறை",
+    "showPlansFor": "{{site}} க்கான திட்டங்கள்",
+    "hidePlansFor": "{{site}} திட்டங்களை மறை",
+    "noPlans": "இந்த தளத்திற்கு இன்னும் திட்டம் உருவாக்கப்படவில்லை.",
+    "awaitingCount_one": "{{count}} காத்திருக்கிறது",
+    "awaitingCount_other": "{{count}} காத்திருக்கின்றன"
   }
 }

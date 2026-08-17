@@ -627,5 +627,16 @@
     "minuteDown": "পাঁচ মিনিট আগে",
     "hourInput": "ঘণ্টা",
     "minuteInput": "মিনিট"
+  },
+  "oversight": {
+    "tabTitle": "তত্বাবধান",
+    "title": "তত্বাবধান",
+    "showPlans": "পরিকল্পনা",
+    "hidePlans": "পরিকল্পনা লুকান",
+    "showPlansFor": "{{site}}-এর পরিকল্পনা দেখান",
+    "hidePlansFor": "{{site}}-এর পরিকল্পনা লুকান",
+    "noPlans": "এই সাইটের জন্য এখনও কোনো পরিকল্পনা তৈরি হয়নি।",
+    "awaitingCount_one": "{{count}} অপেক্ষমাণ",
+    "awaitingCount_other": "{{count}} অপেক্ষমাণ"
   }
 }

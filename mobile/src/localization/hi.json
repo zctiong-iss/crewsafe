@@ -626,5 +626,16 @@
     "minuteDown": "पाँच मिनट पहले",
     "hourInput": "घंटा",
     "minuteInput": "मिनट"
+  },
+  "oversight": {
+    "tabTitle": "निगरानी",
+    "title": "निगरानी",
+    "showPlans": "योजनाएँ",
+    "hidePlans": "योजनाएँ छिपाएँ",
+    "showPlansFor": "{{site}} की योजनाएँ दिखाएँ",
+    "hidePlansFor": "{{site}} की योजनाएँ छिपाएँ",
+    "noPlans": "इस साइट के लिए अभी तक कोई योजना नहीं बनी है।",
+    "awaitingCount_one": "{{count}} लंबित",
+    "awaitingCount_other": "{{count}} लंबित"
   }
 }

@@ -627,5 +627,16 @@
     "minuteDown": "Awal lima minit",
     "hourInput": "Jam",
     "minuteInput": "Minit"
+  },
+  "oversight": {
+    "tabTitle": "Pengawasan",
+    "title": "Pengawasan",
+    "showPlans": "Pelan",
+    "hidePlans": "Sembunyikan pelan",
+    "showPlansFor": "Tunjukkan pelan untuk {{site}}",
+    "hidePlansFor": "Sembunyikan pelan untuk {{site}}",
+    "noPlans": "Tiada pelan dirangka untuk tapak ini lagi.",
+    "awaitingCount_one": "{{count}} menunggu",
+    "awaitingCount_other": "{{count}} menunggu"
   }
 }
