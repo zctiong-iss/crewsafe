@@ -256,13 +256,13 @@ the emulator is not. On a physical phone use your LAN IP for both. Hosted UI run
 | `supervisor1` | SUPERVISOR | Bishan | Shifts · Weather · Profile |
 | `supervisor2` | SUPERVISOR | NUS Campus | Shifts · Weather · Profile |
 | `manager1` | SAFETY_MANAGER | **both** | Shifts · Weather · Profile |
-| `admin1` | ADMIN | **none** | Shifts · Weather · Profile |
+| `admin1@synthetic.crewsafe.invalid` | ADMIN | **none** | Shifts · Weather · Profile |
 
 Pick by what you need to look at:
 
 - **The Heat conditions card** is on *My shift*, which is WORKER-only — use `worker1`.
 - **Two sites in the picker** needs `manager1`; a supervisor sees only their own.
-- **The empty-membership state** is `admin1`, who holds every permission a supervisor does
+- **The empty-membership state** is `admin1@synthetic.crewsafe.invalid`, who holds every permission a supervisor does
   but belongs to no site. That is the account that catches code assuming a membership exists.
 
 Only a WORKER gets *My shift* and *Alerts*. `/shifts/me` is scoped to the caller's own

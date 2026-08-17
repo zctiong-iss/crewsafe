@@ -192,8 +192,14 @@ public class DemoDataSeeder implements ApplicationRunner {
             throw new IllegalArgumentException("Mappings must contain unique usernames and Cognito subjects.");
         }
         for (DemoUserMapping mapping : mappings) {
+            // A developer identity is normally a bare handle ("admin1"), but the live shared
+            // pool sets username_attributes=["email"] (infra/terraform/cognito/main.tf) — an
+            // account meant to exist there needs an email-shaped username too. Scoped to the
+            // same reserved @synthetic.crewsafe.invalid namespace synthetic-test already uses,
+            // so this never opens the door to a real address, just a second accepted shape.
             boolean developerUsername = "developer".equals(mapping.identityKind())
-                    && mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$");
+                    && (mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$")
+                        || mapping.username().matches("^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$"));
             boolean syntheticUsername = "synthetic-test".equals(mapping.identityKind())
                     && mapping.username().matches(
                             "^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$")
