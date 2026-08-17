@@ -524,10 +524,11 @@ it("names the site supervisor on every plan, whatever the status", async () => {
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   // Two plans in the fixture: one PENDING_APPROVAL, one APPROVED. Both carry the pill.
-  // One pill per plan, and the name is in it. Asserted separately because the i18n mock
-  // renders key and interpolations as one string.
-  await waitFor(() => expect(getAllByText(/oversight.supervisorLabel/).length).toBe(2));
-  expect(getAllByText(/Meng Hui/).length).toBe(2);
+  // Two plans in the fixture: one PENDING_APPROVAL, one APPROVED. Both carry the pill, and the
+  // pill shows the bare name -- the "Site supervisor:" prefix lives on the accessible label
+  // only, because it doubled the pill width and pushed it onto a second row.
+  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
+  expect(getAllByLabelText(/oversight.supervisorLabel/).length).toBe(2);
 });
 
 it("lists every supervisor when a site has more than one", async () => {
@@ -547,7 +548,10 @@ it("lists every supervisor when a site has more than one", async () => {
   await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
-  await waitFor(() => expect(getAllByText(/oversight.supervisorLabel/).length).toBe(4));
+  // Two supervisors x two plans. Names render bare; the spoken form keeps the context.
+  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
+  expect(getAllByText("Zhong Cheng").length).toBe(2);
+  expect(getAllByLabelText(/oversight.supervisorLabel/).length).toBe(4);
 });
 
 it("does not repeat a name when the decider is the site supervisor", async () => {
@@ -630,4 +634,31 @@ it("renders no supervisor pill when the summary names none", async () => {
 
   await waitFor(() => expect(getAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
   expect(queryAllByText(/oversight.supervisorLabel/).length).toBe(0);
+});
+
+it("keeps the status and the supervisor on one line for every status", async () => {
+  /*
+   * The prefixed label wrapped the supervisor pill onto a second row, which read as two
+   * unrelated facts stacked rather than one row saying "this plan, this owner". Asserted for
+   * pending and decided alike, since the row must not reflow depending on status.
+   */
+  mockFetchPlanSummary.mockResolvedValue([
+    {
+      siteId: "site-1",
+      awaitingDecision: 1,
+      totalPlans: 2,
+      supervisors: [{ id: "sup-1", displayName: "Meng Hui" }],
+    },
+  ]);
+
+  const { getAllByLabelText, getAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
+
+  // The pill row must not wrap: a wrapping container is what put the owner on its own line.
+  const pillRow = getAllByText("Meng Hui")[0].parent?.parent?.parent;
+  const style = pillRow?.props?.style;
+  const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
+  expect(flattened.flexWrap ?? "nowrap").not.toBe("wrap");
 });

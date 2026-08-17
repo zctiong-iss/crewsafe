@@ -154,7 +154,15 @@ function PlanRow({
             <Pill
               key={supervisor.id}
               role="entity"
-              label={t("oversight.supervisorLabel", { name: supervisor.displayName })}
+              // Just the name. "Site supervisor:" doubled the pill's width and pushed it onto a
+              // second line, and a name sitting opposite a status pill already reads as "who
+              // owns this" — the prefix was spending a whole row to say what position says.
+              label={supervisor.displayName}
+              // The long form survives here, because read aloud in isolation a bare name is
+              // only a name.
+              accessibilityLabel={t("oversight.supervisorLabel", {
+                name: supervisor.displayName,
+              })}
             />
           ))}
 
@@ -527,18 +535,28 @@ const styles = StyleSheet.create({
   },
   planPills: {
     flexDirection: "row",
-    flexWrap: "wrap",
+    /*
+     * No wrap: the status and the owner share one line, whatever the status.
+     *
+     * A long label used to push the owner pill onto a second row, which read as two unrelated
+     * facts stacked rather than one row saying "this plan, this owner". With the prefix gone a
+     * name fits comfortably, and the shrink below is what keeps it on the line when it does not
+     * — the pill's own text wraps inside its border instead of the pill relocating.
+     */
+    flexWrap: "nowrap",
     alignItems: "center",
-    // Pushes the owner pills to the trailing edge, and reflows them beneath the status rather
-    // than clipping once names or text size grow.
     justifyContent: "space-between",
     gap: s(6),
   },
   planOwners: {
     flexDirection: "row",
+    // Wraps within the trailing group only, so a site with several supervisors stacks them on
+    // the right rather than shunting the status pill around.
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "flex-end",
+    // Yields to the status pill rather than clipping it: at 1.5x text the name gets narrower
+    // and wraps inside its own pill, and the status stays fully readable.
     flexShrink: 1,
     gap: s(6),
   },
