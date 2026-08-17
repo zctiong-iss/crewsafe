@@ -484,6 +484,8 @@
     "generatedToast": "योजना तैयार हो गई।",
     "statusDraft": "मसौदा",
     "statusSuperseded": "प्रतिस्थापित",
+    "statusAutoDispatched": "कार्य-रोक भेजी गई",
+    "autoDispatchedNotice": "यह कार्य-रोक निर्देश स्वचालित रूप से श्रमिकों को भेजा गया है — किसी स्वीकृति की आवश्यकता नहीं थी।",
     "requiredCannotRemove": "गर्मी नीति के अनुसार आवश्यक — इसे हटाया नहीं जा सकता।"
   },
   "mitigationCategory": {

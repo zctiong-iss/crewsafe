@@ -484,6 +484,8 @@
     "generatedToast": "方案已生成。",
     "statusDraft": "草稿",
     "statusSuperseded": "已替代",
+    "statusAutoDispatched": "已自动停工",
+    "autoDispatchedNotice": "此停工指令已自动发送给工人 — 无需批准。",
     "requiredCannotRemove": "高温规则要求此项，无法删除。"
   },
   "mitigationCategory": {
