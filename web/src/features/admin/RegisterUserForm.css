@@ -1,0 +1,82 @@
+/** @author Jemilin Beulah */
+
+/* Register-user form. Same input styling as SiteForm.css / CreatePolicyVersionForm.css. */
+.register-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 480px;
+}
+
+.register-form label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+.register-form input,
+.register-form select {
+  font: inherit;
+  font-size: var(--text-base);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  color: var(--ink);
+}
+.register-form input:focus-visible,
+.register-form select:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 1px;
+}
+
+.register-form__sites {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.register-form__sites legend {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  padding: 0 var(--space-2);
+}
+.register-form__site-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  color: var(--ink);
+}
+.register-form__hint {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.register-form__error {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.register-form__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-2);
+}
+.register-form__actions button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--action);
+  background: var(--action);
+  color: var(--action-ink);
+  cursor: pointer;
+}
+.register-form__actions button:disabled { opacity: 0.6; cursor: default; }

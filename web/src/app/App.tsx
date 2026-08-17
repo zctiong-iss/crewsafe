@@ -19,6 +19,10 @@ import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
 import { LightningPage } from "@/features/lightning/LightningPage";
+import { AdminSitesPage } from "@/features/admin/AdminSitesPage";
+import { AdminUsersPage } from "@/features/admin/AdminUsersPage";
+import { CreateSitePage } from "@/features/admin/CreateSitePage";
+import { RegisterUserPage } from "@/features/admin/RegisterUserPage";
 import { SiteProvider } from "@/site/SiteProvider";
 
 /**
@@ -114,7 +118,8 @@ export function App() {
             {NAVIGATION.filter(
               (item) =>
                 item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
-                item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning",
+                item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning" &&
+                item.to !== "/settings",
             ).map((item) => (
               <Route
                 key={item.to}
@@ -158,6 +163,22 @@ export function App() {
             <Route
               path="/lightning"
               element={<RoleRoute roles={rolesForRoute("/lightning")}><LightningPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/sites/new"
+              element={<RoleRoute roles={rolesForRoute("/settings/sites/new")}><CreateSitePage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/users/new"
+              element={<RoleRoute roles={rolesForRoute("/settings/users/new")}><RegisterUserPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/users"
+              element={<RoleRoute roles={rolesForRoute("/settings/users")}><AdminUsersPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings"
+              element={<RoleRoute roles={rolesForRoute("/settings")}><AdminSitesPage /></RoleRoute>}
             />
 
             {/* Replace a placeholder only when its real guarded route lands in this same change. */}

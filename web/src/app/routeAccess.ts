@@ -16,7 +16,12 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/lightning": MANAGEMENT_ROLES,
   "/approvals": ["SUPERVISOR", "SAFETY_MANAGER"],
   "/audit": ["SAFETY_MANAGER", "ADMIN"],
+  // Admin console (US-30): site + local user/role/site-membership management. Matches
+  // AdminSiteController/AdminUserController's hasRole('ADMIN') gate exactly.
   "/settings": ["ADMIN"],
+  "/settings/sites/new": ["ADMIN"],
+  "/settings/users": ["ADMIN"],
+  "/settings/users/new": ["ADMIN"],
   // Read matches PolicyVersionController's list/active endpoints (SUPERVISOR+SAFETY_MANAGER+ADMIN);
   // create matches its create/activate endpoints (SAFETY_MANAGER+ADMIN only).
   "/policy": MANAGEMENT_ROLES,
