@@ -145,6 +145,44 @@ recommendation, which is not the same claim as "a template wrote this".
 The mock now carries honest values too — one seeded plan from a model, one from the fallback, and
 the on-request draft as the fallback, because mock mode never reaches ml-service at all.
 
+### Which trigger actually reaches Bedrock
+
+Traced, because "auto-drafting" and "AI drafting" are not the same claim.
+
+`generateAuto` (the scheduler) and `generate` (the manual button) both call the same private
+`doGenerate`, so the auto-trigger is not a separate, lesser path — it reaches the model exactly
+as the button does. Inside `doGenerate` the route forks on lightning:
+
+| Trigger | Path | `modelVersion` |
+|---|---|---|
+| WBGT band transition | `modelDraft` → ml-service → **Bedrock** | the real model id |
+| Lightning `STOP_WORK` | `lightningDraft` — **short-circuits before any model call** | `deterministic-lightning` |
+| Model unavailable / gate rejected | deterministic | `deterministic-fallback` |
+
+The lightning short-circuit is correct and required: §7.1 evaluates lightning before any WBGT
+rule, and SCRUM-440 auto-dispatches that plan without approval, so waiting 10–20 s on a model
+before telling a crew to take shelter would be indefensible.
+
+It also means the provenance notice deliberately fires on `deterministic-fallback` only.
+`deterministic-lightning` is a designed path, not a degradation, and those plans are
+auto-dispatched anyway — the screen already says so with its own notice.
+
+### The local path had no auto-trigger at all
+
+Mock mode seeds its store once (`store ??= seed()`) and only the manual draft ever added to it,
+so the Plans tab polled every 60 s and received byte-identical data forever. The
+auto-regenerating behaviour was invisible in precisely the mode used for demos and review — a
+reviewer would watch the screen do nothing and reasonably conclude it was unimplemented.
+
+The mock now runs its own auto-trigger on the server's cadence, **superseding rather than
+stacking**, copied from `AgentDraftService.supersedeOpenRecommendation`. The cadence is matched
+to the real 2-minute default rather than shortened for convenience: a demo drafting every ten
+seconds would show a rhythm the system never has.
+
+The drafted plan is marked `deterministic-fallback`, because mock mode reaches no ml-service and
+therefore no Bedrock. Claiming a model id would make the provenance notice lie in the one mode
+where nobody can check it.
+
 ### Why not a health indicator
 
 Considered and rejected. `management.endpoint.health.show-details: never` means an indicator's
