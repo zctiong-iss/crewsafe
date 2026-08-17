@@ -62,7 +62,9 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
 
   return (
     <AppShell title={isWorker ? "My Shifts & Tasks" : "Shifts & Tasks"} actions={createButton}>
-      {load.status === "loading" && <p role="status">Loading shifts…</p>}
+      {load.status === "loading" && (
+        <output style={{ display: "block" }}>Loading shifts…</output>
+      )}
 
       {load.status === "error" && (
         <EmptyState headline="Could not load shifts" body={load.message} />

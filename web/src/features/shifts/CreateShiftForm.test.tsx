@@ -99,9 +99,21 @@ describe("CreateShiftForm", () => {
   renderApp();
   await user.selectOptions(await screen.findByLabelText("Worksite"), "site-2");
 
-  expect(await screen.findByText(/No workers are assigned/i)).toBeInTheDocument();
+  const note = await screen.findByText(/No workers are assigned/i);
+  expect(note).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Add worker" })).toBeNull();
+  // SCRUM-420 / S6819 — this note must be a native <output> status region, not role=status.
+  expect(note.tagName).toBe("OUTPUT");
+  expect(note).toHaveClass("shift-form__note");
 });
+
+  it("renders the loading-workers message as an <output> status region (SCRUM-420 / S6819)", async () => {
+    server.use(http.get("*/api/v1/sites/:siteId/workers", () => new Promise(() => {})));
+    renderApp();
+
+    const status = await screen.findByText("Loading workers…");
+    expect(status.tagName).toBe("OUTPUT");
+  });
 
   it("AC-2 — a reversed date order sends no request", async () => {
     const posted = spyOnPost();
@@ -152,6 +164,41 @@ describe("CreateShiftForm", () => {
     await user.click(screen.getByRole("button", { name: "Create Shift" }));
     expect(await screen.findByText(/do not have access/i)).toBeInTheDocument();
     expect(screen.getByLabelText("Starts at")).toBeInTheDocument();
+  });
+
+  /**
+   * SCRUM-420 / S6479. Sonar flags `key={i}` on this row list. All row fields here are
+   * React-controlled (`value={row.X}`), so this assertion already passes before the fix —
+   * controlled inputs re-sync from props on every render regardless of key-based DOM reuse,
+   * so there is no observed value-bleed defect today. The fix (`key={row.id}`) is still the
+   * correct React practice: it gives each row a stable identity that survives add/remove,
+   * which is what protects this exact assertion if a future field here ever becomes
+   * uncontrolled (local state, an animation library, a third-party input) — the class of bug
+   * `key={i}` is generally associated with. This test locks in the current-and-future-correct
+   * behavior; it is not evidence of a pre-existing bug.
+   */
+  it("keeps each row's data when a middle row is removed (SCRUM-420 / S6479)", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByLabelText("Starts at");
+
+    await user.click(screen.getByRole("button", { name: "Add worker" }));
+    await user.click(screen.getByRole("button", { name: "Add worker" }));
+    await user.click(screen.getByRole("button", { name: "Add worker" }));
+
+    const taskInputs = screen.getAllByLabelText("Task (optional)");
+    expect(taskInputs).toHaveLength(3);
+    await user.type(taskInputs[0]!, "First row task");
+    await user.type(taskInputs[1]!, "Second row task");
+    await user.type(taskInputs[2]!, "Third row task");
+
+    const removeButtons = screen.getAllByRole("button", { name: "Remove worker" });
+    await user.click(removeButtons[1]!); // remove the middle row
+
+    const remainingTaskInputs = screen.getAllByLabelText("Task (optional)");
+    expect(remainingTaskInputs).toHaveLength(2);
+    expect(remainingTaskInputs[0]).toHaveValue("First row task");
+    expect(remainingTaskInputs[1]).toHaveValue("Third row task");
   });
 
   it("AC-6 — an empty shift submits, with the inline note", async () => {

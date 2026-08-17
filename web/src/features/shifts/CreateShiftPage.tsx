@@ -45,7 +45,7 @@ export function CreateShiftPage() {
 if (sitesLoad.status === "loading") {
     return (
       <AppShell title="Create Shift">
-        <p role="status">Loading worksites…</p>
+        <output style={{ display: "block" }}>Loading worksites…</output>
       </AppShell>
     );
   }

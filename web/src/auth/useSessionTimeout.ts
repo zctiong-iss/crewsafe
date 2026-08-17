@@ -54,12 +54,14 @@ export function useSessionTimeout({
         return;
       }
 
-      const nextWarning: SessionWarning | null =
-        current >= absoluteDeadline - ABSOLUTE_WARNING_MS
-          ? { kind: "absolute", expiresAt: absoluteDeadline }
-          : current >= idleDeadline - IDLE_WARNING_MS
-            ? { kind: "idle", expiresAt: idleDeadline }
-            : null;
+      const computeWarning = (): SessionWarning | null => {
+        if (current >= absoluteDeadline - ABSOLUTE_WARNING_MS)
+          return { kind: "absolute", expiresAt: absoluteDeadline };
+        if (current >= idleDeadline - IDLE_WARNING_MS)
+          return { kind: "idle", expiresAt: idleDeadline };
+        return null;
+      };
+      const nextWarning = computeWarning();
 
       setWarning((previous) =>
         previous?.kind === nextWarning?.kind && previous?.expiresAt === nextWarning?.expiresAt
