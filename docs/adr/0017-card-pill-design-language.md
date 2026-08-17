@@ -92,6 +92,25 @@ replaces the mechanical half of the eyeball pass, not the judgement half. Verifi
 re-introducing the origin pill's old `maxWidth: 110` + `numberOfLines={1}` fails 32 of the
 80 cases.
 
+**3. `PillTone` resolves to a `{ fill, ink }` pair, not one colour per tone.** (Phase 2)
+
+Found while migrating `RecommendationStatusPill`. A `state` pill fills with the tone colour and
+carries `textInverse`; for `warning` that is `#B26A00`, which `colors.ts` records as 4.24:1
+against white — below the AA floor. `warningFill` exists for precisely this case and the
+shipped pill already used it, so a naive migration would have *introduced* a contrast failure
+on "Awaiting decision". Each tone now names both values, because "legible on white" and
+"legible under white" are opposite problems.
+
+**4. The `numberOfLines={1}` clamp is dropped from the status pills.** (Phase 2)
+
+Both status pills clamped to one line against a documented defect (a wrapped label painted
+outside its own fill). §6 forbids clipping, and a pill reading "Waiting on your…" contradicts
+this ADR's own rule that text is the source of truth. The structural half of that original fix
+— `flexDirection: "row"` + `maxWidth: "100%"` + `flexShrink` — lives in `Pill` and is what
+actually solved the measurement bug; the clamp was belt-and-braces. Asserted across 288 gate
+cases in the real longest Tamil and Burmese strings. **The gate cannot prove the wrap paints
+inside the fill — that check stays human.**
+
 **Open item 4 in Doc 1 §8.5 was already solved.** The plan called for a new locale key-parity
 test; `mobile/scripts/check-locale-parity.mjs` already existed, already ran in CI, and is
 strictly more thorough (it also checks `{{placeholder}}` parity and detects wrong-script text).

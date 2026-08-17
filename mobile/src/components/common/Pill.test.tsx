@@ -84,6 +84,24 @@ it("ignores tone on an entity chip, so an identity never carries a hazard colour
   expect(style.borderColor).not.toBe(mockTheme.colors.danger);
 });
 
+it("fills a warning state pill with warningFill, not warning", async () => {
+  /*
+   * The AA trap `colors.ts` documents. `warning` (#B26A00) is 4.24:1 against white — under
+   * the 4.5:1 floor — so a filled warning pill carrying white text would be illegible in the
+   * sun and non-compliant. `warningFill` is the darkened value that exists for exactly this.
+   */
+  const style = await pillStyle(<Pill role="state" label="Label" tone="warning" />);
+  expect(style.backgroundColor).toBe(mockTheme.colors.warningFill);
+  expect(style.backgroundColor).not.toBe(mockTheme.colors.warning);
+});
+
+it("outlines a warning attribute pill with warning, not warningFill", async () => {
+  // The other direction: as a border and as text on a light surface, plain `warning` is the
+  // value that has already been checked. `warningFill` would read as brown rather than amber.
+  const style = await pillStyle(<Pill role="attribute" label="Label" tone="warning" />);
+  expect(style.borderColor).toBe(mockTheme.colors.warning);
+});
+
 it("defaults to the neutral tone when none is given", async () => {
   const style = await pillStyle(<Pill role="attribute" label="Label" />);
   expect(style.borderColor).toBe(mockTheme.colors.textSecondary);

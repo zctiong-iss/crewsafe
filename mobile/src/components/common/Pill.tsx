@@ -46,7 +46,7 @@ export type PillRole = "state" | "attribute" | "entity";
  * Mirrors the semantic slots in `AppPalette`. `neutral` is the default and resolves to
  * `textSecondary`, which is the "this classifies something, but it is not a signal" case.
  */
-export type PillTone = "neutral" | "danger" | "warning" | "success" | "info";
+export type PillTone = "neutral" | "danger" | "warning" | "success" | "info" | "simulated";
 
 interface PillProps {
   role: PillRole;
@@ -64,28 +64,40 @@ const Pill: FC<PillProps> = ({ role, label, tone = "neutral" }) => {
   const theme = useTheme();
 
   /*
+   * Two colours per tone, because "legible ON white" and "legible UNDER white" are opposite
+   * problems and one value cannot always solve both.
+   *
+   * `warning` is the case that forces this. Measured against white it is 4.24:1 — under the
+   * 4.5:1 AA floor — so a FILLED warning pill carrying white text would ship a contrast
+   * failure, while the same colour is correct as text and as a border on a light surface.
+   * `warningFill` is the palette's already-darkened answer, and `colors.ts` documents it as
+   * "only ever a fill". A single `accent` per tone would have quietly picked the wrong one.
+   *
    * `info` maps to `primary` rather than a blue: the mobile chrome is monochrome by D3, and
    * introducing a blue here would be the first decorative colour in the palette.
    */
-  const toneColors: Record<PillTone, string> = {
-    neutral: theme.colors.textSecondary,
-    danger: theme.colors.danger,
-    warning: theme.colors.warning,
-    success: theme.colors.success,
-    info: theme.colors.primary,
+  const toneColors: Record<PillTone, { fill: string; ink: string }> = {
+    neutral: { fill: theme.colors.textSecondary, ink: theme.colors.textSecondary },
+    danger: { fill: theme.colors.danger, ink: theme.colors.danger },
+    warning: { fill: theme.colors.warningFill, ink: theme.colors.warning },
+    success: { fill: theme.colors.success, ink: theme.colors.success },
+    info: { fill: theme.colors.primary, ink: theme.colors.primary },
+    // Simulated data is not degraded data; conflating it with warning or danger would make a
+    // demo look like a fault. Already AA against white in both directions.
+    simulated: { fill: theme.colors.simulated, ink: theme.colors.simulated },
   };
 
-  const accent = toneColors[tone];
+  const { fill, ink } = toneColors[tone];
 
   let surface: { backgroundColor: string; borderColor: string };
   let textColor: string;
 
   if (role === "state") {
-    surface = { backgroundColor: accent, borderColor: accent };
+    surface = { backgroundColor: fill, borderColor: fill };
     textColor = theme.colors.textInverse;
   } else if (role === "attribute") {
-    surface = { backgroundColor: "transparent", borderColor: accent };
-    textColor = accent;
+    surface = { backgroundColor: "transparent", borderColor: ink };
+    textColor = ink;
   } else {
     // Entity: neutral fill, always bordered — `surfaceAlt` collapses to `surface` in high
     // contrast, so the border is the only thing left holding the chip's edge.

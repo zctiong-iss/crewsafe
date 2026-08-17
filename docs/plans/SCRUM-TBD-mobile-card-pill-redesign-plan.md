@@ -1,6 +1,6 @@
 # SCRUM-TBD — Mobile Card & Pill Redesign (implementation plan)
 
-**Status:** Phase 1 complete — awaiting real Jira keys
+**Status:** Phases 1–2 complete — awaiting real Jira keys
 **Branch:** `feat/scrum-tbd-mobile-card-pill-redesign`
 **Canon:** [ADR-0017](../adr/0017-card-pill-design-language.md) · [Design language (Doc 1)](../design/crewsafe-card-pill-design-language.md)
 **Backlog CSV:** `~/OneDrive/Desktop/crewsafe-mobile-card-pill-redesign-jira.csv`
@@ -90,6 +90,70 @@ wrong-script detection, so the Tamil/Bengali/Myanmar/Hindi additions are in the 
 NATIVE-REVIEWED"**. The four strings added in Phase 1 are machine-drafted too and inherit that
 caveat. They are UI chrome ("Details", "Read more") rather than safety instructions, so they are
 not in the FR-26c critical set — but they still want a native pass before the programme closes.
+
+---
+
+## Phase 2 — what shipped (2026-08-17)
+
+All four remaining hand-rolled pills now render through `Pill`. Each file kept only its
+status → role/tone mapping; the shape, fill rule, border and text treatment moved to one place.
+
+| Ticket | Delivered |
+|---|---|
+| TBD-26/27/28 | `RecommendationStatusPill` 142 → 93 lines. Status map is now **total** over the type, so a new backend status is a compile error rather than a silent green "Approved". 7 → 10 tests. |
+| TBD-29/30 | `ShiftStatusPill` 64 → 37 lines; **first test coverage**, 6 tests. |
+| TBD-31/32 | `PolicyStatusPill` 79 → 37 lines. |
+| TBD-33/34 | `FreshnessBadge` 57 → 39 lines; 5 → 10 tests. |
+| TBD-35/36 | Sweep + `Pill.guardrails.test.tsx`, 288 gate cases over the four migrated pills. |
+
+**Verification:** `tsc` clean · eslint 0 errors · **67 suites / 1042 tests green** · guardrail
+gate 368 cases · all 7 locales in parity.
+
+### An AA bug was found in Phase 1's `Pill` and fixed here
+
+`Pill` filled a `state` pill with the tone colour and put `textInverse` on it. For
+`tone="warning"` that resolves to `#B26A00`, which `colors.ts` documents as **4.24:1 against
+white — under the 4.5:1 AA floor**. `warningFill` exists for exactly this and the shipped
+`RecommendationStatusPill` was already using it correctly, so migrating it onto `Pill` would
+have *introduced* a contrast failure on the "Awaiting decision" pill.
+
+`PillTone` now resolves to a `{ fill, ink }` pair rather than one colour, because "legible ON
+white" and "legible UNDER white" are opposite problems. Two tests lock it in.
+
+### The `numberOfLines={1}` clamp was removed — and this is the item wanting human eyes
+
+`RecommendationStatusPill` and `PolicyStatusPill` both shipped with a one-line clamp,
+documented against a real defect: a wrapping pill painted its second line *outside* its own
+fill, so "Waiting on your decision" rendered as "Waiting on your" with the last word gone.
+
+The clamp is gone, for two reasons. ADR-0017 §6 forbids clipping outright; and a pill reading
+"Waiting on your…" contradicts the ADR's own rule that **text is the source of truth and colour
+is only reinforcement** — a truncated label is a worse failure than a two-line one.
+
+That is safe *only* because `Pill` carries the structural half of the original fix
+(`flexDirection: "row"` + `maxWidth: "100%"` + `flexShrink`), which is what made the pill
+measure against its whole string instead of its first break opportunity. The clamp was
+belt-and-braces on top. `Pill.guardrails.test.tsx` asserts the structural half holds across
+288 cases using the genuine longest Tamil and Burmese translations.
+
+**But the test renderer has no layout engine.** It proves nothing clamps and nothing caps the
+width; it cannot prove the second line paints inside the fill. **Before merging Phase 2, look
+at a PENDING_APPROVAL pill in Tamil at fontScale 1.5.** This is the judgement half of the gate.
+
+### A sixth pill was found — logged, not migrated
+
+The TBD-35 sweep turned up an **acclimatisation chip** that the original catalogue of five
+missed, duplicated across `ShiftCard.tsx` and `ShiftDetailScreen.tsx` and already drifted
+between the two (different padding, `label` vs `caption` text). Both are outlined + warning and
+map cleanly onto `Pill`.
+
+It was **not** migrated in the sweep: the `ShiftDetailScreen` copy carries an explicit
+"centred because it is the only element on its own line" comment, and `Pill` is
+`alignSelf: flex-start`. Converting it would silently override a documented layout decision.
+Raised as **SCRUM-TBD-52/53/54** so the centring gets a deliberate call.
+
+Consequently TBD-35's acceptance criterion "grep finds no remaining hand-rolled pill" is **not
+yet met** — it is met for the five catalogued pills and blocked on TBD-52 for the sixth.
 
 ---
 
