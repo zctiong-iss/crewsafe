@@ -1,0 +1,187 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Audit endpoints
+  version: "1.0"
+  description: >
+    Contract for SCRUM-452 (the backend half of US-15 / SCRUM-151: a Safety Manager
+    exports the audit timeline to hand an inspector a complete record). SCRUM-435
+    covers the web view and download that consumes this.
+
+    Site-scoped like every other endpoint: the caller must be a member of {siteId}
+    (ADMIN excepted), enforced by SiteAccessEvaluator. Unlike most write endpoints,
+    which allow SUPERVISOR/SAFETY_MANAGER/ADMIN, this one is SAFETY_MANAGER/ADMIN
+    only — it reads the entire trail out of the system in bulk, including rows about
+    other people's actions, and the web app already declares that narrower group for
+    its /audit route.
+
+    Site attribution: audit_event has no site_id column. Each row's site is resolved
+    at read time by joining out through target_type/target_id — almost every target
+    type reaches a site via shift_id -> shift.site_id, while SITE-targeted rows carry
+    the site as target_id and POLICY_VERSION rows carry their own site_id. Rows that
+    resolve to no site at all are excluded from a site's export: a TOKEN_FIRST_SEEN
+    login is not site evidence, and the company-wide default policy_version row
+    (site_id NULL since V18) belongs to no site. Emitting either into one site's
+    export is the cross-site bleed this scoping exists to prevent.
+
+    Tamper-evidence: audit_event is append-only, enforced by a Postgres trigger that
+    rejects UPDATE and DELETE (V5__audit_event_append_only.sql). That protects the
+    table, not a file already handed over, so the export additionally carries a
+    SHA-256 of its own CSV section — see AuditExportCsv below. Hash-chaining the rows
+    themselves is deliberately not in this contract; it needs a migration and a change
+    to the audit write path, and is tracked separately.
+
+servers:
+  - url: /
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/sites/{siteId}/audit/export:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: exportAuditTimeline
+      summary: Download this site's audit timeline as CSV
+      description: >
+        Returns the whole timeline for the site as an attachment, oldest event first.
+        Both range bounds are optional and default to the entire history to date
+        rather than a rolling window — an inspector asking for the record should not
+        silently receive a partial one that looks complete.
+
+        The response is a file download (Content-Disposition: attachment), not JSON.
+        Nothing is persisted server-side: there is no object storage in this system,
+        so the export exists only in the response.
+
+        Recorded to the audit trail itself as AUDIT_EXPORTED — taking a copy of the
+        evidence is an event the evidence should show.
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: Inclusive lower bound on occurredAt. Defaults to the beginning of time.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: Exclusive upper bound on occurredAt. Defaults to now.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The audit timeline as a CSV attachment.
+          headers:
+            Content-Disposition:
+              description: attachment; filename="crewsafe-audit-{siteId}-{timestamp}.csv"
+              schema:
+                type: string
+            X-Content-SHA256:
+              description: >
+                Hex SHA-256 of the CSV section of the body — the same value printed in
+                the file's own preamble, so a saved file can be verified without the
+                response it arrived in.
+              schema:
+                type: string
+          content:
+            text/csv:
+              schema:
+                $ref: "#/components/schemas/AuditExportCsv"
+        "400":
+          description: The range is empty or inverted ('to' is not after 'from').
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Caller is not a member of {siteId}, or holds a role below SAFETY_MANAGER.
+            A SUPERVISOR is refused here even at their own site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SiteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthorized:
+      description: Missing, malformed or expired bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # Mirrors ErrorResponse.java exactly — the same shape every endpoint in this API
+    # returns errors in.
+    ErrorResponse:
+      type: object
+      required: [error, message, requestId]
+      properties:
+        error:
+          type: string
+          example: Forbidden
+        message:
+          type: string
+          example: Access denied
+        requestId:
+          type: string
+          nullable: true
+
+    AuditExportCsv:
+      type: string
+      description: >
+        A UTF-8 text file in two parts, CRLF line endings throughout (RFC 4180).
+
+        Part one is a preamble of exactly 8 lines, each starting with '#', naming the
+        site, the requested range, when the file was generated, the row count, and the
+        SHA-256. The digest covers every byte *after* the preamble, not the whole file
+        — a file cannot contain its own hash — so it is verified with
+        `tail -n +9 export.csv | shasum -a 256`.
+
+        Part two is the CSV proper: one header row then one row per audit event, with
+        columns event_id, occurred_at, correlation_id, actor_id, actor_name, event_type,
+        target_type, target_id, detail.
+
+        Mapping to the US-15 acceptance criteria: correlation_id is the trace id (every
+        row has carried one since SCRUM-180); actor_id/actor_name is the actor, resolved
+        to a display name because a UUID is not readable evidence; event_type is the
+        decision; and detail is the rule, in the words the originating service recorded.
+        detail is free text in a VARCHAR(500) — it is emitted verbatim and deliberately
+        not parsed into structured fields, which would invent a schema the write side
+        does not have.
+
+        actor_name is 'SYSTEM' where actor_id is empty. That is a real distinction, not
+        missing data: scheduler-driven events (SHIFT_ACTIVATED, ACTION_LATE,
+        RECOMMENDATION_AUTO_DISPATCHED) had no human behind them.
+      example: |
+        # CrewSafe SG - audit timeline export
+        # site_id: 3f2a9c14-8e5b-4a71-9c3d-2b6f8e0a1d45
+        # site_name: Tuas Yard B
+        # range_from: 1970-01-01T00:00:00Z
+        # range_to: 2026-08-18T02:30:00Z
+        # generated_at: 2026-08-18T02:30:00Z
+        # row_count: 2
+        # sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 (SHA-256 of every byte below this preamble)
+        event_id,occurred_at,correlation_id,actor_id,actor_name,event_type,target_type,target_id,detail
+        6b1c...,2026-08-17T01:00:00Z,4da7...,8c2e...,Priya Raman,SHIFT_CREATED,SHIFT,a91f...,Created shift for site 3f2a... (17 Aug 2026 08:00–16:00 Asia/Singapore)
+        7c2d...,2026-08-17T09:15:00Z,5eb8...,,SYSTEM,SHIFT_ACTIVATED,SHIFT,a91f...,Shift auto-activated for site 3f2a...

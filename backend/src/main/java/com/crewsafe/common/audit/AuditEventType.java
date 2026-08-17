@@ -129,6 +129,16 @@ public final class AuditEventType {
      * previously active for that site (SCRUM-120). */
     public static final String POLICY_VERSION_ACTIVATED = "POLICY_VERSION_ACTIVATED";
 
+    /**
+     * A Safety Manager or Admin exported a site's audit timeline (SCRUM-452). Targets the
+     * SITE, and the detail carries the range and row count.
+     *
+     * <p>Pulling the evidence is itself an event worth having evidence of: this is the one
+     * endpoint that reads the whole trail out of the system, and an audit trail that cannot
+     * say who took a copy of it has a hole in exactly the place an inspector would look.
+     */
+    public static final String AUDIT_EXPORTED = "AUDIT_EXPORTED";
+
     private AuditEventType() {
     }
 }
