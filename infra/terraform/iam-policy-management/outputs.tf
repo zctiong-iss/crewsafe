@@ -1,5 +1,5 @@
 output "policy_bindings" {
-  description = "Non-secret metadata for the sixteen reviewed customer-managed policies."
+  description = "Non-secret metadata for the twenty reviewed customer-managed policies."
   value = {
     for binding_key, binding in local.policy_bindings : binding_key => {
       binding_key      = binding_key
@@ -25,7 +25,7 @@ output "policy_names" {
 }
 
 output "attachment_keys" {
-  description = "The sixteen deterministic policy attachment keys."
+  description = "The twenty deterministic policy attachment keys."
   value       = [for binding_key in sort(keys(aws_iam_role_policy_attachment.component)) : "${binding_key}-attachment"]
 }
 
