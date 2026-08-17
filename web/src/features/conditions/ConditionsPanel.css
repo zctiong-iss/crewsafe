@@ -29,7 +29,7 @@
 
 /* ---- Stop-Work Lightning Alert Banner ----------------------------------- */
 .stop-work-banner {
-  background-color: var(--band-high);
+  background-color: var(--band-extreme);
   color: #ffffff;
   font-size: var(--text-base);
   font-weight: var(--weight-bold);
@@ -44,7 +44,7 @@
 }
 
 .stop-work-banner::before {
-  content: "🛑 ⚡ ";
+  content: " ⚡ ";
   font-size: 1.2rem;
 }
 
