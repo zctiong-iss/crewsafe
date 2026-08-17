@@ -7,6 +7,7 @@ import com.crewsafe.identity.domain.UserStatus;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -23,9 +24,10 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Admin local-user management (US-30): registering an already-existing Cognito identity as a
- * local {@code app_user}, then managing its role, status and site memberships. Never talks to
- * Cognito — see {@link UserAdminService}'s javadoc.
+ * Admin local-user management (US-30): registering a local {@code app_user} — either bound to
+ * an already-existing Cognito identity, or provisioned fresh via
+ * {@link com.crewsafe.admin.cognito.CognitoUserProvisioningService} — then managing its role,
+ * status and site memberships. See {@link UserAdminService}'s javadoc.
  *
  * @author Jemilin Beulah
  */
@@ -37,19 +39,25 @@ public class AdminUserController {
     private final UserAdminService userAdminService;
     private final SiteMembershipRepository memberships;
 
-    public record UserResponse(UUID id, String username, String cognitoSub, String displayName,
+    public record UserResponse(UUID id, String username, String cognitoSub, String email, String displayName,
             String role, String status, List<UUID> siteIds, Instant createdAt, Instant updatedAt) {
 
         static UserResponse from(AppUser user, List<UUID> siteIds) {
-            return new UserResponse(user.getId(), user.getUsername(), user.getCognitoSub(),
+            return new UserResponse(user.getId(), user.getUsername(), user.getCognitoSub(), user.getEmail(),
                     user.getDisplayName(), user.getRole().name(), user.getStatus().name(),
                     siteIds, user.getCreatedAt(), user.getUpdatedAt());
         }
     }
 
+    /** Exactly one of {@code cognitoSub}/{@code email} is expected; {@code username} is
+     * required with {@code cognitoSub} and ignored with {@code email} (the resolved username
+     * is the email itself); {@code password} is required with {@code email}, ignored with
+     * {@code cognitoSub} — see {@code UserAdminService.register}'s javadoc. */
     public record UserRegisterRequest(
-            @NotBlank @Size(max = 64) String username,
-            @NotBlank @Size(max = 64) String cognitoSub,
+            @Size(max = 254) String username,
+            @Size(max = 64) String cognitoSub,
+            @Email @Size(max = 254) String email,
+            @Size(max = 99) String password,
             @NotBlank @Size(max = 120) String displayName,
             @NotNull Role role,
             @NotNull Set<UUID> siteIds) {
@@ -75,8 +83,8 @@ public class AdminUserController {
     public ResponseEntity<UserResponse> registerUser(@AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody UserRegisterRequest request) {
 
-        AppUser saved = userAdminService.register(request.username(), request.cognitoSub(), request.displayName(),
-                request.role(), request.siteIds(), principal.getId());
+        AppUser saved = userAdminService.register(request.username(), request.cognitoSub(), request.email(),
+                request.password(), request.displayName(), request.role(), request.siteIds(), principal.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(UserResponse.from(saved, memberships.findSiteIdsByUserId(saved.getId())));
     }

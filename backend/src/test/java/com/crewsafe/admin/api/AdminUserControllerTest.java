@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -88,6 +89,20 @@ class AdminUserControllerTest extends AbstractIntegrationTest {
         return body;
     }
 
+    private static final String VALID_PASSWORD = "Valid-Password-123";
+
+    /** No username field — the email path doesn't ask for one; UserAdminService.register
+     * derives it from email directly. */
+    private Map<String, Object> registerBodyWithEmail(String email, String role, List<String> siteIds) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("email", email);
+        body.put("password", VALID_PASSWORD);
+        body.put("displayName", "Invited User");
+        body.put("role", role);
+        body.put("siteIds", siteIds);
+        return body;
+    }
+
     @Test
     void adminRegistersAnExistingCognitoIdentity() throws Exception {
         String sub = freshCognitoSub();
@@ -121,6 +136,92 @@ class AdminUserControllerTest extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondBody)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void duplicateUsernameReturns409WithUsernameAlreadyRegisteredCode() throws Exception {
+        String username = "dup-username-" + UUID.randomUUID();
+        Map<String, Object> body = registerBody(username, freshCognitoSub(), "WORKER", List.of());
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+
+        Map<String, Object> secondBody = registerBody(username, freshCognitoSub(), "WORKER", List.of());
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(secondBody)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USERNAME_ALREADY_REGISTERED"));
+    }
+
+    @Test
+    void adminRegistersANewUserByEmailProvisionsARealCognitoIdentityWithUsernameEqualToEmail() throws Exception {
+        String email = "invited-" + UUID.randomUUID() + "@synthetic.crewsafe.invalid";
+
+        String response = mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                registerBodyWithEmail(email, "WORKER", List.of(siteA.getId().toString())))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value(email))
+                .andExpect(jsonPath("$.email").value(email))
+                .andExpect(jsonPath("$.role").value("WORKER"))
+                .andReturn().getResponse().getContentAsString();
+
+        String cognitoSub = objectMapper.readTree(response).get("cognitoSub").asText();
+        // Proves this is a real Cognito identity, not a placeholder string -- the emulator
+        // now has a user under this exact email whose sub matches what was returned.
+        assertThat(cognitoSub).isEqualTo(subFor(email));
+    }
+
+    @Test
+    void reInvitingAnAlreadyRegisteredEmailReturns409WithUsernameAlreadyRegisteredCode() throws Exception {
+        String email = "redup-" + UUID.randomUUID() + "@synthetic.crewsafe.invalid";
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerBodyWithEmail(email, "WORKER", List.of()))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(registerBodyWithEmail(email, "WORKER", List.of()))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("USERNAME_ALREADY_REGISTERED"));
+    }
+
+    @Test
+    void registeringWithBothCognitoSubAndEmailReturns400() throws Exception {
+        Map<String, Object> body = registerBody("both-" + UUID.randomUUID(), freshCognitoSub(), "WORKER", List.of());
+        body.put("email", "both-" + UUID.randomUUID() + "@synthetic.crewsafe.invalid");
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void registeringWithNeitherCognitoSubNorEmailReturns400() throws Exception {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("username", "neither-" + UUID.randomUUID());
+        body.put("displayName", "Nobody");
+        body.put("role", "WORKER");
+        body.put("siteIds", List.of());
+
+        mockMvc.perform(post("/api/v1/admin/users")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

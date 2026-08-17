@@ -1,8 +1,10 @@
 package com.crewsafe.admin.service;
 
+import com.crewsafe.admin.cognito.CognitoUserProvisioningService;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.common.error.ErrorCode;
 import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
@@ -56,12 +58,17 @@ class UserAdminServiceTest {
     @Mock
     private AuditService audit;
 
+    @Mock
+    private CognitoUserProvisioningService cognitoProvisioning;
+
+    private static final String VALID_PASSWORD = "Valid-Password-123";
+
     private UserAdminService service;
     private UUID actorId;
 
     @BeforeEach
     void setUp() {
-        service = new UserAdminService(users, sites, memberships, audit);
+        service = new UserAdminService(users, sites, memberships, audit, cognitoProvisioning);
         actorId = UUID.randomUUID();
 
         when(users.save(any(AppUser.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -76,13 +83,56 @@ class UserAdminServiceTest {
     class Register {
 
         @Test
-        @DisplayName("Duplicate username → ConflictException")
+        @DisplayName("Neither cognitoSub nor email → BadRequestException")
+        void neitherSubNorEmail() {
+            assertThatThrownBy(() -> service.register("new-user", null, null, null, "Someone", Role.WORKER,
+                    Set.of(), actorId))
+                    .isInstanceOf(BadRequestException.class);
+
+            verify(users, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Both cognitoSub and email → BadRequestException")
+        void bothSubAndEmail() {
+            assertThatThrownBy(() -> service.register("new-user", "sub-1", "someone@synthetic.crewsafe.invalid",
+                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId))
+                    .isInstanceOf(BadRequestException.class);
+
+            verify(users, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Email without a password → BadRequestException")
+        void emailWithoutPassword() {
+            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
+                    null, "Someone", Role.WORKER, Set.of(), actorId))
+                    .isInstanceOf(BadRequestException.class);
+
+            verify(users, never()).save(any());
+            verify(cognitoProvisioning, never()).createUser(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("cognitoSub without a username → BadRequestException")
+        void cognitoSubWithoutUsername() {
+            assertThatThrownBy(() -> service.register(null, "sub-1", null, null, "Someone", Role.WORKER,
+                    Set.of(), actorId))
+                    .isInstanceOf(BadRequestException.class);
+
+            verify(users, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Duplicate username → ConflictException with USERNAME_ALREADY_REGISTERED")
         void duplicateUsername() {
             when(users.existsByUsername("taken")).thenReturn(true);
 
-            assertThatThrownBy(() -> service.register("taken", "sub-1", "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register("taken", "sub-1", null, null, "Someone", Role.WORKER,
                     Set.of(), actorId))
-                    .isInstanceOf(ConflictException.class);
+                    .isInstanceOf(ConflictException.class)
+                    .satisfies(e -> assertThat(((ConflictException) e).getCode())
+                            .isEqualTo(ErrorCode.USERNAME_ALREADY_REGISTERED));
 
             verify(users, never()).save(any());
         }
@@ -92,7 +142,7 @@ class UserAdminServiceTest {
         void duplicateSub() {
             when(users.existsByCognitoSub("sub-1")).thenReturn(true);
 
-            assertThatThrownBy(() -> service.register("new-user", "sub-1", "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register("new-user", "sub-1", null, null, "Someone", Role.WORKER,
                     Set.of(), actorId))
                     .isInstanceOf(ConflictException.class);
 
@@ -105,7 +155,7 @@ class UserAdminServiceTest {
             UUID siteId = UUID.randomUUID();
             when(sites.existsById(siteId)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.register("new-user", "sub-1", "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register("new-user", "sub-1", null, null, "Someone", Role.WORKER,
                     Set.of(siteId), actorId))
                     .isInstanceOf(ResourceNotFoundException.class);
 
@@ -113,18 +163,81 @@ class UserAdminServiceTest {
         }
 
         @Test
-        @DisplayName("Valid request registers the user, grants sites and audits")
-        void registersAndAudits() {
+        @DisplayName("Unknown site id on the email path → ResourceNotFoundException, Cognito never called")
+        void unknownSiteOnEmailPathNeverCallsCognito() {
+            UUID siteId = UUID.randomUUID();
+            when(sites.existsById(siteId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
+                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(siteId), actorId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            // Every local check must run before the external, non-transactional Cognito
+            // call -- a doomed request must never leave a real orphaned identity behind.
+            verify(cognitoProvisioning, never()).createUser(any(), any(), any());
+            verify(users, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("Valid request with cognitoSub registers the user, grants sites and audits")
+        void registersWithSubAndAudits() {
             UUID siteId = UUID.randomUUID();
             when(sites.existsById(siteId)).thenReturn(true);
 
-            AppUser saved = service.register("new-user", "sub-1", "Someone", Role.SUPERVISOR,
+            AppUser saved = service.register("new-user", "sub-1", null, null, "Someone", Role.SUPERVISOR,
                     Set.of(siteId), actorId);
 
             assertThat(saved.getUsername()).isEqualTo("new-user");
             assertThat(saved.getRole()).isEqualTo(Role.SUPERVISOR);
+            assertThat(saved.getEmail()).isNull();
+            verify(memberships).save(any(SiteMembership.class));
+            verify(cognitoProvisioning, never()).createUser(any(), any(), any());
+            verify(audit).record(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
+        }
+
+        @Test
+        @DisplayName("Valid request with email provisions via Cognito, registers with username == email, and audits")
+        void registersWithEmailAndAudits() {
+            UUID siteId = UUID.randomUUID();
+            when(sites.existsById(siteId)).thenReturn(true);
+            when(cognitoProvisioning.createUser("new-user@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
+                    .thenReturn("cognito-sub-123");
+
+            AppUser saved = service.register(null, null, "new-user@synthetic.crewsafe.invalid",
+                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(siteId), actorId);
+
+            assertThat(saved.getCognitoSub()).isEqualTo("cognito-sub-123");
+            assertThat(saved.getEmail()).isEqualTo("new-user@synthetic.crewsafe.invalid");
+            assertThat(saved.getUsername()).isEqualTo("new-user@synthetic.crewsafe.invalid");
             verify(memberships).save(any(SiteMembership.class));
             verify(audit).record(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
+        }
+
+        @Test
+        @DisplayName("A client-supplied username on the email path is ignored — the email wins")
+        void emailPathIgnoresSuppliedUsername() {
+            when(cognitoProvisioning.createUser("someone@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
+                    .thenReturn("cognito-sub-456");
+
+            AppUser saved = service.register("some-other-handle", null, "someone@synthetic.crewsafe.invalid",
+                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId);
+
+            assertThat(saved.getUsername()).isEqualTo("someone@synthetic.crewsafe.invalid");
+        }
+
+        @Test
+        @DisplayName("Re-inviting an already-registered email → ConflictException with USERNAME_ALREADY_REGISTERED, Cognito never called")
+        void duplicateEmailAsUsername() {
+            when(users.existsByUsername("someone@synthetic.crewsafe.invalid")).thenReturn(true);
+
+            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
+                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId))
+                    .isInstanceOf(ConflictException.class)
+                    .satisfies(e -> assertThat(((ConflictException) e).getCode())
+                            .isEqualTo(ErrorCode.USERNAME_ALREADY_REGISTERED));
+
+            verify(cognitoProvisioning, never()).createUser(any(), any(), any());
+            verify(users, never()).save(any());
         }
     }
 

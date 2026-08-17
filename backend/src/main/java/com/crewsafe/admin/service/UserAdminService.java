@@ -1,9 +1,11 @@
 package com.crewsafe.admin.service;
 
+import com.crewsafe.admin.cognito.CognitoUserProvisioningService;
 import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.common.error.ConflictException;
+import com.crewsafe.common.error.ErrorCode;
 import com.crewsafe.common.error.ResourceNotFoundException;
 import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.domain.Role;
@@ -22,15 +24,11 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Admin-only local user management (US-30): registering a local {@code app_user} row for a
- * Cognito identity that already exists, and managing role/status/site-membership from there.
- *
- * <p>This deliberately never talks to Cognito. Registering a user takes a {@code cognitoSub}
- * the admin already has — created however accounts are created today (AWS Console, or the
- * SCRUM-190 CI pipeline for synthetic identities) — and does exactly what {@code
- * DemoDataSeeder.reconcileIdentity} already does for the seeded demo mapping, just
- * admin-triggered instead of JSON-file-triggered. Actually creating the Cognito identity
- * (and emailing an invite) is separate follow-on work — see the plan for this feature.
+ * Admin-only local user management (US-30): registering a local {@code app_user} row, either
+ * bound to a Cognito identity that already exists (a {@code cognitoSub} the admin has —
+ * Console, or the SCRUM-190 CI pipeline for synthetic identities) or provisioned fresh
+ * (an {@code email}, handed to {@link CognitoUserProvisioningService} to create for real) —
+ * then managing role/status/site-membership from there.
  *
  * @author Jemilin Beulah
  */
@@ -43,6 +41,7 @@ public class UserAdminService {
     private final SiteRepository sites;
     private final SiteMembershipRepository memberships;
     private final AuditService audit;
+    private final CognitoUserProvisioningService cognitoProvisioning;
 
     /** Every user, display-name sorted. */
     public List<AppUser> list() {
@@ -52,17 +51,56 @@ public class UserAdminService {
     }
 
     /**
-     * @throws ConflictException if the username or cognitoSub is already registered
+     * Exactly one of {@code cognitoSub}/{@code email} is expected. On the email path, the
+     * admin doesn't invent a separate username at all — {@code username} is ignored and the
+     * local {@code app_user.username} is set to {@code email} directly, since username's only
+     * remaining job is a unique local handle (auth resolves purely by {@code cognitoSub}; see
+     * {@link com.crewsafe.identity.security.CognitoJwtAuthenticationConverter}) and asking for
+     * a second identifier for the same person is friction with no payoff. {@code username} is
+     * required, and used as-is, on the {@code cognitoSub} path — there's no email to derive it
+     * from there. {@code password} is required with {@code email} (the admin sets it directly
+     * — ADR 0018) and ignored with {@code cognitoSub}.
+     *
+     * <p>Every local check runs before {@link CognitoUserProvisioningService} creates the
+     * Cognito identity, so a doomed request (bad username, bad site) fails before that
+     * external, non-transactional call ever happens rather than after. Cognito isn't part of
+     * the Postgres transaction below: if {@code users.save} somehow still fails after a
+     * successful {@code AdminCreateUser} call, the Cognito identity is orphaned but
+     * recoverable — an admin can register it later via the {@code cognitoSub} path.
+     *
+     * @throws BadRequestException if neither or both of {@code cognitoSub}/{@code email} are
+     *                             given, {@code cognitoSub} is given without a {@code username},
+     *                             {@code email} is given without a {@code password}, or (via
+     *                             {@code CognitoUserProvisioningService}) the password doesn't
+     *                             meet the pool's policy
+     * @throws ConflictException with {@link ErrorCode#USERNAME_ALREADY_REGISTERED} if the
+     *                           resolved username (the email itself, on that path) is taken,
+     *                           plainly if the cognitoSub is already registered, or (via
+     *                           {@code CognitoUserProvisioningService}) Cognito provisioning
+     *                           isn't enabled yet or already has an identity under this email
      * @throws ResourceNotFoundException if any requested site doesn't exist
      */
     @Transactional
-    public AppUser register(String username, String cognitoSub, String displayName, Role role,
-            Set<UUID> siteIds, UUID actorId) {
+    public AppUser register(String username, String cognitoSub, String email, String password, String displayName,
+            Role role, Set<UUID> siteIds, UUID actorId) {
 
-        if (users.existsByUsername(username)) {
-            throw new ConflictException("Username " + username + " is already registered");
+        if ((cognitoSub == null) == (email == null)) {
+            throw new BadRequestException("Exactly one of cognitoSub or email must be provided");
         }
-        if (users.existsByCognitoSub(cognitoSub)) {
+        if (email != null && (password == null || password.isBlank())) {
+            throw new BadRequestException("A password is required when registering by email");
+        }
+        if (cognitoSub != null && (username == null || username.isBlank())) {
+            throw new BadRequestException("A username is required when binding an existing Cognito identity");
+        }
+
+        String resolvedUsername = email != null ? email : username;
+
+        if (users.existsByUsername(resolvedUsername)) {
+            throw new ConflictException("Username " + resolvedUsername + " is already registered",
+                    ErrorCode.USERNAME_ALREADY_REGISTERED);
+        }
+        if (cognitoSub != null && users.existsByCognitoSub(cognitoSub)) {
             throw new ConflictException("This Cognito identity is already registered");
         }
         for (UUID siteId : siteIds) {
@@ -71,7 +109,11 @@ public class UserAdminService {
             }
         }
 
-        AppUser saved = users.save(new AppUser(username, cognitoSub, displayName, role));
+        String resolvedSub = cognitoSub != null ? cognitoSub : cognitoProvisioning.createUser(email, password, actorId);
+
+        AppUser draft = new AppUser(resolvedUsername, resolvedSub, displayName, role);
+        draft.setEmail(email);
+        AppUser saved = users.save(draft);
         siteIds.forEach(siteId -> memberships.save(new SiteMembership(saved.getId(), siteId)));
 
         audit.record(actorId, AuditEventType.USER_REGISTERED, "USER", saved.getId(),

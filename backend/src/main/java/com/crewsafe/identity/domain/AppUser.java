@@ -39,7 +39,11 @@ public class AppUser {
     @Id
     private UUID id;
 
-    @Column(nullable = false, unique = true, length = 64)
+    /** For an account registered by email (US-30), this is the email — UserAdminService.register
+     * never asks for a separate username on that path. Widened to match {@link #email}'s length
+     * for that reason (V23); still asked for directly when binding an already-existing
+     * {@code cognitoSub}, where there is no email to derive it from. */
+    @Column(nullable = false, unique = true, length = 254)
     private String username;
 
     /**
@@ -52,6 +56,12 @@ public class AppUser {
 
     @Column(name = "display_name", nullable = false, length = 120)
     private String displayName;
+
+    /** Set only when this account was provisioned via {@code AdminCreateUser} (the address the
+     * Cognito identity was created under) — null for an account registered by binding an
+     * already-existing Cognito identity. */
+    @Column(length = 254)
+    private String email;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
