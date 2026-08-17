@@ -177,7 +177,17 @@ function HorizonCard({
             >
               {state.forecast.predictedValue.toFixed(1)}
             </AppText>
-            <AppText variant="subtitle" tone="secondary" style={styles.unit}>
+            {/*
+              The unit takes the band colour but keeps its smaller size. `tone` is dropped when
+              a colour applies, because tone sets a colour of its own and the two would fight —
+              the explicit style wins in `AppText`, but leaving `secondary` on would make the
+              intent unreadable to the next person.
+            */}
+            <AppText
+              variant="subtitle"
+              tone={bandColor ? undefined : "secondary"}
+              style={[styles.unit, bandColor ? { color: bandColor } : null]}
+            >
               °C
             </AppText>
           </View>
@@ -228,7 +238,15 @@ function HorizonCard({
             <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
               {state.forecast.confidenceIntervalUpper.toFixed(1)}
             </AppText>
-            {t("forecast.rangeUnit")}
+            {/*
+              One unit for two bounds, so it follows the hotter end. On a range that crosses a
+              boundary the trailing colour then reinforces the stricter band rather than
+              softening it — the wrong way round would let an amber upper bound trail off in
+              green.
+            */}
+            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+              {t("forecast.rangeUnit")}
+            </AppText>
           </AppText>
 
           {/*

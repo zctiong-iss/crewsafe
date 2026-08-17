@@ -231,3 +231,63 @@ it("colours each interval bound by its own band when the range crosses a boundar
   // Different bands, so different colours — that difference is the warning.
   expect(colorOf(lower)).not.toBe(colorOf(upper));
 });
+
+it("colours the degree symbol with the value it qualifies", async () => {
+  answerWith((h) =>
+    Promise.resolve(prediction(h, 26.3, "BELOW_31", { lower: "BELOW_31", upper: "BELOW_31" })),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  // The unit used to sit grey beside a coloured number, which read as two different readings.
+  expect(colorOf(screen.getAllByText("°C")[0])).toBe(colorOf(screen.getAllByText("26.3")[0]));
+});
+
+it("gives the range's shared degree symbol the hotter bound's colour", async () => {
+  /*
+   * One unit for two bounds, so it follows the upper one. The other way round would let an
+   * amber upper bound trail off in green, softening exactly the crossing the split exists to
+   * make visible.
+   */
+  answerWith((h) =>
+    Promise.resolve(
+      prediction(h, 30.9, "BELOW_31", { lower: "BELOW_31", upper: "31_TO_BELOW_32" }),
+    ),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("31.2").length).toBe(2));
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  const rangeUnit = screen.getAllByText("forecast.rangeUnit")[0];
+  expect(colorOf(rangeUnit)).toBe(colorOf(screen.getAllByText("31.2")[0]));
+  expect(colorOf(rangeUnit)).not.toBe(colorOf(screen.getAllByText("30.6")[0]));
+});
+
+it("keeps the degree symbol on its quiet default when no band came down", async () => {
+  // Falls back to the secondary tone, not to a band colour. An unknown reading rendered in
+  // green would turn "we do not know" into "it is safe".
+  answerWith((h) => Promise.resolve(prediction(h, 26.3)));
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+
+  const style = screen.getAllByText("°C")[0].props.style;
+  const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
+  const { colors } = jest.requireActual("@/styles/theme").defaultTheme;
+  expect(flattened.color).toBe(colors.textSecondary);
+  expect(flattened.color).not.toBe(colors.success);
+});
