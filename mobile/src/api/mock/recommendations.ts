@@ -17,6 +17,7 @@ import { ApiError } from "../errors";
 import { mockListShifts } from "./shifts";
 import { DEMO_SITES } from "@/auth/demoUsers";
 import type { DecisionInput } from "../endpoints/recommendations";
+import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 import type { Mitigation, Recommendation } from "@/types/domain";
 
 let sequence = 0;
@@ -123,6 +124,8 @@ function seed(): Recommendation[] {
         ),
       ],
       approval: null,
+      // A model wrote this one, so the screen shows no provenance notice.
+      modelVersion: "anthropic.claude-3-5-sonnet",
     });
   }
 
@@ -157,6 +160,12 @@ function seed(): Recommendation[] {
         ),
       ],
       approval: null,
+      /*
+       * Deliberately the fallback, so the "no model wrote this" notice is reachable in review
+       * without anyone having to break ml-service to see it. The real agent's no-LLM path is
+       * the version most likely to reach a supervisor on a bad day.
+       */
+      modelVersion: DETERMINISTIC_FALLBACK_MODEL,
     });
   }
 
@@ -183,7 +192,69 @@ function copy(recommendation: Recommendation): Recommendation {
   };
 }
 
+/**
+ * How often the mock pretends a band transition drafted a new plan.
+ *
+ * Matched to the server's `app.recommendation.auto-trigger.interval` default of 2 minutes
+ * rather than shortened for convenience. A demo that produced a plan every ten seconds would
+ * be showing a cadence the real system never has, and the whole point of the mock is that what
+ * a reviewer sees is what a supervisor gets.
+ */
+const MOCK_AUTO_TRIGGER_MS = 2 * 60_000;
+
+/** When the mock last auto-drafted, so the cadence survives across polls. */
+let lastAutoDraftAt = Date.now();
+
+/**
+ * The mock's stand-in for SCRUM-291's server-side auto-trigger.
+ *
+ * ── WHY THIS HAD TO EXIST ───────────────────────────────────────────────────────────────
+ * The store is seeded once (`store ??= seed()`) and only `mockGenerateRecommendation` ever
+ * added to it, so in mock mode the Plans tab polled every 60 seconds and received byte-identical
+ * data forever. The auto-regenerating behaviour was invisible in exactly the mode used for demos
+ * and review — a reviewer would watch the screen do nothing and reasonably conclude it was not
+ * implemented.
+ *
+ * ── IT SUPERSEDES, IT DOES NOT STACK ────────────────────────────────────────────────────
+ * Copied from `AgentDraftService.supersedeOpenRecommendation`, because that behaviour is the
+ * one most likely to be got wrong by a client and the mock is where a client learns it: an open
+ * PENDING_APPROVAL plan becomes SUPERSEDED, and exactly one new plan takes its place. A mock
+ * that stacked would teach the opposite of the contract.
+ *
+ * The new plan is a fallback draft: mock mode reaches no ml-service and therefore no Bedrock,
+ * so claiming a model id would make the provenance notice lie in the one mode where nobody can
+ * check.
+ */
+function runMockAutoTrigger(shiftId: string): void {
+  if (Date.now() - lastAutoDraftAt < MOCK_AUTO_TRIGGER_MS) return;
+  lastAutoDraftAt = Date.now();
+
+  const current = all();
+  const open = current.find(
+    (item) => item.shiftId === shiftId && item.status === "PENDING_APPROVAL",
+  );
+  // Nothing open means nothing to supersede — and nothing to replace it with either. The server
+  // only drafts for a shift in scope; inventing plans for a shift nobody is running would be the
+  // mock telling a story the backend does not.
+  if (!open) return;
+
+  open.status = "SUPERSEDED";
+  current.push({
+    ...open,
+    id: nextId("r"),
+    status: "PENDING_APPROVAL",
+    rationale:
+      "Conditions moved into a higher WBGT band, so the previous plan was replaced with one "
+      + "drafted for the new band.",
+    createdAt: new Date().toISOString(),
+    approval: null,
+    modelVersion: DETERMINISTIC_FALLBACK_MODEL,
+    mitigations: open.mitigations.map((m) => ({ ...m })),
+  });
+}
+
 export function mockListRecommendations(shiftId: string): Recommendation[] {
+  runMockAutoTrigger(shiftId);
   return all()
     .filter((recommendation) => recommendation.shiftId === shiftId)
     .map(copy);
@@ -234,6 +305,9 @@ export function mockDecideRecommendation(
 export function resetMockRecommendations(): void {
   store = null;
   sequence = 0;
+  // Without this the auto-trigger clock survives a reset, so a test that ran after a two-minute
+  // gap would find a plan it never asked for.
+  lastAutoDraftAt = Date.now();
 }
 
 /**
@@ -252,6 +326,9 @@ export function mockGenerateRecommendation(shiftId: string): Recommendation {
     rationale:
       "Drafted on request. Current band requires an hourly rest for anyone on heavy work.",
     createdAt: new Date().toISOString(),
+    // Mock mode never reaches ml-service, let alone Bedrock. Claiming a model id here would
+    // make the one screen that reports provenance lie in the mode used for demos.
+    modelVersion: DETERMINISTIC_FALLBACK_MODEL,
     mitigations: [
       mitigation(
         "REST_10_MIN_HOURLY",

@@ -9,6 +9,25 @@ app:
     clientIds: local-dev
     demoUsersJson: '{"local": {"password": "Test@12345"}}'
 
+  recommendation:
+    auto-trigger:
+      # ── ON HERE, AND DELIBERATELY NOWHERE ELSE (SCRUM-291 / SCRUM-TBD-70) ──────────────
+      # The default in application.yml is `false`, so without this nothing auto-drafts in
+      # any environment and the mobile side of SCRUM-TBD-70 cannot be verified at all: the
+      # Plans tab would poll correctly and forever find nothing new.
+      #
+      # Enabling it here and NOT in staging or production is the point, not an oversight.
+      # The scheduler makes real Bedrock calls on every band or lightning transition, so
+      # turning it on for an environment with live sites is a cost and blast-radius decision
+      # that belongs to whoever owns that environment — it should not arrive as a side effect
+      # of a mobile ticket.
+      #
+      # `interval` and `lead-window` are left at their defaults (2m / 30m) on purpose. The
+      # 30m lead window is matched to LightningRiskProperties' own strike-validity window:
+      # a strike detected more than 30 minutes before a shift starts has already aged out of
+      # relevance by the time anyone walks on site. Do not tune it here.
+      enabled: true
+
 spring:
   jpa:
     hibernate:
