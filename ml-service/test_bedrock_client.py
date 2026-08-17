@@ -81,7 +81,9 @@ def test_verify_invoke_succeeds():
 
         batch, latency_ms, input_tokens, output_tokens = client.invoke("some context")
 
-        assert input_tokens == 42 and output_tokens == 17 and len(batch.mitigations) == 1
+        assert input_tokens == 42
+        assert output_tokens == 17
+        assert len(batch.mitigations) == 1
 
 def test_invoke_failure_does_not_poison_cache():
     with patch('bedrock_client.AnthropicBedrock') as mock_client_class:
