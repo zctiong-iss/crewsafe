@@ -20,6 +20,8 @@ interface MessageBannerProps {
   tone?: BannerTone;
   /** The X-Request-Id to quote when reporting a failure. Rendered small, below. */
   requestId?: string | null;
+  /** For tests that need the container itself rather than the text inside it. */
+  testID?: string;
 }
 
 const ICONS: Record<BannerTone, keyof typeof Ionicons.glyphMap> = {
@@ -51,7 +53,12 @@ const MOTIONS: Record<BannerTone, IconMotion> = {
  * colour-blind user, and in direct sun where the tint washes out of a light fill. The icon
  * and the border survive both.
  */
-const MessageBanner: FC<MessageBannerProps> = ({ message, tone = "danger", requestId }) => {
+const MessageBanner: FC<MessageBannerProps> = ({
+  message,
+  tone = "danger",
+  requestId,
+  testID,
+}) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -66,6 +73,7 @@ const MessageBanner: FC<MessageBannerProps> = ({ message, tone = "danger", reque
 
   return (
     <View
+      testID={testID}
       // Announced as a unit, and as an alert when it is one, so a screen reader does not
       // read the icon and the text as two unrelated stops.
       accessibilityRole={tone === "danger" ? "alert" : "text"}
@@ -109,15 +117,20 @@ export default MessageBanner;
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    /*
+     * Centred against the whole message, not pinned to its first line.
+     *
+     * `flex-start` is right for a one-line banner and wrong for a wrapped one: the icon strands
+     * itself at the top of a four-line block with empty space beneath it, which reads as a
+     * layout fault rather than as an icon labelling a message. Centring costs nothing on a
+     * single line — there is nothing to centre against — and fixes every longer one.
+     */
+    alignItems: "center",
     padding: s(12),
     width: "100%",
   },
   icon: {
     marginEnd: s(10),
-    // Nudges the icon onto the first line's optical centre. Without it the icon sits high
-    // against a wrapped, multi-line message.
-    marginTop: vs(1),
   },
   body: {
     flex: 1,

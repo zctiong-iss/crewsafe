@@ -379,8 +379,17 @@ export default function RecommendationDetailScreen() {
           much the supervisor's own judgement is carrying, which is exactly the kind of thing
           US-08 says they are entitled to see.
         */}
+        {/*
+          The bottom margin belongs here rather than on the section below it. "Why this was
+          drafted" has no `gapTop`, unlike every other section title on this screen, because the
+          card above it already carries `marginBottom` — correct until this banner appears
+          between them and butts straight into the heading. Spacing the banner fixes the case
+          that is broken without double-spacing the one that is not.
+        */}
         {recommendation.modelVersion === DETERMINISTIC_FALLBACK_MODEL ? (
-          <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+          <View style={styles.noticeGap}>
+            <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+          </View>
         ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
@@ -571,6 +580,11 @@ const styles = StyleSheet.create({
   },
   metaLine: {
     marginTop: vs(8),
+  },
+  noticeGap: {
+    // The same 12 the cards and `gapTop` use, so the banner sits in this screen's rhythm
+    // rather than introducing a spacing of its own.
+    marginBottom: vs(12),
   },
   sectionTitle: {
     marginBottom: vs(8),
