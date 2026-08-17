@@ -169,6 +169,17 @@ override_data {
   values = { id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" }
 }
 
+# AWS-published, region-resolving account used for ALB access-log delivery
+# (SCRUM-443, terraform:S6258, research.md R-003). Same override pattern as
+# the managed prefix list / cache policy data sources above.
+override_data {
+  target = data.aws_elb_service_account.main
+  values = {
+    arn = "arn:aws:iam::123456789012:root"
+    id  = "123456789012"
+  }
+}
+
 variables {
   expected_account_id          = "123456789012"
   account_alias                = "crewsafe-dev"
@@ -436,6 +447,98 @@ run "public_edge" {
   assert {
     condition     = tolist(aws_cloudfront_distribution.main.default_cache_behavior[0].cached_methods) == tolist(["GET", "HEAD"])
     error_message = "Only safe methods may be cacheable (FR-023)."
+  }
+}
+
+# SCRUM-443, terraform:S6258 — the public ALB itself had no access logging.
+# A dedicated bucket, granted to the AWS-managed ELB log-delivery account
+# (research.md R-003), closes the gap without touching the ALB's subnets,
+# security groups, or deletion protection.
+run "public_alb_access_logging" {
+  command = apply
+
+  assert {
+    condition     = one(aws_lb.public.access_logs).enabled == true
+    error_message = "The public ALB must have access logging enabled (terraform:S6258)."
+  }
+
+  assert {
+    condition     = one(aws_lb.public.access_logs).bucket == aws_s3_bucket.alb_logs.id
+    error_message = "The public ALB's access logs must be delivered to the dedicated alb_logs bucket."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_bucket_public_access_block.alb_logs.block_public_acls,
+      aws_s3_bucket_public_access_block.alb_logs.block_public_policy,
+      aws_s3_bucket_public_access_block.alb_logs.ignore_public_acls,
+      aws_s3_bucket_public_access_block.alb_logs.restrict_public_buckets,
+    ])
+    error_message = "The ALB logging bucket must block all public access."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.alb_logs.rule[0].object_ownership == "BucketOwnerEnforced"
+    error_message = "The ALB logging bucket must enforce bucket-owner ownership, matching every other bucket in this stack except the CloudFront log bucket."
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_server_side_encryption_configuration.alb_logs.rule) == 1
+    error_message = "The ALB logging bucket must have exactly one SSE rule."
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in aws_s3_bucket_server_side_encryption_configuration.alb_logs.rule :
+      one(rule.apply_server_side_encryption_by_default).sse_algorithm == "AES256"
+    ])
+    error_message = "The ALB logging bucket must use SSE-S3 (AES256) encryption."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.alb_logs.rule[0].expiration[0].days == var.access_log_expiration_days
+    error_message = "The ALB logging bucket's objects must expire after access_log_expiration_days."
+  }
+
+  assert {
+    condition = length([
+      for stmt in jsondecode(aws_s3_bucket_policy.alb_logs.policy).Statement :
+      stmt
+      if stmt.Effect == "Allow"
+      && try(stmt.Principal.AWS, null) == data.aws_elb_service_account.main.arn
+      && can(regex("^${aws_s3_bucket.alb_logs.arn}/", stmt.Resource))
+    ]) == 1
+    error_message = "The ALB logging bucket's policy must grant s3:PutObject to exactly the ELB log-delivery account, scoped under this bucket's own ARN — no wildcard principal or resource."
+  }
+}
+
+# terraform:S6258 also flags alb_logs itself (it is an S3 bucket, and an
+# unlogged one is exactly the finding this whole feature exists to close).
+# Self-logging (source == target) closes the gap without a third bucket,
+# mirroring the web_logs precedent (SCRUM-414).
+run "alb_logs_bucket_self_logging" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.alb_logs.bucket == aws_s3_bucket.alb_logs.id
+    error_message = "The alb_logs bucket must have its own access logging configured, so it is not itself an unlogged S3 bucket (terraform:S6258)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.alb_logs.target_bucket == aws_s3_bucket.alb_logs.id
+    error_message = "The alb_logs bucket's own access logs must be delivered to itself (there is no third bucket)."
+  }
+
+  assert {
+    condition = length([
+      for stmt in jsondecode(aws_s3_bucket_policy.alb_logs.policy).Statement :
+      stmt
+      if stmt.Sid == "S3ServerAccessLogsPolicy"
+      && stmt.Effect == "Allow"
+      && try(stmt.Principal.Service, null) == "logging.s3.amazonaws.com"
+      && try(stmt.Condition.ArnLike["aws:SourceArn"], null) == aws_s3_bucket.alb_logs.arn
+    ]) == 1
+    error_message = "The alb_logs bucket's self-logging delivery grant must be scoped to exactly logging.s3.amazonaws.com and this bucket's own ARN — no wildcard principal or resource."
   }
 }
 
@@ -1258,6 +1361,108 @@ run "web_distribution_edge" {
   # mock_provider "aws" gives every instance of a resource TYPE the same
   # default arn. Verified for real against the applied distributions in
   # quickstart.md §4.
+}
+
+# SCRUM-443, terraform:S6258 — both CloudFront distributions had no access
+# logging. Classic CloudFront logging_config has no bucket-policy delivery
+# alternative (research.md R-004), so this is the one deliberate ACL exception
+# in the whole stack: one shared bucket, ownership BucketOwnerPreferred, ACL
+# log-delivery-write, used by both distributions with distinct prefixes.
+run "cloudfront_logging_config" {
+  command = apply
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.logging_config).bucket == aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    error_message = "The backend distribution must deliver access logs to the shared cloudfront_logs bucket."
+  }
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.web.logging_config).bucket == aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    error_message = "The web distribution must deliver access logs to the same shared cloudfront_logs bucket."
+  }
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.logging_config).prefix != one(aws_cloudfront_distribution.web.logging_config).prefix
+    error_message = "The two distributions must use distinct log prefixes so their delivered objects stay distinguishable in the one shared bucket."
+  }
+
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.logging_config).prefix != "" && one(aws_cloudfront_distribution.web.logging_config).prefix != ""
+    error_message = "Both distributions must set a non-empty log prefix."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_ownership_controls.cloudfront_logs.rule[0].object_ownership == "BucketOwnerPreferred"
+    error_message = "The CloudFront log bucket is the one deliberate ACL exception in this stack — it must use BucketOwnerPreferred, not BucketOwnerEnforced."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_acl.cloudfront_logs.acl == "log-delivery-write"
+    error_message = "The CloudFront log bucket must grant the log-delivery-write canned ACL — the only delivery mechanism classic CloudFront logging_config supports."
+  }
+
+  assert {
+    condition = alltrue([
+      aws_s3_bucket_public_access_block.cloudfront_logs.block_public_acls,
+      aws_s3_bucket_public_access_block.cloudfront_logs.block_public_policy,
+      aws_s3_bucket_public_access_block.cloudfront_logs.ignore_public_acls,
+      aws_s3_bucket_public_access_block.cloudfront_logs.restrict_public_buckets,
+    ])
+    error_message = "The CloudFront log bucket must still block all public access despite having an ACL grant."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_lifecycle_configuration.cloudfront_logs.rule[0].expiration[0].days == var.access_log_expiration_days
+    error_message = "The CloudFront log bucket's objects must expire after access_log_expiration_days."
+  }
+
+  # Regression guard: neither distribution's origin, cache policy, or viewer
+  # certificate may change as part of adding logging_config.
+  assert {
+    condition     = one(aws_cloudfront_distribution.main.origin).domain_name == aws_lb.public.dns_name
+    error_message = "The backend distribution's origin must remain the public ALB — unchanged by this feature."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.main.default_cache_behavior[0].cache_policy_id == data.aws_cloudfront_cache_policy.caching_disabled.id
+    error_message = "The backend distribution's cache policy must remain caching-disabled — unchanged by this feature."
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.web.viewer_certificate[0].cloudfront_default_certificate == true
+    error_message = "The web distribution's viewer certificate must remain the provider default — unchanged by this feature."
+  }
+}
+
+# terraform:S6258 also flags cloudfront_logs itself (it is an S3 bucket, and
+# an unlogged one is exactly the finding this whole feature exists to close).
+# Self-logging via the standard S3 bucket-policy mechanism (not the ACL used
+# for CloudFront's own delivery) closes the gap without a second bucket,
+# mirroring the web_logs / alb_logs precedent.
+run "cloudfront_logs_bucket_self_logging" {
+  command = apply
+
+  assert {
+    condition     = aws_s3_bucket_logging.cloudfront_logs.bucket == aws_s3_bucket.cloudfront_logs.id
+    error_message = "The cloudfront_logs bucket must have its own access logging configured, so it is not itself an unlogged S3 bucket (terraform:S6258)."
+  }
+
+  assert {
+    condition     = aws_s3_bucket_logging.cloudfront_logs.target_bucket == aws_s3_bucket.cloudfront_logs.id
+    error_message = "The cloudfront_logs bucket's own access logs must be delivered to itself (there is no second bucket)."
+  }
+
+  assert {
+    condition = length([
+      for stmt in jsondecode(aws_s3_bucket_policy.cloudfront_logs.policy).Statement :
+      stmt
+      if stmt.Sid == "S3ServerAccessLogsPolicy"
+      && stmt.Effect == "Allow"
+      && stmt.Principal.Service == "logging.s3.amazonaws.com"
+      && stmt.Condition.ArnLike["aws:SourceArn"] == aws_s3_bucket.cloudfront_logs.arn
+    ]) == 1
+    error_message = "The cloudfront_logs bucket's self-logging delivery grant must be scoped to exactly logging.s3.amazonaws.com and this bucket's own ARN — no wildcard principal or resource."
+  }
 }
 
 # ---------------------------------------------------------------------------

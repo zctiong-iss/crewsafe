@@ -271,6 +271,122 @@ resource "aws_vpc_security_group_ingress_rule" "app_from_public_lb" {
 }
 
 # ---------------------------------------------------------------------------
+# ALB access-log target (SCRUM-443, terraform:S6258)
+#
+# Private, encrypted, BucketOwnerEnforced — the same hardening pattern the
+# web_logs bucket uses (SCRUM-414). Delivery is granted via bucket policy to
+# the AWS-managed ELB log-delivery account, not an ACL: ALB access logging has
+# required a bucket policy (never an ACL) for this delivery path since ALBs
+# were introduced (research.md R-003 in specs/046-terraform-access-logging-
+# remediation).
+# ---------------------------------------------------------------------------
+
+data "aws_elb_service_account" "main" {}
+
+resource "aws_s3_bucket" "alb_logs" {
+  bucket = "${local.name_prefix}-alb-logs"
+}
+
+resource "aws_s3_bucket_ownership_controls" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+# AWS-managed SSE-S3 (AES256) — access logs are operational metadata (source
+# IP, timestamp, request line, status code), the same sensitivity class as
+# every other access-log bucket in this stack, so a dedicated KMS key buys no
+# confidentiality gain here either (matches the web_logs precedent).
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.access_log_expiration_days
+    }
+  }
+}
+
+# jsonencode(), not data "aws_iam_policy_document" — mock_provider "aws"
+# fabricates a random opaque string for that data source's .json attribute,
+# which defeats plan/apply-mode assertions on the actual statement content
+# (same reasoning as local.web_logs_bucket_policy above it in this file).
+#
+# Two statements, two distinct principals: the ELB log-delivery account
+# delivers the ALB's own logs (ALBAccessLogsPolicy), and the S3 log-delivery
+# service principal delivers this bucket's own self-logs
+# (S3ServerAccessLogsPolicy) — terraform:S6258 flags alb_logs too, since it is
+# itself an S3 bucket, mirroring the web_logs self-logging precedent below.
+locals {
+  alb_logs_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "ALBAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.alb_logs.arn}/AWSLogs/${var.expected_account_id}/*"
+        Principal = { AWS = data.aws_elb_service_account.main.arn }
+      },
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.alb_logs.arn}/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = aws_s3_bucket.alb_logs.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  policy = local.alb_logs_bucket_policy
+}
+
+resource "aws_s3_bucket_logging" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  target_bucket = aws_s3_bucket.alb_logs.id
+  target_prefix = "alb-logs-bucket-access-logs/"
+}
+
+# ---------------------------------------------------------------------------
 # Origins
 #
 # SCRUM-204 selects the verified public ALB for CloudFront's existing backend
@@ -290,6 +406,11 @@ resource "aws_lb" "public" {
 
   enable_deletion_protection = true
   drop_invalid_header_fields = true
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    enabled = true
+  }
 
   tags = { Name = "${local.name_prefix}-public" }
 }
@@ -388,6 +509,16 @@ resource "aws_cloudfront_distribution" "main" {
     geo_restriction {
       restriction_type = "none"
     }
+  }
+
+  # SCRUM-443, terraform:S6258. Classic CloudFront logging has no bucket-policy
+  # delivery alternative — it requires the log-delivery-write ACL on the target
+  # bucket, which is why cloudfront_logs (defined near the web distribution
+  # below) is the one bucket in this stack with ACLs enabled.
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "backend/"
   }
 
   # TLSv1 is NOT a choice. It is what the default certificate forces, and the comment
@@ -1174,6 +1305,116 @@ resource "aws_s3_bucket_logging" "web_logs" {
 }
 
 # ---------------------------------------------------------------------------
+# CloudFront access-log target (SCRUM-443, terraform:S6258)
+#
+# Shared by both the backend (main) and web CloudFront distributions,
+# distinguished by logging_config.prefix. This is the one deliberate
+# exception to this stack's otherwise ACL-free (BucketOwnerEnforced)
+# convention: classic CloudFront logging_config requires the target bucket to
+# grant the CloudFront log-delivery account via the log-delivery-write canned
+# ACL, and AWS has never added a bucket-policy alternative for this specific
+# delivery path (research.md R-004 in specs/046-terraform-access-logging-
+# remediation). BucketOwnerPreferred is required for the ACL grant below to be
+# honoured; every other bucket in this stack keeps BucketOwnerEnforced.
+# ---------------------------------------------------------------------------
+
+resource "aws_s3_bucket" "cloudfront_logs" {
+  bucket = "${local.name_prefix}-cloudfront-logs"
+}
+
+resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+# depends_on is required: AWS rejects an ACL write before ownership controls
+# exist in BucketOwnerPreferred mode.
+resource "aws_s3_bucket_acl" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  acl    = "log-delivery-write"
+
+  depends_on = [aws_s3_bucket_ownership_controls.cloudfront_logs]
+}
+
+#trivy:ignore:AWS-0132
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+
+    bucket_key_enabled = false
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.access_log_expiration_days
+    }
+  }
+}
+
+# terraform:S6258 also flags cloudfront_logs itself (it is an S3 bucket, and
+# an unlogged one is exactly the finding this whole feature exists to close).
+# Self-logging uses the standard S3 bucket-policy delivery mechanism (not the
+# ACL above, which is specifically for CloudFront's own delivery) — the two
+# mechanisms coexist independently on the same bucket.
+locals {
+  cloudfront_logs_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.cloudfront_logs.arn}/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = aws_s3_bucket.cloudfront_logs.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_s3_bucket_policy" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+  policy = local.cloudfront_logs_bucket_policy
+}
+
+resource "aws_s3_bucket_logging" "cloudfront_logs" {
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  target_bucket = aws_s3_bucket.cloudfront_logs.id
+  target_prefix = "cloudfront-logs-bucket-access-logs/"
+}
+
+# ---------------------------------------------------------------------------
 # Public edge
 #
 # CloudFront reaches the bucket exclusively through Origin Access Control —
@@ -1263,6 +1504,14 @@ resource "aws_cloudfront_distribution" "web" {
     geo_restriction {
       restriction_type = "none"
     }
+  }
+
+  # SCRUM-443, terraform:S6258. Shares the same cloudfront_logs bucket as the
+  # backend distribution above, distinguished by prefix (research.md R-004).
+  logging_config {
+    include_cookies = false
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "web/"
   }
 
   # TLSv1 is what the default certificate forces, not a choice — the same

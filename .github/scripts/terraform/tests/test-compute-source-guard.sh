@@ -318,10 +318,28 @@ forbid '(block_public_acls|block_public_policy|ignore_public_acls|restrict_publi
   'All four flags must stay true (FR-002). A single false flag reopens direct public access to the web bucket.'
 
 # FR-002. BucketOwnerEnforced disables ACLs entirely; an ACL resource or a
-# public-read ACL argument would reintroduce a second, ACL-based access path.
-forbid '(^|[^a-z_])resource[[:space:]]+"aws_s3_bucket_acl"|acl[[:space:]]*=[[:space:]]*"public' \
-  'an S3 bucket ACL' \
-  'Object ownership is BucketOwnerEnforced, which disables ACLs entirely (FR-002). An ACL resource or a public-read ACL argument reopens the access path OAC exists to close.'
+# public-read ACL argument would reintroduce a second, ACL-based access path
+# to the web bucket.
+#
+# The one deliberate, narrow exception is aws_s3_bucket_acl.cloudfront_logs
+# (SCRUM-443): classic CloudFront `logging_config` has no bucket-policy
+# delivery alternative and requires the `log-delivery-write` canned ACL on
+# its target bucket — a different bucket, for a different AWS-mandated
+# delivery mechanism, not a regression of the web bucket's OAC-only design.
+# Any OTHER ACL resource remains forbidden, so this is an explicit allow-list
+# of exactly one resource, not a loosening of the guard.
+acl_resource_matches=$(grep -En '(^|[^a-z_])resource[[:space:]]+"aws_s3_bucket_acl"' < <(scan) || true)
+disallowed_acl_resource_matches=$(printf '%s\n' "$acl_resource_matches" | grep -Ev '"aws_s3_bucket_acl"[[:space:]]+"cloudfront_logs"' || true)
+if [[ -n "$disallowed_acl_resource_matches" ]]; then
+  printf 'FAIL: %s declares %s.\n  %s\n' "$component_dir" 'an S3 bucket ACL' \
+    'Object ownership is BucketOwnerEnforced, which disables ACLs entirely (FR-002). An ACL resource reopens the access path OAC exists to close. The only permitted exception is aws_s3_bucket_acl.cloudfront_logs (SCRUM-443).' >&2
+  printf '%s\n' "$disallowed_acl_resource_matches" | head -5 >&2
+  exit 1
+fi
+
+forbid 'acl[[:space:]]*=[[:space:]]*"public' \
+  'a public-read ACL argument' \
+  'Object ownership is BucketOwnerEnforced, which disables ACLs entirely (FR-002). A public-read ACL argument reopens the access path OAC exists to close.'
 
 # FR-003. Static website hosting serves over plain HTTP with no built-in
 # restriction to a specific CloudFront distribution; OAC is the only access path.

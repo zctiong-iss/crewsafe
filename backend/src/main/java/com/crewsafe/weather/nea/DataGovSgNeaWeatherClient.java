@@ -46,6 +46,9 @@ import static com.crewsafe.weather.nea.NeaApiException.Reason.TRANSPORT;
 @Slf4j
 public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
 
+    /** Named once so every failure message says where the reading was meant to come from. */
+    private static final String DATA_SOURCE_NAME = "data.gov.sg";
+
     private static final String WBGT_ENDPOINT_PATH = "/weather";
     private static final String DATASET_QUERY_PARAMETER = "api";
     private static final String WBGT_DATASET_NAME = "wbgt";
@@ -251,18 +254,26 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
         throw new IllegalStateException("NEA retry loop completed without a result");
     }
 
+    /**
+     * Opens every failure message the same way, e.g. {@code "data.gov.sg wbgt "}, so a reader
+     * sees the source and the failing operation before the reason.
+     */
+    private static String failurePrefix(String operation) {
+        return DATA_SOURCE_NAME + " " + operation + " ";
+    }
+
     private NeaApiException translateFailure(String operation, RestClientException exception) {
         if (exception instanceof RestClientResponseException responseException) {
             return new NeaApiException(HTTP,
-                    "data.gov.sg " + operation + " request failed with HTTP "
+                    failurePrefix(operation) + "request failed with HTTP "
                             + responseException.getStatusCode().value(), responseException);
         }
         if (exception instanceof ResourceAccessException) {
             return new NeaApiException(TRANSPORT,
-                    "data.gov.sg " + operation + " request could not be completed", exception);
+                    failurePrefix(operation) + "request could not be completed", exception);
         }
         return new NeaApiException(INVALID_RESPONSE,
-                "data.gov.sg " + operation + " response could not be decoded", exception);
+                failurePrefix(operation) + "response could not be decoded", exception);
     }
 
     private boolean isRetryable(RestClientException exception) {
@@ -315,7 +326,7 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new NeaApiException(TRANSPORT,
-                    "data.gov.sg " + operation + " retry was interrupted", exception);
+                    failurePrefix(operation) + "retry was interrupted", exception);
         }
     }
 
