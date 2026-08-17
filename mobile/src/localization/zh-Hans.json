@@ -276,7 +276,6 @@
     "generatedAt": "预报生成于 {{time}}",
     "unavailableTitle": "暂无预报",
     "unavailableBody": "本工地没有足够新的可用读数可供预测，或条件变化过快，无法给出有意义的范围。当前读数不受影响。",
-    "noBandNote": "预报不显示风险等级。等级由服务器上的高温政策判定，目前尚未对预测值进行评定。",
     "cardTitle": "预报",
     "cardValue_one": "{{count}} 分钟后预计 {{value}}°C",
     "cardValue_other": "{{count}} 分钟后预计 {{value}}°C",

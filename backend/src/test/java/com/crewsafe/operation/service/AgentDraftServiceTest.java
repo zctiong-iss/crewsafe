@@ -238,7 +238,8 @@ class AgentDraftServiceTest {
         when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
                 new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
-                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false)));
+                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false,
+                WbgtBand.BAND_33_AND_ABOVE)));
         when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("connection refused"));
 
         Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
@@ -423,7 +424,8 @@ class AgentDraftServiceTest {
         when(siteForecast.forecast(SITE_ID, 30)).thenReturn(Optional.of(new SiteForecastService.SiteForecast(
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
                 new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
-                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false)));
+                com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false,
+                WbgtBand.BAND_33_AND_ABOVE)));
         stubDraft(validModelPlan(), false, MODEL_ID);
 
         service.generate(SITE_ID, SHIFT_ID, ACTOR_ID);

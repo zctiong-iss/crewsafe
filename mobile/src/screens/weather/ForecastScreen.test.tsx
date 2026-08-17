@@ -69,7 +69,12 @@ import { ApiError } from "@/api/errors";
 import ForecastScreen from "./ForecastScreen";
 import type { SiteForecast } from "@/types/domain";
 
-function prediction(horizonMinutes: 30 | 60, predictedValue: number): SiteForecast {
+/** `band` is optional so every pre-existing case keeps exercising the no-band rendering. */
+function prediction(
+  horizonMinutes: 30 | 60,
+  predictedValue: number,
+  band?: SiteForecast["band"],
+): SiteForecast {
   return {
     metric: "WBGT",
     predictedValue,
@@ -78,6 +83,7 @@ function prediction(horizonMinutes: 30 | 60, predictedValue: number): SiteForeca
     confidenceIntervalLower: predictedValue - 0.3,
     confidenceIntervalUpper: predictedValue + 0.3,
     generatedAt: "2026-08-14T01:00:00Z",
+    band,
   };
 }
 
@@ -168,11 +174,25 @@ it("keeps a good 30 when 60 declines", async () => {
   expect(screen.getAllByText("forecast.unavailableTitle").length).toBe(1);
 });
 
-it("states that no band is shown rather than leaving it absent", async () => {
+it("states the band in words, not by colour alone", async () => {
+  answerWith((h) => Promise.resolve(prediction(h, 32.8, "32_TO_BELOW_33")));
+
+  await renderScreen();
+
+  /*
+   * Colour alone fails WCAG 1.4.1, and outdoors it also fails to sunlight flattening hue and to
+   * red/green colour-vision deficiency. The words are the actual signal; the colour is a
+   * shortcut to them.
+   */
+  await waitFor(() => expect(screen.getAllByText("wbgt.band.32_TO_BELOW_33").length).toBe(2));
+});
+
+it("renders no band when the server classified none, rather than the coolest one", async () => {
+  // An unknown reading shown green would turn "we do not know" into "it is safe".
   answerWith((h) => Promise.resolve(prediction(h, 32.8)));
 
   await renderScreen();
 
-  // Someone who sees bands elsewhere in the app would read a band-less forecast as broken.
-  await waitFor(() => expect(screen.getByText("forecast.noBandNote")).toBeTruthy());
+  await waitFor(() => expect(screen.getAllByText("forecast.rangeLabel").length).toBe(2));
+  expect(screen.queryByText(/wbgt\.band\./)).toBeNull();
 });

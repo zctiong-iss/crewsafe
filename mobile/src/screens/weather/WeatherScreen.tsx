@@ -54,6 +54,7 @@ import { classifyCondition, isNightObservation } from "@/helpers/weather";
 import { formatTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { wbgtBandColor } from "@/helpers/wbgtBandColor";
 
 const WEATHER_SCENARIOS: WeatherScenario[] = [
   "fair",
@@ -82,6 +83,13 @@ export default function WeatherScreen() {
   const user = useAppSelector((state) => state.auth.user);
   const { status, sites, selectedSiteId, conditions, band, errorKey, requestId, refreshing } =
     useAppSelector((state) => state.weather);
+
+  /*
+   * The band arrives evaluated (§12.2, FR-15) and this only picks its colour — see
+   * `helpers/wbgtBandColor.ts` for why that is presentation rather than the client deciding
+   * what a WBGT number means. Null when no band came down, which renders as ordinary text.
+   */
+  const observedBandColor = wbgtBandColor(band, theme.colors);
 
   const load = useCallback(
     (isRefresh: boolean, siteId?: string) => {
@@ -225,7 +233,13 @@ export default function WeatherScreen() {
               ) : null}
 
               <View style={styles.wbgtRow}>
-                <AppText variant="display">
+                {/* Coloured from the band the server already evaluated, in MOM's own colours so
+                    this and the wall chart a supervisor knows agree. Uncoloured when there is no
+                    band — an unknown reading in green would read as a safe one. */}
+                <AppText
+                  variant="display"
+                  style={observedBandColor ? { color: observedBandColor } : undefined}
+                >
                   {conditions.wbgt === null ? "—" : conditions.wbgt.toFixed(1)}
                 </AppText>
                 <AppText variant="subtitle" tone="secondary" style={styles.unit}>
@@ -240,7 +254,10 @@ export default function WeatherScreen() {
               {/* Absent when the reading exists but its WBGT could not be derived. Showing
                   the coolest band instead would turn "unknown" into "safe". */}
               {band ? (
-                <AppText variant="label" style={styles.band}>
+                <AppText
+                  variant="label"
+                  style={[styles.band, observedBandColor ? { color: observedBandColor } : undefined]}
+                >
                   {t(`wbgt.band.${band}`)}
                 </AppText>
               ) : null}

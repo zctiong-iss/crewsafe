@@ -276,7 +276,6 @@
     "generatedAt": "Forecast made {{time}}",
     "unavailableTitle": "No forecast right now",
     "unavailableBody": "This site has no usable reading recent enough to forecast from, or conditions are changing too fast to give a useful range. The current reading is unaffected.",
-    "noBandNote": "No risk band is shown for a forecast. Bands are decided by the heat policy on the server, and one has not yet been evaluated for predicted values.",
     "cardTitle": "Forecast",
     "cardValue_one": "{{value}}°C predicted in {{count}} minute",
     "cardValue_other": "{{value}}°C predicted in {{count}} minutes",

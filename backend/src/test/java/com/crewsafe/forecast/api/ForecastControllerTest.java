@@ -34,7 +34,8 @@ class ForecastControllerTest {
                 Instant.parse("2026-08-14T04:00:00Z"),
                 com.crewsafe.forecast.service.ForecastBasis.MODEL,
                 5L,
-                false);
+                false,
+                com.crewsafe.weather.domain.WbgtBand.BAND_31_TO_BELOW_32);
         when(service.forecast(siteId, 30)).thenReturn(Optional.of(forecast));
 
         var response = controller.getForecast(siteId, 30);

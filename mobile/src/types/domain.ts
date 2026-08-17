@@ -204,6 +204,17 @@ export interface SiteForecast {
   inputAgeMinutes?: number;
   /** True for any basis other than MODEL. The server decides this; the client never infers it. */
   degraded?: boolean;
+  /**
+   * The MOM band the predicted value falls in, evaluated server-side (SCRUM-369).
+   *
+   * This is what the "do not add a derived one" note above was waiting for. The band is still
+   * never computed here — `WbgtBand.classify` runs on the server against `predictedValue`, so
+   * there remains exactly one authority for what a WBGT number means (FR-15, §12.2).
+   *
+   * Optional because a backend predating it omits it; a missing band renders as no colour and
+   * no label rather than as the coolest band, which would turn "unknown" into "safe".
+   */
+  band?: WbgtBand | null;
 }
 
 /**
