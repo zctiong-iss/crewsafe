@@ -484,6 +484,9 @@
     "generateFailedTitle": "Tiada pelan didraf",
     "generatedToast": "Satu pelan telah didraf.",
     "statusDraft": "Draf",
+    "statusSuperseded": "Digantikan",
+    "statusAutoDispatched": "Henti kerja dihantar",
+    "autoDispatchedNotice": "Arahan henti kerja ini telah dihantar kepada pekerja secara automatik — tiada kelulusan diperlukan.",
     "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {

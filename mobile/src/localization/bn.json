@@ -484,6 +484,9 @@
     "generateFailedTitle": "পরিকল্পনা তৈরি হয়নি",
     "generatedToast": "একটি পরিকল্পনা তৈরি হয়েছে।",
     "statusDraft": "খসড়া",
+    "statusSuperseded": "প্রতিস্থাপিত",
+    "statusAutoDispatched": "কাজ বন্ধের নির্দেশ পাঠানো হয়েছে",
+    "autoDispatchedNotice": "এই কাজ বন্ধের নির্দেশ স্বয়ংক্রিয়ভাবে শ্রমিকদের কাছে পাঠানো হয়েছে — কোনো অনুমোদনের প্রয়োজন ছিল না।",
     "requiredCannotRemove": "তাপ নীতির কারণে আবশ্যক — এটি সরানো যাবে না।"
   },
   "mitigationCategory": {
