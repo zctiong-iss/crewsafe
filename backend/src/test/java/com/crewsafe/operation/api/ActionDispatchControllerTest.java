@@ -89,6 +89,7 @@ class ActionDispatchControllerTest extends AbstractIntegrationTest {
 
         dispatch = ActionDispatch.builder()
                 .id(dispatchId)
+                .recommendation(recommendation)
                 .approval(approval)
                 .worker(worker)
                 .actionCode("REST_10_MIN")

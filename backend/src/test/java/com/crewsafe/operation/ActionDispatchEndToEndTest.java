@@ -162,6 +162,7 @@ class ActionDispatchEndToEndTest extends AbstractIntegrationTest {
 
         ActionDispatch dispatch = ActionDispatch.builder()
                 .id(UUID.randomUUID())
+                .recommendation(recommendation)
                 .approval(approval)
                 .worker(worker)
                 .actionCode(actionCode)

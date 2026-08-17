@@ -309,6 +309,22 @@ class DataGovSgNeaWeatherClientTest {
         server.verify();
     }
 
+    /**
+     * SCRUM-412. The source and the failing operation are the first thing an on-call reader sees,
+     * so the prefix is part of the contract rather than incidental wording. Pinned here because
+     * the four call sites now build it from one shared constant.
+     */
+    @Test
+    void namesTheSourceAndTheOperationInEveryFailureMessage() {
+        server.expect(times(3), requestTo("https://data.gov.sg.test/relative-humidity"))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> client.fetch(NeaMetric.RELATIVE_HUMIDITY))
+                .isInstanceOfSatisfying(NeaApiException.class, exception ->
+                        assertThat(exception).hasMessageStartingWith("data.gov.sg RELATIVE_HUMIDITY "));
+        server.verify();
+    }
+
     @Test
     void retriesTemporaryServerFailureAndReturnsTheNextSuccessfulResponse() {
         server.expect(once(), requestTo("https://data.gov.sg.test/air-temperature"))

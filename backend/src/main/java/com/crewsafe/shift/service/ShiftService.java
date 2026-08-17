@@ -5,7 +5,6 @@ import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
-import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.domain.ShiftAssignment;
 import com.crewsafe.shift.domain.ShiftStatus;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
@@ -52,6 +51,7 @@ public class ShiftService {
 
     private static final DateTimeFormatter LOCAL_DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.UK);
     private static final DateTimeFormatter LOCAL_TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.UK);
+    private static final String AUDIT_TARGET_TYPE = "SHIFT";
 
     public record AssignmentInput(UUID workerId, String taskName, Intensity intensity,
                                    Integer acclimatisationDay) {
@@ -80,7 +80,7 @@ public class ShiftService {
         UUID shiftId = shift.getId();
         // Resolved now, not inside the lambda: that runs after commit, outside this transaction.
         String detail = "Created shift for site " + siteId + " (" + localRange(siteId, startsAt, endsAt) + ")";
-        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, "SHIFT", shiftId, detail));
+        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, AUDIT_TARGET_TYPE, shiftId, detail));
 
         return shift;
     }
@@ -129,7 +129,7 @@ public class ShiftService {
             shift.correctTimes(startsAt, endsAt);
             String detail = "Corrected shift times for site " + siteId
                     + " to " + localRange(siteId, startsAt, endsAt);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, "SHIFT", shiftId, detail));
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, AUDIT_TARGET_TYPE, shiftId, detail));
             return shift;
         });
     }
@@ -146,7 +146,7 @@ public class ShiftService {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             assignments.deleteByShiftId(shiftId);
             shifts.delete(shift);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_DELETED, "SHIFT", shiftId,
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_DELETED, AUDIT_TARGET_TYPE, shiftId,
                     "Deleted shift for site " + siteId));
             return true;
         }).orElse(false);
@@ -174,9 +174,37 @@ public class ShiftService {
 
             shift.cancel();
             String detail = "Cancelled shift for site " + siteId + " - Reason: " + reason;
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, "SHIFT", shiftId, detail));
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, AUDIT_TARGET_TYPE, shiftId, detail));
             return shift;
         });
+    }
+
+    /**
+     * Flips every {@link ShiftStatus#PLANNED} shift whose {@code startsAt} has passed to
+     * {@link ShiftStatus#ACTIVE} (SCRUM-441). Called from {@code ShiftActivationScheduler}
+     * on a fixed interval, not from a client — {@link ShiftStatus#CANCELLED} shifts are
+     * excluded by construction (the query only ever matches {@code PLANNED}), and
+     * {@link ShiftStatus#CLOSED} is untouched, deliberately: nothing today treats "time ran
+     * out" and "marked finished" as the same fact.
+     *
+     * <p>System-triggered, so the audit actor is {@code null} — the same convention
+     * {@code ActionDispatchService} uses for its sweep-driven {@code ACTION_LATE}/
+     * {@code ACTION_AUTO_COMPLETED} events.
+     *
+     * @return how many shifts were activated this run
+     */
+    @Transactional
+    public int activateDueShifts() {
+        List<Shift> due = shifts.findByStatusAndStartsAtLessThanEqual(ShiftStatus.PLANNED, clock.instant());
+
+        for (Shift shift : due) {
+            shift.activate();
+            UUID shiftId = shift.getId();
+            String detail = "Shift auto-activated for site " + shift.getSiteId();
+            afterCommit(() -> audit.record(null, AuditEventType.SHIFT_ACTIVATED, AUDIT_TARGET_TYPE, shiftId, detail));
+        }
+
+        return due.size();
     }
 
     /**

@@ -67,14 +67,16 @@ class ActionStatusStreamServiceTest {
     }
 
     private static ActionDispatch dispatch(ActionDispatch.ActionDispatchStatus status) {
+        Recommendation recommendation = Recommendation.builder().id(UUID.randomUUID()).build();
         Approval approval = Approval.builder()
                 .id(UUID.randomUUID())
-                .recommendation(Recommendation.builder().id(UUID.randomUUID()).build())
+                .recommendation(recommendation)
                 .build();
         AppUser worker = AppUser.builder().id(UUID.randomUUID()).role(Role.WORKER).build();
 
         return ActionDispatch.builder()
                 .id(UUID.randomUUID())
+                .recommendation(recommendation)
                 .approval(approval)
                 .worker(worker)
                 .actionCode("REST_10_MIN")

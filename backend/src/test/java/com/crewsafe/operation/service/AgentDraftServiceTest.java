@@ -59,6 +59,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -97,6 +99,7 @@ class AgentDraftServiceTest {
     @Mock private SiteForecastService siteForecast;
     @Mock private AgentDraftClient agentDraftClient;
     @Mock private RecommendationRepository recommendations;
+    @Mock private RecommendationService recommendationService;
     @Mock private AuditService audit;
 
     private AgentDraftService service;
@@ -105,7 +108,7 @@ class AgentDraftServiceTest {
     void setUp() {
         service = new AgentDraftService(shifts, shiftAssignments, readinessSubmissions, policyEngine,
                 weather, lightning, siteForecast, agentDraftClient, new DeterministicPlanBuilder(), recommendations,
-                audit, new ObjectMapper().findAndRegisterModules(),
+                recommendationService, audit, new ObjectMapper().findAndRegisterModules(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         when(shifts.findByIdAndSiteId(SHIFT_ID, SITE_ID)).thenReturn(Optional.of(shift(ShiftStatus.ACTIVE)));
@@ -280,6 +283,84 @@ class AgentDraftServiceTest {
         Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
 
         assertThat(parse(saved).get(0).appliesTo()).containsExactly(WORKER_ID.toString());
+    }
+
+    // ----------------------------------------------------------------------------------
+    // Auto-dispatch without approval (SCRUM-440)
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("A lightning stop-work is persisted AUTO_DISPATCHED and fanned out with no approval step")
+    void lightningStopWorkAutoDispatchesWithoutApproval() {
+        when(lightning.deriveForSite(SITE_ID, NOW)).thenReturn(Optional.of(new LightningRiskPayload(
+                LightningRiskState.STOP_WORK, new BigDecimal("3.10"), OBSERVED_AT, NOW,
+                WeatherQualityStatus.LIVE)));
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        verify(recommendationService).autoDispatch(eq(saved), eq(ACTOR_ID), anyList());
+        verify(audit).record(eq(ACTOR_ID), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
+                eq("RECOMMENDATION"), eq(saved.getId()), any());
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_DRAFTED), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("A WBGT-max mandatory stop-work is also persisted AUTO_DISPATCHED, not just lightning")
+    void wbgtMaxEmergencyStopAutoDispatchesWithoutApproval() {
+        when(policyEngine.evaluateForShift(any(), anyDouble(), anyList())).thenReturn(emergencyStopDecision());
+        stubDraft(emergencyStopModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        assertThat(persistedCodes(saved)).contains(PolicyActionCode.STOP_WORK);
+        verify(recommendationService).autoDispatch(eq(saved), eq(ACTOR_ID), anyList());
+    }
+
+    @Test
+    @DisplayName("An ordinary draft is never auto-dispatched")
+    void ordinaryDraftIsNotAutoDispatched() {
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
+        verify(recommendationService, never()).autoDispatch(any(), any(), any());
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("An auto-triggered stop-work (SCRUM-291) auto-dispatches with a null actor")
+    void autoTriggeredLightningStopWorkUsesANullActor() {
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        when(lightning.deriveForSite(SITE_ID, NOW)).thenReturn(Optional.of(new LightningRiskPayload(
+                LightningRiskState.STOP_WORK, new BigDecimal("3.10"), OBSERVED_AT, NOW,
+                WeatherQualityStatus.LIVE)));
+
+        Recommendation saved = service.generateAuto(SITE_ID, SHIFT_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        verify(recommendationService).autoDispatch(eq(saved), isNull(), anyList());
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
+                eq("RECOMMENDATION"), eq(saved.getId()), any());
+    }
+
+    @Test
+    @DisplayName("A stop-work recommendation still cannot be decided on -- see RecommendationServiceTest for the 409")
+    void autoDispatchedRecommendationIsNeverPendingApproval() {
+        when(lightning.deriveForSite(SITE_ID, NOW)).thenReturn(Optional.of(new LightningRiskPayload(
+                LightningRiskState.STOP_WORK, new BigDecimal("3.10"), OBSERVED_AT, NOW,
+                WeatherQualityStatus.LIVE)));
+
+        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+
+        assertThat(saved.getStatus()).isNotEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
     }
 
     @Test
@@ -552,6 +633,60 @@ class AgentDraftServiceTest {
     }
 
     // ----------------------------------------------------------------------------------
+    // Auto-trigger (SCRUM-291)
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("generateAuto drafts with a null actor, recording that it was system-triggered")
+    void generateAutoUsesANullActor() {
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generateAuto(SITE_ID, SHIFT_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_DRAFTED), eq("RECOMMENDATION"),
+                eq(saved.getId()), any());
+    }
+
+    @Test
+    @DisplayName("An open PENDING_APPROVAL recommendation is superseded before the new one is drafted")
+    void generateAutoSupersedesAnOpenRecommendation() {
+        Recommendation existing = Recommendation.builder()
+                .id(UUID.randomUUID())
+                .shiftId(SHIFT_ID)
+                .status(Recommendation.RecommendationStatus.PENDING_APPROVAL)
+                .createdAt(NOW.minusSeconds(600))
+                .build();
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.of(existing));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
+        verify(recommendations).save(existing);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+                eq(existing.getId()), any());
+    }
+
+    @Test
+    @DisplayName("With no open recommendation for the shift, nothing is superseded")
+    void generateAutoSupersedesNothingWhenNoneIsOpen() {
+        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
+                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
+    }
+
+    // ----------------------------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------------------------
 
@@ -620,6 +755,23 @@ class AgentDraftServiceTest {
     private static PolicyDecision.PolicyAction action(String code) {
         return new PolicyDecision.PolicyAction(code, "UNACCLIMATISED_HEAVY_WORK_RULE",
                 List.of(WORKER_ID.toString()), "WBGT 32.5°C exceeds threshold 22.0°C");
+    }
+
+    /** Shape of {@code PolicyEngineService}'s emergency-stop branch: mandatory STOP_WORK + CLOSE_MONITORING. */
+    private static PolicyDecision emergencyStopDecision() {
+        return new PolicyDecision("MOM-WBGT-2026.1", WbgtBand.BAND_33_AND_ABOVE, WbgtBand.BAND_33_AND_ABOVE,
+                List.of(
+                        new PolicyDecision.PolicyAction(PolicyActionCode.STOP_WORK, "EMERGENCY_STOP_RULE",
+                                List.of(WORKER_ID.toString()), "WBGT 34.0°C exceeds emergency stop threshold 33.0°C"),
+                        new PolicyDecision.PolicyAction(PolicyActionCode.CLOSE_MONITORING, "EMERGENCY_STOP_RULE",
+                                List.of(WORKER_ID.toString()), "Worker requires close monitoring following an emergency stop")),
+                List.of());
+    }
+
+    private static List<MitigationSuggestion> emergencyStopModelPlan() {
+        return List.of(
+                mitigation(PolicyActionCode.STOP_WORK, "MANDATORY", "STOP_WORK"),
+                mitigation(PolicyActionCode.CLOSE_MONITORING, "MANDATORY", "MONITORING"));
     }
 
     private static Shift shift(ShiftStatus status) {

@@ -19,6 +19,12 @@ from crewsafe_ml.approval_evaluation import (
 from crewsafe_ml.features import FEATURE_VERSION
 
 
+HORIZONS_KEY = "horizons"
+SELECTED_MODEL_KEY = "selected_model"
+ARTIFACT_KEY = "artifact"
+ARTIFACT_SHA256_KEY = "artifact_sha256"
+
+
 class ApprovalEvaluationTest(unittest.TestCase):
     def test_reports_ready_without_changing_the_model_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -99,6 +105,95 @@ class ApprovalEvaluationTest(unittest.TestCase):
                     workspace_root=root,
                 )
 
+    def test_evaluates_a_persistence_candidate_without_an_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, feature_path, feature_manifest_path = build_fixture(root)
+            manifest = read_json(manifest_path)
+            for configuration in manifest[HORIZONS_KEY].values():
+                configuration[SELECTED_MODEL_KEY] = "persistence"
+                configuration.pop(ARTIFACT_KEY)
+                configuration.pop(ARTIFACT_SHA256_KEY)
+            write_json(manifest_path, manifest)
+
+            report = evaluate_frozen_candidate(
+                model_manifest_path=manifest_path,
+                expected_model_manifest_sha256=sha256(manifest_path),
+                feature_path=feature_path,
+                feature_manifest_path=feature_manifest_path,
+                workspace_root=root,
+                minimum_untouched_days=2,
+            )
+
+            self.assertEqual(
+                report["horizons"]["30"]["candidate"],
+                report["horizons"]["30"]["persistence"],
+            )
+
+    def test_rejects_an_artifact_path_outside_the_model_bundle(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, feature_path, feature_manifest_path = build_fixture(root)
+            manifest = read_json(manifest_path)
+            manifest[HORIZONS_KEY]["30"][ARTIFACT_KEY] = "../forecast-30m.joblib"
+            write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
+
+            with self.assertRaisesRegex(ApprovalEvaluationError, "artifact name"):
+                evaluate_frozen_candidate(
+                    model_manifest_path=manifest_path,
+                    expected_model_manifest_sha256=manifest_checksum,
+                    feature_path=feature_path,
+                    feature_manifest_path=feature_manifest_path,
+                    workspace_root=root,
+                )
+
+    def test_rejects_an_artifact_with_the_wrong_checksum(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, feature_path, feature_manifest_path = build_fixture(root)
+            manifest = read_json(manifest_path)
+            manifest[HORIZONS_KEY]["30"][ARTIFACT_SHA256_KEY] = "0" * 64
+            write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
+
+            with self.assertRaisesRegex(ApprovalEvaluationError, "artifact checksum"):
+                evaluate_frozen_candidate(
+                    model_manifest_path=manifest_path,
+                    expected_model_manifest_sha256=manifest_checksum,
+                    feature_path=feature_path,
+                    feature_manifest_path=feature_manifest_path,
+                    workspace_root=root,
+                )
+
+    def test_rejects_out_of_range_model_predictions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, feature_path, feature_manifest_path = build_fixture(root)
+            manifest = read_json(manifest_path)
+            artifact_path = (
+                manifest_path.parent / manifest[HORIZONS_KEY]["30"][ARTIFACT_KEY]
+            )
+            feature_frame = pd.read_csv(feature_path)
+            model = DummyRegressor(strategy="constant", constant=61.0)
+            model.fit(
+                feature_frame[["wbgt_t", "station_id"]],
+                [61.0] * len(feature_frame),
+            )
+            joblib.dump(model, artifact_path)
+            manifest[HORIZONS_KEY]["30"][ARTIFACT_SHA256_KEY] = sha256(artifact_path)
+            write_json(manifest_path, manifest)
+            manifest_checksum = sha256(manifest_path)
+
+            with self.assertRaisesRegex(ApprovalEvaluationError, "out-of-range"):
+                evaluate_frozen_candidate(
+                    model_manifest_path=manifest_path,
+                    expected_model_manifest_sha256=manifest_checksum,
+                    feature_path=feature_path,
+                    feature_manifest_path=feature_manifest_path,
+                    workspace_root=root,
+                )
+
 
 def build_fixture(
     root: Path,
@@ -143,9 +238,9 @@ def build_fixture(
         artifact_path = bundle / f"forecast-{horizon}m.joblib"
         joblib.dump(model, artifact_path)
         horizons[str(horizon)] = {
-            "selected_model": "test-candidate",
-            "artifact": artifact_path.name,
-            "artifact_sha256": sha256(artifact_path),
+            SELECTED_MODEL_KEY: "test-candidate",
+            ARTIFACT_KEY: artifact_path.name,
+            ARTIFACT_SHA256_KEY: sha256(artifact_path),
             "interval_half_width": 1.0,
         }
     manifest_path = bundle / "manifest.json"
@@ -161,7 +256,7 @@ def build_fixture(
                 "dataset": {"start_date": "2026-01-01", "end_date": "2026-07-31"},
                 "numeric_features": ["wbgt_t"],
                 "categorical_features": ["station_id"],
-                "horizons": horizons,
+                HORIZONS_KEY: horizons,
             }
         ),
         encoding="utf-8",
@@ -171,6 +266,14 @@ def build_fixture(
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -45,6 +45,10 @@ public final class AuditEventType {
      * as a record (SCRUM-255). */
     public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
 
+    /** A PLANNED shift was auto-activated by the scheduler once its start time passed
+     * (SCRUM-441). System-triggered — actorId is null, the same as {@link #ACTION_LATE}. */
+    public static final String SHIFT_ACTIVATED = "SHIFT_ACTIVATED";
+
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
      * through this event's originating endpoint. */
@@ -91,6 +95,22 @@ public final class AuditEventType {
      * original draft is retained on the recommendation; the edited version is retained on
      * the resulting approval. */
     public static final String RECOMMENDATION_EDITED = "RECOMMENDATION_EDITED";
+
+    /** An open PENDING_APPROVAL recommendation was replaced by a new auto-triggered draft for
+     * the same shift before a supervisor decided on it (SCRUM-291). System-triggered --
+     * actorId is null, the same as {@link #SHIFT_ACTIVATED}. */
+    public static final String RECOMMENDATION_SUPERSEDED = "RECOMMENDATION_SUPERSEDED";
+
+    /** A lightning-immediate or WBGT-max stop-work recommendation skipped supervisor approval
+     * and was dispatched straight to workers (SCRUM-440). Recorded once per recommendation,
+     * alongside one {@link #ACTION_AUTO_DISPATCHED} per worker/action actually dispatched.
+     * System-triggered -- actorId is null. */
+    public static final String RECOMMENDATION_AUTO_DISPATCHED = "RECOMMENDATION_AUTO_DISPATCHED";
+
+    /** A worker-level dispatch created by the SCRUM-440 auto-dispatch path rather than a
+     * supervisor's {@code POST /api/action-dispatch} (which records {@link #ACTION_DISPATCHED}
+     * instead). System-triggered -- actorId is null. */
+    public static final String ACTION_AUTO_DISPATCHED = "ACTION_AUTO_DISPATCHED";
 
     /** A worker logged a rest or a drink of water (US-11). */
     public static final String WELLBEING_LOGGED = "WELLBEING_LOGGED";

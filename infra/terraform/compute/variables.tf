@@ -275,3 +275,21 @@ variable "web_access_log_expiration_days" {
     error_message = "web_access_log_expiration_days must be a positive number of days."
   }
 }
+
+variable "access_log_expiration_days" {
+  description = <<-EOT
+    Days after which an access-log object in the ALB or CloudFront logging
+    buckets is expired (SCRUM-443, terraform:S6258).
+
+    Shared by both alb_logs and cloudfront_logs rather than one variable per
+    bucket. 30 days matches the retention floor already established for
+    web_access_log_expiration_days above, keeping every access-log control in
+    this stack consistent.
+  EOT
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.access_log_expiration_days > 0
+    error_message = "access_log_expiration_days must be a positive number of days."
+  }
+}
