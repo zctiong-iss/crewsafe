@@ -585,6 +585,22 @@ run "credentials_by_reference" {
     error_message = "The database credential must be injected as a secret reference (FR-027)."
   }
 
+  assert {
+    condition = length([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].secrets :
+      entry if entry.name == "LIGHTNING_INGESTION_ENABLED"
+    ]) == 1
+    error_message = "The backend task must contain exactly one managed lightning-ingestion configuration reference (SCRUM-444, FR-003)."
+  }
+
+  assert {
+    condition = length([
+      for entry in jsondecode(aws_ecs_task_definition.backend.container_definitions)[0].secrets :
+      entry if entry.name == "LIGHTNING_INGESTION_ENABLED" && endswith(entry.valueFrom, "/lightning/ingestion-enabled")
+    ]) == 1
+    error_message = "The lightning-ingestion task reference must resolve under the published SSM configuration prefix (SCRUM-444, SEC-003)."
+  }
+
   # A correct reference ends with the JSON key and two EMPTY fields. The managed
   # service rotates on its own schedule; a pinned version makes that rotation an
   # outage.

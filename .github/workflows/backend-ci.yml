@@ -6,6 +6,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/security/backend-image.trivyignore.source"
@@ -14,6 +15,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/security/backend-image.trivyignore.source"

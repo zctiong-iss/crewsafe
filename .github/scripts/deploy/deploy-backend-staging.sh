@@ -14,6 +14,20 @@ actual_digest="$(aws ecr describe-images --repository-name crewsafe/backend --im
 
 tmp_dir="$(mktemp -d)"; trap 'rm -rf "$tmp_dir"' EXIT
 aws ecs describe-task-definition --task-definition crewsafe-shared-dev-backend --query taskDefinition --output json >"$tmp_dir/current.json"
+jq -e '
+  [.containerDefinitions[] | select(.name == "backend")] as $backend
+  | if ($backend | length) != 1 then false
+    else
+      ([$backend[0].secrets[]? | select(.name == "LIGHTNING_INGESTION_ENABLED")] | length) == 1
+      and ([$backend[0].secrets[]?
+        | select(.name == "LIGHTNING_INGESTION_ENABLED"
+          and ((.valueFrom // "") | endswith("/lightning/ingestion-enabled")))
+      ] | length) == 1
+    end
+' "$tmp_dir/current.json" >/dev/null || {
+  echo "Current backend task definition lacks exactly one managed LIGHTNING_INGESTION_ENABLED reference; apply the reviewed compute configuration before redeploying." >&2
+  exit 1
+}
 jq --arg image "$REPOSITORY@$IMAGE_DIGEST" '
   del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy,.deregisteredAt)
   | .containerDefinitions |= map(if .name == "backend" then .image=$image else . end)
@@ -36,4 +50,7 @@ done
   echo "rollout_state=$state"
   echo "deployed_revision=$IMAGE_TAG"
 } >>"${GITHUB_OUTPUT:-/dev/null}"
-if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then printf '## Backend staging deployment\n- Commit SHA: `%s`\n- Image digest: `%s`\n- Task definition: `%s`\n- Result: promoted\n' "$IMAGE_TAG" "$IMAGE_DIGEST" "$task_definition" >>"$GITHUB_STEP_SUMMARY"; fi
+if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+  # shellcheck disable=SC2016 # Markdown backticks are literal output, not shell expressions.
+  printf '## Backend staging deployment\n- Commit SHA: `%s`\n- Image digest: `%s`\n- Task definition: `%s`\n- Result: promoted\n' "$IMAGE_TAG" "$IMAGE_DIGEST" "$task_definition" >>"$GITHUB_STEP_SUMMARY"
+fi
