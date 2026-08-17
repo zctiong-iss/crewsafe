@@ -56,7 +56,7 @@ locals {
 
   cognito = data.terraform_remote_state.cognito.outputs
 
-  # Eight entries. A value earns one only where the deployed environment must
+  # Nine entries. A value earns one only where the deployed environment must
   # differ from the default the application already carries (FR-001, research.md
   # R-008), or (the two ml/model-manifest* entries, SCRUM-373) where the
   # application has no default at all and the slot is declared explicitly
@@ -71,12 +71,13 @@ locals {
   #   db/url               -> the database component (SCRUM-175)
   #   cors/allowed-origins -> whatever creates the web application's public origin
   config_parameters = {
-    "db/username"               = var.database_username
-    "cognito/issuer-uri"        = local.cognito.issuer_uri
-    "cognito/jwk-set-uri"       = local.cognito.jwks_uri
-    "cognito/client-ids"        = join(",", [local.cognito.web_client_id, local.cognito.mobile_client_id, local.cognito.cli_client_id])
-    "spring/profiles-active"    = "staging"
-    "weather/ingestion-enabled" = "true"
+    "db/username"                 = var.database_username
+    "cognito/issuer-uri"          = local.cognito.issuer_uri
+    "cognito/jwk-set-uri"         = local.cognito.jwks_uri
+    "cognito/client-ids"          = join(",", [local.cognito.web_client_id, local.cognito.mobile_client_id, local.cognito.cli_client_id])
+    "spring/profiles-active"      = "staging"
+    "weather/ingestion-enabled"   = "true"
+    "lightning/ingestion-enabled" = "true"
 
     # SCRUM-373 (FR-008) declared this slot with the placeholder value
     # "unset" — NOT an empty string, since AWS SSM PutParameter rejects ""
@@ -103,12 +104,13 @@ locals {
   }
 
   config_parameter_descriptions = {
-    "db/username"               = "PostgreSQL user the backend connects as. Written by Terraform; read by the task execution role at task start. Not a credential - the password is held by the managed database service."
-    "cognito/issuer-uri"        = "Cognito issuer the backend validates access tokens against. Sourced from the cognito-shared-dev component; read by the task execution role."
-    "cognito/jwk-set-uri"       = "Cognito JWKS endpoint the backend fetches signing keys from. Sourced from the cognito-shared-dev component; read by the task execution role."
-    "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
-    "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
-    "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
+    "db/username"                 = "PostgreSQL user the backend connects as. Written by Terraform; read by the task execution role at task start. Not a credential - the password is held by the managed database service."
+    "cognito/issuer-uri"          = "Cognito issuer the backend validates access tokens against. Sourced from the cognito-shared-dev component; read by the task execution role."
+    "cognito/jwk-set-uri"         = "Cognito JWKS endpoint the backend fetches signing keys from. Sourced from the cognito-shared-dev component; read by the task execution role."
+    "cognito/client-ids"          = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
+    "spring/profiles-active"      = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
+    "weather/ingestion-enabled"   = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
+    "lightning/ingestion-enabled" = "Whether the backend polls the external lightning service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
     "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
     "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
   }
