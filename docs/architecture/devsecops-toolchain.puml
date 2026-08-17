@@ -52,7 +52,7 @@ package "Build and test" as build {
   artifact "Backend CI\nJava 21 · Maven verify" as backend_ci
   artifact "Web CI\nNode 22 · lint · test · build" as web_ci
   artifact "Mobile CI\nNode 22 · locale · test" as mobile_ci
-  artifact "ml-service CI\nPython · pytest" as mlservice_ci
+  artifact "ml-service CI\nPython · pytest · Trivy" as mlservice_ci
 }
 
 package "Security gates" as security_gates {
@@ -64,7 +64,7 @@ package "Security gates" as security_gates {
 }
 
 package "Reviewed artifacts" as artifacts {
-  database "ECR\nbackend + web + ml-service\nimmutable + scan" as ecr_release
+  database "ECR\nbackend + web + ml-service\nimmutable + Inspector" as ecr_release
   database "S3\nversioned web bundle" as s3_release
   artifact "Plan bundle\nmetadata + lockfile" as tf_plan
   database "Remote state\nS3 · per-component keys" as tf_state
@@ -72,6 +72,7 @@ package "Reviewed artifacts" as artifacts {
 
 package "Controlled delivery" as delivery {
   cloud "ECS staging\nbackend + ml-service sidecar" as ecs_release
+  cloud "ECS sidecar redeploy\nworkflow_dispatch\nexisting main SHA" as mlservice_redeploy
   cloud "CloudFront + S3\nweb staging" as web_release
   cloud "Terraform Apply\nmain + confirmation" as tf_apply
   cloud "Security Hub\nredacted import" as sh_import
@@ -87,6 +88,7 @@ package "OIDC roles" as roles {
   artifact "ECR push\nml-service" as role_ecr_mlservice
   artifact "Web sync\nS3 + invalidation" as role_web
   artifact "Backend deploy\nECS service" as role_backend
+  artifact "ml-service deploy\nECS service · manual" as role_mlservice_deploy
   artifact "Terraform plan / apply\nstate + component" as role_tf
   artifact "Security Hub import\nBatchImport only" as role_sh
 }
@@ -117,14 +119,25 @@ actions --> role_ecr
 actions --> role_ecr_mlservice
 actions --> role_web
 actions --> role_backend
+actions --> role_mlservice_deploy
 actions --> role_tf
 actions --> role_sh
 role_ecr --> ecr_release
 role_ecr_mlservice --> ecr_release
 role_web --> s3_release
 role_backend --> ecs_release
+role_mlservice_deploy --> mlservice_redeploy
+mlservice_redeploy --> ecs_release
 role_tf --> tf_apply
 role_sh --> sh_import
+
+note right of ecr_release
+  Backend publish or an explicit
+  main-ancestor sidecar redeploy
+  consumes these immutable images;
+  ml-service publication alone does
+  not roll the sidecar automatically.
+end note
 
 ecs_release --> smoke_staging
 web_release --> smoke_staging
@@ -144,13 +157,17 @@ note right of tf_apply
 end note
 
 note bottom of sast
-  Covers backend, web and mobile.
+  Covers backend, web, mobile and ml-service.
   Coverage is generated first.
+  Package lifecycle scripts are disabled;
+  downloaded tools use HTTPS + checksums.
 end note
 
 note bottom of roles
   OIDC is short-lived and role-scoped.
   No long-lived cloud keys in CI.
+  ml-service publication and deployment
+  use separate roles and gates.
 end note
 
 note bottom of verification
@@ -216,9 +233,10 @@ package "Pull request gates" as pr_gates {
 
 package "Main-branch promotion" as main_promotion {
   rectangle "Build immutable image\ncommit SHA + digest" as main_image
-  rectangle "Build ml-service image\ncommit SHA + digest" as main_mlservice_image
+  rectangle "Build + publish ml-service image\ncommit SHA + digest" as main_mlservice_image
+  rectangle "Redeploy ml-service sidecar\nmanual dispatch + existing SHA" as main_mlservice_redeploy
   rectangle "Sync static web\nS3 + CloudFront invalidate" as main_web
-  rectangle "Deploy backend\nECS service update\n(carries ml-service sidecar)" as main_backend
+  rectangle "Deploy backend or sidecar\nECS service update\n(shared task revision)" as main_backend
   rectangle "Apply infrastructure\nreviewed plan + confirmation" as main_tf
 }
 
@@ -234,13 +252,14 @@ pr_backend --> main_image
 pr_mlservice --> main_mlservice_image
 pr_web --> main_web
 pr_backend --> main_backend
-main_mlservice_image --> main_backend
 pr_tf --> main_tf
 pr_secrets --> security_evidence
 pr_sast --> security_evidence
 pr_tf --> plan_evidence
 main_image --> summaries
 main_mlservice_image --> summaries
+main_mlservice_redeploy --> main_backend
+main_mlservice_redeploy --> summaries
 main_web --> summaries
 main_backend --> summaries
 main_tf --> plan_evidence
@@ -256,6 +275,23 @@ end note
 note right of main_tf
   Apply checks account, commit, component,
   plan metadata and typed confirmation.
+end note
+
+note right of main_backend
+  Backend push publication and the
+  main-only existing-image redeploy
+  both use the backend deploy role.
+  The ml-service path is explicit and
+  uses its separate deploy role.
+end note
+
+note right of main_mlservice_redeploy
+  ML-service CI publishes on main,
+  but does not roll the sidecar out
+  automatically. Redeploy resolves an
+  existing main-ancestor image digest and
+  updates the shared ECS service with the
+  dedicated ml-service deploy role.
 end note
 
 note bottom of security_evidence
@@ -303,6 +339,16 @@ skinparam artifact {
 
 actor "Developer / operator" as operator
 
+package "Web recovery / sync\nmanual · main-ref gated" as web_recovery {
+  rectangle "Build exact main SHA\nweb audit · lint · type · test" as web_sync_build
+  rectangle "Sync S3 bundle\nverify edge + invalidate CloudFront" as web_sync
+}
+
+package "ML sidecar redeploy\nmanual · main-ref gated" as ml_recovery {
+  rectangle "Resolve existing image\nmain-ancestor SHA → digest" as ml_resolve
+  rectangle "Update shared ECS service\nml-service container only" as ml_redeploy
+}
+
 package "Mobile security testing\nmanual · main-ref gated" as mobile_security {
   rectangle "Native build\nAndroid/iOS artifact" as mobile_build
   rectangle "MobSF dynamic scan\nMaestro-driven sign-in flow" as mobsf_scan
@@ -313,6 +359,10 @@ package "Cognito operations\nmanual · main-ref gated" as cognito_ops {
   rectangle "User administration\nallowlisted operations" as cognito_admin
 }
 
+operator --> web_sync_build
+web_sync_build --> web_sync
+operator --> ml_resolve
+ml_resolve --> ml_redeploy
 operator --> mobile_build
 mobile_build --> mobsf_scan
 operator --> cognito_mapping
@@ -324,6 +374,20 @@ note right of mobile_build
   auth_mode=cognito-password builds a
   staging-authenticated artifact for MobSF.
   Never produces a store-ready artifact.
+end note
+
+note right of web_sync
+  Exact commit is supplied at dispatch.
+  OIDC web-sync role only; stale S3
+  objects are deleted and the web
+  distribution is invalidated.
+end note
+
+note right of ml_redeploy
+  Existing immutable image only.
+  Dedicated ml-service deploy role.
+  Shared backend ECS service is updated;
+  backend image is left untouched.
 end note
 
 note right of mobsf_scan
