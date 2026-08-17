@@ -109,8 +109,8 @@ locals {
     "cognito/client-ids"        = "Comma-separated Cognito client identifiers the backend accepts audiences from. Sourced from the cognito-shared-dev component; read by the task execution role."
     "spring/profiles-active"    = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled" = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
-    "ml/model-manifest"         = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
-    "ml/model-manifest-sha256"  = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
+    "ml/model-manifest"           = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
+    "ml/model-manifest-sha256"    = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
   }
 }
 
