@@ -111,8 +111,9 @@ class TestForecastService:
 
     def test_forecast_service_rejects_unsupported_horizon(self):
         """Internal callers receive the same 30-or-60 rule as HTTP callers."""
+        service = ForecastService()
         with pytest.raises(ValueError, match="30 or 60"):
-            ForecastService().forecast(
+            service.forecast(
                 metric="wbgt",
                 current_value=35.5,
                 horizon_minutes=45,
@@ -150,14 +151,15 @@ class TestTrainedForecastService:
         registry = Mock()
         service = ForecastService(registry, clock=lambda: self.NOW)
 
+        context = forecast_context(
+            self.NOW - timedelta(minutes=60),
+            latest_wbgt=33.5,
+        )
         with pytest.raises(ForecastInputError) as caught:
             service.forecast(
                 metric="wbgt",
                 current_value=33.5,
-                context=forecast_context(
-                    self.NOW - timedelta(minutes=60),
-                    latest_wbgt=33.5,
-                ),
+                context=context,
             )
 
         assert caught.value.code == "FORECAST_INPUT_INVALID"
@@ -166,11 +168,12 @@ class TestTrainedForecastService:
     def test_rejects_context_that_disagrees_with_current_value(self):
         service = ForecastService(Mock(), clock=lambda: self.NOW)
 
+        context = forecast_context(self.NOW, latest_wbgt=31.0)
         with pytest.raises(ForecastInputError) as caught:
             service.forecast(
                 metric="wbgt",
                 current_value=33.5,
-                context=forecast_context(self.NOW, latest_wbgt=31.0),
+                context=context,
             )
 
         assert caught.value.code == "FORECAST_INPUT_INVALID"
@@ -178,11 +181,12 @@ class TestTrainedForecastService:
     def test_returns_typed_failure_when_trained_model_is_not_configured(self):
         service = ForecastService(clock=lambda: self.NOW)
 
+        context = forecast_context(self.NOW, latest_wbgt=33.5)
         with pytest.raises(ForecastModelUnavailableError) as caught:
             service.forecast(
                 metric="wbgt",
                 current_value=33.5,
-                context=forecast_context(self.NOW, latest_wbgt=33.5),
+                context=context,
             )
 
         assert caught.value.code == "FORECAST_MODEL_UNAVAILABLE"
@@ -197,11 +201,12 @@ class TestTrainedForecastService:
 
         service = ForecastService.from_environment()
 
+        context = forecast_context(self.NOW, latest_wbgt=33.5)
         with pytest.raises(ForecastModelUnavailableError):
             service.forecast(
                 metric="wbgt",
                 current_value=33.5,
-                context=forecast_context(self.NOW, latest_wbgt=33.5),
+                context=context,
             )
 
     def test_returns_typed_failure_when_model_inference_fails(self):
@@ -209,11 +214,12 @@ class TestTrainedForecastService:
         registry.predict.side_effect = ModelInferenceError("private artifact detail")
         service = ForecastService(registry, clock=lambda: self.NOW)
 
+        context = forecast_context(self.NOW, latest_wbgt=33.5)
         with pytest.raises(ForecastInferenceError) as caught:
             service.forecast(
                 metric="wbgt",
                 current_value=33.5,
-                context=forecast_context(self.NOW, latest_wbgt=33.5),
+                context=context,
             )
 
         assert caught.value.code == "FORECAST_INFERENCE_FAILED"
