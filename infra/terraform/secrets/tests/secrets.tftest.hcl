@@ -164,13 +164,13 @@ run "entry_shape" {
     error_message = "The secret must be named inside this component's naming scope, or the read policy will not reach it (FR-004)."
   }
 
-  # Eight, not thirteen: a value earns an entry only where the deployment must
+  # Nine, not thirteen: a value earns an entry only where the deployment must
   # differ from the application's own default (FR-001, research.md R-008). The
   # two ml/model-manifest* entries (SCRUM-373, FR-008) are always declared
   # explicitly rather than absent — see the dedicated model_manifest_slots run
   # block below.
   assert {
-    condition     = length(aws_ssm_parameter.config) == 8
+    condition     = length(aws_ssm_parameter.config) == 9
     error_message = "The configuration entry set changed. Adding one is fine; restating an application default is not (FR-001)."
   }
 
@@ -179,6 +179,15 @@ run "entry_shape" {
   assert {
     condition     = alltrue([for p in values(aws_ssm_parameter.config) : p.type == "String"])
     error_message = "Every configuration parameter must be a plain String; secrets belong in the secret store (FR-002, FR-003)."
+  }
+
+  assert {
+    condition = (
+      aws_ssm_parameter.config["lightning/ingestion-enabled"].name == "/crewsafe/shared-dev/lightning/ingestion-enabled"
+      && aws_ssm_parameter.config["lightning/ingestion-enabled"].value == "true"
+      && strcontains(lower(aws_ssm_parameter.config["lightning/ingestion-enabled"].description), "lightning")
+    )
+    error_message = "Staging must publish the explicit lightning ingestion flag under the shared configuration prefix (SCRUM-444, FR-001)."
   }
 
   assert {
