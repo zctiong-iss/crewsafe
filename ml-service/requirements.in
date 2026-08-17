@@ -13,4 +13,4 @@ pytest-asyncio==0.24.0
 # belongs here (test/dev deps) rather than requirements-runtime.in. Keeps
 # shap's transitive deps (numba/llvmlite - common CVE sources) out of the
 # Trivy-scanned deployed container entirely.
-shap==0.52.0
+shap==0.51.0
