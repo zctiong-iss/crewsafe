@@ -12,8 +12,15 @@ from fastapi.responses import JSONResponse
 from agent.contract import AgentDraftRequest, AgentDraftResponse
 from agent.graph import draft_plan, set_bedrock_client
 from bedrock_client import BedrockClient, BedrockAccessError, BedrockModelAccessError
-from models import MitigationRequest, MitigationBatch, ForecastRequest, ForecastPrediction
+from models import (
+    MitigationRequest,
+    MitigationBatch,
+    ForecastRequest,
+    ForecastPrediction,
+    ModelStatus,
+)
 from forecast_service import ForecastService, ForecastServiceError
+from crewsafe_ml.model_status import current_model_status
 
 # Selected in SCRUM-287 against the §8.6 evaluation set. Kept in sync with the backend's
 # app.bedrock.model-id, which is the same value with the same BEDROCK_MODEL_ID override.
@@ -267,6 +274,23 @@ async def forecast(request: ForecastRequest):
         # it logs no exception detail to lose in the first place.
         logger.error("Forecast inference failed")
         raise HTTPException(status_code=500, detail=INTERNAL_SERVER_ERROR) from error
+
+
+@app.get(
+    "/model/status",
+    response_model=ModelStatus,
+    responses={
+        200: {"description": "Currently configured model's approval status and accuracy metrics"},
+    },
+)
+async def model_status():
+    """Report the deployed WBGT model's approval status and evaluation-artifact metrics.
+
+    Always returns 200: an unconfigured or unverifiable model bundle is a reportable
+    state (SCRUM-150 "fallback status"), not a service failure. Never loads model
+    artifacts, only the manifest that already backs /forecast's trust checks.
+    """
+    return current_model_status()
 
 
 @app.post(
