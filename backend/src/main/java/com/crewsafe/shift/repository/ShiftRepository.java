@@ -36,6 +36,29 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
     /** Powers the SCRUM-441 activation sweep: shifts of a given status whose start time has passed. */
     List<Shift> findByStatusAndStartsAtLessThanEqual(ShiftStatus status, Instant now);
 
+    /**
+     * The SCRUM-291 auto-trigger's shift-state guard: {@code status == ACTIVE AND now <
+     * endsAt}, or {@code status == PLANNED AND now >= startsAt - leadWindow} -- expressed here
+     * as {@code startsAt <= leadWindowCutoff} where the caller passes {@code now + leadWindow},
+     * since JPQL has no interval-subtraction operator. {@code endsAt > now} on the ACTIVE arm
+     * matters because SCRUM-441 deliberately never auto-transitions a shift out of ACTIVE when
+     * it ends -- without this check, a shift that ended and was never closed would stay
+     * ACTIVE, and therefore in scope for auto-trigger, indefinitely. CANCELLED and CLOSED are
+     * excluded by construction: neither status appears in either arm.
+     */
+    @Query("""
+            SELECT shift FROM Shift shift
+            WHERE shift.siteId = :siteId
+              AND (
+                  (shift.status = com.crewsafe.shift.domain.ShiftStatus.ACTIVE AND shift.endsAt > :now)
+                  OR (shift.status = com.crewsafe.shift.domain.ShiftStatus.PLANNED
+                      AND shift.startsAt <= :leadWindowCutoff)
+              )
+            ORDER BY shift.startsAt ASC, shift.id ASC
+            """)
+    List<Shift> findEligibleForAutoTrigger(@Param("siteId") UUID siteId, @Param("now") Instant now,
+            @Param("leadWindowCutoff") Instant leadWindowCutoff);
+
     @Query("""
             SELECT shift FROM Shift shift
             WHERE shift.startsAt <= :now AND shift.endsAt > :now

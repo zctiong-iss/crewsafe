@@ -8,6 +8,7 @@ import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.config.ActionDispatchProperties;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
+import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.ApprovalRepository;
 import com.crewsafe.wellbeing.service.WellbeingService;
@@ -74,6 +75,7 @@ public class ActionDispatchService {
 
         ActionDispatch dispatch = ActionDispatch.builder()
                 .id(UUID.randomUUID())
+                .recommendation(approval.getRecommendation())
                 .approval(approval)
                 .worker(worker)
                 .actionCode(actionCode)
@@ -87,6 +89,46 @@ public class ActionDispatchService {
                 AUDIT_TARGET_TYPE, saved.getId(),
                 "Action dispatched: " + actionCode + " to worker: " + workerId);
         log.info("action_dispatched");
+
+        return saved;
+    }
+
+    /**
+     * The SCRUM-440 counterpart to {@link #dispatchAction}: a lightning-immediate or
+     * WBGT-max stop-work skips the approval step entirely, so there is no {@code Approval}
+     * to attribute this to. {@code actorId} is still whoever's request produced the draft --
+     * null for the SCRUM-291 auto-trigger, but a real supervisor id when they pressed
+     * "Generate" themselves and the draft happened to be a mandatory stop-work; either way,
+     * nobody made an approve/reject decision, which is what {@link #dispatchAction} attributes
+     * an {@code Approval} to.
+     *
+     * <p>{@code REQUIRES_NEW} for the same reason as {@link #dispatchAction}: this is called
+     * from {@code AgentDraftService}'s {@code afterCommit} callback, where Spring's
+     * transaction synchronization is still bound to the thread even though the physical
+     * commit already happened.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ActionDispatch autoDispatchAction(Recommendation recommendation, UUID actorId, UUID workerId,
+                                              String actionCode, String instruction) {
+        AppUser worker = appUserRepository.findById(workerId)
+                .orElseThrow(() -> new IllegalArgumentException("Worker not found: " + workerId));
+
+        ActionDispatch dispatch = ActionDispatch.builder()
+                .id(UUID.randomUUID())
+                .recommendation(recommendation)
+                .approval(null)
+                .worker(worker)
+                .actionCode(actionCode)
+                .instruction(instruction)
+                .status(ActionDispatch.ActionDispatchStatus.PENDING)
+                .dispatchedAt(Instant.now())
+                .build();
+
+        ActionDispatch saved = actionDispatchRepository.save(dispatch);
+        auditService.record(actorId, AuditEventType.ACTION_AUTO_DISPATCHED,
+                AUDIT_TARGET_TYPE, saved.getId(),
+                "Action auto-dispatched (no supervisor approval): " + actionCode + " to worker: " + workerId);
+        log.info("action_auto_dispatched");
 
         return saved;
     }
@@ -224,7 +266,7 @@ public class ActionDispatchService {
         }
 
         try {
-            UUID shiftId = dispatch.getApproval().getRecommendation().getShiftId();
+            UUID shiftId = dispatch.getRecommendation().getShiftId();
             wellbeingService.recordInstructedRest(shiftId, dispatch.getWorker().getId(), dispatch.getId());
         } catch (RuntimeException e) {
             log.warn("instructed_rest_derivation_failed");

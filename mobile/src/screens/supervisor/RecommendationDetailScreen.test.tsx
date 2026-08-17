@@ -122,6 +122,26 @@ it("offers approve/edit/reject to a supervisor who may decide", async () => {
   expect(queryByText("recommendations.readOnlyNotice")).toBeNull();
 });
 
+it("shows the auto-dispatched notice, not decision buttons, even to a supervisor who may decide", async () => {
+  // SCRUM-440: a lightning-immediate or WBGT-max stop-work has no Approval at all -- it
+  // skipped that step entirely -- so this must not fall into the "offers buttons" branch just
+  // because `approval` is null and the caller can decide. It already happened.
+  const store = buildStore(SUPERVISOR, [recommendation({ status: "AUTO_DISPATCHED" })]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.autoDispatchedNotice")).not.toBeNull();
+  expect(queryByText("recommendations.approveButton")).toBeNull();
+  expect(queryByText("recommendations.editButton")).toBeNull();
+  expect(queryByText("recommendations.rejectButton")).toBeNull();
+  expect(queryByText("recommendations.readOnlyNotice")).toBeNull();
+  expect(queryByText("recommendations.decisionBySomeone")).toBeNull();
+});
+
 it("shows a read-only notice, not decision buttons, to a role that may not decide", async () => {
   // Checked client-side as well as server-side — not because the client is authoritative,
   // but because three buttons that would each 403 is a worse answer than saying so plainly.

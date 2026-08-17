@@ -181,7 +181,15 @@ export default function RecommendationDetailScreen() {
   if (!recommendation) return null;
 
   const approval = recommendation.approval;
-  const decided = approval !== null;
+  /*
+   * SCRUM-440: a lightning-immediate or WBGT-max stop-work has no Approval at all -- it skipped
+   * that step entirely -- so `approval !== null` alone would miss it, and this screen would
+   * still offer Approve/Edit/Reject on a plan that already took effect. Treated as decided for
+   * the same reason SUPERSEDED and a real decision both hide the buttons: there is nothing left
+   * for a supervisor to do here.
+   */
+  const autoDispatched = recommendation.status === "AUTO_DISPATCHED";
+  const decided = approval !== null || autoDispatched;
 
   return (
     <AppSafeView>
@@ -327,7 +335,11 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── The decision ─────────────────────────────────────────────────── */}
-        {decided ? (
+        {autoDispatched ? (
+          <View style={styles.gapTop}>
+            <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
+          </View>
+        ) : decided ? (
           <AppText variant="caption" tone="secondary" style={styles.gapTop}>
             {t("recommendations.decisionBySomeone")}
           </AppText>
