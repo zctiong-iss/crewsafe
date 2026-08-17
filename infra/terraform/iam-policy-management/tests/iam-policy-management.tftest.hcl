@@ -128,8 +128,10 @@ run "compute_s3_policies_stay_least_privilege" {
     condition = anytrue([
       for stmt in jsondecode(aws_iam_policy.component["compute-s3-plan"].policy).Statement :
       stmt.Sid == "ListAllComputeS3Buckets"
-      && try(sort(stmt.Action), []) == ["s3:ListAllMyBuckets"]
-      && stmt.Resource == ["*"]
+      && length(try(tolist(stmt.Action), [stmt.Action])) == 1
+      && try(tolist(stmt.Action), [stmt.Action])[0] == "s3:ListAllMyBuckets"
+      && length(try(tolist(stmt.Resource), [stmt.Resource])) == 1
+      && try(tolist(stmt.Resource), [stmt.Resource])[0] == "*"
     ])
     error_message = "Only ListAllMyBuckets may use the account-level resource wildcard in the compute-s3 plan policy."
   }
@@ -169,8 +171,8 @@ run "compute_s3_policies_stay_least_privilege" {
         for stmt in jsondecode(aws_iam_policy.component[policy_key].policy).Statement :
         alltrue([for action in stmt.Action : !can(regex(":\\*$", action))])
         && alltrue([for action in stmt.Action : !can(regex("^s3:(Get|Put|Delete)Object", action))])
-        && (stmt.Resource == ["*"] ? stmt.Sid == "ListAllComputeS3Buckets" : alltrue([
-          for resource in stmt.Resource : contains([
+        && (length(try(tolist(stmt.Resource), [stmt.Resource])) == 1 && try(tolist(stmt.Resource), [stmt.Resource])[0] == "*" ? stmt.Sid == "ListAllComputeS3Buckets" : alltrue([
+          for resource in try(tolist(stmt.Resource), [stmt.Resource]) : contains([
             "arn:aws:s3:::crewsafe-shared-dev-web",
             "arn:aws:s3:::crewsafe-shared-dev-alb-logs",
             "arn:aws:s3:::crewsafe-shared-dev-web-logs",
