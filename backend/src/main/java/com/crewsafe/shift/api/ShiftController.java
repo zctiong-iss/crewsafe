@@ -40,9 +40,22 @@ import lombok.RequiredArgsConstructor;
  * Every method is site-scoped the same way {@link com.crewsafe.site.api.SiteController}
  * is: {@code @PreAuthorize("@siteAccess.canAccess(#siteId)")}. Every mutating method —
  * create, correct or delete a shift; add, correct or remove an assignment — is
- * additionally role-gated to SUPERVISOR/SAFETY_MANAGER/ADMIN, the same role group
- * {@code SiteController}'s dashboard uses; a worker may read their site's shifts but not
- * plan them.
+ * additionally role-gated to SUPERVISOR/ADMIN; a worker may read their site's shifts but
+ * not plan them.
+ *
+ * <h2>Why SAFETY_MANAGER reads but does not write (SCRUM-TBD-92)</h2>
+ *
+ * A safety manager oversees sites they do not run. Planning and staffing a shift is the
+ * supervisor's job, and a manager editing one would be reaching past the person accountable
+ * for that crew. The role was in the mutating group originally because it shared
+ * {@code SiteController}'s dashboard role set, not because anyone decided a manager should
+ * plan shifts.
+ *
+ * <p><strong>The reads are deliberately untouched.</strong> They carry
+ * {@code @siteAccess.canAccess} alone, with no role clause, so a safety manager keeps them —
+ * and the Oversight screen depends on it: a recommendation names only its {@code shiftId},
+ * so the shift window a plan applies to is only reachable by reading the shift. Adding a
+ * role clause to the GETs would break oversight while appearing to tighten security.
  *
  * <p>Every "not found" throws {@link ResourceNotFoundException} rather than building a
  * bare {@code ResponseEntity.notFound()} (SCRUM-263) — the latter bypasses {@code
@@ -125,7 +138,7 @@ public class ShiftController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> createShift(@PathVariable UUID siteId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ShiftCreateRequest request) {
@@ -147,7 +160,7 @@ public class ShiftController {
     }
 
     @PatchMapping("/{shiftId}")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> updateShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody ShiftUpdateRequest request) {
@@ -159,7 +172,7 @@ public class ShiftController {
     }
 
     @DeleteMapping("/{shiftId}")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<Void> deleteShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
 
@@ -171,7 +184,7 @@ public class ShiftController {
     }
 
     @PostMapping("/{shiftId}/cancel")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> cancelShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody CancelShiftRequest request) {
@@ -183,7 +196,7 @@ public class ShiftController {
     }
 
     @PostMapping("/{shiftId}/assignments")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @Valid @RequestBody ShiftAssignmentCreateRequest request) {
 
@@ -195,7 +208,7 @@ public class ShiftController {
     }
 
     @PatchMapping("/{shiftId}/assignments/{assignmentId}")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> updateShiftAssignment(@PathVariable UUID siteId,
             @PathVariable UUID shiftId, @PathVariable UUID assignmentId,
             @AuthenticationPrincipal CrewSafeUserPrincipal principal,
@@ -209,7 +222,7 @@ public class ShiftController {
     }
 
     @DeleteMapping("/{shiftId}/assignments/{assignmentId}")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<Void> removeShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,
             @PathVariable UUID assignmentId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
 
