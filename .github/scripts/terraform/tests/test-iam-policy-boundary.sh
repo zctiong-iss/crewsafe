@@ -12,7 +12,32 @@ assert_file "infra/terraform/iam-policy-management/.terraform.lock.hcl"
 assert_file ".github/scripts/terraform/select-execution-role.sh"
 assert_file ".github/scripts/terraform/preflight-iam-policy-account.sh"
 assert_file ".github/scripts/terraform/tests/fixtures/iam-policy-management/authorization-boundary.json"
-[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 18 ]] || fail "IAM policy-management root must contain exactly eighteen policy templates"
+[[ "$(find "$tf_root/policies" -type f -name '*.json.tftpl' | wc -l | tr -d ' ')" == 20 ]] || fail "IAM policy-management root must contain exactly twenty policy templates"
+
+for role_kind in plan apply; do
+  policy="$tf_root/policies/compute-s3/$role_kind.json.tftpl"
+  assert_file "infra/terraform/iam-policy-management/policies/compute-s3/$role_kind.json.tftpl"
+  jq empty "$policy"
+  rendered="$(sed 's/<ACCOUNT_ID>/123456789012/g' "$policy")"
+  jq empty <<<"$rendered"
+  if grep -Fq '<ACCOUNT_ID>' <<<"$rendered"; then
+    fail "unresolved account placeholder in $policy"
+  fi
+done
+
+if grep -R -Eq '"Action"[[:space:]]*:[[:space:]]*"s3:\*"|"Action"[[:space:]]*:[[:space:]]*\[[^]]*"s3:\*"' "$tf_root/policies/compute-s3"; then
+  fail "compute-s3 policy grants a wildcard S3 action"
+fi
+
+if grep -R -Eq 's3:(Get|Put|Delete)Object([A-Z]|[" ]|$)' "$tf_root/policies/compute-s3"; then
+  fail "compute-s3 policy grants object-level access"
+fi
+
+for policy in "$tf_root/policies/compute-s3/plan.json.tftpl" "$tf_root/policies/compute-s3/apply.json.tftpl"; do
+  if grep -Eq 'arn:aws:s3:::\*|arn:aws:s3:::crewsafe-shared-dev-[^"/]*(\*|/\*)' "$policy"; then
+    fail "compute-s3 policy contains an unrelated or wildcard S3 resource: $policy"
+  fi
+done
 
 jq -e '
   .components["iam-policy-management-shared-dev"].root == "infra/terraform/iam-policy-management"

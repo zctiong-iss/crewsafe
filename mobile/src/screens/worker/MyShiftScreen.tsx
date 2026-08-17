@@ -65,7 +65,7 @@ import {
 } from "@/api/mock/scenario";
 import type { WeatherQualityStatus } from "@/types/domain";
 import { features } from "@/constants/features";
-import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
+import { sharedPaddingHorizontal, sharedGap } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 
 const LIGHTNING_SOURCES: LightningSource[] = ["live", "simulated"];
@@ -175,7 +175,9 @@ export default function MyShiftScreen() {
         }
       >
         {status === "error" ? (
-          <View style={styles.block}>
+          /* Still a wrapper: it groups the banner with its retry button so the two travel as
+             one item in the gapped stack, rather than being spaced apart from each other. */
+          <View>
             <MessageBanner
               message={t(errorKey ?? "errors.unknown")}
               tone="danger"
@@ -197,9 +199,7 @@ export default function MyShiftScreen() {
           Only when there is a shift: with no shift there is no site to have data about.
         */}
         {!lightning && shift ? (
-          <View style={styles.block}>
-            <MessageBanner message={t("lightning.unavailable")} tone="warning" />
-          </View>
+          <MessageBanner message={t("lightning.unavailable")} tone="warning" />
         ) : null}
 
         {lightning ? (
@@ -231,11 +231,7 @@ export default function MyShiftScreen() {
         {/* Heat conditions last, and the freshness notice stays immediately above it: a
             worker should know whether to trust the number before they read it, so the two
             move together or not at all. */}
-        {conditions ? (
-          <View style={styles.block}>
-            <FreshnessNotice status={conditions.qualityStatus} />
-          </View>
-        ) : null}
+        {conditions ? <FreshnessNotice status={conditions.qualityStatus} /> : null}
 
         {conditions ? (
           <WbgtCard conditions={conditions} superseded={stopWorkActive} />
@@ -344,13 +340,26 @@ export default function MyShiftScreen() {
 }
 
 const styles = StyleSheet.create({
+  /*
+   * ── THE GAP BELONGS TO THE CONTAINER, NOT TO EACH CARD ────────────────────────────────
+   * Every card here used to carry its own `marginTop: vs(12)`, which meant the space between
+   * any two of them was owned by whichever happened to be underneath. React Native does not
+   * collapse margins, so a card that used `marginBottom` instead — `WellbeingLogCard` did —
+   * contributed nothing above itself and sat flush against the card above. `LightningBanner`,
+   * carrying no root margin at all, had the same problem under the error banner.
+   *
+   * Neither is visible while reading one component: the bug only exists in the relationship
+   * between two of them, which is exactly the kind a stylesheet cannot show you. `gap` makes
+   * the spacing a property of the stack, so a new card is correctly spaced by existing here
+   * rather than by remembering a convention.
+   *
+   * `sharedGap` is the value the design system already exported for this and nothing used.
+   */
   content: {
     flexGrow: 1,
     paddingHorizontal: sharedPaddingHorizontal,
     paddingVertical: vs(12),
-  },
-  block: {
-    marginTop: vs(12),
+    gap: sharedGap,
   },
   retry: {
     marginTop: vs(12),
