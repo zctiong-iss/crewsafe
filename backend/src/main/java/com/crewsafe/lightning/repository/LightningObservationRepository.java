@@ -40,6 +40,19 @@ public interface LightningObservationRepository extends JpaRepository<LightningO
      */
     List<LightningObservation> findTop20BySiteIdOrderByObservedAtDesc(UUID siteId);
 
+    /** Fields for {@link #insertIfAbsent}, grouped so the method stays under Sonar's parameter limit. */
+    record InsertObservationCommand(
+            UUID id,
+            UUID siteId,
+            BigDecimal nearestStrikeKm,
+            Instant nearestStrikeAt,
+            Instant observedAt,
+            Instant ingestedAt,
+            String source,
+            String qualityStatus
+    ) {
+    }
+
     /**
      * Atomically inserts one observation or reports that its logical identity already
      * exists, the same idempotency shape as {@code WeatherObservationRepository}.
@@ -51,19 +64,10 @@ public interface LightningObservationRepository extends JpaRepository<LightningO
                 id, site_id, nearest_strike_km, nearest_strike_at,
                 observed_at, ingested_at, source, quality_status
             ) VALUES (
-                :id, :siteId, :nearestStrikeKm, :nearestStrikeAt,
-                :observedAt, :ingestedAt, :source, :qualityStatus
+                :#{#command.id}, :#{#command.siteId}, :#{#command.nearestStrikeKm}, :#{#command.nearestStrikeAt},
+                :#{#command.observedAt}, :#{#command.ingestedAt}, :#{#command.source}, :#{#command.qualityStatus}
             )
             ON CONFLICT (site_id, observed_at, source) DO NOTHING
             """, nativeQuery = true)
-    int insertIfAbsent(
-            @Param("id") UUID id,
-            @Param("siteId") UUID siteId,
-            @Param("nearestStrikeKm") BigDecimal nearestStrikeKm,
-            @Param("nearestStrikeAt") Instant nearestStrikeAt,
-            @Param("observedAt") Instant observedAt,
-            @Param("ingestedAt") Instant ingestedAt,
-            @Param("source") String source,
-            @Param("qualityStatus") String qualityStatus
-    );
+    int insertIfAbsent(@Param("command") InsertObservationCommand command);
 }

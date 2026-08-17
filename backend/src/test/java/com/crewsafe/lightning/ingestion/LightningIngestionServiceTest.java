@@ -21,8 +21,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -64,16 +63,21 @@ class LightningIngestionServiceTest {
                 new NeaLightningStrike(decimal("1.4300"), decimal("103.9600"), STRUCK_AT.minusSeconds(30), "C"),
                 new NeaLightningStrike(decimal("1.3010"), decimal("103.8010"), STRUCK_AT, "G")
         )));
-        when(observations.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(1);
+        when(observations.insertIfAbsent(any())).thenReturn(1);
 
         LightningIngestionResult result = service.ingestCurrentConditions();
 
         assertThat(result).isEqualTo(new LightningIngestionResult(1, 1, 0));
-        verify(observations).insertIfAbsent(
-                any(), eq(site.getId()),
-                argDistanceUnder(2.0),
-                eq(STRUCK_AT), eq(OBSERVED_AT), eq(NOW), eq("NEA"), eq("LIVE"));
+        verify(observations).insertIfAbsent(argThat(command ->
+                command.siteId().equals(site.getId())
+                        && command.nearestStrikeKm() != null
+                        && command.nearestStrikeKm().doubleValue() < 2.0
+                        && command.nearestStrikeKm().doubleValue() >= 0
+                        && command.nearestStrikeAt().equals(STRUCK_AT)
+                        && command.observedAt().equals(OBSERVED_AT)
+                        && command.ingestedAt().equals(NOW)
+                        && command.source().equals("NEA")
+                        && command.qualityStatus().equals("LIVE")));
     }
 
     @Test
@@ -81,13 +85,18 @@ class LightningIngestionServiceTest {
         Site site = new Site("Quiet Site", decimal("1.3000"), decimal("103.8000"));
         when(sites.findAll()).thenReturn(List.of(site));
         when(client.fetchLatest()).thenReturn(new NeaLightningObservation(OBSERVED_AT, List.of()));
-        when(observations.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(1);
+        when(observations.insertIfAbsent(any())).thenReturn(1);
 
         service.ingestCurrentConditions();
 
-        verify(observations).insertIfAbsent(
-                any(), eq(site.getId()), isNull(), isNull(), eq(OBSERVED_AT), eq(NOW), eq("NEA"), eq("LIVE"));
+        verify(observations).insertIfAbsent(argThat(command ->
+                command.siteId().equals(site.getId())
+                        && command.nearestStrikeKm() == null
+                        && command.nearestStrikeAt() == null
+                        && command.observedAt().equals(OBSERVED_AT)
+                        && command.ingestedAt().equals(NOW)
+                        && command.source().equals("NEA")
+                        && command.qualityStatus().equals("LIVE")));
     }
 
     @Test
@@ -95,8 +104,7 @@ class LightningIngestionServiceTest {
         Site site = new Site("Duplicate Site", decimal("1.3000"), decimal("103.8000"));
         when(sites.findAll()).thenReturn(List.of(site));
         when(client.fetchLatest()).thenReturn(new NeaLightningObservation(OBSERVED_AT, List.of()));
-        when(observations.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(0);
+        when(observations.insertIfAbsent(any())).thenReturn(0);
 
         assertThat(service.ingestCurrentConditions())
                 .isEqualTo(new LightningIngestionResult(1, 0, 1));
@@ -107,13 +115,18 @@ class LightningIngestionServiceTest {
         Site site = new Site("Replay Site", decimal("1.3000"), decimal("103.8000"));
         when(sites.findAll()).thenReturn(List.of(site));
         when(client.fetchLatest()).thenReturn(new NeaLightningObservation(OBSERVED_AT, List.of(), true));
-        when(observations.insertIfAbsent(any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(1);
+        when(observations.insertIfAbsent(any())).thenReturn(1);
 
         service.ingestCurrentConditions();
 
-        verify(observations).insertIfAbsent(
-                any(), eq(site.getId()), isNull(), isNull(), eq(OBSERVED_AT), eq(NOW), eq("CACHED"), eq("SIMULATED"));
+        verify(observations).insertIfAbsent(argThat(command ->
+                command.siteId().equals(site.getId())
+                        && command.nearestStrikeKm() == null
+                        && command.nearestStrikeAt() == null
+                        && command.observedAt().equals(OBSERVED_AT)
+                        && command.ingestedAt().equals(NOW)
+                        && command.source().equals("CACHED")
+                        && command.qualityStatus().equals("SIMULATED")));
     }
 
     @Test
@@ -123,11 +136,6 @@ class LightningIngestionServiceTest {
         assertThat(service.ingestCurrentConditions()).isEqualTo(LightningIngestionResult.noSites());
 
         verifyNoInteractions(client, observations);
-    }
-
-    private BigDecimal argDistanceUnder(double maxKm) {
-        return org.mockito.ArgumentMatchers.argThat(value ->
-                value != null && value.doubleValue() < maxKm && value.doubleValue() >= 0);
     }
 
     private BigDecimal decimal(String value) {

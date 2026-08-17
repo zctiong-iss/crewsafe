@@ -37,7 +37,7 @@ import my from "./my.json";
  *
  * ── FONTS ARE PART OF THIS ──────────────────────────────────────────────────────────────
  * Registering a language here is only half of supporting it. Tamil, Bengali and Burmese
- * have no glyphs in Gelasio, so each also needs its Noto family loaded in `App.tsx` and
+ * have no glyphs in Lexend, so each also needs its Noto family loaded in `App.tsx` and
  * mapped in `styles/fonts.ts`. Adding a locale file without that renders tofu — a language
  * that is present in the picker and unreadable on screen.
  *

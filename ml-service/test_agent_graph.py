@@ -268,7 +268,8 @@ def test_happy_path_ships_the_model_plan_without_falling_back():
     assert response.modelId == MODEL_ID
     assert response.rationale == "A model-written explanation of the whole plan."
     assert len(stub.calls) == 1
-    assert response.inputTokens == 900 and response.outputTokens == 600
+    assert response.inputTokens == 900
+    assert response.outputTokens == 600
 
 
 def test_one_bad_draft_is_retried_and_the_retry_ships():
@@ -283,7 +284,8 @@ def test_one_bad_draft_is_retried_and_the_retry_ships():
     assert len(stub.calls) == 2
     assert response.usedFallback is False
     # Both attempts are billed, so both are reported.
-    assert response.inputTokens == 1800 and response.outputTokens == 1200
+    assert response.inputTokens == 1800
+    assert response.outputTokens == 1200
 
 
 def test_two_bad_drafts_fall_back_and_still_return_a_plan():
@@ -381,7 +383,8 @@ def test_the_prompt_carries_the_policy_decision_and_the_roster():
     assert "MANDATORY actions" in context
     assert "REST_15_MIN_HOURLY (rule: UNACCLIMATISED_HEAVY_WORK_RULE)" in context
     assert "MOM-WBGT-2026.1" in context
-    assert WORKER_A in context and WORKER_B in context
+    assert WORKER_A in context
+    assert WORKER_B in context
     # WORKER_B filed no readiness check, and the prompt says so without turning it into a mandate.
     assert "readiness check" in context
     assert "do not treat it as grounds for any action" in context
