@@ -46,10 +46,10 @@ export function AuthNotice({
         </div>
 
         {busy && (
-          <p className="auth-notice__busy" role="status">
+          <output className="auth-notice__busy">
             <span className="auth-notice__pulse" aria-hidden="true" />
             Working
-          </p>
+          </output>
         )}
 
         {(action ?? secondary) && (

@@ -66,6 +66,14 @@ it("lists shifts from every site the user belongs to", async () => {
   expect(await screen.findByText("NUS Campus Maintenance")).toBeInTheDocument();
 });
 
+  it("renders the loading message as an <output> status region (SCRUM-420 / S6819)", async () => {
+    server.use(http.get("*/api/v1/sites/:siteId/shifts", () => new Promise(() => {})));
+    renderApp();
+
+    const status = await screen.findByText("Loading shifts…");
+    expect(status.tagName).toBe("OUTPUT");
+  });
+
   it("offers a Create button when there are no shifts", async () => {
     server.use(http.get("*/api/v1/sites/:siteId/shifts", () => HttpResponse.json([])));
     renderApp();

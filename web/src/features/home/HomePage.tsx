@@ -58,9 +58,9 @@ export function HomePage() {
       subtitle={`Signed in as ${user.username}`}
     >
       {load.status === "loading" && (
-        <p className="home__loading" role="status">
+        <output className="home__loading">
           Loading your sites
-        </p>
+        </output>
       )}
 
       {load.status === "error" && (

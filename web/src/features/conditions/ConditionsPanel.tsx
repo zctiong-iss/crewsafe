@@ -9,6 +9,14 @@ import { ConditionsTrendChart } from "./ConditionsTrendChart";
 import { StopWorkBanner } from "./StopWorkBanner";
 import "./ConditionsPanel.css";
 
+// A lookup reads top-to-bottom; the nested ?: did not. Keys mirror the freshness union.
+const FRESHNESS_LABEL: Record<string, string> = {
+  LIVE: "Live",
+  DELAYED: "Delayed",
+  SIMULATED: "Simulated",
+  STALE: "Stale",
+};
+
 function rangeWarningMessage(
   warning: ConditionsRangeWarning,
 ): string {
@@ -54,7 +62,7 @@ export function ConditionsPanel({
   if (connectionState === "connecting" && snapshot === null)
     return (
       <AppShell title="Conditions" subtitle="Real-time site conditions & weather monitoring" siteSwitcher={siteSwitcher}>
-        <p className="conditions-panel__loading" role="status">Connecting to live conditions...</p>
+        <output className="conditions-panel__loading">Connecting to live conditions...</output>
       </AppShell>
     );
 
@@ -70,11 +78,7 @@ export function ConditionsPanel({
 
   const c = snapshot?.conditions ?? null;
 
-  const badgeText = c === null ? null
-    : c.freshness === "LIVE" ? "Live"
-    : c.freshness === "DELAYED" ? "Delayed"
-    : c.freshness === "SIMULATED" ? "Simulated"
-    : "Stale";
+  const badgeText = c === null ? null : (FRESHNESS_LABEL[c.freshness] ?? "Stale");
 
   return (
     <AppShell title="Conditions" subtitle="Real-time site conditions, WBGT heat stress & trend monitoring" siteSwitcher={siteSwitcher}>
@@ -103,12 +107,11 @@ export function ConditionsPanel({
         ) : (
           <>
            <div className="conditions-panel__header">
-              <span
+              <output
                 className={"conditions-panel__badge conditions-panel__badge--" + c.freshness.toLowerCase()}
-                role="status"
               >
                 {badgeText}
-              </span>
+              </output>
               {c.observedAt && (
                 <span className="conditions-panel__timestamp">
                   Reading observed at {new Date(c.observedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

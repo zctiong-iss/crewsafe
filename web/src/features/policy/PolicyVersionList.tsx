@@ -95,7 +95,9 @@ export function PolicyVersionList({ siteId, siteSwitcher }: { siteId: string; si
 
   return (
     <AppShell title="Heat Policy" siteSwitcher={siteSwitcher} actions={createButton}>
-      {load.status === "loading" && <p role="status">Loading policy versions…</p>}
+      {load.status === "loading" && (
+        <output style={{ display: "block" }}>Loading policy versions…</output>
+      )}
 
       {load.status === "error" && (
         <EmptyState headline="Could not load policy versions" body={load.message} />
