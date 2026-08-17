@@ -167,9 +167,9 @@ class LightningControllerTest extends AbstractIntegrationTest {
 
     private void insertObservation(UUID siteId, Instant observedAt, BigDecimal nearestStrikeKm,
                                    WeatherQualityStatus qualityStatus) {
-        observations.insertIfAbsent(
+        observations.insertIfAbsent(new LightningObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(), siteId, nearestStrikeKm, observedAt, observedAt,
-                Instant.now(), WeatherSource.NEA.name(), qualityStatus.name());
+                Instant.now(), WeatherSource.NEA.name(), qualityStatus.name()));
     }
 
     private MockHttpServletRequestBuilder authenticatedGet(UUID siteId) {

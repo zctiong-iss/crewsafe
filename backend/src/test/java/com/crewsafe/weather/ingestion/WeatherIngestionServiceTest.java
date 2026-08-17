@@ -21,12 +21,11 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -68,26 +67,23 @@ class WeatherIngestionServiceTest {
         Site site = new Site("Test Site", decimal("1.3000"), decimal("103.8000"));
         when(sites.findAll()).thenReturn(List.of(site));
         when(client.fetchAll()).thenReturn(completeSnapshot());
-        when(observations.insertIfAbsent(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(1);
+        when(observations.insertIfAbsent(any())).thenReturn(1);
 
         WeatherIngestionResult result = service.ingestCurrentConditions();
 
         assertThat(result).isEqualTo(new WeatherIngestionResult(1, 1, 0));
-        verify(observations).insertIfAbsent(
-                any(UUID.class),
-                eq(site.getId()),
-                eq(decimal("31.2")),
-                eq(decimal("29.1")),
-                eq(decimal("81.0")),
-                eq(decimal("4.0")),
-                eq(decimal("0.0")),
-                eq(OBSERVED_AT),
-                eq(NOW),
-                eq("NEA"),
-                eq("DELAYED"),
-                eq("WBGT-NEAR"));
+        verify(observations).insertIfAbsent(argThat(command ->
+                command.siteId().equals(site.getId())
+                        && command.wbgt().equals(decimal("31.2"))
+                        && command.temperature().equals(decimal("29.1"))
+                        && command.humidity().equals(decimal("81.0"))
+                        && command.windSpeed().equals(decimal("4.0"))
+                        && command.rainfall().equals(decimal("0.0"))
+                        && command.observedAt().equals(OBSERVED_AT)
+                        && command.ingestedAt().equals(NOW)
+                        && command.source().equals("NEA")
+                        && command.qualityStatus().equals("DELAYED")
+                        && command.stationId().equals("WBGT-NEAR")));
     }
 
     @Test
@@ -95,9 +91,7 @@ class WeatherIngestionServiceTest {
         Site site = new Site("Duplicate Site", decimal("1.3000"), decimal("103.8000"));
         when(sites.findAll()).thenReturn(List.of(site));
         when(client.fetchAll()).thenReturn(completeSnapshot());
-        when(observations.insertIfAbsent(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(0);
+        when(observations.insertIfAbsent(any())).thenReturn(0);
 
         assertThat(service.ingestCurrentConditions())
                 .isEqualTo(new WeatherIngestionResult(1, 0, 1));
@@ -112,25 +106,22 @@ class WeatherIngestionServiceTest {
                         observation.metric(), observation.observedAt(), observation.unit(),
                         observation.readings(), true))
                 .toList());
-        when(observations.insertIfAbsent(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(1);
+        when(observations.insertIfAbsent(any())).thenReturn(1);
 
         assertThat(service.ingestCurrentConditions())
                 .isEqualTo(new WeatherIngestionResult(1, 1, 0));
-        verify(observations).insertIfAbsent(
-                any(UUID.class),
-                eq(site.getId()),
-                eq(decimal("31.2")),
-                eq(decimal("29.1")),
-                eq(decimal("81.0")),
-                eq(decimal("4.0")),
-                eq(decimal("0.0")),
-                eq(OBSERVED_AT),
-                eq(NOW),
-                eq("CACHED"),
-                eq("SIMULATED"),
-                eq("WBGT-NEAR"));
+        verify(observations).insertIfAbsent(argThat(command ->
+                command.siteId().equals(site.getId())
+                        && command.wbgt().equals(decimal("31.2"))
+                        && command.temperature().equals(decimal("29.1"))
+                        && command.humidity().equals(decimal("81.0"))
+                        && command.windSpeed().equals(decimal("4.0"))
+                        && command.rainfall().equals(decimal("0.0"))
+                        && command.observedAt().equals(OBSERVED_AT)
+                        && command.ingestedAt().equals(NOW)
+                        && command.source().equals("CACHED")
+                        && command.qualityStatus().equals("SIMULATED")
+                        && command.stationId().equals("WBGT-NEAR")));
     }
 
     @Test
@@ -148,8 +139,7 @@ class WeatherIngestionServiceTest {
         assertThatThrownBy(service::ingestCurrentConditions)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("mixed live and simulated");
-        verify(observations, never()).insertIfAbsent(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(observations, never()).insertIfAbsent(any());
     }
 
     @Test
@@ -172,8 +162,7 @@ class WeatherIngestionServiceTest {
         assertThatThrownBy(service::ingestCurrentConditions)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("RAINFALL");
-        verify(observations, never()).insertIfAbsent(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(observations, never()).insertIfAbsent(any());
     }
 
     private List<NeaObservation> completeSnapshot() {

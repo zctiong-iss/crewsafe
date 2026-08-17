@@ -45,11 +45,11 @@ class WeatherObservationSchemaTest extends AbstractIntegrationTest {
     }
 
     private int insert(UUID siteId, Instant observedAt, BigDecimal wbgt) {
-        return observations.insertIfAbsent(
+        return observations.insertIfAbsent(new WeatherObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(), siteId, wbgt,
                 new BigDecimal("29.10"), new BigDecimal("81.00"),
                 new BigDecimal("4.00"), BigDecimal.ZERO,
                 observedAt, Instant.parse("2026-07-30T09:00:00Z"),
-                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name(), "S124");
+                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name(), "S124"));
     }
 }

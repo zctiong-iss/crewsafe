@@ -56,9 +56,10 @@ class LightningObservationSchemaTest extends AbstractIntegrationTest {
                 new BigDecimal("1.352100"), new BigDecimal("103.819800")));
         Instant observedAt = Instant.parse("2026-07-30T08:30:00Z");
 
-        int inserted = observations.insertIfAbsent(UUID.randomUUID(), site.getId(), null, null,
+        int inserted = observations.insertIfAbsent(new LightningObservationRepository.InsertObservationCommand(
+                UUID.randomUUID(), site.getId(), null, null,
                 observedAt, Instant.parse("2026-07-30T09:00:00Z"),
-                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name());
+                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name()));
 
         assertThat(inserted).isEqualTo(1);
         assertThat(observations.findFirstBySiteIdOrderByObservedAtDesc(site.getId()))
@@ -85,9 +86,9 @@ class LightningObservationSchemaTest extends AbstractIntegrationTest {
     }
 
     private int insert(UUID siteId, Instant observedAt, Instant strikeAt, BigDecimal distanceKm) {
-        return observations.insertIfAbsent(
+        return observations.insertIfAbsent(new LightningObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(), siteId, distanceKm, strikeAt,
                 observedAt, Instant.parse("2026-07-30T09:00:00Z"),
-                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name());
+                WeatherSource.NEA.name(), WeatherQualityStatus.LIVE.name()));
     }
 }
