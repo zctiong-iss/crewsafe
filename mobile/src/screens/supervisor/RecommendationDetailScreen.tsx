@@ -43,6 +43,7 @@ import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 import type { Mitigation, MitigationCategory } from "@/types/domain";
 import type { RecommendationsStackParamList } from "@/navigation/types";
 
@@ -357,6 +358,30 @@ export default function RecommendationDetailScreen() {
             </AppText>
           ) : null}
         </View>
+
+        {/*
+          ── WHO WROTE THIS PLAN (SCRUM-359 / SCRUM-TBD-70) ──────────────────
+          The server has reported `modelVersion` since SCRUM-359 and the client dropped it,
+          because the type never declared the field. That was survivable while a supervisor
+          pressed "Draft plan" themselves: the agent takes 10-20s, so an instant answer was
+          itself a signal that the deterministic template had run instead.
+
+          Auto-drafting removes that signal entirely. Plans now arrive on their own every two
+          minutes, so a Bedrock or ml-service outage would produce a steady stream of template
+          plans that look exactly like agent-drafted ones, with nobody waiting on a spinner to
+          notice. `AgentDraftClient`'s own header records this failure happening once already,
+          when a 5s timeout made every call fall back "while looking exactly like a working LLM
+          path".
+
+          Said here rather than in a log, because the person who needs to know is the one about
+          to approve it. It is not a warning — a deterministic plan is a legitimate, policy-
+          derived plan, and §8.2 guarantees the policy engine ran either way. It changes how
+          much the supervisor's own judgement is carrying, which is exactly the kind of thing
+          US-08 says they are entitled to see.
+        */}
+        {recommendation.modelVersion === DETERMINISTIC_FALLBACK_MODEL ? (
+          <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+        ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
         {recommendation.rationale ? (

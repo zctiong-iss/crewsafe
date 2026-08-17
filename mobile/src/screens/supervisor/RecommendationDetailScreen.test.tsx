@@ -86,6 +86,7 @@ function recommendation(overrides: Partial<Recommendation> = {}): Recommendation
     createdAt: "2026-08-13T01:00:00Z",
     mitigations: [],
     approval: null,
+    modelVersion: "anthropic.claude-3-5-sonnet",
     ...overrides,
   };
 }
@@ -435,4 +436,77 @@ it("does not poll while a decision is in flight", async () => {
   tick();
 
   expect(mockFetchShifts.mock.calls.length).toBe(before);
+});
+
+/* ── Plan provenance: model or template (SCRUM-359 / SCRUM-TBD-70) ──────────────────────── */
+
+it("says so when no model wrote the plan", async () => {
+  /*
+   * THE POINT OF SURFACING modelVersion.
+   *
+   * `AgentDraftService` writes "deterministic-fallback" on three paths: ml-service fell back
+   * internally, ml-service was unreachable or timed out, or the backend's own gate rejected the
+   * model's draft. The server has reported this since SCRUM-359 and the client dropped it,
+   * because the type never declared the field.
+   *
+   * That was survivable while a supervisor pressed Draft plan and could infer a fallback from
+   * an instant response instead of a 10-20s wait. With auto-drafting there is no spinner and no
+   * human in the loop, so a Bedrock outage would produce template plans every two minutes,
+   * indistinguishable from agent-drafted ones.
+   */
+  const store = buildStore(SUPERVISOR, [
+    recommendation({ modelVersion: "deterministic-fallback" }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.noModelNotice")).not.toBeNull();
+});
+
+it("stays quiet when a model did write the plan", async () => {
+  const store = buildStore(SUPERVISOR, [
+    recommendation({ modelVersion: "anthropic.claude-3-5-sonnet" }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.noModelNotice")).toBeNull();
+});
+
+it("does not claim a template wrote a plan that simply predates the field", async () => {
+  // Null means "not recorded" -- recommendations drafted before SCRUM-359 carry no model
+  // version at all. Asserting a fallback there would be inventing a fact about old records.
+  const store = buildStore(SUPERVISOR, [recommendation({ modelVersion: null })]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.noModelNotice")).toBeNull();
+});
+
+it("still offers the decision buttons on a fallback plan", async () => {
+  // A deterministic plan is a legitimate, policy-derived plan -- §8.2 guarantees the policy
+  // engine ran either way. The notice informs the judgement; it must not block the decision.
+  const store = buildStore(SUPERVISOR, [
+    recommendation({ modelVersion: "deterministic-fallback" }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.approveButton")).not.toBeNull();
 });

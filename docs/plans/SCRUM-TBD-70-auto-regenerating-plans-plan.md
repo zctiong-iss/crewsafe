@@ -102,6 +102,59 @@ before a shift starts has aged out of relevance by the time anyone walks on site
 
 ---
 
+## Making the Bedrock path verifiable
+
+Auto-drafting removes the human from the loop, and with them the only signal anyone had that
+the model was actually running. Two gaps, both found by asking "how would we know if Bedrock
+were down?"
+
+### The live contract test could not fail
+
+`AgentDraftContractLiveTest` exists specifically to exercise the real model. **Every assertion
+in it passed with Bedrock completely unavailable.** ml-service's deterministic fallback
+(`agent/fallback.py`) builds its plan from the policy decision the request already carries, and
+that plan satisfies the lot: `REST_15_MIN_HOURLY` at `durationMinutes=15 / everyMinutes=60`,
+`HYDRATE_HOURLY`, a non-blank rationale, known action codes, and a valid `origin`,
+`ruleReference` and `category` on every mitigation.
+
+So a green run proved only that ml-service was up. The test now asserts `usedFallback` is false,
+`fallbackReason` is null, and `modelId` names a real model — checked *first*, before anything
+else. The two are asserted together because they fail differently: the flag catches ml-service
+falling back internally, the id catches a response claiming success while naming the sentinel.
+
+This is the same class of bug the test's own header records happening once already, when a 5 s
+timeout made every call fall back "while looking exactly like a working LLM path".
+
+### The client dropped the provenance the server was already sending
+
+`RecommendationController` has returned `modelVersion` since SCRUM-359. The mobile
+`Recommendation` type never declared the field, so it arrived in every payload and was discarded.
+
+That was survivable while a supervisor pressed Draft plan: the agent takes 10–20 s, so an
+instant answer was itself a tell. Auto-drafting removes it. A Bedrock outage would now produce
+template plans every two minutes, indistinguishable from agent-drafted ones, with nobody waiting
+on a spinner to notice.
+
+The detail screen now says so when `modelVersion` is `deterministic-fallback`. Deliberately
+`info`, not a warning: a deterministic plan is a legitimate, policy-derived plan — §8.2
+guarantees the policy engine ran either way — and the buttons stay enabled. What changes is how
+much the supervisor's own judgement is carrying, which is exactly what US-08 says they are
+entitled to see. `null` renders nothing: that means "not recorded" on a pre-SCRUM-359
+recommendation, which is not the same claim as "a template wrote this".
+
+The mock now carries honest values too — one seeded plan from a model, one from the fallback, and
+the on-request draft as the fallback, because mock mode never reaches ml-service at all.
+
+### Why not a health indicator
+
+Considered and rejected. `management.endpoint.health.show-details: never` means an indicator's
+detail would never be visible, and contributing `DOWN` for a working fallback would drag the
+whole application's health down — potentially restarting instances or pulling them from
+rotation — over a degradation the app is explicitly designed to absorb. The honest signals are
+the ones added above plus the existing `agent_draft_unavailable` structured log.
+
+---
+
 ## Not done
 
 **SCRUM-TBD-79 — verifying SCRUM-291's guards end to end.** The dedup, shift-state, lead-window,

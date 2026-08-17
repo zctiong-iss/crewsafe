@@ -91,6 +91,7 @@ function recommendation(id: string, overrides: Partial<Recommendation> = {}): Re
     createdAt: "2026-08-17T01:00:00Z",
     mitigations: [],
     approval: null,
+    modelVersion: "anthropic.claude-3-5-sonnet",
     ...overrides,
   };
 }

@@ -17,6 +17,7 @@ import { ApiError } from "../errors";
 import { mockListShifts } from "./shifts";
 import { DEMO_SITES } from "@/auth/demoUsers";
 import type { DecisionInput } from "../endpoints/recommendations";
+import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 import type { Mitigation, Recommendation } from "@/types/domain";
 
 let sequence = 0;
@@ -123,6 +124,8 @@ function seed(): Recommendation[] {
         ),
       ],
       approval: null,
+      // A model wrote this one, so the screen shows no provenance notice.
+      modelVersion: "anthropic.claude-3-5-sonnet",
     });
   }
 
@@ -157,6 +160,12 @@ function seed(): Recommendation[] {
         ),
       ],
       approval: null,
+      /*
+       * Deliberately the fallback, so the "no model wrote this" notice is reachable in review
+       * without anyone having to break ml-service to see it. The real agent's no-LLM path is
+       * the version most likely to reach a supervisor on a bad day.
+       */
+      modelVersion: DETERMINISTIC_FALLBACK_MODEL,
     });
   }
 
@@ -252,6 +261,9 @@ export function mockGenerateRecommendation(shiftId: string): Recommendation {
     rationale:
       "Drafted on request. Current band requires an hourly rest for anyone on heavy work.",
     createdAt: new Date().toISOString(),
+    // Mock mode never reaches ml-service, let alone Bedrock. Claiming a model id here would
+    // make the one screen that reports provenance lie in the mode used for demos.
+    modelVersion: DETERMINISTIC_FALLBACK_MODEL,
     mitigations: [
       mitigation(
         "REST_10_MIN_HOURLY",
