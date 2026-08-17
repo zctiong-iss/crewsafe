@@ -33,13 +33,13 @@ override_data {
   target = data.terraform_remote_state.cognito
   values = {
     outputs = {
-      issuer_uri        = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000"
-      jwks_uri          = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000/.well-known/jwks.json"
-      web_client_id     = "webclientid0000000000000000"
-      mobile_client_id  = "mobileclientid000000000000"
-      cli_client_id     = "cliclientid0000000000000000"
-      user_pool_id      = "ap-southeast-1_TEST00000"
-      user_pool_arn     = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TEST00000"
+      issuer_uri       = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000"
+      jwks_uri         = "https://cognito-idp.ap-southeast-1.amazonaws.com/ap-southeast-1_TEST00000/.well-known/jwks.json"
+      web_client_id    = "webclientid0000000000000000"
+      mobile_client_id = "mobileclientid000000000000"
+      cli_client_id    = "cliclientid0000000000000000"
+      user_pool_id     = "ap-southeast-1_TEST00000"
+      user_pool_arn    = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TEST00000"
     }
   }
 }
