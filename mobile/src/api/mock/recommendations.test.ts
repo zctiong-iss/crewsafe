@@ -101,3 +101,81 @@ it("answers 404 for a recommendation on another shift", () => {
     mockDecideRecommendation("some-other-shift", recommendation.id, { decision: "APPROVED" }),
   )).toBe(404);
 });
+
+/* ── The mock's stand-in for the SCRUM-291 auto-trigger (SCRUM-TBD-70) ──────────────────── */
+
+/**
+ * The store is seeded once, so before SCRUM-TBD-70 the Plans tab polled every 60s in mock mode
+ * and received byte-identical data forever. The auto-regenerating behaviour was invisible in
+ * exactly the mode used for demos — a reviewer would watch the screen do nothing and reasonably
+ * conclude it was not implemented.
+ *
+ * Time is advanced with fake timers rather than waited out: the cadence is deliberately matched
+ * to the server's 2-minute default, and a test that slept for it would add two minutes to every
+ * run to prove something a clock can prove instantly.
+ */
+describe("auto-trigger", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    resetMockRecommendations();
+  });
+  afterEach(() => jest.useRealTimers());
+
+  function shiftId() {
+    const shift = mockListShifts(DEMO_SITES.bishan.id).find((s) => s.status === "ACTIVE");
+    if (!shift) throw new Error("fixture shift missing");
+    return shift.id;
+  }
+
+  it("drafts nothing before the interval has elapsed", () => {
+    const id = shiftId();
+    const before = mockListRecommendations(id).length;
+
+    jest.advanceTimersByTime(60_000); // half the cadence
+    expect(mockListRecommendations(id)).toHaveLength(before);
+  });
+
+  it("drafts a new plan once the interval has elapsed", () => {
+    const id = shiftId();
+    const before = mockListRecommendations(id).length;
+
+    jest.advanceTimersByTime(2 * 60_000);
+    expect(mockListRecommendations(id).length).toBe(before + 1);
+  });
+
+  it("SUPERSEDES the open plan rather than stacking a second one", () => {
+    /*
+     * The contract most likely to be got wrong by a client, and the mock is where a client
+     * learns it. `AgentDraftService.supersedeOpenRecommendation` flips the open plan to
+     * SUPERSEDED before drafting, so there is never more than one awaiting a decision. A mock
+     * that stacked would teach the opposite.
+     */
+    const id = shiftId();
+    jest.advanceTimersByTime(2 * 60_000);
+
+    const after = mockListRecommendations(id);
+    expect(after.filter((r) => r.status === "PENDING_APPROVAL")).toHaveLength(1);
+    expect(after.filter((r) => r.status === "SUPERSEDED")).toHaveLength(1);
+  });
+
+  it("marks the auto-drafted plan as written by no model", () => {
+    // Mock mode reaches no ml-service and therefore no Bedrock. Claiming a model id would make
+    // the provenance notice lie in the one mode where nobody can check.
+    const id = shiftId();
+    jest.advanceTimersByTime(2 * 60_000);
+
+    const pending = mockListRecommendations(id).find((r) => r.status === "PENDING_APPROVAL");
+    expect(pending?.modelVersion).toBe("deterministic-fallback");
+  });
+
+  it("drafts nothing for a shift with no open plan", () => {
+    // The server only drafts for a shift in scope. Inventing plans for a shift nobody is
+    // running would be the mock telling a story the backend does not.
+    const planned = mockListShifts(DEMO_SITES.bishan.id).find((s) => s.status === "CLOSED");
+    if (!planned) return; // no closed fixture; nothing to assert
+
+    const before = mockListRecommendations(planned.id).length;
+    jest.advanceTimersByTime(2 * 60_000);
+    expect(mockListRecommendations(planned.id)).toHaveLength(before);
+  });
+});

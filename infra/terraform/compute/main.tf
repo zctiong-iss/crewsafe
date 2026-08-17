@@ -144,6 +144,7 @@ locals {
     APP_COGNITO_CLIENT_IDS      = "${local.secrets.config_parameter_prefix}/cognito/client-ids"
     SPRING_PROFILES_ACTIVE      = "${local.secrets.config_parameter_prefix}/spring/profiles-active"
     WEATHER_INGESTION_ENABLED   = "${local.secrets.config_parameter_prefix}/weather/ingestion-enabled"
+    LIGHTNING_INGESTION_ENABLED = "${local.secrets.config_parameter_prefix}/lightning/ingestion-enabled"
     CORS_ALLOWED_ORIGINS        = aws_ssm_parameter.cors_allowed_origins.name
     APP_COGNITO_DEMO_USERS_JSON = aws_ssm_parameter.demo_users_json.name
   }
@@ -411,6 +412,8 @@ resource "aws_lb" "public" {
     bucket  = aws_s3_bucket.alb_logs.id
     enabled = true
   }
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 
   tags = { Name = "${local.name_prefix}-public" }
 }

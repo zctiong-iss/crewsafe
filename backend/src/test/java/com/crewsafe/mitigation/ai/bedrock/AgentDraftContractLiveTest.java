@@ -62,6 +62,35 @@ class AgentDraftContractLiveTest {
     void javaRequestRoundTripsThroughTheLiveAgent() {
         AgentDraftClient.DraftResponse response = client().draft(request());
 
+        /*
+         * ── FIRST, AND BEFORE ANYTHING ELSE: A MODEL ACTUALLY RAN ───────────────────────
+         *
+         * Without this the entire test passes with Bedrock completely unavailable, which is
+         * the precise failure its own header warns about. ml-service's deterministic fallback
+         * (agent/fallback.py) builds its plan straight from the policy decision this request
+         * carries, and that plan satisfies every other assertion below: it emits
+         * REST_15_MIN_HOURLY with durationMinutes=15/everyMinutes=60 and HYDRATE_HOURLY, a
+         * non-blank rationale, known action codes, and a valid origin, ruleReference and
+         * category on each mitigation.
+         *
+         * So a green run proved only that ml-service was up. The one test whose whole purpose
+         * is exercising the live model could not distinguish a working Bedrock from a dead one
+         * — and this sprint has already produced that exact bug once, when a 5s timeout made
+         * every call fall back "while looking exactly like a working LLM path".
+         *
+         * `modelId` is asserted alongside `usedFallback` because they fail differently: the
+         * flag catches ml-service falling back internally, the id catches a response that
+         * claims success while naming the fallback sentinel.
+         */
+        assertThat(response.usedFallback())
+                .as("a model must have drafted this; fallbackReason=%s", response.fallbackReason())
+                .isFalse();
+        assertThat(response.fallbackReason()).isNull();
+        assertThat(response.modelId())
+                .as("the drafting model must be named")
+                .isNotBlank()
+                .isNotEqualTo("deterministic-fallback");
+
         assertThat(response.rationale()).isNotBlank();
         assertThat(response.mitigations()).isNotEmpty();
 

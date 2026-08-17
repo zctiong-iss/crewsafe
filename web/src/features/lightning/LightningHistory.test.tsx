@@ -66,4 +66,14 @@ describe("LightningHistory", () => {
     await screen.findByText("Clear");
     expect(screen.queryByRole("combobox", { name: "Site" })).not.toBeInTheDocument();
   });
+
+  it("renders the loading message as an <output> status region (SCRUM-420 / S6819)", async () => {
+    server.use(
+      http.get("*/api/v1/sites/:siteId/lightning/observations", () => new Promise(() => {})),
+    );
+    renderApp();
+
+    const status = await screen.findByText("Loading lightning data…");
+    expect(status.tagName).toBe("OUTPUT");
+  });
 });

@@ -71,7 +71,7 @@ export function AuthProvider({
   now = Date.now,
   activityTarget = document,
   sessionPolicyEnabled = true,
-}: {
+}: Readonly<{
   children: ReactNode;
   /** Injectable so tests can drive auth without a real Cognito. */
   userManager?: UserManager;
@@ -84,11 +84,9 @@ export function AuthProvider({
   now?: () => number;
   activityTarget?: Pick<Document, "addEventListener" | "removeEventListener">;
   sessionPolicyEnabled?: boolean;
-}) {
+}>) {
   const managerRef = useRef<UserManager | null>(null);
-  if (managerRef.current === null) {
-    managerRef.current = userManager ?? getProductionUserManager();
-  }
+  managerRef.current ??= userManager ?? getProductionUserManager();
   const manager = managerRef.current;
 
   const [state, setState] = useState<AuthState>({ status: "starting" });

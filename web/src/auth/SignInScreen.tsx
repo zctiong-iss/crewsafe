@@ -17,7 +17,7 @@ import { AuthNotice } from "./AuthNotice";
  * A separate component, not a case in App's switch, because this is the one pre-app screen
  * that needs its own local state — the others are pure renders of {@link AuthState}.
  */
-export function SignInScreen({ onSignIn }: { onSignIn: () => Promise<void> }) {
+export function SignInScreen({ onSignIn }: Readonly<{ onSignIn: () => Promise<void> }>) {
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 

@@ -3,6 +3,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import List, Literal, Optional
 from datetime import datetime, timezone
 
+# Shared across ForecastPrediction/ModelStatus/ModelCard example payloads (python:S1192).
+_BASELINE_MODEL_VERSION_EXAMPLE = "baseline-1.0.0"
+
 
 class Timing(BaseModel):
     """Duration / recurrence / deadline for a mitigation that needs one.
@@ -187,7 +190,7 @@ class ForecastPrediction(BaseModel):
                 "metric": "wbgt",
                 "predicted_value": 35.5,
                 "horizon_minutes": 30,
-                "model_version": "baseline-1.0.0",
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
                 "confidence_interval_lower": 34.2,
                 "confidence_interval_upper": 36.8,
                 "timestamp": "2026-02-08T12:00:00Z",
@@ -210,4 +213,115 @@ class ForecastPrediction(BaseModel):
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         description="Prediction generation time in UTC",
+    )
+
+
+class ModelHorizonMetrics(BaseModel):
+    """Accuracy metrics for one forecast horizon, taken from the evaluation artifact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mae: float = Field(..., description="Mean absolute error")
+    rmse: float = Field(..., description="Root mean squared error")
+    mean_bias: float = Field(..., description="Mean signed error (predicted minus actual)")
+    macro_f1: float = Field(..., description="Macro-averaged F1 across WBGT risk bands")
+    recall_at_least_32: float = Field(..., description="Recall for actual WBGT >= 32 degrees")
+    recall_at_least_33: float = Field(..., description="Recall for actual WBGT >= 33 degrees")
+    mae_by_actual_band: dict[str, Optional[float]] = Field(
+        ..., description="Mean absolute error grouped by actual WBGT risk band"
+    )
+    confusion_matrix: List[List[int]] = Field(
+        ..., description="Risk-band confusion matrix, ordered BELOW_31..AT_LEAST_33"
+    )
+    sample_count: int = Field(..., description="Number of evaluation samples backing these metrics")
+
+
+class ModelStatus(BaseModel):
+    """Currently configured model's approval status and per-horizon accuracy metrics."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
+                "approved_for_inference": False,
+                "approval_blocker": "no model configured",
+                "horizons": {},
+            }
+        },
+    )
+
+    model_version: str = Field(..., description="Currently configured model bundle version")
+    approved_for_inference: bool = Field(
+        ..., description="Whether the configured bundle is approved for production inference"
+    )
+    approval_blocker: Optional[str] = Field(
+        None, description="Why the bundle is not approved, when applicable"
+    )
+    horizons: dict[str, ModelHorizonMetrics] = Field(
+        default_factory=dict,
+        description="Evaluation metrics per horizon (keys '30'/'60'), from the model manifest",
+    )
+
+
+class ShapDriver(BaseModel):
+    """One input feature's mean absolute SHAP contribution for a horizon."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    feature: str = Field(..., description="Feature name (one-hot/indicator columns collapsed)")
+    mean_abs_shap: float = Field(..., description="Mean absolute SHAP value across the validation sample")
+
+
+class HorizonCalibration(BaseModel):
+    """Whether the stated confidence interval matches real-world coverage."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_coverage: float = Field(..., description="Coverage the interval was calibrated to, e.g. 0.95")
+    final_test_coverage: float = Field(
+        ..., description="Actual coverage measured on the held-out test window"
+    )
+    calibration_sample_count: int = Field(
+        ..., description="Validation samples used to calibrate the interval"
+    )
+
+
+class ModelCardHorizon(BaseModel):
+    """Explainability and reliability data for one forecast horizon."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    shap_drivers: List[ShapDriver] = Field(
+        default_factory=list,
+        description="Top drivers by mean absolute SHAP value, most important first",
+    )
+    shap_computed: bool = Field(
+        ..., description="False when this model bundle predates SHAP computation or has no tree to explain"
+    )
+    calibration: Optional[HorizonCalibration] = Field(
+        None, description="Stated-vs-actual confidence interval coverage, when available"
+    )
+    mae_by_actual_band: dict[str, Optional[float]] = Field(
+        ..., description="Mean absolute error grouped by actual WBGT risk band"
+    )
+
+
+class ModelCard(BaseModel):
+    """Explainability and reliability report for the configured model (SCRUM-152)."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
+                "horizons": {},
+            }
+        },
+    )
+
+    model_version: str = Field(..., description="Currently configured model bundle version")
+    horizons: dict[str, ModelCardHorizon] = Field(
+        default_factory=dict,
+        description="Model card data per horizon (keys '30'/'60')",
     )

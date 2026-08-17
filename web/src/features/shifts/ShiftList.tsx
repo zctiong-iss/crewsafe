@@ -17,7 +17,7 @@ import "./ShiftList.css";
   | { status: "error"; message: string; requestId: string | null };
 
 // ShiftList.tsx — signature + effect (render body unchanged)
-export function ShiftList({ siteIds }: { siteIds: string[] }) {
+export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
   const user = useCurrentUser();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const isWorker = user.role === "WORKER";
@@ -62,7 +62,9 @@ export function ShiftList({ siteIds }: { siteIds: string[] }) {
 
   return (
     <AppShell title={isWorker ? "My Shifts & Tasks" : "Shifts & Tasks"} actions={createButton}>
-      {load.status === "loading" && <p role="status">Loading shifts…</p>}
+      {load.status === "loading" && (
+        <output style={{ display: "block" }}>Loading shifts…</output>
+      )}
 
       {load.status === "error" && (
         <EmptyState headline="Could not load shifts" body={load.message} />

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useSessionTimeout } from "./useSessionTimeout";
 import {
   ABSOLUTE_TIMEOUT_MS,
+  ABSOLUTE_WARNING_MS,
   IDLE_TIMEOUT_MS,
   IDLE_WARNING_MS,
 } from "./sessionPolicy";
@@ -70,5 +71,27 @@ describe("useSessionTimeout", () => {
     expect(screen.getByText("absolute")).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(5 * 60_000));
     expect(onExpire).toHaveBeenCalledTimes(1);
+  });
+
+  // SCRUM-420 / S3358 — locks in precedence (absolute checked before idle) before the
+  // nested-ternary `nextWarning` computation is extracted.
+  it("prefers the absolute warning when both the idle and absolute windows are active at once", () => {
+    vi.useFakeTimers();
+    const start = Date.UTC(2026, 7, 10);
+    vi.setSystemTime(start);
+    const onExpire = vi.fn();
+    // idleDeadline = start + IDLE_TIMEOUT_MS (30min); its warning window opens at 28min.
+    // absoluteDeadline is set to 29min so its warning window (24min–29min) overlaps the
+    // idle warning window (28min–30min) in the [28min, 29min) range.
+    const absoluteDeadline = start + IDLE_TIMEOUT_MS - 60_000;
+    render(<Harness onExpire={onExpire} absoluteDeadline={absoluteDeadline} />);
+
+    const overlapMoment = IDLE_TIMEOUT_MS - IDLE_WARNING_MS + 30_000; // 28.5min
+    expect(overlapMoment).toBeLessThan(absoluteDeadline - start);
+    expect(overlapMoment).toBeGreaterThanOrEqual(absoluteDeadline - start - ABSOLUTE_WARNING_MS);
+
+    act(() => vi.advanceTimersByTime(overlapMoment));
+    expect(screen.getByText("absolute")).toBeInTheDocument();
+    expect(onExpire).not.toHaveBeenCalled();
   });
 });

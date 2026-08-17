@@ -15,7 +15,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -31,6 +31,8 @@ import RecommendationStatusPill from "@/components/recommendations/Recommendatio
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadRecommendations } from "@/store/reducers/recommendationsSlice";
 import { loadShifts } from "@/store/reducers/shiftsSlice";
+import { showToast } from "@/store/reducers/uiSlice";
+import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -43,7 +45,9 @@ export default function RecommendationsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RecommendationsStackParamList>>();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { items, status, errorKey, refreshing } = useAppSelector((state) => state.recommendations);
+  const { items, status, errorKey, refreshing, decidingId } = useAppSelector(
+    (state) => state.recommendations,
+  );
   const shifts = useAppSelector((state) => state.shifts.shifts);
   const selectedSiteId = useAppSelector((state) => state.shifts.selectedSiteId);
 
@@ -68,6 +72,79 @@ export default function RecommendationsScreen() {
   useEffect(() => {
     load(false);
   }, [load]);
+
+  /*
+   * ── PLANS ARRIVE ON THEIR OWN NOW (SCRUM-291 / SCRUM-TBD-70) ──────────────────────────
+   * The server drafts a plan by itself when a WBGT band or lightning risk state transitions.
+   * Before this, the client never found out: the screen fetched once on mount and otherwise
+   * waited for a supervisor to pull down. So the auto-trigger worked and nobody saw it until
+   * they happened to refresh.
+   *
+   * Deliberately a poll and not a request to draft. The client must never call
+   * `generateRecommendation` on a timer: it is a real 10-20s model call, so N supervisors
+   * watching one site would produce N drafts for a single band change, and it would bypass
+   * the server-side dedup that makes a new band change SUPERSEDE the open plan rather than
+   * stack a second one. The server stays the only thing that decides when to draft.
+   */
+  const refreshingRef = useRef(refreshing);
+  refreshingRef.current = refreshing;
+  const decidingRef = useRef(decidingId);
+  decidingRef.current = decidingId;
+
+  useAutoRefresh(
+    useCallback(() => {
+      /*
+       * Not while a decision is in flight.
+       *
+       * `items` is the FlatList's data and the server returns most-recently-drafted first, so
+       * a poll landing mid-decision can reorder the list under a supervisor's thumb — moving a
+       * different plan under a press aimed at Approve. Pull-to-refresh is never suppressed:
+       * that is the supervisor choosing to refresh, which is a different thing entirely.
+       */
+      if (decidingRef.current !== null || refreshingRef.current) return;
+      load(false);
+    }, [load]),
+    REFRESH_INTERVALS.PLANS_MS,
+  );
+
+  /*
+   * Say so when one arrives, rather than letting it appear silently.
+   *
+   * The auto-trigger fires precisely when conditions changed, which is when a supervisor most
+   * needs to notice — and a card quietly materialising in a list is easy to miss. A toast
+   * rather than an Alert: this screen is a decision surface, and a modal would interrupt
+   * someone mid-judgement to tell them about something less urgent than what they are doing.
+   */
+  const seenIds = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (status !== "ready") return;
+
+    // The first ready render seeds the baseline. Without this, opening the tab would announce
+    // every plan already on it as though it had just arrived.
+    if (seenIds.current === null) {
+      seenIds.current = new Set(items.map((item) => item.id));
+      return;
+    }
+
+    const arrived = items.filter((item) => !seenIds.current!.has(item.id));
+    if (arrived.length > 0) {
+      seenIds.current = new Set(items.map((item) => item.id));
+      /*
+       * Two fixed keys rather than a count.
+       *
+       * `showToast` carries a key and a tone, with no interpolation values — and widening it
+       * for this would put a formatting concern into the store for one message. The exact
+       * number is on screen anyway; the toast's job is only to say "look up".
+       */
+      dispatch(
+        showToast({
+          messageKey:
+            arrived.length === 1 ? "recommendations.autoDrafted" : "recommendations.autoDraftedMany",
+          tone: "info",
+        }),
+      );
+    }
+  }, [items, status, dispatch]);
 
   const windowFor = useCallback(
     (shiftId: string) => {

@@ -22,6 +22,7 @@ import { type Site } from "@/api/identity";
 import { useSelectedSite } from "@/site/useSelectedSite";
 
 interface AssignmentRow {
+  id: string;
   workerId: string;
   intensity: Intensity | "";
   taskName: string;
@@ -39,7 +40,7 @@ type Submit =
   | { status: "created"; shift: Shift }
   | { status: "error"; message: string; requestId: string | null };
 
-export function CreateShiftForm({ sites }: { sites: Site[] }) {
+export function CreateShiftForm({ sites }: Readonly<{ sites: Site[] }>) {
   const { siteId: currentSiteId } = useSelectedSite();
   const [workersLoad, setWorkersLoad] = useState<WorkersLoad>({ status: "loading" });
   const [startsAt, setStartsAt] = useState<Date | null>(null);
@@ -65,7 +66,10 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
   }, [siteId]);
 
   const addRow = () =>
-    setRows((prev) => [...prev, { workerId: "", intensity: "", taskName: "", acclimatisationDay: "" }]);
+    setRows((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), workerId: "", intensity: "", taskName: "", acclimatisationDay: "" },
+    ]);
   const removeRow = (index: number) =>
     setRows((prev) => prev.filter((_, i) => i !== index));
   const updateRow = (index: number, patch: Partial<AssignmentRow>) =>
@@ -105,7 +109,7 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
   if (workersLoad.status === "loading") {
     return (
       <AppShell title="Create shift">
-        <p role="status">Loading workers…</p>
+        <output style={{ display: "block" }}>Loading workers…</output>
       </AppShell>
     );
   }
@@ -181,7 +185,7 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
         <section className="shift-form__section">
         <h2 className="shift-form__section-title">Crew Assigned</h2>
           {rows.map((row, i) => (
-            <fieldset key={i} className="shift-form__row card">
+            <fieldset key={row.id} className="shift-form__row card">
               <legend>Worker {i + 1}</legend>
 
               <label htmlFor={`worker-${i}`}>Worker</label>
@@ -217,9 +221,9 @@ export function CreateShiftForm({ sites }: { sites: Site[] }) {
           ))}
 
           {noWorkers && (
-            <p className="shift-form__note" role="status">
+            <output className="shift-form__note">
               No workers are assigned to this worksite yet. You can still create the shift and staff it later.
-            </p>
+            </output>
           )}
           {!noWorkers && (
             <button type="button" onClick={addRow}>Add worker</button>

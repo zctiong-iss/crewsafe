@@ -195,6 +195,14 @@ describe("PolicyVersionList", () => {
     expect(screen.queryByRole("combobox", { name: "Site" })).not.toBeInTheDocument();
   });
 
+  it("renders the loading message as an <output> status region (SCRUM-420 / S6819)", async () => {
+    server.use(http.get("*/api/v1/sites/:siteId/policy-versions", () => new Promise(() => {})));
+    renderApp();
+
+    const status = await screen.findByText("Loading policy versions…");
+    expect(status.tagName).toBe("OUTPUT");
+  });
+
   it("lets a multi-site user switch sites, loading that site's own catalogue", async () => {
     asMultiSiteSupervisor();
     const user = userEvent.setup();

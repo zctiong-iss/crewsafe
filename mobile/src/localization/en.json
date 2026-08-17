@@ -487,10 +487,14 @@
     "generating": "Drafting",
     "generateFailedTitle": "No plan drafted",
     "generatedToast": "A plan has been drafted.",
+    "autoDrafted": "A new plan has been drafted",
+    "autoDraftedMany": "New plans have been drafted",
     "statusDraft": "Draft",
     "statusSuperseded": "Superseded",
     "statusAutoDispatched": "Stop-work dispatched",
     "autoDispatchedNotice": "This stop-work order was sent to workers automatically — no approval was required.",
+    "supersededNotice": "Conditions changed, so this plan was replaced by a newer one. There is nothing to decide here.",
+    "noModelNotice": "No AI model was available, so this plan was built directly from the heat policy. The required actions are still correct; there is less tailoring to this crew.",
     "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {

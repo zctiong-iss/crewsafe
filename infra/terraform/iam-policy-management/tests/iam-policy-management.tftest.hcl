@@ -17,8 +17,8 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_bindings) == 18
-    error_message = "The IAM policy-management root must expose exactly sixteen bindings."
+    condition     = length(output.policy_bindings) == 20
+    error_message = "The IAM policy-management root must expose exactly twenty bindings."
   }
 
   assert {
@@ -33,10 +33,164 @@ run "customer_managed_policy_contract" {
   }
 
   assert {
-    condition     = length(output.policy_arns) == 18 && length(output.attachment_keys) == 18
+    condition     = length(output.policy_arns) == 20 && length(output.attachment_keys) == 20
     error_message = "Every customer-managed policy must have one explicit attachment."
   }
 
+}
+
+# SCRUM-451: write the binding contract before adding the compute-s3 policy
+# family. This must fail while the central component list still exposes only
+# the existing eighteen bindings.
+run "compute_s3_policy_binding_contract" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region               = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  assert {
+    condition = (
+      contains(keys(output.policy_bindings), "compute-s3-plan")
+      && contains(keys(output.policy_bindings), "compute-s3-apply")
+      && output.policy_bindings["compute-s3-plan"].policy_name == "crewsafe-terraform-compute-s3-plan-policy"
+      && output.policy_bindings["compute-s3-apply"].policy_name == "crewsafe-terraform-compute-s3-apply-policy"
+      && output.policy_bindings["compute-s3-plan"].target_role_name == "CrewSafeGitHubTerraformPlanRole"
+      && output.policy_bindings["compute-s3-apply"].target_role_name == "CrewSafeGitHubTerraformApplyRole"
+    )
+    error_message = "The policy-management root must expose deterministic compute-s3 plan/apply bindings attached to the normal Terraform roles."
+  }
+}
+
+# SCRUM-451: least-privilege contract written before the policy templates.
+# The four bucket ARNs are the only bucket resources. ListAllMyBuckets is the
+# sole account-level discovery exception; no object paths or wildcard actions
+# are acceptable.
+run "compute_s3_policies_stay_least_privilege" {
+  command = plan
+
+  variables {
+    expected_account_id      = "123456789012"
+    account_alias            = "alice"
+    aws_region               = "ap-southeast-1"
+    terraform_plan_role_arn  = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformPlanRole"
+    terraform_apply_role_arn = "arn:aws:iam::123456789012:role/CrewSafeGitHubTerraformApplyRole"
+  }
+
+  override_data {
+    target = data.aws_caller_identity.current
+    values = { account_id = "123456789012" }
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-s3-plan"].policy).Statement :
+      stmt.Sid == "ReadComputeS3BucketConfiguration"
+      && try(sort(stmt.Action), []) == sort([
+        "s3:GetAccelerateConfiguration",
+        "s3:GetBucketAcl",
+        "s3:GetBucketCORS",
+        "s3:GetBucketLocation",
+        "s3:GetBucketLogging",
+        "s3:GetBucketNotification",
+        "s3:GetBucketObjectLockConfiguration",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicy",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketRequestPayment",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:GetBucketWebsite",
+        "s3:GetEncryptionConfiguration",
+        "s3:GetLifecycleConfiguration",
+        "s3:GetReplicationConfiguration",
+      ])
+      && try(sort(stmt.Resource), []) == sort([
+        "arn:aws:s3:::crewsafe-shared-dev-web",
+        "arn:aws:s3:::crewsafe-shared-dev-alb-logs",
+        "arn:aws:s3:::crewsafe-shared-dev-web-logs",
+        "arn:aws:s3:::crewsafe-shared-dev-cloudfront-logs",
+      ])
+    ])
+    error_message = "The compute-s3 plan policy must read exactly the four compute bucket configurations."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-s3-plan"].policy).Statement :
+      stmt.Sid == "ListAllComputeS3Buckets"
+      && length(try(tolist(stmt.Action), [stmt.Action])) == 1
+      && try(tolist(stmt.Action), [stmt.Action])[0] == "s3:ListAllMyBuckets"
+      && length(try(tolist(stmt.Resource), [stmt.Resource])) == 1
+      && try(tolist(stmt.Resource), [stmt.Resource])[0] == "*"
+    ])
+    error_message = "Only ListAllMyBuckets may use the account-level resource wildcard in the compute-s3 plan policy."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-s3-apply"].policy).Statement :
+      stmt.Sid == "ManageComputeS3Buckets"
+      && try(sort(stmt.Action), []) == sort([
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketAcl",
+        "s3:PutBucketLogging",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutBucketTagging",
+        "s3:PutBucketVersioning",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+      ])
+      && try(sort(stmt.Resource), []) == sort([
+        "arn:aws:s3:::crewsafe-shared-dev-web",
+        "arn:aws:s3:::crewsafe-shared-dev-alb-logs",
+        "arn:aws:s3:::crewsafe-shared-dev-web-logs",
+        "arn:aws:s3:::crewsafe-shared-dev-cloudfront-logs",
+      ])
+    ])
+    error_message = "The compute-s3 apply policy must grant only the explicit bucket-management actions on the four compute buckets."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy_key in ["compute-s3-plan", "compute-s3-apply"] :
+      alltrue([
+        for stmt in jsondecode(aws_iam_policy.component[policy_key].policy).Statement :
+        alltrue([for action in stmt.Action : !can(regex(":\\*$", action))])
+        && alltrue([for action in stmt.Action : !can(regex("^s3:(Get|Put|Delete)Object", action))])
+        && (length(try(tolist(stmt.Resource), [stmt.Resource])) == 1 && try(tolist(stmt.Resource), [stmt.Resource])[0] == "*" ? stmt.Sid == "ListAllComputeS3Buckets" : alltrue([
+          for resource in try(tolist(stmt.Resource), [stmt.Resource]) : contains([
+            "arn:aws:s3:::crewsafe-shared-dev-web",
+            "arn:aws:s3:::crewsafe-shared-dev-alb-logs",
+            "arn:aws:s3:::crewsafe-shared-dev-web-logs",
+            "arn:aws:s3:::crewsafe-shared-dev-cloudfront-logs",
+          ], resource)
+        ]))
+      ])
+    ])
+    error_message = "The compute-s3 policies must reject wildcard S3 actions, object-level actions, and unrelated resources."
+  }
+
+  assert {
+    condition = alltrue([
+      for stmt in jsondecode(aws_iam_policy.component["compute-s3-plan"].policy).Statement :
+      alltrue([for action in stmt.Action : startswith(action, "s3:Get") || action == "s3:ListBucket" || action == "s3:ListAllMyBuckets"])
+    ])
+    error_message = "The compute-s3 plan policy must remain read/discovery-only."
+  }
 }
 
 # SCRUM-298: negative boundary test for the compute-web component, added before the

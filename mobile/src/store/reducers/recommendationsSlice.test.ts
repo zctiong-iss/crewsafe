@@ -42,6 +42,7 @@ function recommendation(id: string, createdAt: string, overrides: Partial<Recomm
     createdAt,
     mitigations: [],
     approval: null,
+    modelVersion: "anthropic.claude-3-5-sonnet",
     ...overrides,
   };
 }

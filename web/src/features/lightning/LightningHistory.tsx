@@ -108,7 +108,9 @@ export function LightningHistory({ siteId, siteSwitcher }: { siteId: string; sit
       subtitle="Nearest-strike readings ingested from NEA"
       siteSwitcher={siteSwitcher}
     >
-      {load.status === "loading" && <p role="status">Loading lightning data…</p>}
+      {load.status === "loading" && (
+        <output style={{ display: "block" }}>Loading lightning data…</output>
+      )}
 
       {load.status === "error" && (
         <EmptyState headline="Could not load lightning data" body={load.message} />

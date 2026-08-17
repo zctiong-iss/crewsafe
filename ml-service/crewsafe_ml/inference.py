@@ -63,15 +63,7 @@ class ForecastModelRegistry:
 
     @classmethod
     def load(cls, manifest_path: Path, expected_checksum: str) -> ForecastModelRegistry:
-        manifest_path = manifest_path.resolve(strict=True)
-        if not _valid_sha256(expected_checksum):
-            raise ModelConfigurationError("model manifest checksum is invalid")
-        if _sha256(manifest_path) != expected_checksum.lower():
-            raise ModelConfigurationError("model manifest checksum does not match")
-
-        manifest = _read_manifest(manifest_path)
-        if manifest.get("schema_version") != 2:
-            raise ModelConfigurationError("model manifest schema is unsupported")
+        manifest_path, manifest = verified_manifest(manifest_path, expected_checksum)
         if manifest.get("approved_for_inference") is not True:
             raise ModelConfigurationError("model bundle is not approved for inference")
         if manifest.get("approval_blocker"):
@@ -143,6 +135,26 @@ class ForecastModelRegistry:
             model_version=f"{self._model_version}:{selected_model}",
             interval_half_width=float(configuration["interval_half_width"]),
         )
+
+
+def verified_manifest(manifest_path: Path, expected_checksum: str) -> tuple[Path, Mapping[str, Any]]:
+    """Resolve, checksum-verify, and parse a model manifest without trusting its content.
+
+    Shared by inference loading and read-only status reporting so both agree on what
+    "trusted" means. Does not check approval — a caller reporting status needs to see
+    an unapproved manifest, not have it rejected the way inference-time loading does.
+    """
+
+    manifest_path = manifest_path.resolve(strict=True)
+    if not _valid_sha256(expected_checksum):
+        raise ModelConfigurationError("model manifest checksum is invalid")
+    if _sha256(manifest_path) != expected_checksum.lower():
+        raise ModelConfigurationError("model manifest checksum does not match")
+
+    manifest = _read_manifest(manifest_path)
+    if manifest.get("schema_version") != 2:
+        raise ModelConfigurationError("model manifest schema is unsupported")
+    return manifest_path, manifest
 
 
 def _load_horizon(

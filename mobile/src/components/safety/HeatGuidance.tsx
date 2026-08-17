@@ -127,8 +127,9 @@ export default HeatGuidance;
 
 const styles = StyleSheet.create({
   card: {
+    // No root margin: MyShiftScreen's container owns the gap between stacked cards.
+    // A margin here would add to it and reintroduce per-card spacing drift.
     padding: s(14),
-    marginTop: vs(12),
   },
   suspendedNotice: {
     flexDirection: "row",

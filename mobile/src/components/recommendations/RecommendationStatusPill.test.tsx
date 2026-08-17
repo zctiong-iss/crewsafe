@@ -34,29 +34,18 @@ it("labels a rejected recommendation as rejected", async () => {
   expect(queryByText("recommendations.decidedRejected")).not.toBeNull();
 });
 
-it("labels a DRAFT recommendation as draft, not as approved", async () => {
-  // The regression this guards: a fall-through chain used to render any unrecognised status,
-  // DRAFT included, as green "Approved" — a plan nobody approved showing as approved.
-  const { queryByText } = await render(<RecommendationStatusPill status="DRAFT" />);
-  expect(queryByText("recommendations.statusDraft")).not.toBeNull();
-  expect(queryByText("recommendations.decidedApproved")).toBeNull();
-});
-
-it("labels a SUPERSEDED recommendation as superseded, not as approved", async () => {
-  // Same regression class as DRAFT: SUPERSEDED (SCRUM-291) is a legal backend status with no
-  // Approval row behind it, so a fall-through here would render it green "Approved" too.
-  const { queryByText } = await render(<RecommendationStatusPill status="SUPERSEDED" />);
-  expect(queryByText("recommendations.statusSuperseded")).not.toBeNull();
-  expect(queryByText("recommendations.decidedApproved")).toBeNull();
-});
-
-it("labels an AUTO_DISPATCHED recommendation distinctly, not as approved", async () => {
-  // Same regression class as DRAFT/SUPERSEDED: AUTO_DISPATCHED (SCRUM-440) is a legal backend
-  // status with no Approval row behind it either, so a fall-through here would render it green
-  // "Approved" too -- misleading in the opposite direction from SUPERSEDED, since this plan
-  // genuinely is in effect, just never through a supervisor's decision.
-  const { queryByText } = await render(<RecommendationStatusPill status="AUTO_DISPATCHED" />);
-  expect(queryByText("recommendations.statusAutoDispatched")).not.toBeNull();
+// The regression every row here guards: a fall-through chain used to render any status it
+// didn't explicitly recognise as green "Approved" — DRAFT and SUPERSEDED were both once
+// missing from it and rendered that way. AUTO_DISPATCHED (SCRUM-440) is the same regression
+// class in the opposite direction: misleading not because nobody decided (SUPERSEDED), but
+// because this plan genuinely is in effect, just never through a supervisor's decision.
+it.each([
+  ["DRAFT", "recommendations.statusDraft"],
+  ["SUPERSEDED", "recommendations.statusSuperseded"],
+  ["AUTO_DISPATCHED", "recommendations.statusAutoDispatched"],
+] as const)("labels a %s recommendation distinctly, not as approved", async (status, labelKey) => {
+  const { queryByText } = await render(<RecommendationStatusPill status={status} />);
+  expect(queryByText(labelKey)).not.toBeNull();
   expect(queryByText("recommendations.decidedApproved")).toBeNull();
 });
 

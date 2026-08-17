@@ -92,6 +92,21 @@ export const REFRESH_INTERVALS = {
   INBOX_MS: 30_000,
   /** Carries the lightning risk state and its validity window. */
   SHIFT_MS: 60_000,
+  /**
+   * AI-drafted plans (SCRUM-291).
+   *
+   * Matched to the server, not chosen by feel. `app.recommendation.auto-trigger.interval`
+   * defaults to **2 minutes**, so a plan cannot exist sooner than the scheduler that drafts
+   * it — polling faster than that cannot surface anything new, it only spends battery. 60s
+   * is half the server cadence, which bounds the worst case at roughly one interval rather
+   * than two without pretending to be a stream.
+   *
+   * This is also the reason there is no SSE endpoint for recommendations, despite the
+   * backend already shipping two (`/conditions/stream`, `/actions/stream`): a push channel
+   * would deliver an event that a 60s poll had already caught, because the thing generating
+   * the event is itself a 2-minute timer. Revisit if that cadence ever tightens.
+   */
+  PLANS_MS: 60_000,
   /** `WEATHER_INGESTION_INTERVAL` defaults to 15m; a third of that bounds staleness. */
   WEATHER_MS: 5 * 60_000,
 } as const;

@@ -20,7 +20,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -39,9 +39,11 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { decideRecommendation, loadRecommendations } from "@/store/reducers/recommendationsSlice";
 import { loadPolicyVersions } from "@/store/reducers/policySlice";
 import { showToast } from "@/store/reducers/uiSlice";
+import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 import type { Mitigation, MitigationCategory } from "@/types/domain";
 import type { RecommendationsStackParamList } from "@/navigation/types";
 
@@ -54,6 +56,110 @@ const CATEGORY_ORDER: MitigationCategory[] = [
   "WORK_SCHEDULING",
   "MONITORING",
 ];
+
+interface DecisionSectionProps {
+  autoDispatched: boolean;
+  /**
+   * SCRUM-291 replaced this plan because conditions moved on. Not a decision — nobody judged
+   * it — but equally not something left to approve.
+   */
+  superseded: boolean;
+  decided: boolean;
+  canDecide: boolean;
+  deciding: boolean;
+  onApprove: () => void;
+  onEdit: () => void;
+  onReject: () => void;
+}
+
+/**
+ * The bottom-of-screen decision affordance: exactly one of four mutually exclusive states.
+ * Extracted out of {@link RecommendationDetailScreen} so those four are early returns rather
+ * than a nested ternary chain, and so the screen component itself stays readable as its own
+ * states (loading, grouped mitigations, evidence) accumulate rather than growing this too.
+ */
+function DecisionSection({
+  autoDispatched,
+  superseded,
+  decided,
+  canDecide,
+  deciding,
+  onApprove,
+  onEdit,
+  onReject,
+}: Readonly<DecisionSectionProps>) {
+  const { t } = useTranslation();
+
+  if (autoDispatched) {
+    return (
+      <View style={styles.gapTop}>
+        <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
+      </View>
+    );
+  }
+
+  /*
+   * ── SUPERSEDED IS NOT DECIDABLE (SCRUM-291) ───────────────────────────────────────────
+   * Checked BEFORE `canDecide`, and it was missing entirely until SCRUM-TBD-70: `decided` is
+   * `approval !== null || autoDispatched`, and a superseded plan has no approval, so it fell
+   * straight through and offered Approve/Edit/Reject on a plan the server had already
+   * replaced. The comment on `decided` claimed SUPERSEDED hid the buttons; nothing did.
+   *
+   * It mattered little while this screen only loaded on mount — a supervisor rarely saw the
+   * status change under them. Now that the screen polls, a plan being superseded mid-read is
+   * the ordinary case, which is exactly what makes fixing it part of this change rather than
+   * a follow-up. Approving here would either 409 or, worse, approve mitigations computed for
+   * conditions that no longer hold.
+   */
+  if (superseded) {
+    return (
+      <View style={styles.gapTop}>
+        <MessageBanner message={t("recommendations.supersededNotice")} tone="warning" />
+      </View>
+    );
+  }
+
+  if (decided) {
+    return (
+      <AppText variant="caption" tone="secondary" style={styles.gapTop}>
+        {t("recommendations.decisionBySomeone")}
+      </AppText>
+    );
+  }
+
+  if (canDecide) {
+    return (
+      <View style={styles.gapTop}>
+        <AppButton
+          title={deciding ? t("recommendations.deciding") : t("recommendations.approveButton")}
+          loading={deciding}
+          onPress={onApprove}
+          style={styles.action}
+        />
+        <AppButton
+          title={t("recommendations.editButton")}
+          variant="secondary"
+          onPress={onEdit}
+          style={styles.action}
+        />
+        <AppButton
+          title={t("recommendations.rejectButton")}
+          variant="danger"
+          onPress={onReject}
+          style={styles.action}
+        />
+      </View>
+    );
+  }
+
+  // A safety manager reads this screen but cannot decide on it. Said plainly, rather
+  // than shown as three buttons that would each answer 403.
+  return (
+    <AppText variant="caption" tone="secondary" style={styles.gapTop}>
+      {t("recommendations.readOnlyNotice")}
+    </AppText>
+  );
+}
 
 export default function RecommendationDetailScreen() {
   const { t, i18n } = useTranslation();
@@ -107,6 +213,32 @@ export default function RecommendationDetailScreen() {
 
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+
+  /*
+   * ── THIS SCREEN HAS TO KEEP LOOKING (SCRUM-TBD-70) ────────────────────────────────────
+   * SCRUM-291 supersedes rather than stacks, so the plan on this screen can be replaced while
+   * a supervisor is reading it — and reading it is exactly what they are here to do. Loading
+   * once on mount meant they would judge a plan that no longer applied and only discover it
+   * from the 409 on submit. That conflict path is the right backstop, but it spends someone's
+   * attention on a stale plan at the moment conditions changed, which is the worst time.
+   *
+   * `recommendation` is derived from the list in the store, so refreshing the list is all this
+   * needs — the status pill and the superseded notice both re-render from it.
+   *
+   * Suppressed while a decision is in flight or a sheet is open. A supervisor part-way through
+   * writing a rejection reason must not have the plan change underneath them; they get told
+   * when they close the sheet, which is a moment they chose.
+   */
+  const busyRef = useRef(false);
+  busyRef.current = decidingId !== null || editing || rejecting;
+
+  useAutoRefresh(
+    useCallback(() => {
+      if (busyRef.current) return;
+      void dispatch(loadRecommendations({ siteId }));
+    }, [dispatch, siteId]),
+    REFRESH_INTERVALS.PLANS_MS,
+  );
   /** Whether the clamped "Why this was drafted" narrative is showing in full (ADR-0017 §3). */
   const [showFullWhy, setShowFullWhy] = useState(false);
 
@@ -191,6 +323,12 @@ export default function RecommendationDetailScreen() {
    * for a supervisor to do here.
    */
   const autoDispatched = recommendation.status === "AUTO_DISPATCHED";
+  /*
+   * SCRUM-291 drafts a replacement and marks this one SUPERSEDED when a WBGT band or lightning
+   * risk state moves. There is no approval behind it — nobody decided anything — so it is not
+   * `decided`, but there is nothing left to decide either. See `DecisionSection`.
+   */
+  const superseded = recommendation.status === "SUPERSEDED";
   const decided = approval !== null || autoDispatched;
 
   return (
@@ -220,6 +358,30 @@ export default function RecommendationDetailScreen() {
             </AppText>
           ) : null}
         </View>
+
+        {/*
+          ── WHO WROTE THIS PLAN (SCRUM-359 / SCRUM-TBD-70) ──────────────────
+          The server has reported `modelVersion` since SCRUM-359 and the client dropped it,
+          because the type never declared the field. That was survivable while a supervisor
+          pressed "Draft plan" themselves: the agent takes 10-20s, so an instant answer was
+          itself a signal that the deterministic template had run instead.
+
+          Auto-drafting removes that signal entirely. Plans now arrive on their own every two
+          minutes, so a Bedrock or ml-service outage would produce a steady stream of template
+          plans that look exactly like agent-drafted ones, with nobody waiting on a spinner to
+          notice. `AgentDraftClient`'s own header records this failure happening once already,
+          when a 5s timeout made every call fall back "while looking exactly like a working LLM
+          path".
+
+          Said here rather than in a log, because the person who needs to know is the one about
+          to approve it. It is not a warning — a deterministic plan is a legitimate, policy-
+          derived plan, and §8.2 guarantees the policy engine ran either way. It changes how
+          much the supervisor's own judgement is carrying, which is exactly the kind of thing
+          US-08 says they are entitled to see.
+        */}
+        {recommendation.modelVersion === DETERMINISTIC_FALLBACK_MODEL ? (
+          <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+        ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
         {recommendation.rationale ? (
@@ -361,42 +523,16 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── The decision ─────────────────────────────────────────────────── */}
-        {autoDispatched ? (
-          <View style={styles.gapTop}>
-            <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
-          </View>
-        ) : decided ? (
-          <AppText variant="caption" tone="secondary" style={styles.gapTop}>
-            {t("recommendations.decisionBySomeone")}
-          </AppText>
-        ) : canDecide ? (
-          <View style={styles.gapTop}>
-            <AppButton
-              title={deciding ? t("recommendations.deciding") : t("recommendations.approveButton")}
-              loading={deciding}
-              onPress={onApprove}
-              style={styles.action}
-            />
-            <AppButton
-              title={t("recommendations.editButton")}
-              variant="secondary"
-              onPress={() => setEditing(true)}
-              style={styles.action}
-            />
-            <AppButton
-              title={t("recommendations.rejectButton")}
-              variant="danger"
-              onPress={() => setRejecting(true)}
-              style={styles.action}
-            />
-          </View>
-        ) : (
-          /* A safety manager reads this screen but cannot decide on it. Said plainly, rather
-             than shown as three buttons that would each answer 403. */
-          <AppText variant="caption" tone="secondary" style={styles.gapTop}>
-            {t("recommendations.readOnlyNotice")}
-          </AppText>
-        )}
+        <DecisionSection
+          autoDispatched={autoDispatched}
+          decided={decided}
+          superseded={superseded}
+          canDecide={canDecide}
+          deciding={deciding}
+          onApprove={onApprove}
+          onEdit={() => setEditing(true)}
+          onReject={() => setRejecting(true)}
+        />
       </ScrollView>
 
       <EditPlanSheet

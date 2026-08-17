@@ -138,3 +138,61 @@ describe("ConditionsPanel — degraded on staleness", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 });
+
+describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const fakeSubscribeNoOp = (_siteId: string, h: ConditionsStreamHandlers) => {
+    void h;
+    return () => {};
+  };
+
+  it("renders the connecting message as an <output> status region before any snapshot arrives", async () => {
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribeNoOp} />);
+
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    const status = screen.getByText("Connecting to live conditions...");
+    expect(status.tagName).toBe("OUTPUT");
+    expect(status).toHaveClass("conditions-panel__loading");
+  });
+
+  it.each([
+    ["LIVE", "Live"],
+    ["DELAYED", "Delayed"],
+    ["SIMULATED", "Simulated"],
+    ["STALE", "Stale"],
+  ] as const)(
+    "renders the %s freshness badge as an <output> status region with text %s",
+    async (freshness, expectedText) => {
+      let handlers!: ConditionsStreamHandlers;
+      const fakeSubscribe = (_siteId: string, h: ConditionsStreamHandlers) => {
+        handlers = h;
+        return () => {};
+      };
+
+      wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+
+      await act(async () => { vi.advanceTimersByTime(100); });
+
+      act(() => {
+        handlers.onStatus("live");
+        handlers.onSnapshot(
+          {
+            siteId: "s1", asOf: "2026-08-06T07:40:12Z", activeShift: null, lightning: null,
+            conditions: {
+              wbgt: 31, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+              observedAt: "2026-08-06T07:40:00Z", source: "NEA", freshness,
+            },
+          },
+          [],
+        );
+      });
+
+      const badge = screen.getByText(expectedText);
+      expect(badge.tagName).toBe("OUTPUT");
+      expect(badge).toHaveClass(`conditions-panel__badge conditions-panel__badge--${freshness.toLowerCase()}`);
+    },
+  );
+});
