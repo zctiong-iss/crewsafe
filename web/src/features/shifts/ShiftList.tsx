@@ -17,7 +17,7 @@ import "./ShiftList.css";
   | { status: "error"; message: string; requestId: string | null };
 
 // ShiftList.tsx — signature + effect (render body unchanged)
-export function ShiftList({ siteIds }: { siteIds: string[] }) {
+export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
   const user = useCurrentUser();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const isWorker = user.role === "WORKER";

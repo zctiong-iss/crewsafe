@@ -16,13 +16,13 @@ import "./AppShell.css";
  * building that in now is much cheaper than retrofitting it around a supervisor-shaped
  * shell later.
  */
-export function AppShell({ title, subtitle, siteSwitcher, actions, children }: {
+export function AppShell({ title, subtitle, siteSwitcher, actions, children }: Readonly<{
   title: string;
   subtitle?: string;
   siteSwitcher?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
-}) {
+}>) {
   const user = useCurrentUser();
   const { signOut } = useAuth();
   const items = navigationFor(user.role);

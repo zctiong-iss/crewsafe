@@ -5,7 +5,7 @@ export interface TrendPoint {
   wbgt: number | null;
 }
 
-export function ConditionsTrendChart({ points }: { points: TrendPoint[] }) {
+export function ConditionsTrendChart({ points }: Readonly<{ points: TrendPoint[] }>) {
   if (points.length < 2) {
     return (
       <div className="conditions-chart__empty">

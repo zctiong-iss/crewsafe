@@ -12,7 +12,7 @@ import "./SiteCard.css";
  * status from the design go — the card is laid out for them now so that adding them is a
  * change to this component alone.
  */
-export function SiteCard({ site }: { site: Site }) {
+export function SiteCard({ site }: Readonly<{ site: Site }>) {
   return (
     <article className="site-card card">
       <header className="site-card__header">

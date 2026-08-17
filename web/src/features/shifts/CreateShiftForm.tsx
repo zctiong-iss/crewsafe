@@ -39,7 +39,7 @@ type Submit =
   | { status: "created"; shift: Shift }
   | { status: "error"; message: string; requestId: string | null };
 
-export function CreateShiftForm({ sites }: { sites: Site[] }) {
+export function CreateShiftForm({ sites }: Readonly<{ sites: Site[] }>) {
   const { siteId: currentSiteId } = useSelectedSite();
   const [workersLoad, setWorkersLoad] = useState<WorkersLoad>({ status: "loading" });
   const [startsAt, setStartsAt] = useState<Date | null>(null);

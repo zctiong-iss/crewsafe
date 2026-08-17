@@ -31,10 +31,10 @@ type Assignment = Shift["assignments"][number];
 export function ShiftRoster({
   shift,
   onShiftChange,
-}: {
+}: Readonly<{
   shift: Shift;
   onShiftChange: (shift: Shift) => void;
-}) {
+}>) {
   const [workers, setWorkers] = useState<SiteWorker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -123,13 +123,13 @@ function RosterRow({
   busy,
   onSave,
   onRemove,
-}: {
+}: Readonly<{
   assignment: Assignment;
   workerLabel: string;
   busy: boolean;
   onSave: (assignmentId: string, body: ShiftAssignmentUpdate) => void;
   onRemove: (assignmentId: string) => void;
-}) {
+}>) {
   const [editing, setEditing] = useState(false);
   const [taskName, setTaskName] = useState(assignment.taskName ?? "");
   const [intensity, setIntensity] = useState<Intensity>(assignment.intensity);
@@ -227,12 +227,12 @@ function AddWorker({
   assigned,
   busy,
   onAdd,
-}: {
+}: Readonly<{
   workers: SiteWorker[];
   assigned: string[];
   busy: boolean;
   onAdd: (body: ShiftAssignmentCreate) => void;
-}) {
+}>) {
   const [adding, setAdding] = useState(false);
   const [workerId, setWorkerId] = useState("");
   const [intensity, setIntensity] = useState<Intensity>("MODERATE");

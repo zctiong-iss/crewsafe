@@ -5,7 +5,7 @@ const timeFormat = new Intl.DateTimeFormat("en-SG", {
   hour: "2-digit", minute: "2-digit", timeZone: "Asia/Singapore",
 });
 
-export function StopWorkBanner({ lightning }: { lightning: LightningRiskPayload }) {
+export function StopWorkBanner({ lightning }: Readonly<{ lightning: LightningRiskPayload }>) {
   return (
     <p className="stop-work-banner" role="alert">
       STOP WORK — Lightning detected {lightning.nearestStrikeKm} km away.
