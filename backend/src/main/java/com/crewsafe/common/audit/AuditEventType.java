@@ -49,6 +49,20 @@ public final class AuditEventType {
      * (SCRUM-441). System-triggered — actorId is null, the same as {@link #ACTION_LATE}. */
     public static final String SHIFT_ACTIVATED = "SHIFT_ACTIVATED";
 
+    /**
+     * A worker was put on a shift (SCRUM-452), whether at shift creation or added to an
+     * existing shift afterwards. One per assignment, so a shift created with three workers
+     * writes one {@link #SHIFT_CREATED} and three of these.
+     *
+     * <p>Added late: the trail recorded {@link #SHIFT_ASSIGNMENT_UPDATED} and
+     * {@link #SHIFT_ASSIGNMENT_REMOVED} from the start but never the original assignment,
+     * so it could show a worker being taken off a shift or having their intensity corrected
+     * while staying silent on who put them there. "Who assigned this worker to heavy work on
+     * acclimatisation day 2" is the first thing an inspector asks, so the detail carries the
+     * intensity and acclimatisation state, not just the ids.
+     */
+    public static final String SHIFT_ASSIGNMENT_ADDED = "SHIFT_ASSIGNMENT_ADDED";
+
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
      * through this event's originating endpoint. */
