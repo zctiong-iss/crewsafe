@@ -211,3 +211,51 @@ class ForecastPrediction(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc),
         description="Prediction generation time in UTC",
     )
+
+
+class ModelHorizonMetrics(BaseModel):
+    """Accuracy metrics for one forecast horizon, taken from the evaluation artifact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mae: float = Field(..., description="Mean absolute error")
+    rmse: float = Field(..., description="Root mean squared error")
+    mean_bias: float = Field(..., description="Mean signed error (predicted minus actual)")
+    macro_f1: float = Field(..., description="Macro-averaged F1 across WBGT risk bands")
+    recall_at_least_32: float = Field(..., description="Recall for actual WBGT >= 32 degrees")
+    recall_at_least_33: float = Field(..., description="Recall for actual WBGT >= 33 degrees")
+    mae_by_actual_band: dict[str, Optional[float]] = Field(
+        ..., description="Mean absolute error grouped by actual WBGT risk band"
+    )
+    confusion_matrix: List[List[int]] = Field(
+        ..., description="Risk-band confusion matrix, ordered BELOW_31..AT_LEAST_33"
+    )
+    sample_count: int = Field(..., description="Number of evaluation samples backing these metrics")
+
+
+class ModelStatus(BaseModel):
+    """Currently configured model's approval status and per-horizon accuracy metrics."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "model_version": "baseline-1.0.0",
+                "approved_for_inference": False,
+                "approval_blocker": "no model configured",
+                "horizons": {},
+            }
+        },
+    )
+
+    model_version: str = Field(..., description="Currently configured model bundle version")
+    approved_for_inference: bool = Field(
+        ..., description="Whether the configured bundle is approved for production inference"
+    )
+    approval_blocker: Optional[str] = Field(
+        None, description="Why the bundle is not approved, when applicable"
+    )
+    horizons: dict[str, ModelHorizonMetrics] = Field(
+        default_factory=dict,
+        description="Evaluation metrics per horizon (keys '30'/'60'), from the model manifest",
+    )
