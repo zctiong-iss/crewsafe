@@ -9,4 +9,5 @@
      keep a readable width and pack from the left as sites are added. */
   grid-template-columns: repeat(auto-fill, minmax(20rem, 28rem));
   gap: var(--space-4);
+  align-items: start;   /* cards size to their own content — no stretch, no dead space */
 }

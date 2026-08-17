@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: WBGT CrewSafe SG API — Site conditions stream
+  version: "1.1"
+  description: >
+    SSE (SCRUM-317/324) pushing a ConditionsSnapshot per site. currentBand + forecastBand added
+    by SCRUM-318: server-authoritative WBGT bands so clients render them rather than classify wbgt
+    (§12.2 / FR-15). The raw 30-min forecast value stays server-side — only its band is emitted.
+servers: [{ url: / }]
+security: [{ bearerAuth: [] }]
+paths:
+  /api/v1/sites/{siteId}/conditions/stream:
+    parameters:
+      - { name: siteId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      operationId: streamSiteConditions
+      summary: Subscribe to a site's live conditions
+      responses:
+        "200":
+          description: An event stream; each `conditions` event carries a ConditionsSnapshot.
+          content:
+            text/event-stream:
+              schema: { $ref: "#/components/schemas/ConditionsSnapshot" }
+        "401": { description: Missing/expired bearer token. }
+        "403": { description: "Not a member of {siteId}." }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  schemas:
+    WbgtBand:
+      type: string
+      enum: [BELOW_31, 31_TO_BELOW_32, 32_TO_BELOW_33, 33_AND_ABOVE]
+      nullable: true
+      description: Server-authoritative, half-open. Null when there is no reading — never defaulted to BELOW_31.
+    ConditionsPayload:
+      type: object
+      required: [wbgt, currentBand, forecastBand, forecastWbgt30m, temperature, humidity, windSpeed, rainfall, observedAt, source, freshness]
+      properties:
+        wbgt: { type: number }
+        currentBand: { $ref: "#/components/schemas/WbgtBand" }
+        forecastBand:
+          allOf: [{ $ref: "#/components/schemas/WbgtBand" }]
+          description: Band of the 30-min forecast. Null when no forecast basis exists.
+        forecastWbgt30m:
+          type: number
+          nullable: true
+          description: Raw 30-min forecast WBGT value. Null when no forecast basis exists.
+        temperature: { type: number }
+        humidity: { type: number }
+        windSpeed: { type: number }
+        rainfall: { type: number }
+        observedAt: { type: string, format: date-time }
+        source: { type: string, enum: [NEA, MANUAL, CACHED] }
+        freshness: { type: string, enum: [LIVE, DELAYED, STALE, SIMULATED] }
+    ConditionsSnapshot:
+      type: object
+      required: [siteId, conditions, lightning, activeShift, asOf]
+      properties:
+        siteId: { type: string, format: uuid }
+        conditions:
+          nullable: true
+          allOf: [{ $ref: "#/components/schemas/ConditionsPayload" }]
+        lightning: { type: object, nullable: true, description: Lightning risk payload — unchanged by SCRUM-318. }
+        activeShift:
+          type: object
+          nullable: true
+          properties:
+            shiftId: { type: string, format: uuid }
+            startsAt: { type: string, format: date-time }
+            endsAt: { type: string, format: date-time }
+        asOf: { type: string, format: date-time }
