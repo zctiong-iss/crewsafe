@@ -58,6 +58,45 @@ This decision also records three previously-locked decisions as foundational to 
 
 3. **Rely on colour alone for pill meaning:** Rejected on CVD-safety grounds. Colour is reinforcement; text is the source of truth. Every pill carries its label.
 
+---
+
+## Addendum — implementation deviations (Phase 1, 2026-08-17)
+
+Two things shipped differently from the code blocks in Doc 1 §8. Both are deliberate, and both
+are recorded here so the next reader does not "fix" the code back to match the document.
+
+**1. `Pill` takes a closed `tone` union, not `tone?: string`.**
+
+Doc 1 §8.1 types `tone` as a free-form string holding a theme colour. That lets any call site
+pass any colour, which leaves **D3 — reserve colour for meaning** — enforced only by code
+review. The shipped component instead takes `PillTone = "neutral" | "danger" | "warning" |
+"success" | "info"` and resolves the colour internally, so a caller names a *meaning* and the
+type checker holds the line. `info` maps to `primary` rather than a blue, because introducing
+a blue would be the first decorative colour in a monochrome chrome.
+
+**2. The §6 guardrail gate is automated, not eyeballed.**
+
+§6 declares the gate a merge blocker while Doc 1 §8.6 defines it as "run the plan screen and
+eyeball" — six checks, per screen, in two languages. A manual checklist across a three-phase
+programme stops being followed, and what it stops checking is whether a supervisor can read a
+stop-work instruction in the sun.
+
+The gate now runs as a matrix render (`mobile/src/testing/guardrails.tsx`): 4 languages ×
+2 font scales × 2 contrast modes, asserting no text clamps, every pill keeps a visible border,
+and every control stays a full touch target. Wired into Mobile CI as `npm run test:guardrails`.
+
+**Honest limit:** the test renderer has no layout engine, so this catches every *cause* of
+clipping that lives in the style tree (`numberOfLines`, fixed `maxWidth`/`height`,
+`overflow: hidden`) but cannot see a box that overflows by three points at runtime. It
+replaces the mechanical half of the eyeball pass, not the judgement half. Verified to bite:
+re-introducing the origin pill's old `maxWidth: 110` + `numberOfLines={1}` fails 32 of the
+80 cases.
+
+**Open item 4 in Doc 1 §8.5 was already solved.** The plan called for a new locale key-parity
+test; `mobile/scripts/check-locale-parity.mjs` already existed, already ran in CI, and is
+strictly more thorough (it also checks `{{placeholder}}` parity and detects wrong-script text).
+No second checker was added.
+
 ## Related
 
 - `crewsafe-card-pill-design-language.md` (Doc 1 — the foundational language + mobile refactor)

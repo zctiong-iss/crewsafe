@@ -88,6 +88,8 @@
     "test:coverage": "jest --coverage --ci",
     "//check:locales": "Fails when a locale drifts from en.json. A missing key is silent — i18next falls back to English and renders it mid-screen on a safety surface. See scripts/check-locale-parity.mjs.",
     "check:locales": "node scripts/check-locale-parity.mjs",
+    "//test:guardrails": "The ADR-0017 §6 card/pill gate — every card rendered across language × fontScale × contrast. A merge blocker, run separately from the main suite so a failure reads as 'this clips in Tamil at 1.5' rather than as one line in a 500-test summary. See src/testing/guardrails.tsx.",
+    "test:guardrails": "jest --ci --testPathPattern=guardrails",
     "doctor": "expo-doctor"
   },
   "private": true
