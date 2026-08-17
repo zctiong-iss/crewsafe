@@ -64,33 +64,82 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   restrict_public_buckets = true
 }
 
-data "aws_iam_policy_document" "terraform_state" {
-  statement {
-    sid    = "DenyInsecureTransport"
-    effect = "Deny"
-
-    principals {
-      type        = "*"
-      identifiers = ["*"]
-    }
-
-    actions = ["s3:*"]
-    resources = [
-      aws_s3_bucket.terraform_state.arn,
-      "${aws_s3_bucket.terraform_state.arn}/*",
+# jsonencode(), not data "aws_iam_policy_document" — mock_provider "aws" fabricates
+# a random opaque string for that data source's .json attribute under `terraform
+# test`'s command = plan, which makes it unknown at plan time and unassertable
+# (research.md R-008 in specs/046-terraform-access-logging-remediation). Mirrors
+# the compute component's own local.web_logs_bucket_policy pattern (SCRUM-414).
+locals {
+  terraform_state_bucket_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:*"]
+        Resource = [
+          aws_s3_bucket.terraform_state.arn,
+          "${aws_s3_bucket.terraform_state.arn}/*",
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid       = "S3ServerAccessLogsPolicy"
+        Effect    = "Allow"
+        Action    = ["s3:PutObject"]
+        Resource  = "${aws_s3_bucket.terraform_state.arn}/access-logs/*"
+        Principal = { Service = "logging.s3.amazonaws.com" }
+        Condition = {
+          ArnLike = {
+            "aws:SourceArn" = aws_s3_bucket.terraform_state.arn
+          }
+          StringEquals = {
+            "aws:SourceAccount" = var.expected_account_id
+          }
+        }
+      },
     ]
-
-    condition {
-      test     = "Bool"
-      variable = "aws:SecureTransport"
-      values   = ["false"]
-    }
-  }
+  })
 }
 
 resource "aws_s3_bucket_policy" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
-  policy = data.aws_iam_policy_document.terraform_state.json
+  policy = local.terraform_state_bucket_policy
 
   depends_on = [aws_s3_bucket_public_access_block.terraform_state]
+}
+
+# SCRUM-443, terraform:S6258 — the state bucket had no access logging. Self-
+# logging (target == source) closes the gap without a second bucket in this
+# foundational, single-bucket root module, mirroring the compute component's
+# own web_logs self-logging precedent (SCRUM-414). The lifecycle rule's filter
+# is scoped exclusively to the access-logs/ prefix so it can never expire a
+# Terraform state object, which never uses that prefix.
+resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+
+    filter {
+      prefix = "access-logs/"
+    }
+
+    expiration {
+      days = var.access_log_expiration_days
+    }
+  }
+}
+
+resource "aws_s3_bucket_logging" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  target_bucket = aws_s3_bucket.terraform_state.id
+  target_prefix = "access-logs/"
 }
