@@ -79,7 +79,7 @@ function DecisionSection({
   onApprove,
   onEdit,
   onReject,
-}: DecisionSectionProps) {
+}: Readonly<DecisionSectionProps>) {
   const { t } = useTranslation();
 
   if (autoDispatched) {
