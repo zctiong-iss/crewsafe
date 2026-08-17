@@ -33,6 +33,23 @@ public interface WeatherObservationRepository extends JpaRepository<WeatherObser
      */
     List<WeatherObservation> findTop24BySiteIdOrderByObservedAtDesc(UUID siteId);
 
+    /** Fields for {@link #insertIfAbsent}, grouped so the method stays under Sonar's parameter limit. */
+    record InsertObservationCommand(
+            UUID id,
+            UUID siteId,
+            BigDecimal wbgt,
+            BigDecimal temperature,
+            BigDecimal humidity,
+            BigDecimal windSpeed,
+            BigDecimal rainfall,
+            Instant observedAt,
+            Instant ingestedAt,
+            String source,
+            String qualityStatus,
+            String stationId
+    ) {
+    }
+
     /**
      * Atomically inserts one observation or reports that its logical identity already
      * exists. PostgreSQL's conflict handling makes this safe across threads and instances;
@@ -45,23 +62,12 @@ public interface WeatherObservationRepository extends JpaRepository<WeatherObser
                 id, site_id, wbgt, temperature, humidity, wind_speed, rainfall,
                 observed_at, ingested_at, source, quality_status, station_id
             ) VALUES (
-                :id, :siteId, :wbgt, :temperature, :humidity, :windSpeed, :rainfall,
-                :observedAt, :ingestedAt, :source, :qualityStatus, :stationId
+                :#{#command.id}, :#{#command.siteId}, :#{#command.wbgt}, :#{#command.temperature},
+                :#{#command.humidity}, :#{#command.windSpeed}, :#{#command.rainfall},
+                :#{#command.observedAt}, :#{#command.ingestedAt}, :#{#command.source},
+                :#{#command.qualityStatus}, :#{#command.stationId}
             )
             ON CONFLICT (site_id, observed_at, source) DO NOTHING
             """, nativeQuery = true)
-    int insertIfAbsent(
-            @Param("id") UUID id,
-            @Param("siteId") UUID siteId,
-            @Param("wbgt") BigDecimal wbgt,
-            @Param("temperature") BigDecimal temperature,
-            @Param("humidity") BigDecimal humidity,
-            @Param("windSpeed") BigDecimal windSpeed,
-            @Param("rainfall") BigDecimal rainfall,
-            @Param("observedAt") Instant observedAt,
-            @Param("ingestedAt") Instant ingestedAt,
-            @Param("source") String source,
-            @Param("qualityStatus") String qualityStatus,
-            @Param("stationId") String stationId
-    );
+    int insertIfAbsent(@Param("command") InsertObservationCommand command);
 }

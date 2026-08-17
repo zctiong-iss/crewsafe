@@ -64,7 +64,7 @@ public class LightningIngestionService {
         Optional<NearestStrikeSelector.Selection> nearest =
                 nearestStrikeSelector.select(site, batch.strikes());
 
-        return observationRepository.insertIfAbsent(
+        return observationRepository.insertIfAbsent(new LightningObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(),
                 site.getId(),
                 nearest.map(NearestStrikeSelector.Selection::distanceKm).orElse(null),
@@ -72,6 +72,6 @@ public class LightningIngestionService {
                 batch.observedAt(),
                 ingestedAt,
                 source.name(),
-                qualityStatus.name());
+                qualityStatus.name()));
     }
 }
