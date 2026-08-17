@@ -20,7 +20,7 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -39,6 +39,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { decideRecommendation, loadRecommendations } from "@/store/reducers/recommendationsSlice";
 import { loadPolicyVersions } from "@/store/reducers/policySlice";
 import { showToast } from "@/store/reducers/uiSlice";
+import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -57,6 +58,11 @@ const CATEGORY_ORDER: MitigationCategory[] = [
 
 interface DecisionSectionProps {
   autoDispatched: boolean;
+  /**
+   * SCRUM-291 replaced this plan because conditions moved on. Not a decision — nobody judged
+   * it — but equally not something left to approve.
+   */
+  superseded: boolean;
   decided: boolean;
   canDecide: boolean;
   deciding: boolean;
@@ -73,6 +79,7 @@ interface DecisionSectionProps {
  */
 function DecisionSection({
   autoDispatched,
+  superseded,
   decided,
   canDecide,
   deciding,
@@ -86,6 +93,27 @@ function DecisionSection({
     return (
       <View style={styles.gapTop}>
         <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
+      </View>
+    );
+  }
+
+  /*
+   * ── SUPERSEDED IS NOT DECIDABLE (SCRUM-291) ───────────────────────────────────────────
+   * Checked BEFORE `canDecide`, and it was missing entirely until SCRUM-TBD-70: `decided` is
+   * `approval !== null || autoDispatched`, and a superseded plan has no approval, so it fell
+   * straight through and offered Approve/Edit/Reject on a plan the server had already
+   * replaced. The comment on `decided` claimed SUPERSEDED hid the buttons; nothing did.
+   *
+   * It mattered little while this screen only loaded on mount — a supervisor rarely saw the
+   * status change under them. Now that the screen polls, a plan being superseded mid-read is
+   * the ordinary case, which is exactly what makes fixing it part of this change rather than
+   * a follow-up. Approving here would either 409 or, worse, approve mitigations computed for
+   * conditions that no longer hold.
+   */
+  if (superseded) {
+    return (
+      <View style={styles.gapTop}>
+        <MessageBanner message={t("recommendations.supersededNotice")} tone="warning" />
       </View>
     );
   }
@@ -184,6 +212,32 @@ export default function RecommendationDetailScreen() {
 
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+
+  /*
+   * ── THIS SCREEN HAS TO KEEP LOOKING (SCRUM-TBD-70) ────────────────────────────────────
+   * SCRUM-291 supersedes rather than stacks, so the plan on this screen can be replaced while
+   * a supervisor is reading it — and reading it is exactly what they are here to do. Loading
+   * once on mount meant they would judge a plan that no longer applied and only discover it
+   * from the 409 on submit. That conflict path is the right backstop, but it spends someone's
+   * attention on a stale plan at the moment conditions changed, which is the worst time.
+   *
+   * `recommendation` is derived from the list in the store, so refreshing the list is all this
+   * needs — the status pill and the superseded notice both re-render from it.
+   *
+   * Suppressed while a decision is in flight or a sheet is open. A supervisor part-way through
+   * writing a rejection reason must not have the plan change underneath them; they get told
+   * when they close the sheet, which is a moment they chose.
+   */
+  const busyRef = useRef(false);
+  busyRef.current = decidingId !== null || editing || rejecting;
+
+  useAutoRefresh(
+    useCallback(() => {
+      if (busyRef.current) return;
+      void dispatch(loadRecommendations({ siteId }));
+    }, [dispatch, siteId]),
+    REFRESH_INTERVALS.PLANS_MS,
+  );
   /** Whether the clamped "Why this was drafted" narrative is showing in full (ADR-0017 §3). */
   const [showFullWhy, setShowFullWhy] = useState(false);
 
@@ -268,6 +322,12 @@ export default function RecommendationDetailScreen() {
    * for a supervisor to do here.
    */
   const autoDispatched = recommendation.status === "AUTO_DISPATCHED";
+  /*
+   * SCRUM-291 drafts a replacement and marks this one SUPERSEDED when a WBGT band or lightning
+   * risk state moves. There is no approval behind it — nobody decided anything — so it is not
+   * `decided`, but there is nothing left to decide either. See `DecisionSection`.
+   */
+  const superseded = recommendation.status === "SUPERSEDED";
   const decided = approval !== null || autoDispatched;
 
   return (
@@ -441,6 +501,7 @@ export default function RecommendationDetailScreen() {
         <DecisionSection
           autoDispatched={autoDispatched}
           decided={decided}
+          superseded={superseded}
           canDecide={canDecide}
           deciding={deciding}
           onApprove={onApprove}

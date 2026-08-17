@@ -28,6 +28,18 @@ jest.mock("@/hooks/useReduceMotion", () => ({
   useSystemReduceMotion: () => false,
 }));
 
+/*
+ * `useAutoRefresh` is captured rather than exercised: the hook has its own focus/AppState
+ * behaviour and its own coverage, and running its real timer here would test React Navigation
+ * instead of this screen. Holding the registered callback lets the polling guard be invoked
+ * directly, which is the part this screen actually owns.
+ */
+const mockAutoRefresh = jest.fn();
+jest.mock("@/hooks/useAutoRefresh", () => ({
+  useAutoRefresh: (cb: () => void, ms: number) => mockAutoRefresh(cb, ms),
+  REFRESH_INTERVALS: { PLANS_MS: 60_000 },
+}));
+
 const mockUseRoute = jest.fn();
 jest.mock("@react-navigation/native", () => ({
   useRoute: () => mockUseRoute(),
@@ -40,7 +52,10 @@ jest.mock("@/api/endpoints/recommendations", () => ({
   decideRecommendation: (...args: unknown[]) => mockDecideRequest(...args),
   fetchRecommendations: (...args: unknown[]) => mockFetchRecommendations(...args),
 }));
-jest.mock("@/api/endpoints/shifts", () => ({ fetchShifts: jest.fn().mockResolvedValue([]) }));
+const mockFetchShifts = jest.fn().mockResolvedValue([]);
+jest.mock("@/api/endpoints/shifts", () => ({
+  fetchShifts: (...args: unknown[]) => mockFetchShifts(...args),
+}));
 jest.mock("@/store/reducers/policySlice", () => ({ loadPolicyVersions: () => ({ type: "policy/noop" }) }));
 jest.mock("@/store/reducers/uiSlice", () => ({ showToast: (p: unknown) => ({ type: "ui/showToast", payload: p }) }));
 
@@ -295,4 +310,129 @@ it("renders no Read more control when there is no rationale to clamp", async () 
   );
 
   expect(queryByLabelText("recommendations.readMore")).toBeNull();
+});
+
+/* ── Superseded plans are not decidable (SCRUM-291 / SCRUM-TBD-70) ──────────────────────── */
+
+it("offers no decision buttons on a superseded plan", async () => {
+  /*
+   * THE REGRESSION THIS EXISTS FOR.
+   *
+   * `decided` is `approval !== null || autoDispatched`. A superseded plan has no approval --
+   * nobody decided anything, the server replaced it because conditions moved on -- so before
+   * SCRUM-TBD-70 it fell straight through to `canDecide` and offered Approve/Edit/Reject on a
+   * plan that no longer applied. Approving it would either 409 or, worse, approve mitigations
+   * computed for a WBGT band that had already passed.
+   *
+   * It mattered little while this screen loaded once on mount. Now that it polls, a plan being
+   * superseded mid-read is ordinary.
+   */
+  const store = buildStore(SUPERVISOR, [recommendation({ status: "SUPERSEDED" })]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.supersededNotice")).not.toBeNull();
+  expect(queryByText("recommendations.approveButton")).toBeNull();
+  expect(queryByText("recommendations.editButton")).toBeNull();
+  expect(queryByText("recommendations.rejectButton")).toBeNull();
+});
+
+it("does not mistake a superseded plan for one someone decided", async () => {
+  // Different facts, different wording: "decided by someone" would be a lie here -- nobody
+  // judged this plan, the conditions behind it changed.
+  const store = buildStore(SUPERVISOR, [recommendation({ status: "SUPERSEDED" })]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.decisionBySomeone")).toBeNull();
+});
+
+it("still offers the decision buttons on a plan that is merely pending", async () => {
+  // Guards the fix from over-reaching: only SUPERSEDED loses the buttons.
+  const store = buildStore(SUPERVISOR, [recommendation({ status: "PENDING_APPROVAL" })]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("recommendations.approveButton")).not.toBeNull();
+  expect(queryByText("recommendations.supersededNotice")).toBeNull();
+});
+
+/* ── The screen keeps looking, but not over a supervisor's shoulder (SCRUM-TBD-70) ──────── */
+
+it("registers a poll at the plans interval", async () => {
+  const store = buildStore(SUPERVISOR, [recommendation()]);
+  await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(mockAutoRefresh).toHaveBeenCalled();
+  expect(mockAutoRefresh.mock.calls[0][1]).toBe(60_000);
+});
+
+it("refreshes on a poll tick so a supersession is noticed without user action", async () => {
+  // The reason this screen polls at all: the plan being read can be replaced under it.
+  const store = buildStore(SUPERVISOR, [recommendation()]);
+  await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  // `loadRecommendations` fetches the site's shifts first, then a plan per shift -- so the
+  // shift fetch is the call that proves the thunk ran at all.
+  const before = mockFetchShifts.mock.calls.length;
+
+  const tick = mockAutoRefresh.mock.calls[0][0] as () => void;
+  tick();
+
+  await waitFor(() => {
+    expect(mockFetchShifts.mock.calls.length).toBeGreaterThan(before);
+  });
+});
+
+it("does not poll while a decision is in flight", async () => {
+  /*
+   * A refresh landing mid-decision can reorder the list the supervisor is acting on, and can
+   * swap the plan under a press aimed at Approve. `decidingId` is the signal; pull-to-refresh
+   * is never suppressed, because that is the supervisor choosing to refresh.
+   */
+  const store = buildStore(SUPERVISOR, [recommendation()]);
+  await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  // Put a decision in flight through the real reducer, then wait for the screen to re-render
+  // with it -- the guard reads a ref written during render, not the store directly.
+  store.dispatch({
+    type: decideRecommendation.pending.type,
+    meta: { arg: { recommendationId: "rec-1" } },
+  });
+  await waitFor(() => {
+    expect(store.getState().recommendations.decidingId).toBe("rec-1");
+  });
+
+  const before = mockFetchShifts.mock.calls.length;
+  // The LAST registered callback: each render re-registers, and only the newest one has seen
+  // the in-flight decision.
+  const calls = mockAutoRefresh.mock.calls;
+  const tick = calls[calls.length - 1][0] as () => void;
+  tick();
+
+  expect(mockFetchShifts.mock.calls.length).toBe(before);
 });

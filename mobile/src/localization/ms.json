@@ -487,10 +487,13 @@
     "generating": "Mendraf",
     "generateFailedTitle": "Tiada pelan didraf",
     "generatedToast": "Satu pelan telah didraf.",
+    "autoDrafted": "Pelan baharu telah dirangka",
+    "autoDraftedMany": "Pelan-pelan baharu telah dirangka",
     "statusDraft": "Draf",
     "statusSuperseded": "Digantikan",
     "statusAutoDispatched": "Henti kerja dihantar",
     "autoDispatchedNotice": "Arahan henti kerja ini telah dihantar kepada pekerja secara automatik — tiada kelulusan diperlukan.",
+    "supersededNotice": "Keadaan telah berubah, jadi pelan ini telah digantikan dengan yang lebih baharu. Tiada apa-apa untuk diputuskan di sini.",
     "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {
