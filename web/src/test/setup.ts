@@ -40,10 +40,20 @@ if (!window.localStorage) {
 }
 
 if (typeof window !== "undefined" && !window.ResizeObserver) {
+  // jsdom does not implement ResizeObserver, but Recharts' <ResponsiveContainer>
+  // calls new ResizeObserver().observe() on mount. These methods are intentional
+  // no-ops: the stub only needs to exist so the chart renders at its default
+  // size in tests instead of throwing. Do not add behaviour here.
   class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
+    observe(): void {
+      /* intentional no-op — see block comment above */
+    }
+    unobserve(): void {
+      /* intentional no-op */
+    }
+    disconnect(): void {
+      /* intentional no-op */
+    }
   }
   window.ResizeObserver = ResizeObserver;
   global.ResizeObserver = ResizeObserver;
@@ -66,4 +76,3 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
-
