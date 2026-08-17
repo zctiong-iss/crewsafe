@@ -5,6 +5,7 @@ locals {
     "cognito",
     "compute",
     "compute-web",
+    "compute-s3",
     "database",
     "developer-access",
     "ecr",
@@ -87,8 +88,8 @@ resource "terraform_data" "input_validation" {
     }
 
     precondition {
-      condition     = length(local.policy_bindings) == 18
-      error_message = "The policy-management root must contain exactly eighteen component bindings."
+      condition     = length(local.policy_bindings) == 20
+      error_message = "The policy-management root must contain exactly twenty component bindings."
     }
   }
 }
