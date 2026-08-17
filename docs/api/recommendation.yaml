@@ -195,7 +195,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "409":
-          description: This recommendation already has a decision recorded.
+          description: >
+            This recommendation can no longer be decided on, for one of three reasons: it
+            already has a decision recorded; a newer auto-triggered draft superseded it
+            (status SUPERSEDED); or it was auto-dispatched with no approval step at all
+            (status AUTO_DISPATCHED) — see RecommendationStatus.
           content:
             application/json:
               schema:
@@ -264,11 +268,18 @@ components:
 
     RecommendationStatus:
       type: string
-      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED]
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SUPERSEDED, AUTO_DISPATCHED]
       description: >
         Server-controlled. Set to APPROVED by a decision of either APPROVED or EDITED
         (both mean a plan reaches dispatch, just with or without changes) and to
         REJECTED by a decision of REJECTED. A client cannot set this directly.
+        SUPERSEDED means a newer auto-triggered draft replaced this one before a
+        supervisor decided on it -- POST .../decision returns 409 for a recommendation
+        in this state. AUTO_DISPATCHED means a lightning-immediate or WBGT-max
+        stop-work skipped approval entirely and was already dispatched to workers --
+        POST .../decision also returns 409 for this state, since there is no approval
+        step left to record; clients render it distinctly from PENDING_APPROVAL, with
+        no approve/reject affordance.
 
     ApprovalDecision:
       type: string

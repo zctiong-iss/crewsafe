@@ -163,6 +163,60 @@ class ActionDispatchServiceTest {
                 () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", principal));
     }
 
+    /**
+     * SCRUM-440: the auto-dispatch path used for a lightning-immediate or WBGT-max stop-work,
+     * with no {@link Approval} in the picture at all.
+     */
+    @Test
+    void testAutoDispatchAction_Success() {
+        Recommendation recommendation = Recommendation.builder()
+                .id(UUID.randomUUID())
+                .status(Recommendation.RecommendationStatus.AUTO_DISPATCHED)
+                .build();
+        AppUser worker = AppUser.builder().id(workerId).role(Role.WORKER).build();
+        when(appUserRepository.findById(workerId)).thenReturn(Optional.of(worker));
+        when(actionDispatchRepository.save(any(ActionDispatch.class))).thenAnswer(i -> i.getArgument(0));
+
+        ActionDispatch result = service.autoDispatchAction(recommendation, null, workerId, "STOP_WORK",
+                "Stop work immediately");
+
+        assertNotNull(result);
+        assertEquals("STOP_WORK", result.getActionCode());
+        assertEquals(ActionDispatch.ActionDispatchStatus.PENDING, result.getStatus());
+        assertNull(result.getApproval());
+        assertEquals(recommendation, result.getRecommendation());
+        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_AUTO_DISPATCHED),
+                eq("ACTION_DISPATCH"), eq(result.getId()), any());
+        // No Approval lookup at all -- there is none to find.
+        verifyNoInteractions(approvalRepository);
+    }
+
+    /**
+     * The auto-dispatch bypass can also be reached by a supervisor pressing "Generate"
+     * themselves, when the draft turns out to be a mandatory stop-work -- the actor is still
+     * recorded in that case, only the decision step is skipped.
+     */
+    @Test
+    void testAutoDispatchAction_PreservesARealActorWhenASupervisorTriggeredTheDraft() {
+        Recommendation recommendation = Recommendation.builder().id(UUID.randomUUID()).build();
+        AppUser worker = AppUser.builder().id(workerId).role(Role.WORKER).build();
+        when(appUserRepository.findById(workerId)).thenReturn(Optional.of(worker));
+        when(actionDispatchRepository.save(any(ActionDispatch.class))).thenAnswer(i -> i.getArgument(0));
+
+        service.autoDispatchAction(recommendation, supervisorId, workerId, "STOP_WORK", "Stop work immediately");
+
+        verify(auditService).record(eq(supervisorId), eq(AuditEventType.ACTION_AUTO_DISPATCHED), any(), any(), any());
+    }
+
+    @Test
+    void testAutoDispatchAction_WorkerNotFound() {
+        Recommendation recommendation = Recommendation.builder().id(UUID.randomUUID()).build();
+        when(appUserRepository.findById(workerId)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () -> service.autoDispatchAction(
+                recommendation, null, workerId, "STOP_WORK", "Stop work immediately"));
+    }
+
     @Test
     void testAcknowledgeDispatch_Idempotent() {
         // Create a worker principal

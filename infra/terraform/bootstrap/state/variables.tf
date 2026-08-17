@@ -28,3 +28,14 @@ variable "aws_region" {
     error_message = "CrewSafe Terraform state must be provisioned in ap-southeast-1."
   }
 }
+
+variable "access_log_expiration_days" {
+  description = "Days after which a self-delivered access-log object in the state bucket's own access-logs/ prefix is expired (SCRUM-443, terraform:S6258)."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.access_log_expiration_days > 0
+    error_message = "access_log_expiration_days must be a positive number of days."
+  }
+}

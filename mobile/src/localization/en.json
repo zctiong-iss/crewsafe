@@ -484,6 +484,9 @@
     "generateFailedTitle": "No plan drafted",
     "generatedToast": "A plan has been drafted.",
     "statusDraft": "Draft",
+    "statusSuperseded": "Superseded",
+    "statusAutoDispatched": "Stop-work dispatched",
+    "autoDispatchedNotice": "This stop-work order was sent to workers automatically — no approval was required.",
     "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {

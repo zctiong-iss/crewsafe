@@ -281,14 +281,25 @@ components:
 
     ActionDispatch:
       type: object
-      required: [id, approvalId, workerId, actionCode, status, dispatchedAt]
+      required: [id, recommendationId, approvalId, workerId, actionCode, status, dispatchedAt]
       properties:
         id:
           type: string
           format: uuid
+        recommendationId:
+          type: string
+          format: uuid
+          description: >
+            The recommendation this dispatch fans out from. Always present, unlike
+            approvalId (SCRUM-440).
         approvalId:
           type: string
           format: uuid
+          nullable: true
+          description: >
+            Null for a lightning-immediate or WBGT-max stop-work dispatched automatically
+            with no supervisor approval step at all (SCRUM-440) — see recommendationId,
+            and Recommendation's AUTO_DISPATCHED status. Present for every other dispatch.
         workerId:
           type: string
           format: uuid

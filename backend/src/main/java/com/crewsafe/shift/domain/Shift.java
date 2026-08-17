@@ -78,6 +78,16 @@ public class Shift {
         this.status = ShiftStatus.CANCELLED;
     }
 
+    /**
+     * Marks the shift active (SCRUM-441) once its start time has passed. Which statuses
+     * may reach this method is a transition rule, not an invariant of this object, so
+     * it's enforced by the caller — see
+     * {@link com.crewsafe.shift.service.ShiftService#activateDueShifts}.
+     */
+    public void activate() {
+        this.status = ShiftStatus.ACTIVE;
+    }
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {
