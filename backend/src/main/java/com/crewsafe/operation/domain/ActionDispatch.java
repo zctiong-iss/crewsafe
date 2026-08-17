@@ -29,8 +29,24 @@ public class ActionDispatch {
     @Id
     private UUID id;
 
+    /**
+     * The recommendation this dispatch fans out from -- always present, unlike
+     * {@link #approval}. Added by SCRUM-440 so shift-scoping (see {@code
+     * ActionDispatchRepository#findByShiftId}) does not depend on an approval existing:
+     * an auto-dispatched stop-work (see {@link #approval}'s javadoc) has none.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approval_id", nullable = false)
+    @JoinColumn(name = "recommendation_id", nullable = false)
+    private Recommendation recommendation;
+
+    /**
+     * Null for a stop-work dispatched automatically, with no supervisor decision at all
+     * (SCRUM-440) -- {@link Recommendation.RecommendationStatus#AUTO_DISPATCHED}. Present for
+     * every other dispatch, which always follows a supervisor's {@code APPROVED}/{@code
+     * EDITED} decision.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "approval_id")
     private Approval approval;
 
     @ManyToOne(fetch = FetchType.LAZY)

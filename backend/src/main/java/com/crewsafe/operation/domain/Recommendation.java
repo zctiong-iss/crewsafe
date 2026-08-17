@@ -72,6 +72,16 @@ public class Recommendation {
          * conditions it was drafted under simply changed first. {@code RecommendationService
          * #decide} refuses a decision on a recommendation in this state.
          */
-        SUPERSEDED
+        SUPERSEDED,
+
+        /**
+         * A lightning-immediate or WBGT-max stop-work (SCRUM-440): dispatched straight to
+         * workers with no supervisor approval step at all, per the team's four-rule alert
+         * policy. Terminal, like APPROVED/REJECTED, but reached without an {@link Approval}
+         * ever existing -- see {@code AgentDraftService#doGenerate} for the two conditions
+         * that reach it and {@code RecommendationService#assertCanDecide} for why one can no
+         * longer be decided on.
+         */
+        AUTO_DISPATCHED
     }
 }
