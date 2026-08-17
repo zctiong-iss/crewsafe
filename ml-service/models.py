@@ -3,6 +3,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import List, Literal, Optional
 from datetime import datetime, timezone
 
+# Shared across ForecastPrediction/ModelStatus/ModelCard example payloads (python:S1192).
+_BASELINE_MODEL_VERSION_EXAMPLE = "baseline-1.0.0"
+
 
 class Timing(BaseModel):
     """Duration / recurrence / deadline for a mitigation that needs one.
@@ -187,7 +190,7 @@ class ForecastPrediction(BaseModel):
                 "metric": "wbgt",
                 "predicted_value": 35.5,
                 "horizon_minutes": 30,
-                "model_version": "baseline-1.0.0",
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
                 "confidence_interval_lower": 34.2,
                 "confidence_interval_upper": 36.8,
                 "timestamp": "2026-02-08T12:00:00Z",
@@ -240,7 +243,7 @@ class ModelStatus(BaseModel):
         protected_namespaces=(),
         json_schema_extra={
             "example": {
-                "model_version": "baseline-1.0.0",
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
                 "approved_for_inference": False,
                 "approval_blocker": "no model configured",
                 "horizons": {},
@@ -311,7 +314,7 @@ class ModelCard(BaseModel):
         protected_namespaces=(),
         json_schema_extra={
             "example": {
-                "model_version": "baseline-1.0.0",
+                "model_version": _BASELINE_MODEL_VERSION_EXAMPLE,
                 "horizons": {},
             }
         },
