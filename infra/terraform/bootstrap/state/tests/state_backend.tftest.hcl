@@ -70,7 +70,7 @@ run "rejects_authenticated_account_mismatch" {
 # this foundational, single-bucket root module, mirroring the compute
 # component's own web_logs self-logging precedent (SCRUM-414).
 run "state_bucket_self_logging" {
-  command = apply
+  command = plan
 
   variables {
     expected_account_id = "123456789012"
@@ -79,7 +79,7 @@ run "state_bucket_self_logging" {
   }
 
   assert {
-    condition     = aws_s3_bucket_logging.terraform_state.target_bucket == aws_s3_bucket.terraform_state.id
+    condition     = aws_s3_bucket_logging.terraform_state.target_bucket == aws_s3_bucket.terraform_state.bucket
     error_message = "The state bucket must log its own access to itself (self-logging), not a separate bucket."
   }
 
@@ -93,9 +93,9 @@ run "state_bucket_self_logging" {
       for s in jsondecode(aws_s3_bucket_policy.terraform_state.policy).Statement : s
       if s.Sid == "S3ServerAccessLogsPolicy"
       && s.Effect == "Allow"
-      && s.Principal.Service == "logging.s3.amazonaws.com"
-      && s.Condition.ArnLike["aws:SourceArn"] == aws_s3_bucket.terraform_state.arn
-      && s.Condition.StringEquals["aws:SourceAccount"] == var.expected_account_id
+      && try(s.Principal.Service, null) == "logging.s3.amazonaws.com"
+      && try(s.Condition.ArnLike["aws:SourceArn"], null) == local.terraform_state_bucket_arn
+      && try(s.Condition.StringEquals["aws:SourceAccount"], null) == var.expected_account_id
     ]) == 1
     error_message = "The state bucket policy must grant exactly one scoped s3:PutObject statement to logging.s3.amazonaws.com for self-logging, with no wildcard principal or resource."
   }
