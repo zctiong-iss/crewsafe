@@ -23,6 +23,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from .estimators import PersistenceFloorRegressor
 from .evaluation import ForecastMetrics, evaluate_predictions, meets_acceptance_rule
+from .explainability import compute_shap_drivers
 from .features import (
     FEATURE_VERSION,
     TARGET_BY_HORIZON,
@@ -63,6 +64,7 @@ class TrainedHorizon:
     test_interval_coverage: float
     training_seconds: float
     validation_trials: tuple[dict[str, Any], ...]
+    shap_drivers: tuple[dict[str, Any], ...]
 
 
 def train_and_package(
@@ -304,6 +306,11 @@ def _train_horizon(
     test_interval_coverage = float(
         np.mean(np.abs(actual - selected_test_predictions) <= interval_half_width)
     )
+    shap_drivers = tuple(
+        compute_shap_drivers(selected_model, split.validation[feature_columns])
+        if selected_model is not None
+        else []
+    )
 
     artifact_path = None
     if selected_model is not None:
@@ -372,6 +379,7 @@ def _train_horizon(
         test_interval_coverage=test_interval_coverage,
         training_seconds=training_seconds,
         validation_trials=validation_trials,
+        shap_drivers=shap_drivers,
     )
 
 
@@ -596,6 +604,9 @@ def _horizon_manifest(
         },
         "training_seconds": result.training_seconds,
         "validation_trials": list(result.validation_trials),
+        # Absent/empty on bundles trained before SCRUM-152 or on a non-tree
+        # selected model (persistence, ridge) - additive, no schema bump.
+        "shap_drivers": list(result.shap_drivers),
         "metrics": {
             "persistence": result.persistence_metrics.as_dict(),
             "ridge": result.ridge_metrics.as_dict(),
