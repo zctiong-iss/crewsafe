@@ -487,7 +487,7 @@ def _preprocessor(
         numeric_steps.append(("scale", StandardScaler()))
     return ColumnTransformer(
         [
-            ("numeric", Pipeline(numeric_steps), numeric_features),
+            ("numeric", Pipeline(numeric_steps, memory=None), numeric_features),
             (
                 "categorical",
                 OneHotEncoder(handle_unknown="ignore", sparse_output=False),
@@ -510,7 +510,8 @@ def _ridge_pipeline(
                 _preprocessor(numeric_features, categorical_features, scale_numeric=True),
             ),
             ("model", Ridge(alpha=alpha)),
-        ]
+        ],
+        memory=None,
     )
 
 
@@ -537,7 +538,8 @@ def build_hist_gradient_pipeline(
                     random_state=RANDOM_SEED,
                 ),
             ),
-        ]
+        ],
+        memory=None,
     )
 
 
