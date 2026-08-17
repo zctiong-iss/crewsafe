@@ -111,34 +111,45 @@ actually solved the measurement bug; the clamp was belt-and-braces. Asserted acr
 cases in the real longest Tamil and Burmese strings. **The gate cannot prove the wrap paints
 inside the fill — that check stays human.**
 
-**5. D1 does not describe the shipped mobile app.** (Phase 3 — needs a decision)
+**5. D1 is now true on mobile — Gelasio replaced by Lexend.** (Phase 4, SCRUM-TBD-55)
 
-D1 is recorded above as a locked decision: *"Lexend everywhere (web + mobile Latin; mobile keeps
-per-script Noto for Tamil/Bengali/Myanmar)"*. Checked against the code:
+D1 recorded *"Lexend everywhere (web + mobile Latin; mobile keeps per-script Noto for
+Tamil/Bengali/Myanmar)"* as locked. Phase 3 found that mobile actually shipped **Gelasio**, with
+zero references to Lexend anywhere in `mobile/`. Phase 4 closed the gap.
 
-| | Typeface | Evidence |
+| | Before | Now |
 |---|---|---|
-| Web | **Lexend** ✅ | `web/src/design/tokens.css` `--font-ui`, `@fontsource/lexend` in `main.tsx` |
-| Mobile Latin | **Gelasio**, not Lexend ❌ | `mobile/src/styles/fonts.ts`, `@expo-google-fonts/gelasio` |
-| Mobile Tamil/Bengali/Myanmar | per-script Noto ✅ | `familyFor()` in `fonts.ts` |
+| Web | Lexend | Lexend (unchanged) |
+| Mobile Latin (`en`, `ms`) | Gelasio | **Lexend** |
+| Mobile `ta` / `bn` / `my` | per-script Noto | per-script Noto (unchanged) |
+| Mobile `hi` | **system Devanagari fallback** | **Noto Sans Devanagari** |
+| Mobile `zh-Hans` | system CJK fallback | system CJK fallback (documented) |
 
-There is **no Lexend anywhere in `mobile/`** — zero references in source or dependencies. ADR-0012,
-which D1 cites, is web-only by its own text: it decides `--font-ui`, loads `@fontsource`, and edits
-`tokens.css`. It never mentions mobile.
+**"Lexend everywhere" is a Latin-only claim, necessarily.** Lexend publishes exactly three
+subsets — `latin`, `latin-ext`, `vietnamese` — verified against the Google Fonts CSS API. It has
+no glyphs for Tamil, Bengali, Myanmar, Devanagari or Han. Applying it to all seven locales would
+have rendered tofu for four of them, which is why D1's own wording keeps per-script Noto.
+`src/styles/fonts.test.ts` asserts, per language, that no non-Latin script ever resolves to Lexend.
 
-So the "everywhere" half of D1 was never implemented on mobile, and the ADR presents it as settled.
-That is the dangerous shape: a future implementer either assumes mobile is already Lexend, or
-"restores" the locked decision by swapping Gelasio out — a change that would touch every screen and
-the `LINE_HEIGHT_RATIO` of 1.35 that is explicitly tuned to Gelasio's ascenders.
+**Hindi moved off the system fallback.** It had been rendering in whatever Devanagari face the
+device happened to have since it shipped — a silent fallback of exactly the kind `fonts.ts` exists
+to prevent. Left in place, it would have been the one language whose typeface was still
+unspecified while every other one was being decided.
 
-**This is not resolved here** — picking a typeface is the design team's call, not a refactor's.
-Raised as SCRUM-TBD-55. Either D1 is corrected to say "Lexend on web, Gelasio on mobile", or a real
-migration is planned and estimated.
+**Simplified Chinese stays on the system face, and that is now recorded rather than implied.**
+`@expo-google-fonts/noto-sans-sc` is **96 MB** unpacked across four weights — roughly sixty times
+the entire Lexend package — and every Android and iOS device ships a usable CJK face. Revisit only
+with a subset build (SCRUM-TBD-58).
 
-**Open item 3 is consequently moot for mobile.** ADR-0012's unverified tabular-figures claim is a
-`font-variant-numeric` concern about Lexend on the web. Mobile does not use Lexend and React Native
-does not support `font-variant-numeric` the way CSS does, so nothing on mobile depends on it. The
-item remains open **for web only**.
+**`LINE_HEIGHT_RATIO` was deliberately left at 1.35.** It was tuned to Gelasio's ascenders, and
+Lexend's large x-height and generous vertical metrics need no less. Re-tuning would have reflowed
+every screen to solve a problem that never appeared: the gate renders all five gated scripts at
+`fontScale` 1.5 with no clipping. The per-script boosts multiply on top of the base ratio, so they
+described the scripts rather than the Latin face and survived the swap untouched.
+
+**Open item 3 remains open for web only.** ADR-0012's unverified tabular-figures claim is a
+`font-variant-numeric` concern, which is a CSS feature. React Native does not support it the same
+way, so no mobile numeric readout depends on it even now that mobile uses Lexend.
 
 **Open item 4 in Doc 1 §8.5 was already solved.** The plan called for a new locale key-parity
 test; `mobile/scripts/check-locale-parity.mjs` already existed, already ran in CI, and is

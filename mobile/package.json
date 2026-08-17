@@ -4,8 +4,9 @@
   "type": "module",
   "main": "index.ts",
   "dependencies": {
-    "@expo-google-fonts/gelasio": "^0.4.1",
+    "@expo-google-fonts/lexend": "^0.4.1",
     "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
+    "@expo-google-fonts/noto-sans-devanagari": "^0.4.1",
     "@expo-google-fonts/noto-sans-myanmar": "^0.4.2",
     "@expo-google-fonts/noto-sans-tamil": "^0.4.3",
     "@expo/vector-icons": "^15.0.2",

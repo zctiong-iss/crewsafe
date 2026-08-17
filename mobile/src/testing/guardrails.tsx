@@ -35,12 +35,15 @@ import { buildTheme, FONT_SCALE_MAX, type AppTheme } from "@/styles/theme";
 /**
  * The languages the gate renders in.
  *
- * Not all seven: `ta` (Tamil), `bn` (Bengali) and `my` (Myanmar) are the three that carry a
- * per-script font and a line-height boost, so they are where a caption-height box clips
- * first. `en` is the control. Adding `hi`, `ms` and `zh-Hans` would quadruple the matrix to
- * re-prove what these four already establish.
+ * Not all seven: these are the ones carrying a per-script font and a line-height boost, so
+ * they are where a caption-height box clips first. `en` is the control (Lexend).
+ *
+ * `hi` joined when Hindi moved off the system Devanagari fallback onto Noto Sans Devanagari —
+ * before that its face was whatever the device happened to have, so gating it would have
+ * asserted something the app did not control. `ms` (Latin, identical to `en`) and `zh-Hans`
+ * (system CJK face, still outside the app's control) stay out for the same reason.
  */
-export const GATE_LANGUAGES = ["en", "ta", "bn", "my"] as const;
+export const GATE_LANGUAGES = ["en", "ta", "bn", "my", "hi"] as const;
 
 /** The two ends of the text-size range, since the cap is where layouts fail. */
 export const GATE_FONT_SCALES = [1, FONT_SCALE_MAX] as const;

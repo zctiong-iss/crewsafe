@@ -14,7 +14,7 @@
  * Malay landed first because it is Latin script and needed no font work, so it exercised
  * this list, `AppLanguage`, `resolveDeviceLanguage`, the i18n registration and both pickers
  * with the font problem held out. Tamil, Bengali and Burmese follow here, together with the
- * Noto font layer they depend on — Gelasio has no glyphs for any of the three, so listing
+ * Noto font layer they depend on — the Latin face has no glyphs for any of the three, so listing
  * them before the fonts existed would have offered a worker a language that renders as empty
  * boxes. See `docs/plans/SCRUM-205-localisation-plan.md` and `styles/fonts.ts`.
  *
