@@ -46,6 +46,11 @@ jobs:
         run: npm run typecheck
       - name: Locale parity
         run: npm run check:locales
+      # ADR-0017 §6 declares the card/pill guardrail gate a merge blocker. Run separately
+      # from the main suite so a gate failure is legible as "this clips at large text / in
+      # high contrast / in Tamil" rather than buried in a 500-test summary.
+      - name: Guardrail gate (ADR-0017 §6)
+        run: npm run test:guardrails
       - name: Unit tests
         run: npm run test:coverage
       - name: Production bundle exports

@@ -107,6 +107,8 @@ export default function RecommendationDetailScreen() {
 
   const [editing, setEditing] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  /** Whether the clamped "Why this was drafted" narrative is showing in full (ADR-0017 §3). */
+  const [showFullWhy, setShowFullWhy] = useState(false);
 
   /**
    * Only a supervisor or admin may decide; a safety manager reads the same screen (SCRUM-119).
@@ -225,9 +227,33 @@ export default function RecommendationDetailScreen() {
             <AppText variant="subtitle" style={styles.sectionTitle}>
               {t("recommendations.whyTitle")}
             </AppText>
-            <AppText variant="body" style={styles.block}>
+            {/*
+              Clamped to three lines (ADR-0017 §3). This narrative is the single biggest text
+              block on the screen, and an agent writing several paragraphs pushes the actions
+              — the thing the supervisor came here to decide on — below the fold. Three lines
+              is enough to judge whether the reasoning is worth reading in full.
+            */}
+            <AppText
+              variant="body"
+              numberOfLines={showFullWhy ? undefined : 3}
+              style={styles.block}
+            >
               {recommendation.rationale}
             </AppText>
+            <TouchableOpacity
+              onPress={() => setShowFullWhy((value) => !value)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showFullWhy }}
+              accessibilityLabel={
+                showFullWhy ? t("recommendations.readLess") : t("recommendations.readMore")
+              }
+              hitSlop={8}
+              style={styles.readMore}
+            >
+              <AppText variant="caption" tone="secondary">
+                {showFullWhy ? t("recommendations.readLess") : t("recommendations.readMore")}
+              </AppText>
+            </TouchableOpacity>
           </>
         ) : null}
 
@@ -428,6 +454,14 @@ const styles = StyleSheet.create({
   },
   block: {
     marginBottom: vs(12),
+  },
+  readMore: {
+    // Sits under the clamped narrative, and keeps a full touch target at every text size.
+    marginTop: vs(-6),
+    marginBottom: vs(12),
+    minHeight: 44,
+    justifyContent: "center",
+    alignSelf: "flex-start",
   },
   gapTop: {
     marginTop: vs(12),

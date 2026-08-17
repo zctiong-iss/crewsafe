@@ -30,7 +30,8 @@ export type AppTextTone = "primary" | "secondary" | "inverse" | "danger" | "warn
  * Size, and which *weight* the variant uses — not which family.
  *
  * The family is resolved per render from the active language (SCRUM-205), because Tamil,
- * Bengali and Myanmar each need their own face and Gelasio has no glyphs for any of them.
+ * Bengali, Myanmar and Devanagari each need their own face, and Lexend — which publishes only
+ * latin, latin-ext and vietnamese subsets — has no glyphs for any of them.
  * Naming the weight here rather than a concrete family name is what lets one table serve
  * every script.
  */
@@ -44,8 +45,18 @@ const VARIANTS: Record<AppTextVariant, { size: number; weight: AppFontWeight }> 
 };
 
 /**
- * Gelasio is a serif with tall ascenders; RN's default line height clips descenders on
- * Android at larger scales, so every variant is given this much room.
+ * RN's default line height clips descenders on Android at larger scales, so every variant is
+ * given this much room.
+ *
+ * Deliberately UNCHANGED when Gelasio became Lexend. It was originally tuned to Gelasio's tall
+ * ascenders, and Lexend needs no less: it carries a large x-height and generous vertical
+ * metrics of its own, so 1.35 remains comfortable rather than merely sufficient. Re-tuning it
+ * would have re-flowed every screen in the app to solve a problem that had not appeared —
+ * the guardrail gate renders all four Latin and non-Latin scripts at `fontScale` 1.5 and finds
+ * no clipping at this value.
+ *
+ * The per-script boosts in `lineHeightBoostFor` multiply on top of this, so they described the
+ * scripts rather than the Latin face and survived the swap untouched.
  */
 export const LINE_HEIGHT_RATIO = 1.35;
 
@@ -96,7 +107,7 @@ const AppText: FC<AppTextProps> = ({
    * Read from i18n rather than from the preferences slice because i18n is what actually
    * decided which string is being rendered. Taking the family from a different source than
    * the text would let the two disagree for a frame during a language change — Tamil words
-   * in Gelasio, which is tofu.
+   * in Lexend, which is tofu.
    */
   const language = isSupportedLanguage(i18n.language) ? i18n.language : "en";
   const fontFamily = familyFor(language)[spec.weight];
@@ -123,9 +134,8 @@ const AppText: FC<AppTextProps> = ({
           fontSize: s(spec.size) * theme.fontScale,
           fontFamily,
           color: colorForTone[tone],
-          // Gelasio is a serif with tall ascenders; RN's default line height clips
-          // descenders on Android at larger scales. Tamil, Bengali and Myanmar need more
-          // again — see `lineHeightBoostFor`.
+          // RN's default line height clips descenders on Android at larger scales. Tamil,
+          // Bengali, Myanmar and Devanagari need more again — see `lineHeightBoostFor`.
           //
           // This is derived from the variant's size, so overriding `fontSize` through the
           // `style` prop leaves the line height behind and the text overlaps itself on

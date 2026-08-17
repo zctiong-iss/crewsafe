@@ -228,3 +228,71 @@ it("verifies the thunk's own fulfilled/rejected matching, independent of the scr
   expect(decideRecommendation.fulfilled.match(fulfilled)).toBe(true);
   expect(decideRecommendation.rejected.match(fulfilled)).toBe(false);
 });
+
+/* ── The clamped "Why this was drafted" narrative (ADR-0017 §3) ─────────────────────────── */
+
+it("clamps the drafting rationale to three lines until it is expanded", async () => {
+  // The agent can write several paragraphs here. Unclamped, that pushes the approve/reject
+  // buttons — the reason the supervisor opened this screen — below the fold.
+  const store = buildStore(SUPERVISOR, [
+    recommendation({ rationale: "A long agent narrative that runs well past three lines." }),
+  ]);
+
+  const { getByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(
+    getByText("A long agent narrative that runs well past three lines.").props.numberOfLines,
+  ).toBe(3);
+});
+
+it("unclamps the rationale on Read more and re-clamps on Read less", async () => {
+  const store = buildStore(SUPERVISOR, [
+    recommendation({ rationale: "A long agent narrative that runs well past three lines." }),
+  ]);
+
+  const { getByText, getByLabelText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  await fireEvent.press(getByLabelText("recommendations.readMore"));
+  expect(
+    getByText("A long agent narrative that runs well past three lines.").props.numberOfLines,
+  ).toBeUndefined();
+
+  await fireEvent.press(getByLabelText("recommendations.readLess"));
+  expect(
+    getByText("A long agent narrative that runs well past three lines.").props.numberOfLines,
+  ).toBe(3);
+});
+
+it("exposes the Read more control as a button reporting its expanded state", async () => {
+  const store = buildStore(SUPERVISOR, [recommendation()]);
+
+  const { getByLabelText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  const toggle = getByLabelText("recommendations.readMore");
+  expect(toggle.props.accessibilityRole).toBe("button");
+  expect(toggle.props.accessibilityState.expanded).toBe(false);
+});
+
+it("renders no Read more control when there is no rationale to clamp", async () => {
+  const store = buildStore(SUPERVISOR, [recommendation({ rationale: null })]);
+
+  const { queryByLabelText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByLabelText("recommendations.readMore")).toBeNull();
+});
