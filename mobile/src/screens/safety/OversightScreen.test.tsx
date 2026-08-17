@@ -212,15 +212,19 @@ it("names the decider on a decided plan and nobody on a pending one", async () =
   expect(queryByText("mgr-1")).toBeNull();
 });
 
-it("falls back to the raw id when a decider cannot be resolved to a name", async () => {
-  // GET /workers returns ACTIVE only, so someone since offboarded resolves to nothing.
-  // Dropping the badge would understate who decided.
+it("names the approver from the server rather than looking them up", async () => {
+  /*
+   * approverId can never be resolved client-side: the only lookup is GET /workers, which
+   * returns WORKERs, and an approver is a SUPERVISOR. The server sends the name for that
+   * reason.
+   */
   mockFetchRecommendations.mockResolvedValue([
     plan("rec-3", {
       status: "APPROVED",
       approval: {
         id: "ap-2",
-        approverId: "gone",
+        approverId: "5fd21b3d-c1b8-450b-93d9-57ed347edf2f",
+        approverName: "Zhong Cheng",
         decision: "APPROVED",
         reason: null,
         editedMitigations: null,
@@ -233,7 +237,35 @@ it("falls back to the raw id when a decider cannot be resolved to a name", async
   await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
-  await waitFor(() => expect(getByText("gone")).toBeTruthy());
+  await waitFor(() => expect(getByText("Zhong Cheng")).toBeTruthy());
+});
+
+it("shows no badge rather than a raw id when the approver cannot be named", async () => {
+  /*
+   * The regression. A UUID fell through to the badge on every decided plan — meaningless to a
+   * manager, and 36 characters with no spaces, so it could not line-wrap and broke the row.
+   * Showing nothing is the honest answer: the status pill already says it was decided.
+   */
+  mockFetchRecommendations.mockResolvedValue([
+    plan("rec-3", {
+      status: "APPROVED",
+      approval: {
+        id: "ap-2",
+        approverId: "5fd21b3d-c1b8-450b-93d9-57ed347edf2f",
+        decision: "APPROVED",
+        reason: null,
+        editedMitigations: null,
+        decidedAt: "2026-08-17T02:00:00Z",
+      },
+    }),
+  ]);
+
+  const { getAllByLabelText, queryByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(queryByText(/oversight.openPlan/)).not.toBeUndefined());
+  expect(queryByText("5fd21b3d-c1b8-450b-93d9-57ed347edf2f")).toBeNull();
 });
 
 /* ── Failure isolation ─────────────────────────────────────────────────────────────────── */

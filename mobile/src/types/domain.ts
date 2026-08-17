@@ -356,6 +356,17 @@ export type ApprovalDecision = "APPROVED" | "REJECTED" | "EDITED";
 export interface Approval {
   id: string;
   approverId: string;
+  /**
+   * Who decided, ready to render.
+   *
+   * `approverId` alone is unresolvable here: the only name lookup available is
+   * `GET /sites/{siteId}/workers`, which returns WORKERs, and an approver is a SUPERVISOR. So
+   * the id could never be matched to a person and the oversight screen rendered the raw UUID.
+   *
+   * Optional because a backend predating it omits it — callers must fall back to showing
+   * nothing rather than to showing the id.
+   */
+  approverName?: string | null;
   decision: ApprovalDecision;
   reason: string | null;
   /** Present only for an EDITED decision — what the supervisor actually approved. */

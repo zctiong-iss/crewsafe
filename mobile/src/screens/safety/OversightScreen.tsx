@@ -194,8 +194,21 @@ function SitePlanList({
           key={plan.id}
           plan={plan}
           onPress={() => onOpenPlan(plan)}
+          /*
+           * The server's name first, then the worker list, then nothing — never the id.
+           *
+           * That last step is the fix. `approverId` was falling through to the badge as a raw
+           * UUID on every decided plan, because the only lookup available returns WORKERs and
+           * an approver is a SUPERVISOR, so the id could never resolve. It read as gibberish
+           * and, being 36 characters with no spaces, could not wrap either.
+           *
+           * The worker lookup is kept for the case it does cover: a plan decided before the
+           * server carried `approverName`, by someone who happens to be in the loaded list.
+           */
           deciderName={
-            plan.approval ? (workerNameFor(plan.approval.approverId) ?? plan.approval.approverId) : null
+            plan.approval
+              ? (plan.approval.approverName ?? workerNameFor(plan.approval.approverId))
+              : null
           }
         />
       ))}

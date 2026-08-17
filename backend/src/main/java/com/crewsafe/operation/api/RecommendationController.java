@@ -46,10 +46,24 @@ public class RecommendationController {
     private final RecommendationService recommendationService;
     private final AgentDraftService agentDraftService;
 
-    public record ApprovalResponse(UUID id, UUID approverId, String decision, String reason,
-                                    List<MitigationSuggestion> editedMitigations, Instant decidedAt) {
+    /**
+     * {@code approverName} exists because {@code approverId} alone is unresolvable by any
+     * client.
+     *
+     * <p>The obvious lookup is {@code GET /sites/{siteId}/workers}, and it cannot work: that
+     * endpoint returns {@code Role.WORKER} only, while an approver is by definition a
+     * SUPERVISOR. So a client holding an approver id had no list it could ever find the name
+     * in, and the oversight screen fell back to rendering the raw UUID — a 36-character string
+     * with no spaces, which is meaningless to a manager and cannot line-wrap.
+     *
+     * <p>Costs nothing: {@link Approval#getApprover()} is already loaded to read its id.
+     */
+    public record ApprovalResponse(UUID id, UUID approverId, String approverName, String decision,
+                                    String reason, List<MitigationSuggestion> editedMitigations,
+                                    Instant decidedAt) {
         static ApprovalResponse from(Approval approval, List<MitigationSuggestion> editedMitigations) {
             return new ApprovalResponse(approval.getId(), approval.getApprover().getId(),
+                    approval.getApprover().getDisplayName(),
                     approval.getDecision().name(), approval.getReason(), editedMitigations, approval.getDecidedAt());
         }
     }
