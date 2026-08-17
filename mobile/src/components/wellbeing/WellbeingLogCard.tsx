@@ -110,8 +110,9 @@ export default WellbeingLogCard;
 
 const styles = StyleSheet.create({
   card: {
+    // No root margin: MyShiftScreen's container owns the gap between stacked cards.
+    // A margin here would add to it and reintroduce per-card spacing drift.
     padding: s(14),
-    marginBottom: vs(12),
   },
   block: {
     marginTop: vs(10),
