@@ -638,6 +638,7 @@
     "noPlans": "No plans drafted for this site yet.",
     "awaitingCount_one": "{{count}} awaiting",
     "awaitingCount_other": "{{count}} awaiting",
-    "openPlan": "Open the plan drafted {{time}}"
+    "openPlan": "Open the plan drafted {{time}}",
+    "supervisorLabel": "Site supervisor: {{name}}"
   }
 }

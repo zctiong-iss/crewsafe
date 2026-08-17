@@ -638,6 +638,7 @@
     "noPlans": "এই সাইটের জন্য এখনও কোনো পরিকল্পনা তৈরি হয়নি।",
     "awaitingCount_one": "{{count}} অপেক্ষমাণ",
     "awaitingCount_other": "{{count}} অপেক্ষমাণ",
-    "openPlan": "{{time}} এ তৈরি পরিকল্পনা খুলুন"
+    "openPlan": "{{time}} এ তৈরি পরিকল্পনা খুলুন",
+    "supervisorLabel": "সাইট সুপারভাইজার: {{name}}"
   }
 }

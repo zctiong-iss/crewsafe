@@ -479,17 +479,155 @@ it("does not blank an expanded site while it refreshes", async () => {
 });
 
 it("keeps showing plans when a background refresh fails", async () => {
-  const { getAllByLabelText, queryAllByLabelText, queryByText } = await renderScreen();
+  const { getAllByLabelText, queryAllByLabelText, queryByText, getByTestId } =
+    await renderScreen();
 
   await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(queryAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
 
-  // One dropped request on a site network must not swap a readable list for a banner.
-  mockFetchShifts.mockRejectedValueOnce(new Error("offline"));
-  await fireEvent.press(getAllByLabelText(/oversight.hidePlansFor/)[0]);
-  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+  // Through the refresh path, which is where a background failure actually happens. Expanding
+  // twice would not have exercised it at all: a site already loaded is deliberately not
+  // refetched, so the queued rejection would never have been consumed.
+  mockFetchShifts.mockRejectedValue(new Error("offline"));
+  const list = getByTestId("oversight-list");
+  await act(async () => {
+    list.props.refreshControl.props.onRefresh();
+  });
 
+  // One dropped request on a site network must not swap a readable list for a banner.
   expect(queryAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0);
   expect(queryByText("errors.unknown")).toBeNull();
+});
+
+/* ── The site supervisor pill ───────────────────────────────────────────────────────────── */
+
+/*
+ * "Which supervisor is responsible for this AI-drafted plan?" has no answer in the data for most
+ * plans: nothing records a creator, and generateAuto passes a null actor because the scheduler
+ * drafts the majority with no human involved. So the pill names who is accountable for the
+ * SITE — true for every plan, whatever its status or origin — and the copy says so rather than
+ * implying authorship.
+ */
+it("names the site supervisor on every plan, whatever the status", async () => {
+  mockFetchPlanSummary.mockResolvedValue([
+    {
+      siteId: "site-1",
+      awaitingDecision: 1,
+      totalPlans: 2,
+      supervisors: [{ id: "sup-1", displayName: "Meng Hui" }],
+    },
+  ]);
+
+  const { getAllByLabelText, getAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  // Two plans in the fixture: one PENDING_APPROVAL, one APPROVED. Both carry the pill.
+  // One pill per plan, and the name is in it. Asserted separately because the i18n mock
+  // renders key and interpolations as one string.
+  await waitFor(() => expect(getAllByText(/oversight.supervisorLabel/).length).toBe(2));
+  expect(getAllByText(/Meng Hui/).length).toBe(2);
+});
+
+it("lists every supervisor when a site has more than one", async () => {
+  mockFetchPlanSummary.mockResolvedValue([
+    {
+      siteId: "site-1",
+      awaitingDecision: 0,
+      totalPlans: 2,
+      supervisors: [
+        { id: "sup-1", displayName: "Meng Hui" },
+        { id: "sup-2", displayName: "Zhong Cheng" },
+      ],
+    },
+  ]);
+
+  const { getAllByLabelText, getAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(getAllByText(/oversight.supervisorLabel/).length).toBe(4));
+});
+
+it("does not repeat a name when the decider is the site supervisor", async () => {
+  /*
+   * The usual case: the supervisor who covers the site is the one who approved. Rendering both
+   * pills would put the same person on the row twice.
+   */
+  mockFetchPlanSummary.mockResolvedValue([
+    {
+      siteId: "site-1",
+      awaitingDecision: 0,
+      totalPlans: 1,
+      supervisors: [{ id: "sup-1", displayName: "Meng Hui" }],
+    },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("rec-9", {
+      status: "APPROVED",
+      approval: {
+        id: "ap-9",
+        approverId: "sup-1",
+        approverName: "Meng Hui",
+        decision: "APPROVED",
+        reason: null,
+        editedMitigations: null,
+        decidedAt: "2026-08-17T02:00:00Z",
+      },
+    }),
+  ]);
+
+  const { getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(queryAllByText(/Meng Hui/).length).toBe(1));
+});
+
+it("still names a decider who is not one of the site's supervisors", async () => {
+  // Genuinely new information: an admin, or a supervisor since moved off the site, decided it.
+  mockFetchPlanSummary.mockResolvedValue([
+    {
+      siteId: "site-1",
+      awaitingDecision: 0,
+      totalPlans: 1,
+      supervisors: [{ id: "sup-1", displayName: "Meng Hui" }],
+    },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("rec-9", {
+      status: "APPROVED",
+      approval: {
+        id: "ap-9",
+        approverId: "adm-1",
+        approverName: "Abu Bakar",
+        decision: "APPROVED",
+        reason: null,
+        editedMitigations: null,
+        decidedAt: "2026-08-17T02:00:00Z",
+      },
+    }),
+  ]);
+
+  const { getAllByLabelText, getByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(getByText("Abu Bakar")).toBeTruthy());
+});
+
+it("renders no supervisor pill when the summary names none", async () => {
+  // A backend predating the field, or a site with no active supervisor. Better an absent pill
+  // than an invented name on a safety record.
+  mockFetchPlanSummary.mockResolvedValue([
+    { siteId: "site-1", awaitingDecision: 1, totalPlans: 2 },
+  ]);
+
+  const { getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(getAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
+  expect(queryAllByText(/oversight.supervisorLabel/).length).toBe(0);
 });

@@ -637,6 +637,7 @@
     "noPlans": "此工地尚未生成计划。",
     "awaitingCount_one": "{{count}} 项待处理",
     "awaitingCount_other": "{{count}} 项待处理",
-    "openPlan": "打开 {{time}} 拟定的计划"
+    "openPlan": "打开 {{time}} 拟定的计划",
+    "supervisorLabel": "工地主管：{{name}}"
   }
 }

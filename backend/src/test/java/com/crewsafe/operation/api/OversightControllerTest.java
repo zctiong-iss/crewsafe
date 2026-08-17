@@ -1,5 +1,6 @@
 package com.crewsafe.operation.api;
 
+import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.repository.RecommendationRepository;
@@ -39,6 +40,7 @@ class OversightControllerTest {
 
     @Mock private RecommendationRepository recommendations;
     @Mock private SiteMembershipRepository memberships;
+    @Mock private AppUserRepository users;
     @InjectMocks private OversightController controller;
 
     private CrewSafeUserPrincipal principal() {
@@ -71,6 +73,31 @@ class OversightControllerTest {
         }
     }
 
+    /** Same reasoning as {@link Counts}: a plain implementation, not a mock. */
+    private record SiteUserRow(UUID getSiteId, UUID getUserId, String getDisplayName)
+            implements AppUserRepository.SiteUser {
+
+        @Override
+        public UUID getSiteId() {
+            return getSiteId;
+        }
+
+        @Override
+        public UUID getUserId() {
+            return getUserId;
+        }
+
+        @Override
+        public String getDisplayName() {
+            return getDisplayName;
+        }
+    }
+
+    /** Strict stubs, so this is set only in the tests that actually reach the query. */
+    private void noSupervisors() {
+        when(users.findBySiteIdsAndRoleAndStatus(any(), any(), any())).thenReturn(List.of());
+    }
+
     private static RecommendationRepository.SitePlanCounts counts(
             UUID siteId, long awaiting, long total) {
         return new Counts(siteId, awaiting, total);
@@ -81,13 +108,14 @@ class OversightControllerTest {
     void returnsZeroesForASiteWithNoPlans() {
         when(memberships.findSiteIdsByUserId(USER_ID)).thenReturn(List.of(SITE_A, SITE_B));
         when(recommendations.countPlansBySite(any())).thenReturn(List.of(counts(SITE_A, 2, 5)));
+        noSupervisors();
 
         List<OversightController.SitePlanSummary> body =
                 controller.planSummary(principal()).getBody();
 
         assertThat(body).containsExactly(
-                new OversightController.SitePlanSummary(SITE_A, 2, 5),
-                new OversightController.SitePlanSummary(SITE_B, 0, 0));
+                new OversightController.SitePlanSummary(SITE_A, 2, 5, List.of()),
+                new OversightController.SitePlanSummary(SITE_B, 0, 0, List.of()));
     }
 
     /*
@@ -100,6 +128,7 @@ class OversightControllerTest {
     void reportsOutstandingWorkBeforeAnythingIsExpanded() {
         when(memberships.findSiteIdsByUserId(USER_ID)).thenReturn(List.of(SITE_B));
         when(recommendations.countPlansBySite(any())).thenReturn(List.of(counts(SITE_B, 1, 1)));
+        noSupervisors();
 
         List<OversightController.SitePlanSummary> body =
                 controller.planSummary(principal()).getBody();
@@ -124,6 +153,7 @@ class OversightControllerTest {
     void scopeIsDerivedFromTheCallerAlone() {
         when(memberships.findSiteIdsByUserId(USER_ID)).thenReturn(List.of(SITE_A));
         when(recommendations.countPlansBySite(any())).thenReturn(List.of());
+        noSupervisors();
 
         List<OversightController.SitePlanSummary> body =
                 controller.planSummary(principal()).getBody();
@@ -131,5 +161,34 @@ class OversightControllerTest {
         assertThat(body).extracting(OversightController.SitePlanSummary::siteId)
                 .containsExactly(SITE_A);
         verify(memberships).findSiteIdsByUserId(USER_ID);
+    }
+
+    /*
+     * The pill this feeds names who is accountable for a SITE, not who authored a plan. Nothing
+     * records a plan's creator, and generateAuto passes a null actor because the scheduler
+     * drafts most of them with no human involved -- so site accountability is the question that
+     * has an answer for every plan, whatever its status.
+     */
+    @Test
+    @DisplayName("Every site carries its supervisors, in one query rather than one per site")
+    void namesEachSitesSupervisors() {
+        UUID supervisorOne = UUID.randomUUID();
+        UUID supervisorTwo = UUID.randomUUID();
+        when(memberships.findSiteIdsByUserId(USER_ID)).thenReturn(List.of(SITE_A, SITE_B));
+        when(recommendations.countPlansBySite(any())).thenReturn(List.of());
+        when(users.findBySiteIdsAndRoleAndStatus(any(), any(), any())).thenReturn(List.of(
+                new SiteUserRow(SITE_A, supervisorOne, "Meng Hui"),
+                new SiteUserRow(SITE_A, supervisorTwo, "Zhong Cheng")));
+
+        List<OversightController.SitePlanSummary> body =
+                controller.planSummary(principal()).getBody();
+
+        assertThat(body).hasSize(2);
+        assertThat(body.getFirst().supervisors())
+                .extracting(OversightController.SiteSupervisor::displayName)
+                .containsExactly("Meng Hui", "Zhong Cheng");
+        // A site with no supervisor gets an empty list, never a null the client must guard.
+        assertThat(body.get(1).supervisors()).isEmpty();
+        verify(users).findBySiteIdsAndRoleAndStatus(any(), any(), any());
     }
 }

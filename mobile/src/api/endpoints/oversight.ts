@@ -20,12 +20,26 @@ import { mockPlanSummary } from "../mock/oversight";
 
 const MOCK_LATENCY_MS = 250;
 
+/**
+ * Mirrors `OversightController.SiteSupervisor`.
+ *
+ * A supervisor accountable for the SITE, not the author of a plan. Nothing records who drafted
+ * a recommendation, and most are drafted by the scheduler with no human involved at all — so
+ * this is the question that has an answer, and it must not be rendered as authorship.
+ */
+export interface SiteSupervisor {
+  id: string;
+  displayName: string;
+}
+
 /** Mirrors `OversightController.SitePlanSummary`. */
 export interface SitePlanSummary {
   siteId: string;
   /** Plans no supervisor has decided on. The only figure that asks for action. */
   awaitingDecision: number;
   totalPlans: number;
+  /** Optional so a backend predating it renders no pill rather than crashing on undefined. */
+  supervisors?: SiteSupervisor[];
 }
 
 /**

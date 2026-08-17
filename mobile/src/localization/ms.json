@@ -638,6 +638,7 @@
     "noPlans": "Tiada pelan dirangka untuk tapak ini lagi.",
     "awaitingCount_one": "{{count}} menunggu",
     "awaitingCount_other": "{{count}} menunggu",
-    "openPlan": "Buka pelan yang dirangka {{time}}"
+    "openPlan": "Buka pelan yang dirangka {{time}}",
+    "supervisorLabel": "Penyelia tapak: {{name}}"
   }
 }

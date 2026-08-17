@@ -1,5 +1,8 @@
 package com.crewsafe.operation.api;
 
+import com.crewsafe.identity.domain.Role;
+import com.crewsafe.identity.domain.UserStatus;
+import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.operation.repository.RecommendationRepository;
@@ -48,13 +51,37 @@ public class OversightController {
 
     private final RecommendationRepository recommendations;
     private final SiteMembershipRepository memberships;
+    private final AppUserRepository users;
+
+    /**
+     * A supervisor accountable for a site — <em>not</em> the author of any particular plan.
+     *
+     * <h2>Why this is site-level and not plan-level</h2>
+     *
+     * "Which supervisor is responsible for this AI-drafted plan?" has no answer in the data for
+     * most plans. Neither {@code shift} nor {@code recommendation} records a creator, and since
+     * SCRUM-291 the majority are drafted by the scheduler — {@code generateAuto} passes a null
+     * actor precisely because there is no human to name. The audit log holds the drafter for the
+     * manually-triggered ones, and nothing at all for the rest.
+     *
+     * <p>So this answers the question that does have an answer: who is accountable for work at
+     * this site. It is true for every plan regardless of status or origin, which is what the
+     * oversight list needs, but it must never be labelled as authorship — a machine-drafted plan
+     * attributed to a named person is a false record on a screen §12.2 exists to make traceable.
+     * The client's copy carries that distinction; see {@code oversight.supervisorLabel}.
+     */
+    public record SiteSupervisor(UUID id, String displayName) {
+    }
 
     /**
      * @param awaitingDecision plans no supervisor has decided on — the only figure that asks
      *                         for action, and what the list sorts by
      * @param totalPlans       every plan ever drafted for the site, decided or not
+     * @param supervisors      the site's active supervisors, so the oversight list can label
+     *                         every plan with who is accountable for it
      */
-    public record SitePlanSummary(UUID siteId, long awaitingDecision, long totalPlans) {
+    public record SitePlanSummary(UUID siteId, long awaitingDecision, long totalPlans,
+                                   List<SiteSupervisor> supervisors) {
     }
 
     /**
@@ -88,13 +115,24 @@ public class OversightController {
                         RecommendationRepository.SitePlanCounts::getSiteId,
                         counts -> counts));
 
+        // One query for every site's supervisors, for the same reason the counts are one query.
+        var supervisorsBySite = users
+                .findBySiteIdsAndRoleAndStatus(siteIds, Role.SUPERVISOR, UserStatus.ACTIVE)
+                .stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        AppUserRepository.SiteUser::getSiteId,
+                        java.util.stream.Collectors.mapping(
+                                row -> new SiteSupervisor(row.getUserId(), row.getDisplayName()),
+                                java.util.stream.Collectors.toList())));
+
         return ResponseEntity.ok(siteIds.stream()
                 .map(siteId -> {
                     var counts = counted.get(siteId);
+                    var supervisors = supervisorsBySite.getOrDefault(siteId, List.of());
                     return counts == null
-                            ? new SitePlanSummary(siteId, 0, 0)
+                            ? new SitePlanSummary(siteId, 0, 0, supervisors)
                             : new SitePlanSummary(siteId, counts.getAwaitingDecision(),
-                                    counts.getTotalPlans());
+                                    counts.getTotalPlans(), supervisors);
                 })
                 .toList());
     }

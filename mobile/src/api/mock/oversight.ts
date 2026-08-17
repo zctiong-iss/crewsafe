@@ -22,6 +22,9 @@ export function mockPlanSummary(): SitePlanSummary[] {
       siteId: site.id,
       awaitingDecision: plans.filter((plan) => plan.status === "PENDING_APPROVAL").length,
       totalPlans: plans.length,
+      // One supervisor per demo site, matching the seeded memberships. Two would be a better
+      // exercise of the pill row, but the fixture should mirror the data it stands in for.
+      supervisors: [{ id: `sup-${site.id}`, displayName: "Zhong Cheng" }],
     };
   });
 }

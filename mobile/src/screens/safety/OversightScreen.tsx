@@ -55,6 +55,7 @@ import { sharedPaddingHorizontal, sharedGap, cardSurface } from "@/styles/shared
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Recommendation, Site } from "@/types/domain";
 import type { OversightStackParamList } from "@/navigation/types";
+import type { SiteSupervisor } from "@/api/endpoints/oversight";
 
 /**
  * One plan, as a manager reads it: what it is, who decided it, when it was drafted.
@@ -83,8 +84,15 @@ import type { OversightStackParamList } from "@/navigation/types";
 function PlanRow({
   plan,
   deciderName,
+  supervisors,
   onPress,
-}: Readonly<{ plan: Recommendation; deciderName: string | null; onPress: () => void }>) {
+}: Readonly<{
+  plan: Recommendation;
+  deciderName: string | null;
+  /** The SITE's supervisors — accountability, not authorship. See `SiteSupervisor`. */
+  supervisors: SiteSupervisor[];
+  onPress: () => void;
+}>) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
 
@@ -126,15 +134,40 @@ function PlanRow({
           status={plan.status}
           decision={plan.approval?.decision ?? null}
         />
-        {/*
-          The supervisor, as an ENTITY pill (ADR-0017 §4): it names an identity, so it takes
-          the neutral fill and the always-on border and never a semantic colour. A person's
-          name must not render in hazard red because of the status sitting beside it.
 
-          Absent when nobody has decided. A pending plan genuinely has no owner, and a badge
-          there would be the screen asserting something the data does not say.
+        {/*
+          Supervisors sit on the trailing edge, opposite the status: the status is about the
+          plan and this is about who answers for it, so keeping them apart stops the row
+          reading as one run-on label.
+
+          ENTITY pills (ADR-0017 §4) — they name identities, so they take the neutral fill and
+          never a semantic colour. A person's name must not render in hazard red because of the
+          status sitting beside it.
+
+          Shown on every plan whatever its status, which is the point: accountability for a
+          site does not appear only once somebody has decided. But it is the SITE's supervisor,
+          not the plan's author — nothing records who drafted a recommendation, and most are
+          drafted by the scheduler with no human involved. The label says so.
         */}
-        {deciderName ? <Pill role="entity" label={deciderName} /> : null}
+        <View style={styles.planOwners}>
+          {supervisors.map((supervisor) => (
+            <Pill
+              key={supervisor.id}
+              role="entity"
+              label={t("oversight.supervisorLabel", { name: supervisor.displayName })}
+            />
+          ))}
+
+          {/*
+            The decider, only when it is not one of the site's supervisors. Where it is — the
+            usual case — the pill above already carries the name, and repeating it would put
+            the same person on the row twice. Kept for the case that is genuinely new
+            information: an admin, or a supervisor since moved off the site, decided this.
+          */}
+          {deciderName && !supervisors.some((s) => s.displayName === deciderName) ? (
+            <Pill role="entity" label={deciderName} />
+          ) : null}
+        </View>
       </View>
 
       {/* The chevron that used to sit here is gone: the border now carries the affordance,
@@ -152,10 +185,13 @@ function PlanRow({
 function SitePlanList({
   plans,
   workerNameFor,
+  supervisors,
   onOpenPlan,
 }: Readonly<{
   plans: SitePlans | undefined;
   workerNameFor: (id: string) => string | null;
+  /** The site's supervisors, passed down so every plan row carries them. */
+  supervisors: SiteSupervisor[];
   onOpenPlan: (plan: Recommendation) => void;
 }>) {
   const { t } = useTranslation();
@@ -193,6 +229,7 @@ function SitePlanList({
         <PlanRow
           key={plan.id}
           plan={plan}
+          supervisors={supervisors}
           onPress={() => onOpenPlan(plan)}
           /*
            * The server's name first, then the worker list, then nothing — never the id.
@@ -286,20 +323,32 @@ export default function OversightScreen() {
 
   const toggleSite = useCallback(
     (siteId: string) => {
+      /*
+       * The dispatch sits outside the updater, and that matters.
+       *
+       * It used to live inside `setExpanded`'s callback, which React is free to invoke during
+       * render and more than once — so this logged "Cannot update a component while rendering a
+       * different component" and could fire the fetch twice for one tap. An updater must be a
+       * pure function of the previous state; side effects belong out here.
+       */
+      const willExpand = !expanded.has(siteId);
+
       setExpanded((current) => {
         const next = new Set(current);
         if (next.has(siteId)) {
           next.delete(siteId);
         } else {
           next.add(siteId);
-          // Fetched once, on first expand. Re-expanding a site already loaded is instant,
-          // because collapsing a row is a display change and not a reason to discard work.
-          if (!plansBySite[siteId]) void dispatch(loadSitePlans({ siteId }));
         }
         return next;
       });
+
+      // Fetched once, on first expand. Re-expanding a site already loaded is instant, because
+      // collapsing a row is a display change and not a reason to discard work — and the auto
+      // refresh keeps an expanded site current anyway.
+      if (willExpand && !plansBySite[siteId]) void dispatch(loadSitePlans({ siteId }));
     },
-    [dispatch, plansBySite],
+    [dispatch, expanded, plansBySite],
   );
 
   /*
@@ -391,6 +440,9 @@ export default function OversightScreen() {
           <SitePlanList
             plans={plans}
             workerNameFor={workerNameFor}
+            /* From the summary, so the pills are present on every plan the moment the site is
+               expanded — the same one request that supplies the awaiting counts. */
+            supervisors={summaryBySite[item.id]?.supervisors ?? []}
             /* siteId comes from the row rather than the plan: a Recommendation names only its
                shift, and the detail screen is site-scoped like every other plan endpoint. */
             onOpenPlan={(plan) =>
@@ -477,6 +529,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
+    // Pushes the owner pills to the trailing edge, and reflows them beneath the status rather
+    // than clipping once names or text size grow.
+    justifyContent: "space-between",
+    gap: s(6),
+  },
+  planOwners: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    flexShrink: 1,
     gap: s(6),
   },
   planMeta: {
