@@ -89,6 +89,10 @@ public class AgentDraftService {
     /** Recorded as {@code modelVersion} when the model's output was unavailable or discarded. */
     static final String FALLBACK_MODEL_VERSION = "deterministic-fallback";
 
+    /** {@code targetType} for every audit event this class records. Same pattern as {@code
+     * ActionDispatchService#AUDIT_TARGET_TYPE}. */
+    private static final String AUDIT_TARGET_TYPE = "RECOMMENDATION";
+
     /**
      * A plan may be drafted for a shift that has not started yet or is running, but not for one
      * that is over or called off — drafting heat controls for either is meaningless, and for a
@@ -200,11 +204,11 @@ public class AgentDraftService {
 
         UUID recommendationId = saved.getId();
         if (autoDispatch) {
-            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, "RECOMMENDATION",
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, AUDIT_TARGET_TYPE,
                     recommendationId, auditDetail(draft)));
             afterCommit(() -> recommendationService.autoDispatch(saved, actorId, draft.mitigations()));
         } else {
-            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
+            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, AUDIT_TARGET_TYPE,
                     recommendationId, auditDetail(draft)));
         }
 
@@ -235,7 +239,7 @@ public class AgentDraftService {
             recommendations.save(existing);
 
             UUID existingId = existing.getId();
-            afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, "RECOMMENDATION",
+            afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, AUDIT_TARGET_TYPE,
                     existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
         });
     }

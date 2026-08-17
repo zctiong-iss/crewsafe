@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 import AppText from "../texts/AppText";
 import { useTheme } from "@/theme/ThemeProvider";
+import type { AppPalette } from "@/styles/colors";
 import type { ApprovalDecision, RecommendationStatus } from "@/types/domain";
 
 interface RecommendationStatusPillProps {
@@ -24,62 +25,51 @@ interface RecommendationStatusPillProps {
   decision?: ApprovalDecision | null;
 }
 
+/**
+ * Every status but `APPROVED` (handled separately below, since it also depends on `decision`)
+ * maps to exactly one appearance. A lookup table rather than a ternary chain deciding `color`
+ * and a second one deciding `label` — the chain grew one branch per ticket (DRAFT, then
+ * SUPERSEDED, then AUTO_DISPATCHED) until Sonar flagged the nesting; a table scales to a new
+ * status by adding a line, not by re-indenting two expressions.
+ *
+ * Absent from this table is exactly the old chain's fall-through: any status not listed here
+ * renders as a plain approval. That used to be a bug (DRAFT and SUPERSEDED were once missing
+ * and rendered green "Approved"); it is safe now only because every non-APPROVED status the
+ * backend can send is listed explicitly.
+ */
+const STATUS_APPEARANCE: Partial<
+  Record<RecommendationStatus, { colorKey: keyof AppPalette; labelKey: string }>
+> = {
+  // Filled only while pending: that is the one state asking someone to do something.
+  PENDING_APPROVAL: { colorKey: "warningFill", labelKey: "recommendations.pending" },
+  REJECTED: { colorKey: "danger", labelKey: "recommendations.decidedRejected" },
+  // A draft is not yet asking anything, and a list of decided plans should recede rather than
+  // keep shouting — same muted treatment as SUPERSEDED below.
+  DRAFT: { colorKey: "textSecondary", labelKey: "recommendations.statusDraft" },
+  // SCRUM-291: a newer auto-triggered draft replaced this one before anyone decided on it —
+  // not a decision either way, so it recedes the same way DRAFT does.
+  SUPERSEDED: { colorKey: "textSecondary", labelKey: "recommendations.statusSuperseded" },
+  // SCRUM-440: a lightning-immediate or WBGT-max stop-work skipped approval entirely and was
+  // already dispatched to workers. Also not a decision, but `danger`, not the muted grey
+  // DRAFT/SUPERSEDED use — a stop-work already in effect is the most severe thing this screen
+  // can show, and the colour should say so even with nothing left for the supervisor to tap.
+  AUTO_DISPATCHED: { colorKey: "danger", labelKey: "recommendations.statusAutoDispatched" },
+};
+
 const RecommendationStatusPill: FC<RecommendationStatusPillProps> = ({ status, decision }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
   const pending = status === "PENDING_APPROVAL";
-  const rejected = status === "REJECTED";
-  /*
-   * Handled by name rather than left to a fall-through.
-   *
-   * The previous chain ended in "otherwise, approved", so any status it did not recognise rendered
-   * green and said Approved — and DRAFT is a legal value in the backend enum and the contract.
-   * Nothing writes it today, but "a plan nobody approved shows as approved" is not a failure worth
-   * leaving to that.
-   */
-  const draft = status === "DRAFT";
+  const appearance = STATUS_APPEARANCE[status];
 
-  /*
-   * SCRUM-291: a newer auto-triggered draft replaced this one before anyone decided on it — not
-   * a decision either way, so it gets the same non-fall-through treatment as DRAFT rather than
-   * inheriting the "otherwise, approved" default.
-   */
-  const superseded = status === "SUPERSEDED";
+  const color = appearance ? theme.colors[appearance.colorKey] : theme.colors.success;
 
-  /*
-   * SCRUM-440: a lightning-immediate or WBGT-max stop-work skipped approval entirely and was
-   * already dispatched to workers. Also not a decision — same non-fall-through treatment as
-   * SUPERSEDED — but `danger`, not the muted grey the other two non-actionable states use: a
-   * stop-work already in effect is not a plan quietly receding into history, it is the most
-   * severe thing this screen can show, and the colour should say so even though there is
-   * nothing left for the supervisor to tap.
-   */
-  const autoDispatched = status === "AUTO_DISPATCHED";
-
-  // Filled only while pending: that is the one state asking someone to do something. A draft is
-  // not yet asking anything, and a list of decided plans should recede rather than keep shouting.
-  const color = pending
-    ? theme.colors.warningFill
-    : rejected || autoDispatched
-      ? theme.colors.danger
-      : draft || superseded
-        ? theme.colors.textSecondary
-        : theme.colors.success;
-
-  const label = pending
-    ? t("recommendations.pending")
-    : rejected
-      ? t("recommendations.decidedRejected")
-      : draft
-        ? t("recommendations.statusDraft")
-        : superseded
-          ? t("recommendations.statusSuperseded")
-          : autoDispatched
-            ? t("recommendations.statusAutoDispatched")
-            : decision === "EDITED"
-              ? t("recommendations.decidedEdited")
-              : t("recommendations.decidedApproved");
+  const label = appearance
+    ? t(appearance.labelKey)
+    : decision === "EDITED"
+      ? t("recommendations.decidedEdited")
+      : t("recommendations.decidedApproved");
 
   return (
     <View

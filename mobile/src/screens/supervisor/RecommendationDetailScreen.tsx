@@ -55,6 +55,83 @@ const CATEGORY_ORDER: MitigationCategory[] = [
   "MONITORING",
 ];
 
+interface DecisionSectionProps {
+  autoDispatched: boolean;
+  decided: boolean;
+  canDecide: boolean;
+  deciding: boolean;
+  onApprove: () => void;
+  onEdit: () => void;
+  onReject: () => void;
+}
+
+/**
+ * The bottom-of-screen decision affordance: exactly one of four mutually exclusive states.
+ * Extracted out of {@link RecommendationDetailScreen} so those four are early returns rather
+ * than a nested ternary chain, and so the screen component itself stays readable as its own
+ * states (loading, grouped mitigations, evidence) accumulate rather than growing this too.
+ */
+function DecisionSection({
+  autoDispatched,
+  decided,
+  canDecide,
+  deciding,
+  onApprove,
+  onEdit,
+  onReject,
+}: DecisionSectionProps) {
+  const { t } = useTranslation();
+
+  if (autoDispatched) {
+    return (
+      <View style={styles.gapTop}>
+        <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
+      </View>
+    );
+  }
+
+  if (decided) {
+    return (
+      <AppText variant="caption" tone="secondary" style={styles.gapTop}>
+        {t("recommendations.decisionBySomeone")}
+      </AppText>
+    );
+  }
+
+  if (canDecide) {
+    return (
+      <View style={styles.gapTop}>
+        <AppButton
+          title={deciding ? t("recommendations.deciding") : t("recommendations.approveButton")}
+          loading={deciding}
+          onPress={onApprove}
+          style={styles.action}
+        />
+        <AppButton
+          title={t("recommendations.editButton")}
+          variant="secondary"
+          onPress={onEdit}
+          style={styles.action}
+        />
+        <AppButton
+          title={t("recommendations.rejectButton")}
+          variant="danger"
+          onPress={onReject}
+          style={styles.action}
+        />
+      </View>
+    );
+  }
+
+  // A safety manager reads this screen but cannot decide on it. Said plainly, rather
+  // than shown as three buttons that would each answer 403.
+  return (
+    <AppText variant="caption" tone="secondary" style={styles.gapTop}>
+      {t("recommendations.readOnlyNotice")}
+    </AppText>
+  );
+}
+
 export default function RecommendationDetailScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -335,42 +412,15 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── The decision ─────────────────────────────────────────────────── */}
-        {autoDispatched ? (
-          <View style={styles.gapTop}>
-            <MessageBanner message={t("recommendations.autoDispatchedNotice")} tone="danger" />
-          </View>
-        ) : decided ? (
-          <AppText variant="caption" tone="secondary" style={styles.gapTop}>
-            {t("recommendations.decisionBySomeone")}
-          </AppText>
-        ) : canDecide ? (
-          <View style={styles.gapTop}>
-            <AppButton
-              title={deciding ? t("recommendations.deciding") : t("recommendations.approveButton")}
-              loading={deciding}
-              onPress={onApprove}
-              style={styles.action}
-            />
-            <AppButton
-              title={t("recommendations.editButton")}
-              variant="secondary"
-              onPress={() => setEditing(true)}
-              style={styles.action}
-            />
-            <AppButton
-              title={t("recommendations.rejectButton")}
-              variant="danger"
-              onPress={() => setRejecting(true)}
-              style={styles.action}
-            />
-          </View>
-        ) : (
-          /* A safety manager reads this screen but cannot decide on it. Said plainly, rather
-             than shown as three buttons that would each answer 403. */
-          <AppText variant="caption" tone="secondary" style={styles.gapTop}>
-            {t("recommendations.readOnlyNotice")}
-          </AppText>
-        )}
+        <DecisionSection
+          autoDispatched={autoDispatched}
+          decided={decided}
+          canDecide={canDecide}
+          deciding={deciding}
+          onApprove={onApprove}
+          onEdit={() => setEditing(true)}
+          onReject={() => setRejecting(true)}
+        />
       </ScrollView>
 
       <EditPlanSheet
