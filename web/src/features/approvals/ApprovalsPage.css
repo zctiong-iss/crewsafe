@@ -1,0 +1,49 @@
+/* @author Tang Chee Seng (with assistance from Claude) */
+.approvals__list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.approvals__card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.approvals__card-title { font-size: var(--text-lg); margin: 0; }
+.approvals__card-site { color: var(--ink-muted); font-size: var(--text-sm); margin: 0; }
+
+.approvals__evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+.approvals__evidence--empty { color: var(--ink-muted); font-size: var(--text-sm); }
+.approvals__evidence-item dt { font-size: var(--text-xs); color: var(--ink-muted); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); }
+.approvals__evidence-item dd { margin: 0; font-weight: var(--weight-medium); }
+
+.approvals__rationale { color: var(--ink-secondary); }
+.approvals__mitigations { list-style: none; padding: 0; display: grid; gap: var(--space-2); }
+.approvals__mitigation { font-size: var(--text-sm); }
+.approvals__rule { color: var(--ink-muted); font-family: var(--font-code); font-size: var(--text-xs); }
+
+.approvals__actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.approvals__panel { margin-top: var(--space-3); display: grid; gap: var(--space-3); }
+.approvals__label { display: grid; gap: var(--space-1); font-size: var(--text-sm); }
+.approvals__error { color: var(--band-high); }
+.approvals__busy { color: var(--ink-muted); font-size: var(--text-sm); }
+
+.mitigation-editor__table { width: 100%; border-collapse: collapse; }
+.mitigation-editor__table th { text-align: left; font-size: var(--text-xs); color: var(--ink-muted); }
+.mitigation-editor__table input { width: 100%; }
+.mitigation-editor__add { margin-top: var(--space-2); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
