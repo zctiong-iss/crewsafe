@@ -1,5 +1,7 @@
 package com.crewsafe.forecast.api;
 
+import com.crewsafe.forecast.service.ModelCardService;
+import com.crewsafe.forecast.service.ModelCardService.ModelCard;
 import com.crewsafe.forecast.service.ModelStatusService;
 import com.crewsafe.forecast.service.ModelStatusService.ModelStatus;
 import org.junit.jupiter.api.Test;
@@ -16,11 +18,12 @@ class ModelStatusControllerTest {
 
     @Test
     void returnsTheServiceStatus() {
-        ModelStatusService service = mock(ModelStatusService.class);
-        ModelStatusController controller = new ModelStatusController(service);
+        ModelStatusService statusService = mock(ModelStatusService.class);
+        ModelCardService cardService = mock(ModelCardService.class);
+        ModelStatusController controller = new ModelStatusController(statusService, cardService);
         ModelStatus status = new ModelStatus(
                 "baseline-1.0.0", false, "no model configured", Map.of());
-        when(service.currentStatus()).thenReturn(status);
+        when(statusService.currentStatus()).thenReturn(status);
 
         var response = controller.getModelStatus();
 
@@ -29,12 +32,31 @@ class ModelStatusControllerTest {
     }
 
     @Test
+    void returnsTheServiceCard() {
+        ModelStatusService statusService = mock(ModelStatusService.class);
+        ModelCardService cardService = mock(ModelCardService.class);
+        ModelStatusController controller = new ModelStatusController(statusService, cardService);
+        ModelCard card = new ModelCard("baseline-1.0.0", Map.of());
+        when(cardService.currentCard()).thenReturn(card);
+
+        var response = controller.getModelCard();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isEqualTo(card);
+    }
+
+    @Test
     void isRestrictedToSafetyManagers() throws NoSuchMethodException {
-        PreAuthorize authorization = ModelStatusController.class
+        PreAuthorize statusAuthorization = ModelStatusController.class
                 .getMethod("getModelStatus")
                 .getAnnotation(PreAuthorize.class);
+        PreAuthorize cardAuthorization = ModelStatusController.class
+                .getMethod("getModelCard")
+                .getAnnotation(PreAuthorize.class);
 
-        assertThat(authorization).isNotNull();
-        assertThat(authorization.value()).isEqualTo("hasRole('SAFETY_MANAGER')");
+        assertThat(statusAuthorization).isNotNull();
+        assertThat(statusAuthorization.value()).isEqualTo("hasRole('SAFETY_MANAGER')");
+        assertThat(cardAuthorization).isNotNull();
+        assertThat(cardAuthorization.value()).isEqualTo("hasRole('SAFETY_MANAGER')");
     }
 }

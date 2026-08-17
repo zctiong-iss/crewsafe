@@ -18,9 +18,11 @@ from models import (
     ForecastRequest,
     ForecastPrediction,
     ModelStatus,
+    ModelCard,
 )
 from forecast_service import ForecastService, ForecastServiceError
 from crewsafe_ml.model_status import current_model_status
+from crewsafe_ml.model_card import current_model_card
 
 # Selected in SCRUM-287 against the §8.6 evaluation set. Kept in sync with the backend's
 # app.bedrock.model-id, which is the same value with the same BEDROCK_MODEL_ID override.
@@ -291,6 +293,23 @@ async def model_status():
     artifacts, only the manifest that already backs /forecast's trust checks.
     """
     return current_model_status()
+
+
+@app.get(
+    "/model/card",
+    response_model=ModelCard,
+    responses={
+        200: {"description": "SHAP driver importance, calibration, and per-band error per horizon"},
+    },
+)
+async def model_card():
+    """Report the deployed WBGT model's explainability and reliability data (SCRUM-152).
+
+    Always returns 200. A horizon is simply absent, or its shap_computed flag is
+    false, when the configured bundle predates SHAP computation or its selected
+    model has no tree to explain (persistence, ridge) - never an error.
+    """
+    return current_model_card()
 
 
 @app.post(
