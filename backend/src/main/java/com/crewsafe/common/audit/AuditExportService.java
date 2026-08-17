@@ -54,9 +54,6 @@ public class AuditExportService {
     /** An actor whose app_user row no longer exists. Named, not blanked: the id is still evidence. */
     private static final String UNKNOWN_ACTOR = "Unknown user";
 
-    /** Comment lines above the CSV. Fixed, because it is where the SHA-256 boundary sits. */
-    private static final int PREAMBLE_LINES = 8;
-
     /**
      * @param filename what the browser should save it as
      * @param body     the whole file, preamble included; the caller encodes it (UTF-8)
@@ -88,12 +85,12 @@ public class AuditExportService {
                     event.getEventType(),
                     event.getTargetType(),
                     event.getTargetId().toString(),
-                    event.getDetail() == null ? "" : event.getDetail()));
+                    oneLine(event.getDetail())));
         }
 
         String csvSection = csv.content();
         String digest = sha256(csvSection);
-        String body = preamble(siteId, from, to, rows.size(), digest) + csvSection;
+        String body = csvSection + trailer(siteId, from, to, rows.size(), digest);
 
         // Recorded inline rather than deferred to after-commit like the write-side services
         // do: there is no enclosing write transaction whose rollback could orphan this row,
@@ -131,43 +128,69 @@ public class AuditExportService {
     }
 
     /**
-     * Comment lines above the CSV, so the file is self-describing when it is detached from
-     * the request that produced it — an inspector holding this months later has no HTTP
-     * response headers to consult.
+     * Provenance rows appended <em>below</em> the data, so the file stays self-describing
+     * once detached from the response that carried it — an inspector opening this months
+     * later has no HTTP headers to consult.
      *
-     * <p>The digest covers the CSV section only, not the whole file. Hashing the whole file
-     * while printing the hash inside it is circular; naming the boundary instead makes the
-     * claim checkable. The preamble is always exactly {@value #PREAMBLE_LINES} lines, so
-     * verifying is one command: {@code tail -n +9 export.csv | shasum -a 256}.
+     * <p>Below, not above, and that placement is the whole point. These lines originally sat
+     * on top of the file, which made row 1 a one-column comment while every data row had
+     * nine. Spreadsheet and JavaScript CSV viewers take row 1 as the header, built a
+     * one-column table, then fell over on the first nine-column row — the file parsed
+     * correctly and displayed as nothing. The header row has to be line 1, so the metadata
+     * moved to the end and is padded to the same nine columns as everything else, leaving
+     * the file uniformly rectangular.
      *
-     * <p>CR and LF are stripped from the site name because the preamble is line-structured:
-     * a name carrying a line break would forge extra preamble lines and shift that boundary.
+     * <p>The digest covers the data section only — a file cannot contain its own hash. The
+     * boundary is stated as a property of the lines rather than a line count, so verifying
+     * is one portable command with no magic number to drift:
+     * {@code grep -v '^#' export.csv | shasum -a 256}. ({@code head -n -N} would have been
+     * the positional equivalent, but BSD/macOS {@code head} rejects negative counts, and a
+     * printed instruction that fails on the reader's own laptop is worse than none.)
+     *
+     * <p>That command is only trustworthy because no field can contain a line break — see
+     * {@link #oneLine}.
      */
-    private String preamble(UUID siteId, Instant from, Instant to, int rowCount, String digest) {
+    private String trailer(UUID siteId, Instant from, Instant to, int rowCount, String digest) {
         String siteName = sites.findById(siteId)
                 .map(Site::getName)
-                .map(name -> name.replaceAll("[\\r\\n]", " "))
                 .orElse("(unknown site)");
 
-        List<String> lines = List.of(
-                "# CrewSafe SG - audit timeline export",
-                "# site_id: " + siteId,
-                "# site_name: " + siteName,
-                "# range_from: " + from,
-                "# range_to: " + to,
-                "# generated_at: " + clock.instant(),
-                "# row_count: " + rowCount,
-                "# sha256: " + digest + " (SHA-256 of every byte below this preamble)");
+        CsvWriter meta = new CsvWriter();
+        meta.row(padded("# CrewSafe SG - audit timeline export", ""));
+        meta.row(padded("# site_id", siteId.toString()));
+        meta.row(padded("# site_name", oneLine(siteName)));
+        meta.row(padded("# range_from", String.valueOf(from)));
+        meta.row(padded("# range_to", String.valueOf(to)));
+        meta.row(padded("# generated_at", clock.instant().toString()));
+        meta.row(padded("# row_count", String.valueOf(rowCount)));
+        meta.row(padded("# sha256", digest));
+        meta.row(padded("# verify_with", "grep -v '^#' <this file> | shasum -a 256"));
 
-        if (lines.size() != PREAMBLE_LINES) {
-            // The file tells its reader to skip exactly PREAMBLE_LINES to verify the digest.
-            // Changing the preamble without changing that constant would silently print a
-            // verification instruction that no longer works.
-            throw new IllegalStateException(
-                    "Preamble is " + lines.size() + " lines but PREAMBLE_LINES says " + PREAMBLE_LINES);
+        return meta.content();
+    }
+
+    /** A metadata row widened to the data's column count, so the file stays rectangular. */
+    private static List<String> padded(String label, String value) {
+        List<String> row = new java.util.ArrayList<>(List.of(label, value));
+        while (row.size() < COLUMNS.size()) {
+            row.add("");
         }
+        return row;
+    }
 
-        return String.join(CsvWriter.LINE_END, lines) + CsvWriter.LINE_END;
+    /**
+     * Collapses CR/LF in free text to spaces so one audit event is always one physical line.
+     *
+     * <p>{@code detail} carries operator free text (a cancellation reason, say), and
+     * {@link CsvWriter} would faithfully quote an embedded newline — valid CSV that no
+     * longer survives line-oriented tooling. Two things depend on one-record-one-line: the
+     * {@code grep -v '^#'} verification above, which a newline followed by {@code #} inside a
+     * quoted field could otherwise corrupt, and every {@code grep}/{@code wc -l} an inspector
+     * might reach for. The writer keeps its newline handling for correctness; this simply
+     * never hands it one.
+     */
+    private static String oneLine(String text) {
+        return text == null ? "" : text.replaceAll("[\\r\\n]+", " ");
     }
 
     private String filename(UUID siteId) {

@@ -55,8 +55,6 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
     @Autowired private SiteMembershipRepository memberships;
     @Autowired private AuditEventRepository auditEvents;
 
-    private static final int PREAMBLE_LINES = 8;
-
     private Site siteA;
     private Site siteB;
     private AppUser managerA;
@@ -132,18 +130,29 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
     }
 
-    /** Everything below the fixed-length preamble — the bytes the printed digest covers. */
+    /**
+     * The data section: everything that is not a trailing metadata row. Deliberately the
+     * same rule the file prints for the reader ({@code grep -v '^#'}) rather than a line
+     * count, so the test verifies the instruction an inspector would actually follow.
+     */
     private static String csvSectionOf(String body) {
-        int index = 0;
-        for (int i = 0; i < PREAMBLE_LINES; i++) {
-            index = body.indexOf("\r\n", index) + 2;
-        }
-        return body.substring(index);
+        return body.lines()
+                .filter(line -> !line.startsWith("#"))
+                .map(line -> line + "\r\n")
+                .collect(java.util.stream.Collectors.joining());
     }
 
     private static String sha256(String content) throws Exception {
         return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(content.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** Reads one value out of the trailing metadata block, which is itself CSV. */
+    private static String metaValue(String body, String key) {
+        return body.lines()
+                .filter(line -> line.startsWith("# " + key + ","))
+                .map(line -> line.split(",")[1])
+                .findFirst().orElseThrow(() -> new AssertionError("no metadata row for " + key));
     }
 
     // --- the acceptance criteria ---
@@ -223,13 +232,7 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
 
         String body = export(siteA.getId(), managerAToken);
 
-        String printed = body.lines()
-                .filter(line -> line.startsWith("# sha256: "))
-                .findFirst().orElseThrow()
-                .replace("# sha256: ", "")
-                .split(" ")[0];
-
-        assertThat(printed).isEqualTo(sha256(csvSectionOf(body)));
+        assertThat(metaValue(body, "sha256")).isEqualTo(sha256(csvSectionOf(body)));
     }
 
     /**
@@ -249,10 +252,10 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
                 .andReturn().getResponse();
 
         String digest = response.getHeader(AuditController.CHECKSUM_HEADER);
+        String body = response.getContentAsString();
 
-        assertThat(response.getContentAsString())
-                .contains("# sha256: " + digest)
-                .satisfies(body -> assertThat(sha256(csvSectionOf(body))).isEqualTo(digest));
+        assertThat(metaValue(body, "sha256")).isEqualTo(digest);
+        assertThat(sha256(csvSectionOf(body))).isEqualTo(digest);
     }
 
     /** An altered file no longer matches the digest it carries — the point of the exercise. */
@@ -262,13 +265,8 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
         String body = export(siteA.getId(), managerAToken);
 
         String tampered = csvSectionOf(body).replace("SHIFT_CREATED", "SHIFT_DELETED");
-        String printed = body.lines()
-                .filter(line -> line.startsWith("# sha256: "))
-                .findFirst().orElseThrow()
-                .replace("# sha256: ", "")
-                .split(" ")[0];
 
-        assertThat(sha256(tampered)).isNotEqualTo(printed);
+        assertThat(sha256(tampered)).isNotEqualTo(metaValue(body, "sha256"));
     }
 
     // --- CSV correctness ---
@@ -304,18 +302,54 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void preambleNamesTheSiteAndTheRowCount() throws Exception {
+    void trailerNamesTheSiteAndTheRowCount() throws Exception {
         createShift(siteA.getId(), supervisorAToken);
 
         String body = export(siteA.getId(), managerAToken);
 
-        assertThat(body)
-                .startsWith("# CrewSafe SG - audit timeline export\r\n")
-                .contains("# site_id: " + siteA.getId())
-                .contains("# site_name: " + siteA.getName());
+        assertThat(metaValue(body, "site_id")).isEqualTo(siteA.getId().toString());
+        assertThat(metaValue(body, "site_name")).isEqualTo(siteA.getName());
+        assertThat(metaValue(body, "row_count"))
+                .isEqualTo(String.valueOf(csvSectionOf(body).lines().skip(1).count()));
+    }
 
-        long dataRows = csvSectionOf(body).lines().skip(1).count();
-        assertThat(body).contains("# row_count: " + dataRows);
+    /**
+     * The regression test for the bug that made this layout necessary. The metadata used to
+     * sit above the data, so line 1 was a one-column comment while every data row had nine;
+     * viewers that take line 1 as the header built a one-column table and then threw on the
+     * first wider row, showing an empty file. Row 1 must be the header, and every row in the
+     * file — data and metadata alike — must have the same width.
+     */
+    @Test
+    void everyLineHasTheSameColumnCountAndTheHeaderIsFirst() throws Exception {
+        createShift(siteA.getId(), supervisorAToken);
+        String shiftId = createShift(siteA.getId(), supervisorAToken);
+        cancelShift(siteA.getId(), shiftId, supervisorAToken, "A reason with, a comma");
+
+        String body = export(siteA.getId(), managerAToken);
+        List<String> lines = body.lines().toList();
+
+        assertThat(lines.get(0)).startsWith("event_id,occurred_at,");
+
+        int expectedColumns = lines.get(0).split(",", -1).length;
+        assertThat(lines)
+                .allSatisfy(line -> assertThat(countFields(line))
+                        .describedAs("column count of: %s", line)
+                        .isEqualTo(expectedColumns));
+    }
+
+    /** Counts CSV fields honouring quoting, so a quoted comma is not miscounted as a separator. */
+    private static int countFields(String line) {
+        int fields = 1;
+        boolean inQuotes = false;
+        for (char c : line.toCharArray()) {
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                fields++;
+            }
+        }
+        return fields;
     }
 
     // --- range filtering ---
@@ -332,7 +366,7 @@ class AuditExportControllerTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(body).contains("# row_count: 0");
+        assertThat(metaValue(body, "row_count")).isEqualTo("0");
         assertThat(csvSectionOf(body).lines().skip(1).count()).isZero();
     }
 

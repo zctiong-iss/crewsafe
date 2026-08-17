@@ -150,17 +150,27 @@ components:
     AuditExportCsv:
       type: string
       description: >
-        A UTF-8 text file in two parts, CRLF line endings throughout (RFC 4180).
+        A UTF-8 text file, CRLF line endings throughout (RFC 4180), uniformly nine
+        columns wide on every line.
 
-        Part one is a preamble of exactly 8 lines, each starting with '#', naming the
-        site, the requested range, when the file was generated, the row count, and the
-        SHA-256. The digest covers every byte *after* the preamble, not the whole file
-        — a file cannot contain its own hash — so it is verified with
-        `tail -n +9 export.csv | shasum -a 256`.
+        Line 1 is the column header: event_id, occurred_at, correlation_id, actor_id,
+        actor_name, event_type, target_type, target_id, detail. Then one line per audit
+        event, oldest first.
 
-        Part two is the CSV proper: one header row then one row per audit event, with
-        columns event_id, occurred_at, correlation_id, actor_id, actor_name, event_type,
-        target_type, target_id, detail.
+        After the data comes a metadata block: rows whose first column begins with '#',
+        padded to the same nine columns, naming the site, the requested range, when the
+        file was generated, the row count, and the SHA-256. It sits below the data
+        rather than above it because the header has to be line 1 — a leading comment
+        block makes row 1 one column wide while the data rows are nine, which spreadsheet
+        and JavaScript CSV viewers read as a one-column table and then fail on, showing
+        an empty file.
+
+        The digest covers the data section only — a file cannot contain its own hash.
+        The boundary is a property of the lines rather than a line number, so it is
+        verified with `grep -v '^#' export.csv | shasum -a 256`. That is portable (BSD
+        head rejects the negative counts a positional rule would need) and it is safe
+        because no field can contain a line break: CR/LF in free text is collapsed to
+        spaces on write, so one audit event is always exactly one physical line.
 
         Mapping to the US-15 acceptance criteria: correlation_id is the trace id (every
         row has carried one since SCRUM-180); actor_id/actor_name is the actor, resolved
@@ -174,14 +184,15 @@ components:
         missing data: scheduler-driven events (SHIFT_ACTIVATED, ACTION_LATE,
         RECOMMENDATION_AUTO_DISPATCHED) had no human behind them.
       example: |
-        # CrewSafe SG - audit timeline export
-        # site_id: 3f2a9c14-8e5b-4a71-9c3d-2b6f8e0a1d45
-        # site_name: Tuas Yard B
-        # range_from: 1970-01-01T00:00:00Z
-        # range_to: 2026-08-18T02:30:00Z
-        # generated_at: 2026-08-18T02:30:00Z
-        # row_count: 2
-        # sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 (SHA-256 of every byte below this preamble)
         event_id,occurred_at,correlation_id,actor_id,actor_name,event_type,target_type,target_id,detail
         6b1c...,2026-08-17T01:00:00Z,4da7...,8c2e...,Priya Raman,SHIFT_CREATED,SHIFT,a91f...,Created shift for site 3f2a... (17 Aug 2026 08:00–16:00 Asia/Singapore)
         7c2d...,2026-08-17T09:15:00Z,5eb8...,,SYSTEM,SHIFT_ACTIVATED,SHIFT,a91f...,Shift auto-activated for site 3f2a...
+        # CrewSafe SG - audit timeline export,,,,,,,,
+        # site_id,3f2a9c14-8e5b-4a71-9c3d-2b6f8e0a1d45,,,,,,,
+        # site_name,Tuas Yard B,,,,,,,
+        # range_from,1970-01-01T00:00:00Z,,,,,,,
+        # range_to,2026-08-18T02:30:00Z,,,,,,,
+        # generated_at,2026-08-18T02:30:00Z,,,,,,,
+        # row_count,2,,,,,,,
+        # sha256,9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08,,,,,,,
+        # verify_with,grep -v '^#' <this file> | shasum -a 256,,,,,,,
