@@ -638,6 +638,7 @@
     "hidePlansFor": "{{site}} အစီအစဉ်များ ဖျှောက်ရန်",
     "noPlans": "ဤလုပ်ငန်းအတွက် အစီအစဉ် မရှိသေးပါ။",
     "awaitingCount_one": "{{count}} စောင့်ဆိုင်းဆဲ",
-    "awaitingCount_other": "{{count}} စောင့်ဆိုင်းဆဲ"
+    "awaitingCount_other": "{{count}} စောင့်ဆိုင်းဆဲ",
+    "openPlan": "{{time}} တွင် ရေးဆွဲထားသော အစီအစဉ်ကို ဖွင့်ပါ"
   }
 }

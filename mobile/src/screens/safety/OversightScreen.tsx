@@ -26,9 +26,11 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { s, vs } from "react-native-size-matters";
 
 import AppSafeView from "@/components/views/AppSafeView";
@@ -43,23 +45,82 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   awaitingDecisionCount,
   loadOversightSites,
+  loadPlanSummary,
   loadSitePlans,
   type SitePlans,
 } from "@/store/reducers/oversightSlice";
+import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, sharedGap, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Recommendation, Site } from "@/types/domain";
+import type { OversightStackParamList } from "@/navigation/types";
 
-/** One plan, as a manager reads it: what it is, who decided it, when it was drafted. */
+/**
+ * One plan, as a manager reads it: what it is, who decided it, when it was drafted.
+ *
+ * Tapping opens the full plan. The row shows a status and a timestamp, which says a plan
+ * exists and nothing about what it recommends — the mitigations, rationale and evidence a
+ * manager needs to oversee a decision all live on the detail screen.
+ *
+ * ── WHY AN OUTLINE AND NOT A HOVER STATE ────────────────────────────────────────────────
+ * Hover was the nicer idea and it is not available here. React Native implements
+ * `onHoverIn`/`onHoverOut` on top of `onMouseEnter`/`onMouseLeave` — its own source says so —
+ * so they need a pointer, and on a touch phone there is never one. They are wired up anyway
+ * because they cost nothing and do work under `npm run web`, but they can never be the thing
+ * that tells a supervisor on site that this row does something.
+ *
+ * So the affordance is a resting border. It is deliberately always visible rather than
+ * appearing on interaction: an outline that only shows once you have already pressed answers
+ * a question you asked by pressing, which is precisely what the chevron it replaced did not
+ * require you to do.
+ *
+ * ── WHY A BORDER AND NOT A TINTED FILL ──────────────────────────────────────────────────
+ * `surfaceAlt` is `#F6F6F6` normally and `#FFFFFF` in high contrast, so a fill-based
+ * affordance disappears completely for the users least able to afford losing it.
+ * `borderStrong` stays `#000000` in both themes.
+ */
 function PlanRow({
   plan,
   deciderName,
-}: Readonly<{ plan: Recommendation; deciderName: string | null }>) {
+  onPress,
+}: Readonly<{ plan: Recommendation; deciderName: string | null; onPress: () => void }>) {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
+
+  /*
+   * Focus and hover share one flag because they mean the same thing to this row: "you are
+   * about to act on me". Focus is the half that matters on a phone — it is what a switch
+   * control or an external keyboard drives — and it is why this is not press-only.
+   */
+  const [highlighted, setHighlighted] = useState(false);
 
   return (
-    <View style={styles.planRow}>
+    <Pressable
+      onPress={onPress}
+      onFocus={() => setHighlighted(true)}
+      onBlur={() => setHighlighted(false)}
+      onHoverIn={() => setHighlighted(true)}
+      onHoverOut={() => setHighlighted(false)}
+      accessibilityRole="button"
+      /* Named by what it opens, not "plan row": a screen reader should say where the tap
+         goes. The status is already announced by the pill beside it. */
+      accessibilityLabel={t("oversight.openPlan", {
+        time: formatDateTime(plan.createdAt, i18n.language),
+      })}
+      style={({ pressed }) => [
+        styles.planRow,
+        {
+          minHeight: theme.metrics.minTouchTarget,
+          borderRadius: theme.metrics.radius,
+          borderWidth: theme.metrics.borderWidth,
+          // Darkens rather than thickening: a border that changes width reflows the row and
+          // nudges everything below it by a pixel on every press.
+          borderColor:
+            pressed || highlighted ? theme.colors.borderStrong : theme.colors.border,
+        },
+      ]}
+    >
       <View style={styles.planPills}>
         <RecommendationStatusPill
           status={plan.status}
@@ -76,12 +137,14 @@ function PlanRow({
         {deciderName ? <Pill role="entity" label={deciderName} /> : null}
       </View>
 
+      {/* The chevron that used to sit here is gone: the border now carries the affordance,
+          and a row with both read as busier than it needed to be. */}
       <AppText variant="caption" tone="secondary" style={styles.planMeta}>
         {t("recommendations.draftedAt", {
           time: formatDateTime(plan.createdAt, i18n.language),
         })}
       </AppText>
-    </View>
+    </Pressable>
   );
 }
 
@@ -89,7 +152,12 @@ function PlanRow({
 function SitePlanList({
   plans,
   workerNameFor,
-}: Readonly<{ plans: SitePlans | undefined; workerNameFor: (id: string) => string | null }>) {
+  onOpenPlan,
+}: Readonly<{
+  plans: SitePlans | undefined;
+  workerNameFor: (id: string) => string | null;
+  onOpenPlan: (plan: Recommendation) => void;
+}>) {
   const { t } = useTranslation();
 
   if (!plans || plans.status === "loading") {
@@ -125,6 +193,7 @@ function SitePlanList({
         <PlanRow
           key={plan.id}
           plan={plan}
+          onPress={() => onOpenPlan(plan)}
           deciderName={
             plan.approval ? (workerNameFor(plan.approval.approverId) ?? plan.approval.approverId) : null
           }
@@ -138,9 +207,10 @@ export default function OversightScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
   const dispatch = useAppDispatch();
+  const navigation = useNavigation<NativeStackNavigationProp<OversightStackParamList>>();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { sites, status, errorKey, refreshing, plansBySite } = useAppSelector(
+  const { sites, status, errorKey, refreshing, plansBySite, summaryBySite } = useAppSelector(
     (state) => state.oversight,
   );
   const workers = useAppSelector((state) => state.shifts.workers);
@@ -160,13 +230,41 @@ export default function OversightScreen() {
     (isRefresh: boolean) => {
       if (siteIds.length === 0) return;
       void dispatch(loadOversightSites({ siteIds, refreshing: isRefresh }));
+      // One request covering every site. This is what lets a collapsed row say what is waiting
+      // on it, instead of reporting zero until someone opens it.
+      void dispatch(loadPlanSummary());
+
+      /*
+       * Expanded rows refresh too, and this was missing.
+       *
+       * Plans were fetched once on first expand and then kept forever — "collapsing a row is a
+       * display change, not a reason to discard work", which is true and was the wrong
+       * conclusion. A decision is made by somebody else, on another device: a supervisor
+       * approves a plan and the manager watching this screen kept seeing "Awaiting decision"
+       * with no way to correct it, because refresh re-read the site list and the counts but
+       * never the plans themselves, and re-expanding a cached site deliberately does not
+       * refetch. There was no in-app path to the truth at all.
+       *
+       * Collapsed sites are left alone — the summary already reports what is outstanding on
+       * them, at one request for all twenty rather than one per site.
+       */
+      expanded.forEach((siteId) => void dispatch(loadSitePlans({ siteId })));
     },
-    [dispatch, siteIds],
+    [dispatch, siteIds, expanded],
   );
 
-  useEffect(() => {
-    load(false);
-  }, [load]);
+  /*
+   * Refreshes on focus, on resume from background, and on a timer — the same treatment the
+   * supervisor's Plans tab gets, and for a stronger reason. This screen's whole job is showing
+   * a manager what is waiting on a decision, so it is the one screen where being wrong about
+   * that is the failure rather than a staleness annoyance.
+   *
+   * PLANS_MS is matched to the server's own auto-draft interval; see REFRESH_INTERVALS.
+   */
+  useAutoRefresh(
+    useCallback(() => load(false), [load]),
+    REFRESH_INTERVALS.PLANS_MS,
+  );
 
   const workerNameFor = useCallback(
     (workerId: string) => workers.find((w) => w.id === workerId)?.displayName ?? null,
@@ -198,16 +296,19 @@ export default function OversightScreen() {
    * decision outstanding. Sites with plans awaiting a decision rise; ties break by name so the
    * order does not shuffle between refreshes, which would move a row under a manager's thumb.
    *
-   * A site nobody has expanded counts zero, because nothing has been fetched for it yet — the
-   * ordering sharpens as the screen is used rather than being wrong before then.
+   * The counts come from the server summary, so this is correct on arrival rather than
+   * sharpening as rows are opened. That was the previous behaviour and it was the wrong
+   * trade for a triage screen: a site nobody had expanded sorted as though it had nothing
+   * outstanding, so the one site that needed attention could sit at the bottom of the list.
    */
   const ordered = useMemo(() => {
     return [...sites].sort((a, b) => {
       const byAwaiting =
-        awaitingDecisionCount(plansBySite[b.id]) - awaitingDecisionCount(plansBySite[a.id]);
+        awaitingDecisionCount(plansBySite[b.id], summaryBySite[b.id]) -
+        awaitingDecisionCount(plansBySite[a.id], summaryBySite[a.id]);
       return byAwaiting !== 0 ? byAwaiting : a.name.localeCompare(b.name);
     });
-  }, [sites, plansBySite]);
+  }, [sites, plansBySite, summaryBySite]);
 
   if (status === "loading" && sites.length === 0) {
     return (
@@ -235,7 +336,7 @@ export default function OversightScreen() {
 
   const renderSite = ({ item }: { item: Site }) => {
     const plans = plansBySite[item.id];
-    const awaiting = awaitingDecisionCount(plans);
+    const awaiting = awaitingDecisionCount(plans, summaryBySite[item.id]);
 
     return (
       <View
@@ -274,7 +375,19 @@ export default function OversightScreen() {
           }
           style={styles.siteToggle}
         >
-          <SitePlanList plans={plans} workerNameFor={workerNameFor} />
+          <SitePlanList
+            plans={plans}
+            workerNameFor={workerNameFor}
+            /* siteId comes from the row rather than the plan: a Recommendation names only its
+               shift, and the detail screen is site-scoped like every other plan endpoint. */
+            onOpenPlan={(plan) =>
+              navigation.navigate("RecommendationDetail", {
+                siteId: item.id,
+                shiftId: plan.shiftId,
+                recommendationId: plan.id,
+              })
+            }
+          />
         </Disclosure>
       </View>
     );
@@ -283,6 +396,7 @@ export default function OversightScreen() {
   return (
     <AppSafeView>
       <FlatList
+        testID="oversight-list"
         data={ordered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.content}
@@ -340,7 +454,11 @@ const styles = StyleSheet.create({
     gap: vs(10),
   },
   planRow: {
-    paddingTop: vs(8),
+    // Padding rather than the old paddingTop: the border needs to sit clear of the content it
+    // encloses, or the pills touch it.
+    padding: s(10),
+    justifyContent: "center",
+    gap: vs(6),
   },
   planPills: {
     flexDirection: "row",
@@ -349,7 +467,7 @@ const styles = StyleSheet.create({
     gap: s(6),
   },
   planMeta: {
-    marginTop: vs(4),
+    flexShrink: 1,
   },
   empty: {
     alignItems: "center",

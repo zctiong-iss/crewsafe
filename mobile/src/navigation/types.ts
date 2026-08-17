@@ -84,6 +84,14 @@ export type SafetyManagerTabParamList = {
 
 export type OversightStackParamList = {
   Oversight: undefined;
+  /**
+   * The same detail screen the supervisor's Plans tab uses, reached read-only.
+   *
+   * Identical params to `RecommendationsStackParamList` on purpose — it is literally the same
+   * component, and a manager arriving from oversight must see exactly what a supervisor sees,
+   * minus the decision controls the screen already withholds from their role.
+   */
+  RecommendationDetail: { siteId: string; shiftId: string; recommendationId: string };
 };
 
 /* ---------------------------- Shared ----------------------------- */

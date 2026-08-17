@@ -118,10 +118,21 @@ const OversightStackNavigator = createNativeStackNavigator<OversightStackParamLi
 /**
  * The safety manager's site-and-plans view (SCRUM-TBD-90).
  *
- * A single screen with no detail route, deliberately: a manager reads plans, and the decision
- * screen behind `RecommendationDetail` exists to approve, edit or reject — all three of which
- * `RecommendationDetailScreen` already refuses this role with a read-only notice. Routing them
- * there would offer a journey that ends in "you cannot do this".
+ * ── WHY THE DETAIL ROUTE IS HERE AFTER ALL ──────────────────────────────────────────────
+ * This stack originally had no detail route, on the reasoning that `RecommendationDetail`
+ * exists to approve, edit or reject — all three of which the screen refuses this role — so
+ * routing a manager there would end in "you cannot do this".
+ *
+ * That reasoning conflated the screen with its buttons. `RecommendationDetailScreen` is mostly
+ * the plan itself: the mitigations, the rationale, the evidence block with its WBGT reading,
+ * band, data age and model version. A manager needs all of that to oversee a decision — §12.2
+ * exists precisely so a recommendation can be traced afterwards — and the screen already
+ * withholds the controls and says why with a read-only notice.
+ *
+ * The oversight list also could not show it: it renders a status pill and a drafted timestamp,
+ * which tells a manager a plan exists and nothing about what it says. Reusing the screen the
+ * supervisor sees is also what keeps the two views honest — a manager reviewing a decision is
+ * looking at the same page the person who made it was looking at, not a summary of it.
  */
 export function OversightStack() {
   const { t } = useTranslation();
@@ -132,6 +143,11 @@ export function OversightStack() {
         name="Oversight"
         component={OversightScreen}
         options={{ title: t("oversight.title") }}
+      />
+      <OversightStackNavigator.Screen
+        name="RecommendationDetail"
+        component={RecommendationDetailScreen}
+        options={{ title: t("recommendations.title") }}
       />
     </OversightStackNavigator.Navigator>
   );

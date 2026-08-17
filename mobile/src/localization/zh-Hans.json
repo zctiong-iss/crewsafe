@@ -636,6 +636,7 @@
     "hidePlansFor": "隐藏 {{site}} 的计划",
     "noPlans": "此工地尚未生成计划。",
     "awaitingCount_one": "{{count}} 项待处理",
-    "awaitingCount_other": "{{count}} 项待处理"
+    "awaitingCount_other": "{{count}} 项待处理",
+    "openPlan": "打开 {{time}} 拟定的计划"
   }
 }

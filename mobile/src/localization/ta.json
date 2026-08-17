@@ -637,6 +637,7 @@
     "hidePlansFor": "{{site}} திட்டங்களை மறை",
     "noPlans": "இந்த தளத்திற்கு இன்னும் திட்டம் உருவாக்கப்படவில்லை.",
     "awaitingCount_one": "{{count}} காத்திருக்கிறது",
-    "awaitingCount_other": "{{count}} காத்திருக்கின்றன"
+    "awaitingCount_other": "{{count}} காத்திருக்கின்றன",
+    "openPlan": "{{time}} அன்று வரையப்பட்ட திட்டத்தைத் திறக்கவும்"
   }
 }

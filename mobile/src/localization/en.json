@@ -637,6 +637,7 @@
     "hidePlansFor": "Hide plans for {{site}}",
     "noPlans": "No plans drafted for this site yet.",
     "awaitingCount_one": "{{count}} awaiting",
-    "awaitingCount_other": "{{count}} awaiting"
+    "awaitingCount_other": "{{count}} awaiting",
+    "openPlan": "Open the plan drafted {{time}}"
   }
 }

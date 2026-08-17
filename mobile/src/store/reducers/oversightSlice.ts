@@ -25,6 +25,7 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
 import { fetchShifts } from "@/api/endpoints/shifts";
 import { fetchRecommendations } from "@/api/endpoints/recommendations";
+import { fetchPlanSummary, type SitePlanSummary } from "@/api/endpoints/oversight";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { Recommendation, Site } from "@/types/domain";
 
@@ -47,6 +48,17 @@ export interface OversightState {
   refreshing: boolean;
   /** Keyed by site id. A missing key means "never expanded", not "no plans". */
   plansBySite: Record<string, SitePlans>;
+  /**
+   * Server-counted plans per site, keyed by site id — one request, fetched on mount.
+   *
+   * Separate from `plansBySite` because they answer different questions and arrive at different
+   * times: this says how much is outstanding everywhere, before anything is expanded, and
+   * `plansBySite` says what those plans actually are, once one site has been opened.
+   *
+   * Empty until the summary lands, which is why `awaitingDecisionCount` falls back to counting
+   * whatever plans have been fetched rather than reporting a confident zero.
+   */
+  summaryBySite: Record<string, SitePlanSummary>;
 }
 
 const initialState: OversightState = {
@@ -55,6 +67,7 @@ const initialState: OversightState = {
   errorKey: null,
   refreshing: false,
   plansBySite: {},
+  summaryBySite: {},
 };
 
 /** The sites this manager oversees. Cheap — one request, no per-site work. */
@@ -98,10 +111,42 @@ export const loadSitePlans = createAsyncThunk<
   }
 });
 
-/** A plan nobody has decided on yet — what the collapsed row counts. */
-export function awaitingDecisionCount(plans: SitePlans | undefined): number {
-  if (!plans) return 0;
-  return plans.items.filter((item) => item.status === "PENDING_APPROVAL").length;
+/**
+ * Counts across every site at once, so a collapsed row can still say what is waiting.
+ *
+ * Deliberately tolerant of failure: if the summary cannot be fetched the screen keeps working
+ * with lazily-loaded counts, which is what it did before this existed. A badge is worth less
+ * than the list it sits on.
+ */
+export const loadPlanSummary = createAsyncThunk<SitePlanSummary[], void>(
+  "oversight/loadPlanSummary",
+  async () => fetchPlanSummary(),
+);
+
+/**
+ * A plan nobody has decided on yet — what the collapsed row counts.
+ *
+ * ── WHY THE SERVER COUNT WINS ───────────────────────────────────────────────────────────
+ * This used to count `plans.items` alone, which meant a site nobody had expanded reported
+ * zero — indistinguishable on screen from a site with genuinely nothing outstanding. A manager
+ * scanning the list would pass over a site with a plan pending approval, on a screen whose
+ * whole purpose is preventing that. The summary is fetched for every site on mount, so the
+ * number is true before anyone touches anything.
+ *
+ * Fetched plans take precedence once they exist, because they are newer: expanding a site
+ * re-reads it, and a manager who just watched a plan appear should not see a stale badge
+ * disagree with the row directly beneath it.
+ */
+export function awaitingDecisionCount(
+  plans: SitePlans | undefined,
+  summary?: SitePlanSummary | undefined,
+): number {
+  if (plans?.status === "ready") {
+    return plans.items.filter((item) => item.status === "PENDING_APPROVAL").length;
+  }
+  if (summary) return summary.awaitingDecision;
+  // Neither has arrived. Zero is the only honest answer, and the badge stays hidden.
+  return plans ? plans.items.filter((item) => item.status === "PENDING_APPROVAL").length : 0;
 }
 
 const oversightSlice = createSlice({
@@ -131,11 +176,21 @@ const oversightSlice = createSlice({
        * spin while one site fetched, which is both wrong and slow-looking on a screen whose
        * whole point is showing twenty sites at once.
        */
+      /*
+       * "loading" only when there is nothing to show yet.
+       *
+       * These plans now refresh on a timer, on focus and on resume, so a plain `status =
+       * "loading"` would blank an expanded site and flash a spinner over readable content
+       * every couple of minutes — the exact behaviour `useAutoRefresh` documents itself as
+       * existing to avoid. A refresh over content already on screen is invisible until it
+       * lands and the content changes.
+       */
       .addCase(loadSitePlans.pending, (state, action) => {
         const { siteId } = action.meta.arg;
+        const existing = state.plansBySite[siteId];
         state.plansBySite[siteId] = {
-          status: "loading",
-          items: state.plansBySite[siteId]?.items ?? [],
+          status: existing?.items.length ? "ready" : "loading",
+          items: existing?.items ?? [],
           errorKey: null,
         };
       })
@@ -146,13 +201,38 @@ const oversightSlice = createSlice({
           errorKey: null,
         };
       })
+      /*
+       * A failed refresh keeps the plans it already had rather than replacing them with an
+       * error. Now that this polls, one dropped request on a site network would otherwise
+       * swap a readable list for a banner and then swap it back two minutes later.
+       *
+       * The error still surfaces on a first load, which is the case where there is genuinely
+       * nothing to show and silence would read as "this site has no plans".
+       */
       .addCase(loadSitePlans.rejected, (state, action) => {
         const siteId = action.payload?.siteId ?? action.meta.arg.siteId;
+        const existing = state.plansBySite[siteId];
+        if (existing?.items.length) {
+          state.plansBySite[siteId] = { ...existing, status: "ready", errorKey: null };
+          return;
+        }
         state.plansBySite[siteId] = {
           status: "error",
-          items: state.plansBySite[siteId]?.items ?? [],
+          items: [],
           errorKey: action.payload?.errorKey ?? "errors.unknown",
         };
+      })
+
+      /*
+       * No `pending` or `rejected` case, and no errorKey. A failed summary must not raise a
+       * banner over a working list: the counts are an aid to triage, and losing them degrades
+       * the screen to exactly the behaviour it had before they existed. The site list, which
+       * is the thing a manager actually came for, is unaffected either way.
+       */
+      .addCase(loadPlanSummary.fulfilled, (state, action) => {
+        state.summaryBySite = Object.fromEntries(
+          action.payload.map((summary) => [summary.siteId, summary]),
+        );
       });
   },
 });

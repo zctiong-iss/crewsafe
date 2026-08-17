@@ -636,6 +636,7 @@
     "hidePlansFor": "{{site}} की योजनाएँ छिपाएँ",
     "noPlans": "इस साइट के लिए अभी तक कोई योजना नहीं बनी है।",
     "awaitingCount_one": "{{count}} लंबित",
-    "awaitingCount_other": "{{count}} लंबित"
+    "awaitingCount_other": "{{count}} लंबित",
+    "openPlan": "{{time}} को तैयार की गई योजना खोलें"
   }
 }
