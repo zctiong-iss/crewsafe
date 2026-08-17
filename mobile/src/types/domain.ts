@@ -215,6 +215,16 @@ export interface SiteForecast {
    * no label rather than as the coolest band, which would turn "unknown" into "safe".
    */
   band?: WbgtBand | null;
+  /**
+   * The bands the interval's own bounds fall in, evaluated server-side.
+   *
+   * An interval routinely crosses a boundary — the half-width can reach 4°C — and painting the
+   * whole range in the point estimate's colour would assert it stays in one band while the
+   * range beside it says otherwise. These let each bound carry its own colour, which is how
+   * "this could already be in the rest-required band" becomes visible at a glance.
+   */
+  confidenceIntervalLowerBand?: WbgtBand | null;
+  confidenceIntervalUpperBand?: WbgtBand | null;
 }
 
 /**

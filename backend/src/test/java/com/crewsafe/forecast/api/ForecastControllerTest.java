@@ -35,6 +35,8 @@ class ForecastControllerTest {
                 com.crewsafe.forecast.service.ForecastBasis.MODEL,
                 5L,
                 false,
+                com.crewsafe.weather.domain.WbgtBand.BAND_31_TO_BELOW_32,
+                com.crewsafe.weather.domain.WbgtBand.BAND_31_TO_BELOW_32,
                 com.crewsafe.weather.domain.WbgtBand.BAND_31_TO_BELOW_32);
         when(service.forecast(siteId, 30)).thenReturn(Optional.of(forecast));
 

@@ -295,7 +295,9 @@
       "PERSISTENCE": "Ini membawa bacaan terakhir ke hadapan kerana arah aliran terkini tidak dapat ditentukan. Anggap sebagai panduan kasar sahaja."
     },
     "inputAge_one": "Daripada bacaan {{count}} minit lalu",
-    "inputAge_other": "Daripada bacaan {{count}} minit lalu"
+    "inputAge_other": "Daripada bacaan {{count}} minit lalu",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "Tiada apa untuk diakui",

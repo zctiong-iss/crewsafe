@@ -294,7 +294,9 @@
       "PERSISTENCE": "This carries the last reading forward, because no recent trend could be established. Treat it as a rough guide only."
     },
     "inputAge_one": "From a reading {{count}} minute old",
-    "inputAge_other": "From a reading {{count}} minutes old"
+    "inputAge_other": "From a reading {{count}} minutes old",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "Nothing to acknowledge",

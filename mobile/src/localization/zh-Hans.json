@@ -294,7 +294,9 @@
       "PERSISTENCE": "无法建立近期趋势，此为沿用上一次读数，仅供粗略参考。"
     },
     "inputAge_one": "来自 {{count}} 分钟前的读数",
-    "inputAge_other": "来自 {{count}} 分钟前的读数"
+    "inputAge_other": "来自 {{count}} 分钟前的读数",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "暂无待确认事项",

@@ -441,7 +441,11 @@ public class SiteForecastService {
                 // Classified from the predicted value, not the observed one — a forecast that
                 // reported the current band would be describing the present, which is the one
                 // thing a forecast is not for.
-                WbgtBand.classify(predicted));
+                WbgtBand.classify(predicted),
+                // The bounds get their own bands, because an interval that crosses a boundary
+                // is saying something the point estimate alone cannot.
+                WbgtBand.classify(predicted.subtract(halfWidth)),
+                WbgtBand.classify(predicted.add(halfWidth)));
     }
 
     private SiteForecast fromApi(ForecastApiResponse response, ForecastBasis basis,
@@ -470,7 +474,9 @@ public class SiteForecastService {
                 basis != ForecastBasis.MODEL,
                 // Same classifier on the model's own prediction, so a model result and a
                 // fallback are banded by one rule rather than two.
-                WbgtBand.classify(predicted));
+                WbgtBand.classify(predicted),
+                WbgtBand.classify(predicted.subtract(halfWidth)),
+                WbgtBand.classify(predicted.add(halfWidth)));
     }
 
     private static ForecastObservation toForecastObservation(WeatherObservation observation,
@@ -542,6 +548,23 @@ public class SiteForecastService {
              * heading, not what anyone is owed right now; the work-rest obligations still come
              * from the policy engine against the observed value.
              */
-            WbgtBand band) {
+            WbgtBand band,
+
+            /**
+             * The bands the interval's own bounds fall in.
+             *
+             * <p>They exist because an interval routinely spans a boundary — the half-width can
+             * reach {@link #MAX_USEFUL_HALF_WIDTH}, so a range eight degrees wide is possible and
+             * even a narrow one crosses 31 or 33 often. Painting such a range in the point
+             * estimate's colour would assert the forecast stays in one band while the interval
+             * beside it says it might not, and "this could already be in the rest-required band"
+             * is the most useful thing an interval has to say.
+             *
+             * <p>Classified here rather than on the device for the same reason {@link #band} is:
+             * §12.2 leaves no room for a client to decide what a WBGT number means, and that
+             * applies to a bound exactly as it does to a point.
+             */
+            WbgtBand confidenceIntervalLowerBand,
+            WbgtBand confidenceIntervalUpperBand) {
     }
 }

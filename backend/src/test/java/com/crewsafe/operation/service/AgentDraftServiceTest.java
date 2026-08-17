@@ -239,6 +239,7 @@ class AgentDraftServiceTest {
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
                 new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
                 com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false,
+                WbgtBand.BAND_33_AND_ABOVE, WbgtBand.BAND_33_AND_ABOVE,
                 WbgtBand.BAND_33_AND_ABOVE)));
         when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("connection refused"));
 
@@ -425,6 +426,7 @@ class AgentDraftServiceTest {
                 "wbgt", new BigDecimal("34.20"), 30, "wbgt-forecast-v1",
                 new BigDecimal("33.00"), new BigDecimal("35.40"), NOW,
                 com.crewsafe.forecast.service.ForecastBasis.MODEL, 5L, false,
+                WbgtBand.BAND_33_AND_ABOVE, WbgtBand.BAND_33_AND_ABOVE,
                 WbgtBand.BAND_33_AND_ABOVE)));
         stubDraft(validModelPlan(), false, MODEL_ID);
 

@@ -137,6 +137,16 @@ function HorizonCard({
       ? wbgtBandColor(state.forecast.band, theme.colors)
       : null;
 
+  // The interval's bounds carry their own bands, so a range crossing 31 or 33 shows it.
+  const lowerBandColor =
+    state.status === "ready" && state.forecast
+      ? wbgtBandColor(state.forecast.confidenceIntervalLowerBand, theme.colors)
+      : null;
+  const upperBandColor =
+    state.status === "ready" && state.forecast
+      ? wbgtBandColor(state.forecast.confidenceIntervalUpperBand, theme.colors)
+      : null;
+
   return (
     <View
       style={[
@@ -193,11 +203,32 @@ function HorizonCard({
           <AppText variant="caption" tone="secondary">
             {t("forecast.rangeLabel")}
           </AppText>
-          <AppText variant="subtitle">
-            {t("forecast.range", {
+          {/*
+            Each bound in its own band's colour, because an interval routinely crosses a
+            boundary — the half-width reaches 4°C — and one colour across the whole range would
+            assert it stays in one band while the range itself says it might not. A green lower
+            bound beside an amber upper one is the range saying "this could already be in the
+            rest-required band", which is the most useful thing it has to tell a supervisor.
+
+            The nested elements are for colour only. `accessibilityLabel` carries the intact
+            translated sentence, so a screen reader hears one phrase rather than three
+            fragments, and the localised whole is never assembled from parts.
+          */}
+          <AppText
+            variant="subtitle"
+            accessibilityLabel={t("forecast.range", {
               lower: state.forecast.confidenceIntervalLower.toFixed(1),
               upper: state.forecast.confidenceIntervalUpper.toFixed(1),
             })}
+          >
+            <AppText variant="subtitle" style={lowerBandColor ? { color: lowerBandColor } : undefined}>
+              {state.forecast.confidenceIntervalLower.toFixed(1)}
+            </AppText>
+            {t("forecast.rangeSeparator")}
+            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+              {state.forecast.confidenceIntervalUpper.toFixed(1)}
+            </AppText>
+            {t("forecast.rangeUnit")}
           </AppText>
 
           {/*

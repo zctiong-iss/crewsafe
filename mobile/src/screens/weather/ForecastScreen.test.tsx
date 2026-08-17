@@ -74,6 +74,7 @@ function prediction(
   horizonMinutes: 30 | 60,
   predictedValue: number,
   band?: SiteForecast["band"],
+  bounds?: { lower: SiteForecast["band"]; upper: SiteForecast["band"] },
 ): SiteForecast {
   return {
     metric: "WBGT",
@@ -84,6 +85,8 @@ function prediction(
     confidenceIntervalUpper: predictedValue + 0.3,
     generatedAt: "2026-08-14T01:00:00Z",
     band,
+    confidenceIntervalLowerBand: bounds?.lower,
+    confidenceIntervalUpperBand: bounds?.upper,
   };
 }
 
@@ -115,7 +118,12 @@ it("shows a prediction with its interval, never the estimate alone", async () =>
   // The interval is the thing that keeps a forecast from reading as a measurement, so its
   // presence is asserted rather than assumed.
   expect(screen.getAllByText("forecast.rangeLabel").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("forecast.range").length).toBeGreaterThan(0);
+  // Both bounds render. They are separate elements now so each can carry its own band colour;
+  // the intact translated sentence lives on the accessible label so a screen reader hears one
+  // phrase rather than three fragments.
+  expect(screen.getAllByText("32.5").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("33.1").length).toBeGreaterThan(0);
+  expect(screen.getAllByLabelText("forecast.range").length).toBeGreaterThan(0);
 });
 
 it("shows both horizons", async () => {
@@ -195,4 +203,31 @@ it("renders no band when the server classified none, rather than the coolest one
 
   await waitFor(() => expect(screen.getAllByText("forecast.rangeLabel").length).toBe(2));
   expect(screen.queryByText(/wbgt\.band\./)).toBeNull();
+});
+
+it("colours each interval bound by its own band when the range crosses a boundary", async () => {
+  /*
+   * The case the split exists for. A half-width can reach 4°C, so a range straddling 31 or 33
+   * is routine — and painting it all in the point estimate's colour would assert it stays in
+   * one band while the range beside it says it might not.
+   */
+  answerWith((h) =>
+    Promise.resolve(
+      prediction(h, 30.9, "BELOW_31", { lower: "BELOW_31", upper: "31_TO_BELOW_32" }),
+    ),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("30.6").length).toBe(2));
+  const lower = screen.getAllByText("30.6")[0];
+  const upper = screen.getAllByText("31.2")[0];
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  // Different bands, so different colours — that difference is the warning.
+  expect(colorOf(lower)).not.toBe(colorOf(upper));
 });

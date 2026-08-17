@@ -294,7 +294,9 @@
       "PERSISTENCE": "हालिया रुझान तय नहीं हो सका, इसलिए यह अंतिम रीडिंग को आगे बढ़ाता है। इसे केवल मोटा अनुमान मानें।"
     },
     "inputAge_one": "{{count}} मिनट पुरानी रीडिंग से",
-    "inputAge_other": "{{count}} मिनट पुरानी रीडिंग से"
+    "inputAge_other": "{{count}} मिनट पुरानी रीडिंग से",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "पुष्टि के लिए कुछ नहीं",
