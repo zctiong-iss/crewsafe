@@ -396,6 +396,16 @@ export type RecommendationStatus =
  * so "what did the supervisor change" stays renderable as a diff against
  * `approval.editedMitigations`.
  */
+/**
+ * What `AgentDraftService` writes into `modelVersion` when no model wrote the plan.
+ *
+ * Mirrors `AgentDraftService.FALLBACK_MODEL_VERSION` exactly. It is set on three distinct
+ * paths — ml-service fell back internally, ml-service was unreachable or timed out, or the
+ * backend's own gate rejected the model's draft — and the supervisor's question is the same in
+ * all three: was this written by the agent, or by a template?
+ */
+export const DETERMINISTIC_FALLBACK_MODEL = "deterministic-fallback";
+
 export interface Recommendation {
   id: string;
   shiftId: string;
@@ -407,6 +417,20 @@ export interface Recommendation {
   mitigations: Mitigation[];
   /** Null while the recommendation is still awaiting a decision. */
   approval: Approval | null;
+  /**
+   * Which model drafted this, or {@link DETERMINISTIC_FALLBACK_MODEL} when none did (SCRUM-359).
+   *
+   * The server has returned this since SCRUM-359; the client simply never declared it, so it
+   * arrived in every payload and was dropped. That was survivable while a human pressed "Draft
+   * plan" and could infer a fallback from an instant response instead of a 10-20s wait. It is
+   * not survivable now that plans arrive on their own (SCRUM-291 / SCRUM-TBD-70): a Bedrock
+   * outage would produce a steady stream of template plans, every two minutes, indistinguishable
+   * from agent-drafted ones, with nobody waiting on a spinner to notice.
+   *
+   * Null on recommendations drafted before SCRUM-359. Render that as "not recorded" — it is not
+   * the same claim as "a template wrote this".
+   */
+  modelVersion: string | null;
 }
 
 /**
