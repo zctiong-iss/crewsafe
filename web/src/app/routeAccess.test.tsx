@@ -8,7 +8,7 @@ import { AuthProvider } from "@/auth/AuthProvider";
 import { fakeUserManager } from "@/test/fakeUserManager";
 import { App } from "./App";
 
-const ROLES: Role[] = ["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"];
+const OPERATIONAL_ROLES: Role[] = ["SUPERVISOR", "SAFETY_MANAGER"];
 
 function renderAt(path: string, role: Role) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
@@ -35,14 +35,24 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 
-  it.each(ROLES.slice(1))("allows %s to open conditions", async (role) => {
+  it.each(OPERATIONAL_ROLES)("allows %s to open conditions", async (role) => {
     renderAt("/conditions", role);
     expect(await screen.findByRole("heading", { name: "Conditions" })).toBeInTheDocument();
   });
 
-  it.each(ROLES.slice(1))("allows %s to open shift creation", async (role) => {
+  it("redirects an administrator away from conditions", async () => {
+    renderAt("/conditions", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
+  });
+
+  it.each(OPERATIONAL_ROLES)("allows %s to open shift creation", async (role) => {
     renderAt("/shifts/new", role);
     expect(await screen.findByRole("heading", { name: "Create Shift" })).toBeInTheDocument();
+  });
+
+  it("redirects an administrator away from shift creation", async () => {
+    renderAt("/shifts/new", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
   });
 
   it.each(["SUPERVISOR", "SAFETY_MANAGER"] as Role[])(
@@ -55,10 +65,10 @@ describe("direct route access", () => {
 
   it("redirects an administrator away from approvals", async () => {
     renderAt("/approvals", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
   });
 
-  it.each(ROLES.slice(1))("allows %s to open the heat policy catalogue", async (role) => {
+  it.each(OPERATIONAL_ROLES)("allows %s to open the heat policy catalogue", async (role) => {
     renderAt("/policy", role);
     expect(await screen.findByRole("heading", { name: "Heat Policy" })).toBeInTheDocument();
   });
@@ -68,8 +78,13 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 
-  it.each(["SAFETY_MANAGER", "ADMIN"] as Role[])("allows %s to open policy version creation", async (role) => {
-    renderAt("/policy/new", role);
+  it("redirects an administrator away from the heat policy catalogue", async () => {
+    renderAt("/policy", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
+  });
+
+  it("allows a safety manager to open policy version creation", async () => {
+    renderAt("/policy/new", "SAFETY_MANAGER");
     expect(await screen.findByRole("heading", { name: "Create Policy Version" })).toBeInTheDocument();
   });
 
@@ -77,4 +92,22 @@ describe("direct route access", () => {
     renderAt("/policy/new", "SUPERVISOR");
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
+
+  it("redirects an administrator away from policy version creation", async () => {
+    renderAt("/policy/new", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
+  });
+
+  it("sends a signed-in administrator to the admin console, not the live board", async () => {
+    renderAt("/", "ADMIN");
+    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
+  });
+
+  it.each(["WORKER", "SUPERVISOR", "SAFETY_MANAGER"] as Role[])(
+    "redirects %s away from the admin console",
+    async (role) => {
+      renderAt("/settings", role);
+      expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
+    },
+  );
 });

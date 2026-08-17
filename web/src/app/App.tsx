@@ -108,9 +108,16 @@ export function App() {
         <SiteProvider>
           <Routes>
             {callbackRoute}
+            {/* fallback="/settings": every sign-in lands here first (CallbackPage always
+                navigates to "/"), and an administrator — the one role not in
+                rolesForRoute("/") — belongs at the admin console, not looping back to "/". */}
             <Route
               path="/"
-              element={<RoleRoute roles={rolesForRoute("/")}><HomePage /></RoleRoute>}
+              element={
+                <RoleRoute roles={rolesForRoute("/")} fallback="/settings">
+                  <HomePage />
+                </RoleRoute>
+              }
             />
 
             {/* Every nav destination resolves to something. A link that 404s reads as a bug;
