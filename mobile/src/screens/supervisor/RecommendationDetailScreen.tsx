@@ -388,7 +388,14 @@ export default function RecommendationDetailScreen() {
         */}
         {recommendation.modelVersion === DETERMINISTIC_FALLBACK_MODEL ? (
           <View style={styles.noticeGap}>
-            <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+            {/* Centred: this is a short standalone notice in a card of its own, where a
+                left-aligned block with a short final line looks stranded. The error banners
+                elsewhere stay left-aligned — they run longer and often carry a request id. */}
+            <MessageBanner
+              message={t("recommendations.noModelNotice")}
+              tone="info"
+              align="center"
+            />
           </View>
         ) : null}
 

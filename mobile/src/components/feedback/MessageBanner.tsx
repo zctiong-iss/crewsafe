@@ -22,6 +22,17 @@ interface MessageBannerProps {
   requestId?: string | null;
   /** For tests that need the container itself rather than the text inside it. */
   testID?: string;
+  /**
+   * Centres the icon and message as a group, instead of left-aligning them across the banner's
+   * full width.
+   *
+   * Opt-in rather than the default, because centring only flatters a short message. Most
+   * banners here carry an error and often a request id beneath it, and centred body text gives
+   * a ragged left edge that is measurably slower to scan — the wrong trade when someone is
+   * reading a failure. A two-line notice sitting alone in a card is the case where the
+   * left-aligned block looks stranded instead, which is what this is for.
+   */
+  align?: "start" | "center";
 }
 
 const ICONS: Record<BannerTone, keyof typeof Ionicons.glyphMap> = {
@@ -58,6 +69,7 @@ const MessageBanner: FC<MessageBannerProps> = ({
   tone = "danger",
   requestId,
   testID,
+  align = "start",
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -80,6 +92,7 @@ const MessageBanner: FC<MessageBannerProps> = ({
       accessibilityLabel={message}
       style={[
         styles.container,
+        align === "center" ? styles.containerCentered : null,
         {
           borderColor: color,
           borderWidth: theme.metrics.borderWidth,
@@ -98,8 +111,11 @@ const MessageBanner: FC<MessageBannerProps> = ({
 
       {/* flex:1 is what keeps a long message wrapping inside the banner instead of
           stretching it past its parent. */}
-      <View style={styles.body}>
-        <AppText variant="label" style={{ color }}>
+      <View style={align === "center" ? styles.bodyCentered : styles.body}>
+        <AppText
+          variant="label"
+          style={[{ color }, align === "center" ? styles.textCentered : null]}
+        >
           {message}
         </AppText>
         {requestId ? (
@@ -132,8 +148,20 @@ const styles = StyleSheet.create({
   icon: {
     marginEnd: s(10),
   },
+  containerCentered: {
+    justifyContent: "center",
+  },
   body: {
     flex: 1,
+  },
+  bodyCentered: {
+    // Shrinks to the text rather than filling the row, so `justifyContent` above has something
+    // to centre. With flex:1 the column would still span the full width and the text would
+    // centre inside it, leaving the icon stranded at the far edge.
+    flexShrink: 1,
+  },
+  textCentered: {
+    textAlign: "center",
   },
   requestId: {
     marginTop: vs(4),

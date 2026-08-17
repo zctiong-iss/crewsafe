@@ -495,7 +495,7 @@
     "statusAutoDispatched": "Stop-work dispatched",
     "autoDispatchedNotice": "This stop-work order was sent to workers automatically — no approval was required.",
     "supersededNotice": "Conditions changed, so this plan was replaced by a newer one. There is nothing to decide here.",
-    "noModelNotice": "No AI model was available. The heat policy and required actions still apply.",
+    "noModelNotice": "AI model unavailable. Heat policy and required actions still apply.",
     "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {

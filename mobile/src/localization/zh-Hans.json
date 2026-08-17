@@ -494,7 +494,7 @@
     "statusAutoDispatched": "已自动停工",
     "autoDispatchedNotice": "此停工指令已自动发送给工人 — 无需批准。",
     "supersededNotice": "现场条件已变化，此计划已被新计划取代。无需在此做出决定。",
-    "noModelNotice": "当前无法使用 AI 模型。高温政策与必需措施仍然适用。",
+    "noModelNotice": "AI 模型不可用。高温政策与必需措施仍然适用。",
     "requiredCannotRemove": "高温规则要求此项，无法删除。"
   },
   "mitigationCategory": {

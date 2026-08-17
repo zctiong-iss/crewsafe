@@ -495,7 +495,7 @@
     "statusAutoDispatched": "Henti kerja dihantar",
     "autoDispatchedNotice": "Arahan henti kerja ini telah dihantar kepada pekerja secara automatik — tiada kelulusan diperlukan.",
     "supersededNotice": "Keadaan telah berubah, jadi pelan ini telah digantikan dengan yang lebih baharu. Tiada apa-apa untuk diputuskan di sini.",
-    "noModelNotice": "Tiada model AI tersedia. Polisi haba dan tindakan wajib masih terpakai.",
+    "noModelNotice": "Model AI tidak tersedia. Polisi haba dan tindakan wajib masih terpakai.",
     "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {

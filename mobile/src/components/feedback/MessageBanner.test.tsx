@@ -74,3 +74,35 @@ describe("MessageBanner", () => {
     expect(screen.getByText(/req-1/)).toBeTruthy();
   });
 });
+
+describe("align", () => {
+  /*
+   * Left-aligned by default and deliberately so. Most banners carry an error, often with a
+   * request id beneath it, and centred body text gives a ragged left edge that is slower to
+   * scan — the wrong trade when someone is reading a failure.
+   */
+  it("left-aligns by default", async () => {
+    await render(<MessageBanner message="Something failed" tone="danger" testID="banner" />);
+
+    expect(containerStyleOf("banner").justifyContent).toBeUndefined();
+  });
+
+  it("centres the icon and message as a group when asked", async () => {
+    await render(
+      <MessageBanner message="Short notice" tone="info" align="center" testID="banner" />,
+    );
+
+    expect(containerStyleOf("banner").justifyContent).toBe("center");
+  });
+
+  it("centres the text itself, not just the group", async () => {
+    await render(
+      <MessageBanner message="Short notice" tone="info" align="center" testID="banner" />,
+    );
+
+    const text = screen.getByText("Short notice");
+    const style = text.props.style;
+    const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
+    expect(flattened.textAlign).toBe("center");
+  });
+});
