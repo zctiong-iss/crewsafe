@@ -155,8 +155,7 @@ def _write_station_inventory(
     summaries: dict[tuple[str, str], _StationSummary],
 ) -> None:
     rows = []
-    for station_key in sorted(summaries):
-        summary = summaries[station_key]
+    for _station_key, summary in sorted(summaries.items()):
         reading = summary.reading
         rows.append(
             {
