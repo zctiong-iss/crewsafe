@@ -13,7 +13,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import type { FC, ReactNode } from "react";
+import { useState, type FC, type ReactNode } from "react";
 import { s, vs } from "react-native-size-matters";
 import AppText from "../texts/AppText";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -47,6 +47,12 @@ const AppButton: FC<AppButtonProps> = ({
   const theme = useTheme();
   const isInactive = disabled || loading;
 
+  /*
+   * Tracked only so `danger` can fill on engage. `primary` and `secondary` ignore it and
+   * keep the steady fill they have always had — `activeOpacity` remains their press cue.
+   */
+  const [pressed, setPressed] = useState(false);
+
   const palette: Record<AppButtonVariant, { background: string; border: string; text: string }> = {
     primary: {
       background: theme.colors.primary,
@@ -58,11 +64,28 @@ const AppButton: FC<AppButtonProps> = ({
       border: theme.colors.borderStrong,
       text: theme.colors.textPrimary,
     },
-    danger: {
-      background: theme.colors.danger,
-      border: theme.colors.danger,
-      text: theme.colors.textInverse,
-    },
+    /*
+     * Destructive: outlined at rest, filled on press (ADR-0017 §5).
+     *
+     * Cancelling a shift or rejecting a plan should not be the same weight of tap as
+     * confirming one. Outlined at rest, the button reads as available but not inviting; the
+     * fill arrives under the thumb, so committing is something you watch yourself do. Mirrors
+     * the shipped web `.shift-form__danger` hover treatment.
+     *
+     * The swap is an instant colour change with no animated transition, which makes it safe
+     * under Reduce Motion by construction rather than by honouring a preference.
+     */
+    danger: pressed
+      ? {
+          background: theme.colors.danger,
+          border: theme.colors.danger,
+          text: theme.colors.textInverse,
+        }
+      : {
+          background: theme.colors.surface,
+          border: theme.colors.danger,
+          text: theme.colors.danger,
+        },
   };
 
   const active = palette[variant];
@@ -76,6 +99,13 @@ const AppButton: FC<AppButtonProps> = ({
   return (
     <TouchableOpacity
       onPress={onPress}
+      /*
+       * Cleared on press-out as well as on release, so a drag off the button leaves it
+       * outlined rather than stuck filled — a destructive button that still looks engaged
+       * after you moved your thumb away reads as though it fired.
+       */
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
       activeOpacity={0.8}
       disabled={isInactive}
       accessibilityRole="button"

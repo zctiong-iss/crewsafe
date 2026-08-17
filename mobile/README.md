@@ -643,7 +643,7 @@ derived from HTTP status.
 | `react-native-image-picker` | `expo-image-picker` | The former does not work in Expo Go |
 | Lottie weather/banner icons | Ionicons + `Animated` | Hand-authored Lottie per state is unverifiable in review and would not match the app's other icons. `WeatherIcon` documents the swap; `AppLoader` still uses Lottie |
 | "react-safe-area" | `react-native-size-matters` + `react-native-safe-area-context` | Scaling and insets are two different libraries |
-| Committed Gelasio `.ttf` | `@expo-google-fonts/gelasio` | Same binaries, out of git, family names as constants |
+| Committed `.ttf` files | `@expo-google-fonts/*`, imported per weight | Same binaries, out of git, family names as constants. Per-weight subpaths, not package roots: a root import bundles all nine weights when the app uses four (measured: 6.3 MB → 2.8 MB). |
 | `react-native-actions-sheet` | React Native `Modal` | **Removed after it crashed the app** — see [Problem 2](#problem-2--expo-go-keeps-stopping). Its latest release targets worklets 0.7 while SDK 57 ships 0.10; no configuration reconciles that |
 | EAS APK build | *(dropped at your request)* | Testing in Expo Go |
 
@@ -657,7 +657,7 @@ derived from HTTP status.
   verification is `tsc`, both platform bundles, `expo-doctor`, and executable specs for the
   logic. **iOS has never been run at all**, and the supervisor screens have not been driven
   end to end on a device.
-- **Still unverified by eye:** Gelasio at the largest text setting, whether the stop-work
+- **Still unverified by eye:** Lexend at the largest text setting, whether the stop-work
   banner reads in direct sun, and whether the animation rates feel right rather than merely
   work.
 - **The heat plan card is switched off** (`features.heatGuidanceCard`, SCRUM-196/197). While
@@ -2135,17 +2135,17 @@ Plan: [`docs/plans/SCRUM-205-localisation-plan.md`](../docs/plans/SCRUM-205-loca
 
 | Language | Code | Script | Family | Status |
 |---|---|---|---|---|
-| English | `en` | Latin | Gelasio | Shipped — source of truth |
-| Simplified Chinese | `zh-Hans` | Han | Gelasio + system | Shipped |
-| Hindi | `hi` | Devanagari | Gelasio + system | Shipped — see the Hindi note below |
-| Malay | `ms` | Latin | Gelasio | Shipped — machine-drafted, awaiting native review |
+| English | `en` | Latin | Lexend | Shipped — source of truth |
+| Simplified Chinese | `zh-Hans` | Han | Lexend + system CJK | Shipped — see the zh-Hans note below |
+| Hindi | `hi` | Devanagari | Noto Sans Devanagari | Shipped |
+| Malay | `ms` | Latin | Lexend | Shipped — machine-drafted, awaiting native review |
 | **Tamil** | `ta` | Tamil | **Noto Sans Tamil** | Shipped — machine-drafted, awaiting native review |
 | **Bengali** | `bn` | Bengali | **Noto Sans Bengali** | Shipped — machine-drafted, awaiting native review |
 | **Burmese** | `my` | Myanmar | **Noto Sans Myanmar** | Shipped — Unicode only, awaiting native review |
 
 ### Why Malay went first
 
-It was the only one of the four in Latin script, so it rendered in Gelasio with no font work
+It was the only one of the four in Latin script, so it rendered in the Latin face with no font work
 at all. That made it the vertical slice: it exercised `languagesArr`, the `AppLanguage` type,
 `resolveDeviceLanguage`, the i18n registration and both pickers — the Settings sheet and the
 sign-in screen — with the font problem held out. It also surfaced a latent `AppButton` layout
@@ -2154,7 +2154,7 @@ first two-word label in the app.
 
 ### The font layer
 
-Gelasio (`src/styles/fonts.ts`) covers Latin, Cyrillic and Greek and has **no glyphs at all**
+Lexend (`src/styles/fonts.ts`) publishes only the `latin`, `latin-ext` and `vietnamese` subsets and has **no glyphs at all**
 for Tamil, Bengali or Myanmar. Rendering them in it produces tofu, or a silent fall back to
 whatever the system has. So each script gets its Noto family:
 
@@ -2165,7 +2165,7 @@ whatever the system has. So each script gets its Noto family:
   face instead of falling back per glyph.
 - `lineHeightBoostFor(language)` widens the line box for the three new scripts. Bengali hangs
   a matra across the top of a word and all three carry vowel signs below the baseline; the
-  1.35 ratio tuned for Gelasio clips them, and it clips *subtly* — a diacritic loses its top
+  1.35 base ratio clips them, and it clips *subtly* — a diacritic loses its top
   and the word is still nearly right, which is how a wrong word reaches a worker.
 - All four weights (400/500/600/700) were **checked to exist** in all four families rather
   than assumed. Noto subsets do not uniformly ship every weight.
@@ -2174,10 +2174,19 @@ whatever the system has. So each script gets its Noto family:
   their language, and a font fetched on language-switch would fail on exactly the site phone
   this app is built for.
 
-**Hindi is deliberately still on the system fallback.** It is Devanagari, which Gelasio also
-lacks, but it shipped long before this change and has been rendering through the OS all
-along. Moving it to a Noto family is a visual change to an already-shipped language and
-deserves its own ticket with its own before-and-after — not a silent ride-along in this one.
+**Hindi moved onto Noto Sans Devanagari** when the Latin face became Lexend (SCRUM-TBD-55). It
+had been rendering through whatever Devanagari face the OS supplied since it shipped — Gelasio
+lacked the script and Lexend lacks it too — so its typeface was the one thing on screen the app
+did not control. Leaving it there while deliberately choosing every other language's face would
+have been fixing the languages that were already fine. It carries Bengali's `1.25` line-height
+boost: the two share the hanging headline that boost was measured against.
+
+**Simplified Chinese is deliberately still on the system fallback.** `zh-Hans` resolves to Lexend,
+which supplies the Latin run inside a Chinese string while the OS supplies the Han.
+`@expo-google-fonts/noto-sans-sc` is **96 MB** unpacked across four weights — about sixty times the
+whole Lexend package — and every Android and iOS device ships a usable Simplified Chinese face. The
+trade that makes sense for Tamil (a few MB, and Android may genuinely have nothing) does not hold
+here. Revisit only with a subset build.
 
 ### Burmese is Unicode only
 

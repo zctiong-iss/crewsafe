@@ -54,14 +54,14 @@ class StructuredLoggingContractTest {
 
             String encoded = new String(encoder.encode(event), StandardCharsets.UTF_8);
             assertThat(encoded.trim()).doesNotContain("\r", "\n");
-            JsonNode record = objectMapper.readTree(encoded);
+            JsonNode logRecord = objectMapper.readTree(encoded);
 
-            assertThat(record.get("message").asText()).isEqualTo("structured log contract");
-            assertThat(record.at("/log/level").asText()).isEqualTo("INFO");
-            assertThat(record.at("/requestId").asText()).isEqualTo(requestId);
-            assertThat(record.at("/service/name").asText()).isEqualTo("crewsafe-backend");
-            assertThat(record.at("/service/environment").asText()).isEqualTo("staging");
-            assertThat(record.at("/ecs/version").asText()).isEqualTo("8.11");
+            assertThat(logRecord.get("message").asText()).isEqualTo("structured log contract");
+            assertThat(logRecord.at("/log/level").asText()).isEqualTo("INFO");
+            assertThat(logRecord.at("/requestId").asText()).isEqualTo(requestId);
+            assertThat(logRecord.at("/service/name").asText()).isEqualTo("crewsafe-backend");
+            assertThat(logRecord.at("/service/environment").asText()).isEqualTo("staging");
+            assertThat(logRecord.at("/ecs/version").asText()).isEqualTo("8.11");
         }
         finally {
             encoder.stop();

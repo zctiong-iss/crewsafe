@@ -58,6 +58,104 @@ This decision also records three previously-locked decisions as foundational to 
 
 3. **Rely on colour alone for pill meaning:** Rejected on CVD-safety grounds. Colour is reinforcement; text is the source of truth. Every pill carries its label.
 
+---
+
+## Addendum — implementation deviations (Phase 1, 2026-08-17)
+
+Two things shipped differently from the code blocks in Doc 1 §8. Both are deliberate, and both
+are recorded here so the next reader does not "fix" the code back to match the document.
+
+**1. `Pill` takes a closed `tone` union, not `tone?: string`.**
+
+Doc 1 §8.1 types `tone` as a free-form string holding a theme colour. That lets any call site
+pass any colour, which leaves **D3 — reserve colour for meaning** — enforced only by code
+review. The shipped component instead takes `PillTone = "neutral" | "danger" | "warning" |
+"success" | "info"` and resolves the colour internally, so a caller names a *meaning* and the
+type checker holds the line. `info` maps to `primary` rather than a blue, because introducing
+a blue would be the first decorative colour in a monochrome chrome.
+
+**2. The §6 guardrail gate is automated, not eyeballed.**
+
+§6 declares the gate a merge blocker while Doc 1 §8.6 defines it as "run the plan screen and
+eyeball" — six checks, per screen, in two languages. A manual checklist across a three-phase
+programme stops being followed, and what it stops checking is whether a supervisor can read a
+stop-work instruction in the sun.
+
+The gate now runs as a matrix render (`mobile/src/testing/guardrails.tsx`): 4 languages ×
+2 font scales × 2 contrast modes, asserting no text clamps, every pill keeps a visible border,
+and every control stays a full touch target. Wired into Mobile CI as `npm run test:guardrails`.
+
+**Honest limit:** the test renderer has no layout engine, so this catches every *cause* of
+clipping that lives in the style tree (`numberOfLines`, fixed `maxWidth`/`height`,
+`overflow: hidden`) but cannot see a box that overflows by three points at runtime. It
+replaces the mechanical half of the eyeball pass, not the judgement half. Verified to bite:
+re-introducing the origin pill's old `maxWidth: 110` + `numberOfLines={1}` fails 32 of the
+80 cases.
+
+**3. `PillTone` resolves to a `{ fill, ink }` pair, not one colour per tone.** (Phase 2)
+
+Found while migrating `RecommendationStatusPill`. A `state` pill fills with the tone colour and
+carries `textInverse`; for `warning` that is `#B26A00`, which `colors.ts` records as 4.24:1
+against white — below the AA floor. `warningFill` exists for precisely this case and the
+shipped pill already used it, so a naive migration would have *introduced* a contrast failure
+on "Awaiting decision". Each tone now names both values, because "legible on white" and
+"legible under white" are opposite problems.
+
+**4. The `numberOfLines={1}` clamp is dropped from the status pills.** (Phase 2)
+
+Both status pills clamped to one line against a documented defect (a wrapped label painted
+outside its own fill). §6 forbids clipping, and a pill reading "Waiting on your…" contradicts
+this ADR's own rule that text is the source of truth. The structural half of that original fix
+— `flexDirection: "row"` + `maxWidth: "100%"` + `flexShrink` — lives in `Pill` and is what
+actually solved the measurement bug; the clamp was belt-and-braces. Asserted across 288 gate
+cases in the real longest Tamil and Burmese strings. **The gate cannot prove the wrap paints
+inside the fill — that check stays human.**
+
+**5. D1 is now true on mobile — Gelasio replaced by Lexend.** (Phase 4, SCRUM-TBD-55)
+
+D1 recorded *"Lexend everywhere (web + mobile Latin; mobile keeps per-script Noto for
+Tamil/Bengali/Myanmar)"* as locked. Phase 3 found that mobile actually shipped **Gelasio**, with
+zero references to Lexend anywhere in `mobile/`. Phase 4 closed the gap.
+
+| | Before | Now |
+|---|---|---|
+| Web | Lexend | Lexend (unchanged) |
+| Mobile Latin (`en`, `ms`) | Gelasio | **Lexend** |
+| Mobile `ta` / `bn` / `my` | per-script Noto | per-script Noto (unchanged) |
+| Mobile `hi` | **system Devanagari fallback** | **Noto Sans Devanagari** |
+| Mobile `zh-Hans` | system CJK fallback | system CJK fallback (documented) |
+
+**"Lexend everywhere" is a Latin-only claim, necessarily.** Lexend publishes exactly three
+subsets — `latin`, `latin-ext`, `vietnamese` — verified against the Google Fonts CSS API. It has
+no glyphs for Tamil, Bengali, Myanmar, Devanagari or Han. Applying it to all seven locales would
+have rendered tofu for four of them, which is why D1's own wording keeps per-script Noto.
+`src/styles/fonts.test.ts` asserts, per language, that no non-Latin script ever resolves to Lexend.
+
+**Hindi moved off the system fallback.** It had been rendering in whatever Devanagari face the
+device happened to have since it shipped — a silent fallback of exactly the kind `fonts.ts` exists
+to prevent. Left in place, it would have been the one language whose typeface was still
+unspecified while every other one was being decided.
+
+**Simplified Chinese stays on the system face, and that is now recorded rather than implied.**
+`@expo-google-fonts/noto-sans-sc` is **96 MB** unpacked across four weights — roughly sixty times
+the entire Lexend package — and every Android and iOS device ships a usable CJK face. Revisit only
+with a subset build (SCRUM-TBD-58).
+
+**`LINE_HEIGHT_RATIO` was deliberately left at 1.35.** It was tuned to Gelasio's ascenders, and
+Lexend's large x-height and generous vertical metrics need no less. Re-tuning would have reflowed
+every screen to solve a problem that never appeared: the gate renders all five gated scripts at
+`fontScale` 1.5 with no clipping. The per-script boosts multiply on top of the base ratio, so they
+described the scripts rather than the Latin face and survived the swap untouched.
+
+**Open item 3 remains open for web only.** ADR-0012's unverified tabular-figures claim is a
+`font-variant-numeric` concern, which is a CSS feature. React Native does not support it the same
+way, so no mobile numeric readout depends on it even now that mobile uses Lexend.
+
+**Open item 4 in Doc 1 §8.5 was already solved.** The plan called for a new locale key-parity
+test; `mobile/scripts/check-locale-parity.mjs` already existed, already ran in CI, and is
+strictly more thorough (it also checks `{{placeholder}}` parity and detects wrong-script text).
+No second checker was added.
+
 ## Related
 
 - `crewsafe-card-pill-design-language.md` (Doc 1 — the foundational language + mobile refactor)

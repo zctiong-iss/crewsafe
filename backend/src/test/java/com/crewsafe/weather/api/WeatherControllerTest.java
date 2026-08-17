@@ -118,10 +118,10 @@ class WeatherControllerTest extends AbstractIntegrationTest {
 
     private void insertObservation(UUID siteId, Instant observedAt, BigDecimal wbgt,
                                    WeatherQualityStatus qualityStatus) {
-        observations.insertIfAbsent(
+        observations.insertIfAbsent(new WeatherObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(), siteId, wbgt, new BigDecimal("32.20"),
                 new BigDecimal("70.00"), new BigDecimal("2.50"), BigDecimal.ZERO,
                 observedAt, observedAt.plusSeconds(10), WeatherSource.NEA.name(),
-                qualityStatus.name(), "S-test");
+                qualityStatus.name(), "S-test"));
     }
 }

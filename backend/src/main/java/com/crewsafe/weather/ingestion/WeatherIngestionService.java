@@ -69,7 +69,7 @@ public class WeatherIngestionService {
         // observed_at and station_id deliberately anchor the combined row to WBGT, the
         // primary safety signal. Supporting metrics can come from different nearest
         // stations and slightly different timestamps in NEA's independent feeds.
-        return observationRepository.insertIfAbsent(
+        return observationRepository.insertIfAbsent(new WeatherObservationRepository.InsertObservationCommand(
                 UUID.randomUUID(),
                 site.getId(),
                 wbgt.value(),
@@ -81,7 +81,7 @@ public class WeatherIngestionService {
                 ingestedAt,
                 source.name(),
                 qualityStatus.name(),
-                wbgt.station().id());
+                wbgt.station().id()));
     }
 
     private NeaStationReading nearest(Site site, Map<NeaMetric, NeaObservation> observations,

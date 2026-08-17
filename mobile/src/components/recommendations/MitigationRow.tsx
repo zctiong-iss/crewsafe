@@ -18,9 +18,19 @@ import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
 import AppText from "@/components/texts/AppText";
+import Pill from "@/components/common/Pill";
+import Disclosure from "@/components/common/Disclosure";
 import { formatTime } from "@/helpers/dateTime";
 import { useTheme } from "@/theme/ThemeProvider";
 import type { Mitigation } from "@/types/domain";
+
+/**
+ * How many worker chips render before the rest collapse into `+N`.
+ *
+ * Four fits two lines at fontScale 1.5 on a small phone. Past that the chips push the
+ * disclosure control off-screen, which hides the evidence behind an invisible affordance.
+ */
+const MAX_WORKER_CHIPS = 4;
 
 interface MitigationRowProps {
   mitigation: Mitigation;
@@ -112,32 +122,15 @@ const MitigationRow: FC<MitigationRowProps> = ({
           glance, not infer it from a rule reference being present.
         */}
         {mitigation.origin ? (
-          <View
-            style={[
-              styles.originPill,
-              {
-                borderColor:
-                  mitigation.origin === "MANDATORY" ? theme.colors.danger : theme.colors.textSecondary,
-                borderWidth: theme.metrics.borderWidth,
-                borderRadius: theme.metrics.radius / 2,
-              },
-            ]}
-          >
-            <AppText
-              variant="caption"
-              numberOfLines={1}
-              style={{
-                color:
-                  mitigation.origin === "MANDATORY"
-                    ? theme.colors.danger
-                    : theme.colors.textSecondary,
-              }}
-            >
-              {mitigation.origin === "MANDATORY"
+          <Pill
+            role="attribute"
+            tone={mitigation.origin === "MANDATORY" ? "danger" : "neutral"}
+            label={
+              mitigation.origin === "MANDATORY"
                 ? t("recommendations.originMandatory")
-                : t("recommendations.originAdvisory")}
-            </AppText>
-          </View>
+                : t("recommendations.originAdvisory")
+            }
+          />
         ) : null}
       </View>
 
@@ -162,7 +155,69 @@ const MitigationRow: FC<MitigationRowProps> = ({
       ) : null}
 
       {showDetail && !removed ? (
-        <>
+        <MitigationDetail mitigation={mitigation} workerNameFor={workerNameFor} />
+      ) : null}
+    </View>
+  );
+};
+
+export default MitigationRow;
+
+/**
+ * The summary chips plus the collapsible evidence (ADR-0017 §3).
+ *
+ * ── WHY `appliesTo` MOVED UP AND THE REST MOVED DOWN ────────────────────────────────────
+ * These four fields used to render as one always-on block, which is the "big chunk" the
+ * design language calls out: showing everything at once shows nothing. They split by what a
+ * supervisor is doing. *Who it applies to* changes the decision — "these two people" versus
+ * "the whole crew" — so it stays visible, now as chips rather than a comma-joined sentence.
+ * Reason, rule and expected effect are the *evidence* behind the decision; they are read once,
+ * when someone is actually judging the plan, so they sit behind an expand.
+ *
+ * ── A LOCAL COMPONENT, NOT INLINE JSX ───────────────────────────────────────────────────
+ * The disclosure needs its own `open` state. Hoisting that into `MitigationRow` would make
+ * the parent re-render on every expand, and hoisting it into the list above would make one
+ * row's state the list's problem.
+ */
+const MitigationDetail: FC<{
+  mitigation: Mitigation;
+  workerNameFor?: (workerId: string) => string;
+}> = ({ mitigation, workerNameFor }) => {
+  const { t } = useTranslation();
+
+  /* Absent OR empty means the whole shift — the server has expressed it both ways. */
+  const appliesToAll = mitigation.appliesTo === null || mitigation.appliesTo.length === 0;
+  const names = appliesToAll
+    ? []
+    : /* Falls back to the raw id rather than dropping the worker: `GET /workers` returns
+         ACTIVE only, so someone since offboarded resolves to no name, and omitting them
+         would understate who the action covers. */
+      mitigation.appliesTo!.map((workerId) => workerNameFor?.(workerId) ?? workerId);
+  const shown = names.slice(0, MAX_WORKER_CHIPS);
+  const overflow = names.length - shown.length;
+
+  const detailLabel = (open: boolean) =>
+    open ? t("recommendations.hideDetails") : t("recommendations.showDetails");
+
+  return (
+    <>
+      <View style={styles.chips}>
+        {appliesToAll ? (
+          <Pill role="entity" label={t("recommendations.appliesToAll")} />
+        ) : (
+          <>
+            {shown.map((name, index) => (
+              <Pill key={`${name}-${index}`} role="entity" label={name} />
+            ))}
+            {overflow > 0 ? <Pill role="entity" label={`+${overflow}`} /> : null}
+          </>
+        )}
+      </View>
+
+      {/* Uncontrolled: this row is the only thing that cares whether it is open, and it does
+          not live in a virtualised list. */}
+      <Disclosure label={detailLabel} accessibilityLabel={detailLabel}>
+        <View>
           {mitigation.rationale ? (
             <View style={styles.detail}>
               <AppText variant="caption" tone="secondary">
@@ -175,28 +230,9 @@ const MitigationRow: FC<MitigationRowProps> = ({
             </View>
           ) : null}
 
-          {/*
-            Who it applies to — and "everyone" said in words.
-
-            An absent list means the whole shift. Rendering nothing for that case would leave the
-            difference between "these two people" and "the entire crew" to blank space, and that
-            difference is the entire point of the field.
-          */}
-          <View style={styles.detail}>
-            <AppText variant="caption" tone="secondary">
-              {t("recommendations.appliesTo")}
-            </AppText>
-            <AppText variant="caption">
-              {mitigation.appliesTo === null || mitigation.appliesTo.length === 0
-                ? t("recommendations.appliesToAll")
-                : mitigation.appliesTo
-                    .map((workerId) => workerNameFor?.(workerId) ?? workerId)
-                    .join(", ")}
-            </AppText>
-          </View>
-
           {/* FR-16: the rule that justifies this action, beside the action rather than in a
-              footer, so judging one does not mean scrolling to find the other. */}
+              footer, so judging one does not mean scrolling to find the other. Long codes such
+              as UNACCLIMATISED_HEAVY_WORK_RULE wrap; they are never truncated. */}
           {mitigation.ruleReference ? (
             <View style={styles.detail}>
               <AppText variant="caption" tone="secondary">
@@ -214,13 +250,11 @@ const MitigationRow: FC<MitigationRowProps> = ({
               <AppText variant="caption">{mitigation.estimatedImpact}</AppText>
             </View>
           ) : null}
-        </>
-      ) : null}
-    </View>
+        </View>
+      </Disclosure>
+    </>
   );
 };
-
-export default MitigationRow;
 
 const styles = StyleSheet.create({
   row: {
@@ -237,11 +271,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginEnd: s(8),
   },
-  originPill: {
-    paddingHorizontal: s(6),
-    paddingVertical: vs(1),
-    alignSelf: "flex-start",
-    maxWidth: s(110),
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: s(6),
+    marginTop: vs(6),
   },
   removed: {
     opacity: 0.6,

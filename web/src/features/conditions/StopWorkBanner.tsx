@@ -8,7 +8,7 @@ const timeFormat = new Intl.DateTimeFormat("en-SG", {
 export function StopWorkBanner({ lightning }: { lightning: LightningRiskPayload }) {
   return (
     <p className="stop-work-banner" role="alert">
-      Stop work — lightning {lightning.nearestStrikeKm} km away.
+      STOP WORK — Lightning detected {lightning.nearestStrikeKm} km away.
       In effect until {timeFormat.format(new Date(lightning.validUntil))}.
     </p>
   );
