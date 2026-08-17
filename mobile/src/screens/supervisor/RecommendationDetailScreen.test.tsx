@@ -510,3 +510,80 @@ it("still offers the decision buttons on a fallback plan", async () => {
 
   expect(queryByText("recommendations.approveButton")).not.toBeNull();
 });
+
+/* ── Naming the workers a plan covers ──────────────────────────────────────────────────── */
+
+/*
+ * The bug these cover. `shifts.workers` belongs to whichever site the shifts screen last
+ * loaded, and nothing on this screen loads it — so a supervisor resolved names only because
+ * they had passed through a screen that happened to populate it, and a safety manager, who has
+ * no shifts tab and can arrive straight from oversight, resolved none. Present workers rendered
+ * as "no longer on this site". Note the store below holds `workers: []`, which is exactly the
+ * manager's situation.
+ */
+it("names workers from the plan itself when the shifts slice is empty", async () => {
+  const store = buildStore(SAFETY_MANAGER, [
+    recommendation({
+      mitigations: [
+        {
+          priority: "HIGH",
+          action: "Rest 15 minutes without a break, every hour",
+          rationale: "Heavy work in the 33°C band",
+          estimatedImpact: null,
+          actionCode: "REST_15_MIN_HOURLY",
+          category: "REST",
+          origin: "MANDATORY",
+          ruleReference: "HS-33-HEAVY",
+          appliesTo: ["w-1", "w-2"],
+          timing: null,
+        },
+      ],
+      workers: [
+        { id: "w-1", displayName: "Kumar (Worker)" },
+        { id: "w-2", displayName: "Siti (Worker)" },
+      ],
+    }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  await waitFor(() => expect(queryByText("Kumar (Worker)")).not.toBeNull());
+  expect(queryByText("Siti (Worker)")).not.toBeNull();
+  expect(queryByText("shifts.unknownWorker")).toBeNull();
+});
+
+it("still says a worker is gone when nothing can name them", async () => {
+  // The fallback is now accurate: with the server naming everyone it knows, an unresolved id
+  // really does mean the person is no longer there.
+  const store = buildStore(SAFETY_MANAGER, [
+    recommendation({
+      mitigations: [
+        {
+          priority: "HIGH",
+          action: "Rest 15 minutes without a break, every hour",
+          rationale: "Heavy work in the 33°C band",
+          estimatedImpact: null,
+          actionCode: "REST_15_MIN_HOURLY",
+          category: "REST",
+          origin: "MANDATORY",
+          ruleReference: "HS-33-HEAVY",
+          appliesTo: ["w-gone"],
+          timing: null,
+        },
+      ],
+      workers: [],
+    }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  await waitFor(() => expect(queryByText("shifts.unknownWorker")).not.toBeNull());
+});

@@ -463,6 +463,24 @@ export interface Recommendation {
    * the same claim as "a template wrote this".
    */
   modelVersion: string | null;
+  /**
+   * Everyone this plan's mitigations name, resolved server-side.
+   *
+   * The client used to turn `appliesTo` ids into names against `shiftsSlice.workers`, which
+   * belongs to whichever site the shifts screen last loaded — and nothing on the recommendation
+   * screens loads it. A supervisor saw names only because they had passed through a screen that
+   * happened to populate it; a safety manager, who has no shifts tab, saw present workers
+   * reported as "no longer on this site".
+   *
+   * Optional because a backend predating it omits it, in which case the old lookup still runs.
+   */
+  workers?: PlanWorker[] | null;
+}
+
+/** Mirrors `RecommendationController.PlanWorker`. */
+export interface PlanWorker {
+  id: string;
+  displayName: string;
 }
 
 /**

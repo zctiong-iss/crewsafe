@@ -191,10 +191,25 @@ export default function RecommendationDetailScreen() {
    * would understate who an action covers.
    */
   const workers = useAppSelector((state) => state.shifts.workers);
+
+  /*
+   * The plan's own worker list first, then the shifts slice, then the fallback.
+   *
+   * That order is the fix. `shifts.workers` belongs to whichever site the shifts screen last
+   * loaded, and nothing on this screen loads it — so a supervisor resolved names only because
+   * they had passed through a screen that happened to populate it, and a safety manager, who
+   * has no shifts tab and can arrive straight from oversight, resolved none at all. Present
+   * workers rendered as "no longer on this site", on a safety record.
+   *
+   * The slice lookup is kept for plans served by a backend predating `workers`, and because it
+   * costs nothing when the server did send them.
+   */
   const workerNameFor = useCallback(
     (workerId: string) =>
-      workers.find((worker) => worker.id === workerId)?.displayName ?? t("shifts.unknownWorker"),
-    [workers, t],
+      recommendation?.workers?.find((worker) => worker.id === workerId)?.displayName ??
+      workers.find((worker) => worker.id === workerId)?.displayName ??
+      t("shifts.unknownWorker"),
+    [recommendation?.workers, workers, t],
   );
   useEffect(() => {
     void dispatch(loadPolicyVersions({ siteId }));
