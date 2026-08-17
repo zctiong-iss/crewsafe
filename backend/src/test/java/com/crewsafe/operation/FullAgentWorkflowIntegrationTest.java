@@ -70,6 +70,11 @@ import static org.mockito.Mockito.when;
  * every mitigation still comes from this codebase's real deterministic-fallback path, not a
  * canned test response, the same technique {@code AgentDraftTransactionIntegrationTest} uses.
  *
+ * <p>Split into one phase method per step of the story (rather than one long test method) so
+ * each stays independently readable, and so a lambda asserting a thrown exception only ever
+ * calls the one thing actually expected to throw -- IDs are resolved to local variables first,
+ * not evaluated as method calls inside the lambda itself.
+ *
  * @author Abu Bakar
  */
 class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
@@ -92,13 +97,30 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @MockitoBean private AgentDraftClient agentDraftClient;
 
+    /** One site, one shift, one worker, and the instant the shift was created -- threaded through every phase. */
+    private record Fixture(Site site, Shift shift, AppUser supervisor, AppUser worker, Instant now) {
+    }
+
     @Test
     @DisplayName("PLANNED shift -> ACTIVE -> band change drafts -> a second change supersedes -> "
             + "approval dispatches -> a WBGT-max breach bypasses approval entirely")
     void theWholeChainWorksTogether() {
         when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("no ml-service in this test"));
 
-        // ── Setup: a site, an emergency-stop policy, a shift starting 5 minutes ago, one worker ──
+        Fixture fixture = setUpSiteShiftAndWorker();
+        activateShift(fixture);
+
+        seedFirstEvaluation(fixture);
+        Recommendation firstDraft = draftOnBandChange(fixture);
+        Recommendation survivingDraft = secondChangeSupersedes(fixture, firstDraft);
+        Recommendation approved = supervisorApprovalDispatches(fixture, survivingDraft);
+        Recommendation autoDispatched = wbgtMaxBreachBypassesApproval(fixture, approved);
+
+        bothKindsVisibleTogether(fixture, approved, autoDispatched);
+    }
+
+    /** Setup: a site, an emergency-stop policy, a shift starting 5 minutes ago, one worker. */
+    private Fixture setUpSiteShiftAndWorker() {
         Site site = sites.save(new Site("Full Workflow " + UUID.randomUUID(),
                 new BigDecimal("1.300000"), new BigDecimal("103.800000")));
         policyVersions.save(emergencyStopPolicy(site.getId()));
@@ -110,36 +132,54 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
         shiftAssignments.save(new ShiftAssignment(shift.getId(), worker.getId(), "Rebar", Intensity.HEAVY, 2));
 
         assertThat(shifts.findById(shift.getId()).orElseThrow().getStatus()).isEqualTo(ShiftStatus.PLANNED);
+        return new Fixture(site, shift, supervisor, worker, now);
+    }
 
-        // ── Step 1 (SCRUM-441): the shift-activation scheduler's own method flips it ACTIVE ──
+    /** Step 1 (SCRUM-441): the shift-activation scheduler's own method flips it ACTIVE. */
+    private void activateShift(Fixture fixture) {
         int activatedCount = shiftService.activateDueShifts();
+
         assertThat(activatedCount).isGreaterThanOrEqualTo(1);
-        assertThat(shifts.findById(shift.getId()).orElseThrow().getStatus()).isEqualTo(ShiftStatus.ACTIVE);
+        assertThat(shifts.findById(fixture.shift().getId()).orElseThrow().getStatus()).isEqualTo(ShiftStatus.ACTIVE);
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ACTIVATED))
-                .anyMatch(e -> shift.getId().equals(e.getTargetId()) && e.getActorId() == null);
+                .anyMatch(e -> fixture.shift().getId().equals(e.getTargetId()) && e.getActorId() == null);
+    }
 
-        // ── Step 2 (SCRUM-291): first-ever evaluation seeds site state, drafts nothing ──
-        Instant t1 = now.plusSeconds(10);
-        weatherObservations.save(observation(site.getId(), new BigDecimal("31.50"), t1)); // BAND_31_TO_BELOW_32
-        autoTriggerService.evaluateAllSites();
-        assertThat(recommendations.findByShiftId(shift.getId())).isEmpty();
+    /** Step 2 (SCRUM-291): first-ever evaluation seeds site state, drafts nothing. */
+    private void seedFirstEvaluation(Fixture fixture) {
+        Instant t1 = fixture.now().plusSeconds(10);
+        weatherObservations.save(observation(fixture.site().getId(), new BigDecimal("31.50"), t1)); // BAND_31_TO_BELOW_32
 
-        // ── Step 3: a genuine band change (31.5 -> 32.5) auto-drafts, with nobody in the loop ──
-        Instant t2 = now.plusSeconds(20);
-        weatherObservations.save(observation(site.getId(), new BigDecimal("32.50"), t2)); // BAND_32_TO_BELOW_33
         autoTriggerService.evaluateAllSites();
 
-        List<Recommendation> afterFirstDraft = recommendations.findByShiftId(shift.getId());
+        assertThat(recommendations.findByShiftId(fixture.shift().getId())).isEmpty();
+    }
+
+    /** Step 3: a genuine band change (31.5 -> 32.5) auto-drafts, with nobody in the loop. */
+    private Recommendation draftOnBandChange(Fixture fixture) {
+        Instant t2 = fixture.now().plusSeconds(20);
+        weatherObservations.save(observation(fixture.site().getId(), new BigDecimal("32.50"), t2)); // BAND_32_TO_BELOW_33
+
+        autoTriggerService.evaluateAllSites();
+
+        List<Recommendation> afterFirstDraft = recommendations.findByShiftId(fixture.shift().getId());
         assertThat(afterFirstDraft).hasSize(1);
         Recommendation firstDraft = afterFirstDraft.get(0);
         assertThat(firstDraft.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.RECOMMENDATION_DRAFTED))
                 .anyMatch(e -> firstDraft.getId().equals(e.getTargetId()) && e.getActorId() == null);
+        return firstDraft;
+    }
 
-        // ── Step 4: conditions change AGAIN before anyone decided -- the new draft supersedes,
-        //    it does not stack (the SCRUM-291 dedup guard) ──
-        Instant t3 = now.plusSeconds(30);
-        weatherObservations.save(observation(site.getId(), new BigDecimal("30.00"), t3)); // BAND_BELOW_31
+    /**
+     * Step 4: conditions change AGAIN before anyone decided -- the new draft supersedes, it
+     * does not stack (the SCRUM-291 dedup guard). Also confirms a superseded recommendation
+     * can never be decided on.
+     */
+    private Recommendation secondChangeSupersedes(Fixture fixture, Recommendation firstDraft) {
+        Instant t3 = fixture.now().plusSeconds(30);
+        weatherObservations.save(observation(fixture.site().getId(), new BigDecimal("30.00"), t3)); // BAND_BELOW_31
+
         autoTriggerService.evaluateAllSites();
 
         Recommendation supersededFirstDraft = recommendations.findById(firstDraft.getId()).orElseThrow();
@@ -147,56 +187,69 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.RECOMMENDATION_SUPERSEDED))
                 .anyMatch(e -> firstDraft.getId().equals(e.getTargetId()));
 
-        List<Recommendation> afterSupersede = recommendations.findByShiftId(shift.getId());
+        List<Recommendation> afterSupersede = recommendations.findByShiftId(fixture.shift().getId());
         assertThat(afterSupersede).hasSize(2);
         Recommendation survivingDraft = afterSupersede.stream()
                 .filter(r -> r.getStatus() == Recommendation.RecommendationStatus.PENDING_APPROVAL)
                 .findFirst().orElseThrow();
 
-        // A superseded recommendation can never be decided on.
-        assertThatThrownBy(() -> recommendationService.decide(site.getId(), shift.getId(),
-                firstDraft.getId(), supervisor.getId(), Approval.ApprovalDecision.APPROVED, null, null))
-                .isInstanceOf(RuntimeException.class);
+        assertCannotBeDecided(fixture, supersededFirstDraft);
+        return survivingDraft;
+    }
 
-        // ── Step 5: a supervisor approves the surviving draft -- real dispatches go out ──
-        recommendationService.decide(site.getId(), shift.getId(), survivingDraft.getId(), supervisor.getId(),
-                Approval.ApprovalDecision.APPROVED, null, null);
+    /** Step 5: a supervisor approves the surviving draft -- real dispatches go out. */
+    private Recommendation supervisorApprovalDispatches(Fixture fixture, Recommendation survivingDraft) {
+        recommendationService.decide(fixture.site().getId(), fixture.shift().getId(), survivingDraft.getId(),
+                fixture.supervisor().getId(), Approval.ApprovalDecision.APPROVED, null, null);
 
         Recommendation approved = recommendations.findById(survivingDraft.getId()).orElseThrow();
         assertThat(approved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.APPROVED);
         assertThat(approvals.findByRecommendationId(approved.getId())).isPresent();
 
-        List<ActionDispatch> approvedPathDispatches = actionDispatches.findByShiftId(shift.getId());
+        List<ActionDispatch> approvedPathDispatches = actionDispatches.findByShiftId(fixture.shift().getId());
         assertThat(approvedPathDispatches).isNotEmpty();
         assertThat(approvedPathDispatches).allSatisfy(d -> assertThat(d.getApproval()).isNotNull());
+        return approved;
+    }
 
-        // ── Step 6 (SCRUM-440): a WBGT-max breach -- no approval step at all, dispatched immediately ──
-        Instant t4 = now.plusSeconds(40);
-        weatherObservations.save(observation(site.getId(), new BigDecimal("34.00"), t4)); // BAND_33_AND_ABOVE, breaches 33.0
+    /**
+     * Step 6 (SCRUM-440): a WBGT-max breach -- no approval step at all, dispatched
+     * immediately. Also confirms the already-approved recommendation from step 5 stays
+     * untouched (supersede only ever targets an open PENDING_APPROVAL row), and that the new
+     * AUTO_DISPATCHED recommendation can never be decided on either.
+     */
+    private Recommendation wbgtMaxBreachBypassesApproval(Fixture fixture, Recommendation approved) {
+        Instant t4 = fixture.now().plusSeconds(40);
+        // BAND_33_AND_ABOVE, breaches the 33.0 emergency-stop threshold.
+        weatherObservations.save(observation(fixture.site().getId(), new BigDecimal("34.00"), t4));
+
         autoTriggerService.evaluateAllSites();
 
-        List<Recommendation> finalState = recommendations.findByShiftId(shift.getId());
+        List<Recommendation> finalState = recommendations.findByShiftId(fixture.shift().getId());
         Recommendation autoDispatched = finalState.stream()
                 .filter(r -> r.getStatus() == Recommendation.RecommendationStatus.AUTO_DISPATCHED)
                 .findFirst().orElseThrow(() -> new AssertionError("Expected an AUTO_DISPATCHED recommendation"));
 
-        // The already-APPROVED recommendation from step 5 is untouched -- supersede only ever
-        // targets an open PENDING_APPROVAL row, never one already decided.
         assertThat(recommendations.findById(approved.getId()).orElseThrow().getStatus())
                 .isEqualTo(Recommendation.RecommendationStatus.APPROVED);
-
         assertThat(approvals.findByRecommendationId(autoDispatched.getId())).isEmpty();
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED))
                 .anyMatch(e -> autoDispatched.getId().equals(e.getTargetId()));
 
-        assertThatThrownBy(() -> recommendationService.decide(site.getId(), shift.getId(),
-                autoDispatched.getId(), supervisor.getId(), Approval.ApprovalDecision.APPROVED, null, null))
-                .isInstanceOf(RuntimeException.class);
+        assertCannotBeDecided(fixture, autoDispatched);
+        return autoDispatched;
+    }
 
-        // ── Step 7: everything is visible through the real shift-scoped query, not just the ──
-        //    freshly-created rows -- proving the recommendation_id fix didn't just work for
-        //    auto-dispatched rows in isolation, it works for a shift carrying BOTH kinds at once.
-        List<ActionDispatch> allDispatchesForShift = actionDispatches.findByShiftId(shift.getId());
+    /**
+     * Step 7: everything is visible through the real shift-scoped query, not just the
+     * freshly-created rows -- proving the recommendation_id fix didn't just work for
+     * auto-dispatched rows in isolation, it works for a shift carrying BOTH kinds at once.
+     * Also checked through the actual SCRUM-317 dashboard read path (findFirstBySiteIdAndStatus
+     * -> ACTIVE shift -> findByShiftId), the exact path the pre-existing implicit-inner-join
+     * bug would have silently emptied for the auto-dispatched half.
+     */
+    private void bothKindsVisibleTogether(Fixture fixture, Recommendation approved, Recommendation autoDispatched) {
+        List<ActionDispatch> allDispatchesForShift = actionDispatches.findByShiftId(fixture.shift().getId());
         assertThat(allDispatchesForShift.stream().map(ActionDispatch::getRecommendation).map(Recommendation::getId))
                 .contains(approved.getId(), autoDispatched.getId());
         assertThat(allDispatchesForShift.stream().filter(d -> d.getApproval() == null))
@@ -204,11 +257,24 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .allSatisfy(d -> assertThat(d.getRecommendation().getId()).isEqualTo(autoDispatched.getId()));
         assertThat(allDispatchesForShift.stream().map(ActionDispatch::getActionCode)).contains("STOP_WORK");
 
-        // Same data, through the actual SCRUM-317 dashboard read path (findFirstBySiteIdAndStatus
-        // -> ACTIVE shift -> findByShiftId) -- the exact path the pre-existing implicit-inner-join
-        // bug would have silently emptied for the auto-dispatched half.
-        List<ActionDispatch> viaSiteSnapshot = actionStatusSnapshotService.getDispatchesForSite(site.getId());
+        List<ActionDispatch> viaSiteSnapshot = actionStatusSnapshotService.getDispatchesForSite(fixture.site().getId());
         assertThat(viaSiteSnapshot).hasSameSizeAs(allDispatchesForShift);
+    }
+
+    /**
+     * IDs are resolved to local variables before the lambda, rather than calling {@code
+     * .getId()} inside it, so the assertion has exactly one call that can throw -- {@code
+     * decide} itself -- not several.
+     */
+    private void assertCannotBeDecided(Fixture fixture, Recommendation recommendation) {
+        UUID siteId = fixture.site().getId();
+        UUID shiftId = fixture.shift().getId();
+        UUID recommendationId = recommendation.getId();
+        UUID supervisorId = fixture.supervisor().getId();
+
+        assertThatThrownBy(() -> recommendationService.decide(siteId, shiftId, recommendationId, supervisorId,
+                Approval.ApprovalDecision.APPROVED, null, null))
+                .isInstanceOf(RuntimeException.class);
     }
 
     private AppUser person(Site site, Role role) {
