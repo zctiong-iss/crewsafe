@@ -270,3 +270,31 @@ it("stays quiet when a poll returns the same plans", async () => {
 
   expect(mockShowToast).not.toHaveBeenCalled();
 });
+
+it("keeps the shift window to one line beside the status pill", async () => {
+  /*
+   * A window is two dates and two times. At `subtitle` it wrapped to two lines and pushed the
+   * status pill up against the first, so the two read as separate rows rather than one heading.
+   * The single-line rule is what keeps the row height fixed whatever the text setting.
+   */
+  const store = configureStore({
+    reducer: {
+      recommendations: (s = { status: "ready", items: [recommendation("rec-1")], errorKey: null,
+        refreshing: false, decidingId: null, generating: false, lastSeenIds: [] } as unknown) => s,
+      shifts: (s = {
+        shifts: [{ id: "shift-1", startsAt: "2026-08-18T00:00:00Z", endsAt: "2026-08-19T00:00:00Z" }],
+        selectedSiteId: "site-1",
+        workers: [],
+      } as unknown) => s,
+      auth: (s = { user: SUPERVISOR } as unknown) => s,
+    },
+  });
+
+  const { getByLabelText } = await renderScreen(store as ReturnType<typeof buildStore>);
+
+  // The i18n mock renders key and interpolations as one string, so match by prefix.
+  await waitFor(() => expect(getByLabelText(/^shifts.window:/)).toBeTruthy());
+  // Ellipsises rather than reflowing, so the pill never moves and the full window stays on the
+  // accessible label for a screen reader.
+  expect(getByLabelText(/^shifts.window:/).props.numberOfLines).toBe(1);
+});
