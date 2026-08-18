@@ -22,6 +22,8 @@ jest.mock("@/auth/authMode", () => ({ isMockApi: () => mockIsMockApi() }));
 
 import {
   addAssignment,
+  cancelShift,
+  closeShift,
   removeAssignment,
   updateAssignment,
   updateShift,
@@ -87,6 +89,46 @@ describe("live mode", () => {
       `/api/v1/sites/${SITE}/shifts/${SHIFT}/assignments/${ASSIGNMENT}`,
     );
   });
+
+  /*
+   * SCRUM-442. Cancel and close are two separate routes because they mean two different
+   * things, and the request shapes are the difference made visible: cancel carries the reason
+   * that goes into the audit trail, close carries nothing at all.
+   */
+  it("POSTs the reason to cancel", async () => {
+    await cancelShift(SITE, SHIFT, "Lightning risk, crew stood down");
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      url: `/api/v1/sites/${SITE}/shifts/${SHIFT}/cancel`,
+      method: "POST",
+      data: { reason: "Lightning risk, crew stood down" },
+    });
+  });
+
+  it("POSTs close with no body, and does not reach for cancel's route", async () => {
+    await closeShift(SITE, SHIFT);
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.url).toBe(`/api/v1/sites/${SITE}/shifts/${SHIFT}/close`);
+    expect(call.url).not.toContain("cancel");
+    // The server takes no body here. Sending a reason would imply close records one, and it
+    // does not — the two actions are not interchangeable and their payloads should not be.
+    expect(call.data).toBeUndefined();
+  });
+
+  it("surfaces the server's refusal rather than swallowing it", async () => {
+    /*
+     * A 400 from close means the shift has not ended yet, and a 409 means someone else already
+     * ended it. Both are ordinary outcomes the screen has to report, so the endpoint must let
+     * them through — a resolved promise here would show the supervisor a shift that did not
+     * actually close.
+     */
+    const refusal = Object.assign(new Error("shift has not ended"), { status: 400 });
+    mockRequest.mockRejectedValueOnce(refusal);
+
+    await expect(closeShift(SITE, SHIFT)).rejects.toBe(refusal);
+  });
 });
 
 describe("mock mode", () => {
@@ -99,6 +141,8 @@ describe("mock mode", () => {
     await updateShift(SITE, SHIFT, "2026-08-07T01:00:00Z", "2026-08-07T09:00:00Z").catch(() => {});
     await updateAssignment(SITE, SHIFT, ASSIGNMENT, { intensity: "LIGHT" }).catch(() => {});
     await removeAssignment(SITE, SHIFT, ASSIGNMENT).catch(() => {});
+    await cancelShift(SITE, SHIFT, "stood down").catch(() => {});
+    await closeShift(SITE, SHIFT).catch(() => {});
 
     expect(mockRequest).not.toHaveBeenCalled();
   });

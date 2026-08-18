@@ -5,6 +5,12 @@
  * added a scheduler that transitions PLANNED shifts to ACTIVE on its own, so the statuses this
  * pill renders now change without anyone touching the client. A status the map does not handle
  * would be a crash on the shift list rather than a cosmetic miss.
+ *
+ * SCRUM-442 added CANCELLED, which is exactly that crash: the backend has been able to produce
+ * it all along, the union did not admit it, and indexing the presentation map with it returned
+ * undefined for the destructure below to throw on.
+ *
+ * @author Justin Chua
  */
 import { render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
@@ -24,7 +30,7 @@ jest.mock("react-i18next", () => ({
 import ShiftStatusPill from "./ShiftStatusPill";
 
 /** Every status the server can produce — the scheduler moves shifts between them unattended. */
-const ALL_STATUSES: ShiftStatus[] = ["PLANNED", "ACTIVE", "CLOSED"];
+const ALL_STATUSES: ShiftStatus[] = ["PLANNED", "ACTIVE", "CLOSED", "CANCELLED"];
 
 async function surfaceOf(status: ShiftStatus) {
   const { getByText } = await render(<ShiftStatusPill status={status} />);
@@ -49,6 +55,27 @@ it("fills ONLY the ACTIVE pill", async () => {
   expect((await surfaceOf("ACTIVE")).backgroundColor).toBe(mockTheme.colors.success);
   expect((await surfaceOf("PLANNED")).backgroundColor).toBe("transparent");
   expect((await surfaceOf("CLOSED")).backgroundColor).toBe("transparent");
+  // CANCELLED outlines too. It names a shift that did not happen, which is worth telling apart
+  // from CLOSED but is not an active hazard and must not shout as loudly as ACTIVE.
+  expect((await surfaceOf("CANCELLED")).backgroundColor).toBe("transparent");
+});
+
+it("does not let CANCELLED read as just another finished shift", async () => {
+  // CLOSED and CANCELLED are both terminal and both outlined, so the border colour is the only
+  // thing saying the crew never worked it.
+  expect((await surfaceOf("CANCELLED")).borderColor).toBe(mockTheme.colors.danger);
+  expect((await surfaceOf("CLOSED")).borderColor).not.toBe(mockTheme.colors.danger);
+});
+
+it("does not throw on a status this build does not know", async () => {
+  /*
+   * The server owns this enum and may add to it again. Rendering an unrecognised status
+   * neutrally is a degraded answer; throwing takes the shift list with it, and that list is
+   * how a supervisor finds the crew.
+   */
+  const { getByText } = await render(<ShiftStatusPill status={"SOMETHING_NEW" as ShiftStatus} />);
+
+  expect(getByText("shifts.status.SOMETHING_NEW")).toBeTruthy();
 });
 
 it("mutes PLANNED and CLOSED rather than colouring them", async () => {

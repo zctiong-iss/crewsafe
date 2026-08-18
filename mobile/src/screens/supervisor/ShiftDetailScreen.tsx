@@ -31,7 +31,10 @@ import EditShiftWindowSheet from "@/components/shifts/EditShiftWindowSheet";
 import AddWorkerSheet from "@/components/shifts/AddWorkerSheet";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import CancelShiftSheet from "@/components/shifts/CancelShiftSheet";
 import {
+  cancelShift,
+  closeShift,
   addWorkerToShift,
   editAssignment,
   editShiftWindow,
@@ -64,6 +67,8 @@ export default function ShiftDetailScreen() {
   const deletingId = useAppSelector((state) => state.shifts.deletingId);
   const savingAssignmentId = useAppSelector((state) => state.shifts.savingAssignmentId);
   const savingWindow = useAppSelector((state) => state.shifts.savingWindow);
+  const endingId = useAppSelector((state) => state.shifts.endingId);
+  const user = useAppSelector((state) => state.auth.user);
   const staffingId = useAppSelector((state) => state.shifts.staffingId);
 
   /* US-11: how the crew is coping, loaded alongside the shift itself. */
@@ -92,6 +97,31 @@ export default function ShiftDetailScreen() {
       !ended && new Date(shift.startsAt).getTime() <= Date.now();
     return { editable: !ended, running };
   }, [shift]);
+
+  /*
+   * Who may end a shift, and when.
+   *
+   * Supervisors and admins only, following `canDecide` in RecommendationDetailScreen. The
+   * shift screens already sit behind the supervisor tab set, so this is defence in depth
+   * rather than the only guard — and the server refuses either way.
+   */
+  const canEndShift = user?.role === "SUPERVISOR" || user?.role === "ADMIN";
+
+  /*
+   * Both actions are only offered on a shift that has not already ended terminally.
+   * PLANNED and ACTIVE are the two states the server will transition; CLOSED and CANCELLED
+   * are terminal, and offering a control that can only be refused is worse than offering none.
+   */
+  const canEndNow = shift?.status === "PLANNED" || shift?.status === "ACTIVE";
+
+  /*
+   * Close is refused while `endsAt` is still in the future — a shift cannot be closed early;
+   * cancel is the tool for calling one off. Mirrored here so the control can explain itself
+   * rather than spending a request on a 400, but the server stays the authority: a device
+   * clock that disagrees must not be able to talk it into closing early.
+   */
+  const hasEnded = shift ? new Date(shift.endsAt).getTime() <= Date.now() : false;
+  const ending = shift ? endingId === shift.id : false;
 
   /** True while the confirmation dialog is on screen. See `onDelete`. */
   const confirmOpen = useRef(false);
@@ -165,6 +195,52 @@ export default function ShiftDetailScreen() {
       );
     },
     [dispatch, reportFailure, shiftId, siteId, t, workerNameFor],
+  );
+
+  const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
+
+  /*
+   * Cancel goes through a sheet because the reason is required and recorded; close goes
+   * through an Alert because it asks nothing beyond confirmation. The asymmetry is the
+   * server's: cancel takes a @NotBlank reason, close takes no body at all.
+   */
+  const onCloseShift = useCallback(() => {
+    if (!shift) return;
+    Alert.alert(t("shifts.closeTitle"), t("shifts.closeBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("shifts.closeConfirm"),
+        style: "destructive",
+        onPress: async () => {
+          const result = await dispatch(closeShift({ siteId, shiftId }));
+          if (closeShift.fulfilled.match(result)) {
+            dispatch(showToast({ messageKey: "shifts.closedToast", tone: "success" }));
+            return;
+          }
+          /* An Alert, not a banner: the supervisor is mid-way through a deliberate
+             terminal action they entered through an Alert, and the answer to "did that
+             work?" must not be a message that can sit below the fold. */
+          Alert.alert(t("shifts.closeFailedTitle"), t(result.payload?.errorKey ?? "errors.unknown"), [
+            { text: t("common.close") },
+          ]);
+        },
+      },
+    ]);
+  }, [dispatch, shift, shiftId, siteId, t]);
+
+  const onCancelShift = useCallback(
+    async (reason: string) => {
+      const result = await dispatch(cancelShift({ siteId, shiftId, reason }));
+      setCancelSheetOpen(false);
+      if (cancelShift.fulfilled.match(result)) {
+        dispatch(showToast({ messageKey: "shifts.cancelledToast", tone: "success" }));
+        return;
+      }
+      Alert.alert(t("shifts.cancelFailedTitle"), t(result.payload?.errorKey ?? "errors.unknown"), [
+        { text: t("common.close") },
+      ]);
+    },
+    [dispatch, shiftId, siteId, t],
   );
 
   const onDelete = useCallback(() => {
@@ -459,6 +535,40 @@ export default function ShiftDetailScreen() {
           style={styles.block}
         />
 
+        {/*
+          Supervisors only, and only while the shift can still be ended. Close sits above
+          Cancel above Delete, in order of how much they destroy: close records that the
+          shift ran, cancel that it did not, delete erases that it ever existed.
+        */}
+        {canEndShift && canEndNow ? (
+          <>
+            <AppButton
+              title={ending ? t("shifts.ending") : t("shifts.closeButton")}
+              variant="secondary"
+              loading={ending}
+              /* Disabled rather than hidden before the shift ends. A control that appears
+                 from nowhere later teaches nothing, and a supervisor looking for a way to
+                 finish a running shift may reach for Cancel instead — which is permanent
+                 and means something different on the record. */
+              disabled={!hasEnded || ending}
+              onPress={onCloseShift}
+              style={styles.block}
+            />
+            {!hasEnded ? (
+              <AppText variant="caption" tone="secondary" style={styles.block}>
+                {t("shifts.closeNotYetEnded")}
+              </AppText>
+            ) : null}
+
+            <AppButton
+              title={t("shifts.cancelButton")}
+              variant="danger"
+              disabled={ending}
+              onPress={() => setCancelSheetOpen(true)}
+              style={styles.block}
+            />
+          </>
+        ) : null}
         <AppButton
           title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}
           variant="danger"
@@ -467,6 +577,13 @@ export default function ShiftDetailScreen() {
           style={styles.block}
         />
       </ScrollView>
+
+      <CancelShiftSheet
+        visible={cancelSheetOpen}
+        saving={ending}
+        onDismiss={() => setCancelSheetOpen(false)}
+        onConfirm={onCancelShift}
+      />
 
       <EditAssignmentSheet
         visible={editing !== null}

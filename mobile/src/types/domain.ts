@@ -35,8 +35,15 @@ export interface SiteWorker {
 /** Mirrors the `Intensity` schema in `docs/api/shift.yaml`. Fixed set — never free text. */
 export type Intensity = "LIGHT" | "MODERATE" | "HEAVY";
 
-/** Mirrors `ShiftStatus`. Server-controlled: a client cannot set it. */
-export type ShiftStatus = "PLANNED" | "ACTIVE" | "CLOSED";
+/**
+ * Mirrors `ShiftStatus`. Server-controlled: a client cannot set it.
+ *
+ * CANCELLED was missing here until SCRUM-442, while the backend enum and the DB check
+ * constraint carried it from the start and the cancel endpoint had existed for some time. A
+ * cancelled shift therefore already arrived as a status nothing here admitted - and
+ * `ShiftStatusPill` indexes a Record by it, so it did not render oddly, it threw.
+ */
+export type ShiftStatus = "PLANNED" | "ACTIVE" | "CLOSED" | "CANCELLED";
 
 /** Mirrors the `ShiftAssignment` schema in `docs/api/shift.yaml`. */
 export interface ShiftAssignment {

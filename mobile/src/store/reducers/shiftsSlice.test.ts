@@ -14,6 +14,8 @@
  */
 import reducer, {
   addWorkerToShift,
+  cancelShift,
+  closeShift,
   editShiftWindow,
   removeWorkerFromShift,
 } from "./shiftsSlice";
@@ -134,5 +136,72 @@ describe("staffing a shift", () => {
 
     expect(next.shifts[0].assignments).toHaveLength(2);
     expect(next.staffingId).toBeNull();
+  });
+});
+
+/*
+ * Ending a shift (SCRUM-442).
+ *
+ * Cancel and close are terminal and neither can be undone, so the thing worth pinning is that
+ * the store never invents the outcome: the new status is whatever the server returned, and a
+ * refusal leaves the shift exactly as it was. A slice that optimistically set CANCELLED would
+ * show a supervisor a stood-down crew that is in fact still working.
+ */
+describe("ending a shift", () => {
+  it("takes the server's status on a cancel rather than assuming one", () => {
+    const cancelled = shift({ status: "CANCELLED" });
+
+    const next = reducer(loaded(), { type: cancelShift.fulfilled.type, payload: cancelled });
+
+    expect(next.shifts[0].status).toBe("CANCELLED");
+    expect(next.endingId).toBeNull();
+  });
+
+  it("takes the server's status on a close", () => {
+    const closed = shift({ status: "CLOSED" });
+
+    const next = reducer(loaded(), { type: closeShift.fulfilled.type, payload: closed });
+
+    expect(next.shifts[0].status).toBe("CLOSED");
+    expect(next.endingId).toBeNull();
+  });
+
+  it("marks which shift is being ended, so only that row's controls disable", () => {
+    const cancelling = reducer(loaded(), {
+      type: cancelShift.pending.type,
+      meta: { arg: { siteId: "site-1", shiftId: "shift-1", reason: "Lightning" } },
+    });
+    expect(cancelling.endingId).toBe("shift-1");
+
+    const closing = reducer(loaded(), {
+      type: closeShift.pending.type,
+      meta: { arg: { siteId: "site-1", shiftId: "shift-1" } },
+    });
+    expect(closing.endingId).toBe("shift-1");
+  });
+
+  it.each([
+    ["cancel", cancelShift],
+    ["close", closeShift],
+  ])("leaves the shift untouched when %s is refused", (_name, thunk) => {
+    /*
+     * The 400 for closing a shift that has not ended yet lands here, as does the refusal when
+     * someone else ended it first. Either way the shift is still PLANNED on the server, and
+     * showing it as anything else would be a confident wrong answer about a live crew.
+     */
+    const pending = reducer(loaded(), {
+      type: thunk.pending.type,
+      meta: { arg: { siteId: "site-1", shiftId: "shift-1", reason: "x" } },
+    });
+
+    const next = reducer(pending, {
+      type: thunk.rejected.type,
+      payload: { errorKey: "errors.badRequest" },
+    });
+
+    expect(next.shifts[0].status).toBe("PLANNED");
+    // Released, or the supervisor is left with a permanently disabled pair of buttons and no
+    // way to retry after a refusal they can act on.
+    expect(next.endingId).toBeNull();
   });
 });
