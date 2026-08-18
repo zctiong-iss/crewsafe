@@ -25,15 +25,95 @@ jest.mock("@/theme/ThemeProvider", () => ({
 jest.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
+const mockAnimatedIcon = jest.fn((_props: unknown) => null);
+jest.mock("../feedback/AnimatedIcon", () => ({
+  __esModule: true,
+  default: (props: unknown) => mockAnimatedIcon(props),
+}));
+let mockSystemReduceMotion = false;
 jest.mock("@/hooks/useReduceMotion", () => ({
   useReduceMotion: () => false,
-  useSystemReduceMotion: () => false,
+  useSystemReduceMotion: () => mockSystemReduceMotion,
 }));
 
-import LightningBanner from "./LightningBanner";
+import LightningBanner, { resolveLightningPresentation } from "./LightningBanner";
 import type { LightningRisk } from "@/types/domain";
 
 const NOW = new Date("2026-08-13T02:00:00Z").getTime();
+
+describe("lightning presentation resolver", () => {
+  it("keeps stop-work visually urgent and accessible", () => {
+    expect(
+      resolveLightningPresentation({ state: "STOP_WORK", expired: false, remainingSeconds: 120 }),
+    ).toEqual({
+      tone: "danger",
+      icon: "flash",
+      titleKey: "lightning.stopWorkTitle",
+      bodyKey: "lightning.stopWorkBody",
+      motion: "urgent",
+      iconSize: 30,
+      accessibilityRole: "alert",
+      countdownMode: "minutes",
+      filled: true,
+      stopWork: true,
+      titleVariant: "title",
+    });
+  });
+
+  it("preserves advisory seconds countdown and steady motion", () => {
+    expect(
+      resolveLightningPresentation({ state: "ADVISORY", expired: false, remainingSeconds: 59 }),
+    ).toMatchObject({
+      tone: "warning",
+      icon: "warning",
+      motion: "steady",
+      countdownMode: "seconds",
+      accessibilityRole: "text",
+    });
+  });
+
+  it("keeps clear still and expired distinct from all-clear", () => {
+    expect(
+      resolveLightningPresentation({ state: "CLEAR", expired: false, remainingSeconds: 60 }),
+    ).toMatchObject({
+      tone: "success",
+      icon: "checkmark-circle",
+      titleKey: "lightning.clearTitle",
+      motion: "none",
+      countdownMode: "minutes",
+      filled: true,
+      accessibilityRole: "text",
+    });
+
+    expect(
+      resolveLightningPresentation({ state: "STOP_WORK", expired: true, remainingSeconds: 0 }),
+    ).toEqual({
+      tone: "expired",
+      icon: "time-outline",
+      titleKey: "lightning.expiredTitle",
+      bodyKey: "lightning.expiredBody",
+      motion: "none",
+      iconSize: 24,
+      accessibilityRole: "text",
+      countdownMode: null,
+      filled: false,
+      stopWork: false,
+      titleVariant: "subtitle",
+    });
+  });
+});
+
+it("keeps stop-work motion essential when system reduced motion is enabled", async () => {
+  mockSystemReduceMotion = true;
+  mockAnimatedIcon.mockClear();
+
+  await render(<LightningBanner risk={risk({ state: "STOP_WORK" })} locale="en" now={NOW} />);
+
+  expect(mockAnimatedIcon).toHaveBeenCalledWith(
+    expect.objectContaining({ motion: "urgent", essential: true }),
+  );
+  mockSystemReduceMotion = false;
+});
 
 /** Depth-first search of the rendered tree for a node carrying this accessibilityRole. */
 function findByAccessibilityRole(node: unknown, role: string): boolean {
