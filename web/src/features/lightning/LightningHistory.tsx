@@ -51,7 +51,7 @@ function StrikeDistance({ km }: { km: number | null }) {
   );
 }
 
-function RiskCard({ risk }: { risk: LightningRisk | null }) {
+function RiskCard({ risk }: Readonly<{ risk: LightningRisk | null }>) {
   if (risk === null)
     return (
       <div className="lightning-history__risk-card card lightning-history__risk-card--none">
@@ -77,7 +77,7 @@ function RiskCard({ risk }: { risk: LightningRisk | null }) {
   );
 }
 
-export function LightningHistory({ siteId, siteSwitcher }: { siteId: string; siteSwitcher?: ReactNode }) {
+export function LightningHistory({ siteId, siteSwitcher }: Readonly<{ siteId: string; siteSwitcher?: ReactNode }>) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
 
   const refresh = useCallback(
