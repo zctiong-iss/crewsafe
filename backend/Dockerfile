@@ -13,7 +13,7 @@ RUN ./mvnw -B -q clean package -DskipTests
 # Runtime stage - slim JRE only, no build toolchain. Digest-pinned for the same
 # reason as the build stage: a floating tag lets the bundled JRE change on any
 # pull, with no diff to review.
-FROM eclipse-temurin:21-jre-jammy@sha256:3097cbbebb7d490494a98aed2301f284b38f79eba158eef098c6fc8c8af11c23 AS runtime
+FROM eclipse-temurin:21-jre-jammy@sha256:8864e3ba0704b8cbd0b74a0959e6ca285eaaa7c899fa0777757cde8a71e62e2e AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
