@@ -8,6 +8,8 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /** Deterministic, isolated fixtures shared by health-probe tests. */
@@ -61,12 +63,14 @@ final class HealthTestFixtures {
             throw new UnsupportedOperationException("health fixture only");
         }
 
+        private final CountDownLatch neverCountsDown = new CountDownLatch(1);
+
         @Override
         public void checkReachability(int maxAttempts) {
             attempts.incrementAndGet();
             if (block) {
                 try {
-                    Thread.sleep(10_000);
+                    neverCountsDown.await(10, TimeUnit.SECONDS);
                 } catch (InterruptedException exception) {
                     Thread.currentThread().interrupt();
                     throw new RuntimeException("interrupted", exception);
