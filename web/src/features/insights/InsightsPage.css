@@ -48,3 +48,56 @@
 .insights__loading {
   color: var(--ink-secondary);
 }
+
+/* SCRUM-434 forecast panels */
+.insights__panel-note {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-3);
+}
+.fallback__header {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+.fallback__basis--ok {
+  background: var(--status-ok-wash);
+  color: var(--status-ok);
+}
+.fallback__basis--waiting {
+  background: var(--status-waiting-wash);
+  color: var(--status-waiting);
+}
+.fallback__basis--none {
+  background: var(--status-none-wash);
+  color: var(--status-none);
+}
+.fallback__degraded {
+  background: var(--band-high-wash);
+  color: var(--band-high);
+}
+.fallback__trust {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  margin-bottom: var(--space-3);
+}
+.fallback__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+.fallback__facts dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+.fallback__facts dd {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+.fallback__degraded-note {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: var(--space-2) 0;
+}

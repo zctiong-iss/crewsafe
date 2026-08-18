@@ -7,6 +7,8 @@ import { fetchComplianceReport, type ComplianceReport } from "@/api/insights";
 import { ApiError, messageFor } from "@/api/errors";
 import { ComplianceChart } from "./ComplianceChart";
 import { ResponseTimeChart } from "./ResponseTimeChart";
+import { FallbackStatusPanel } from "./FallbackStatusPanel";
+import { ForecastAccuracyPanel } from "./ForecastAccuracyPanel";
 import "./InsightsPage.css";
 
 // Same Load-union shape as HomePage — a total union so every branch is handled and
@@ -116,7 +118,23 @@ export function InsightsPage() {
         />
       )}
 
-      {load.status === "loaded" && <ReportView report={load.report} />}
+      {load.status === "loaded" && siteId !== null && (
+        <>
+          <ReportView report={load.report} />
+
+          {/* SCRUM-434 forecast panels: fallback status is per-site (takes the chosen siteId);
+              model accuracy is global (takes nothing). Both consume already-shipped endpoints. */}
+          <section className="insights__panel" aria-label="Forecast fallback status">
+            <h2 className="insights__panel-title">Is the forecast running degraded?</h2>
+            <FallbackStatusPanel siteId={siteId} />
+          </section>
+
+          <section className="insights__panel" aria-label="Model accuracy">
+            <h2 className="insights__panel-title">How accurate is the forecast model?</h2>
+            <ForecastAccuracyPanel />
+          </section>
+        </>
+      )}
     </AppShell>
   );
 }
