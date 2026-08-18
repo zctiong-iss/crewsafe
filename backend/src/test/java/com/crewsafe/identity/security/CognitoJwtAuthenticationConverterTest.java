@@ -151,16 +151,18 @@ class CognitoJwtAuthenticationConverterTest {
     @Test
     void anUnknownSubIsRejected() {
         when(users.findByCognitoSub(SUB)).thenReturn(Optional.empty());
+        Jwt token = tokenWithJti("jti-5");
 
-        assertThatThrownBy(() -> converter.convert(tokenWithJti("jti-5")))
+        assertThatThrownBy(() -> converter.convert(token))
                 .isInstanceOf(OAuth2AuthenticationException.class);
     }
 
     @Test
     void aDeactivatedUserIsRejectedAndNotAudited() {
         user.setStatus(UserStatus.INACTIVE);
+        Jwt token = tokenWithJti("jti-6");
 
-        assertThatThrownBy(() -> converter.convert(tokenWithJti("jti-6")))
+        assertThatThrownBy(() -> converter.convert(token))
                 .isInstanceOf(OAuth2AuthenticationException.class);
         verify(audit, times(0)).record(any(), any(), any(), any(), any());
     }

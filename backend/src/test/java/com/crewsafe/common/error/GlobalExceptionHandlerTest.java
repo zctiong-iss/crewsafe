@@ -4,6 +4,8 @@ import com.crewsafe.forecast.service.ForecastUnavailableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -68,29 +70,14 @@ class GlobalExceptionHandlerTest {
         assertEquals("Invalid request parameters", response.getBody().message());
     }
 
-    @Test
-    void testHandleIllegalArgument_WorkerNotFound() {
-        IllegalArgumentException ex = new IllegalArgumentException("Worker not found: invalid-id");
-
-        ResponseEntity<ErrorResponse> response = handler.handleIllegalArgument(ex);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNotNull(response.getBody());
-    }
-
-    @Test
-    void testHandleIllegalArgument_ActionDispatchNotFound() {
-        IllegalArgumentException ex = new IllegalArgumentException("ActionDispatch not found: invalid-id");
-
-        ResponseEntity<ErrorResponse> response = handler.handleIllegalArgument(ex);
-
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNotNull(response.getBody());
-    }
-
-    @Test
-    void testHandleIllegalArgument_CanOnlyDispatchFromApprovedDecision() {
-        IllegalArgumentException ex = new IllegalArgumentException("Can only dispatch from an approved decision");
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Worker not found: invalid-id",
+            "ActionDispatch not found: invalid-id",
+            "Can only dispatch from an approved decision"
+    })
+    void testHandleIllegalArgument_ReturnsBadRequest(String message) {
+        IllegalArgumentException ex = new IllegalArgumentException(message);
 
         ResponseEntity<ErrorResponse> response = handler.handleIllegalArgument(ex);
 
