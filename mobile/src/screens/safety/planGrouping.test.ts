@@ -6,6 +6,8 @@
  * "the site's latest plan" would hide a decision awaiting a supervisor on one crew because an
  * unrelated crew got a newer draft. Several cases below use two shifts for exactly that
  * reason — a single-shift fixture passes whether or not the grouping works.
+ *
+ * @author Justin Chua
  */
 import { groupPlansByShift } from "./planGrouping";
 import type { PlanShift } from "@/store/reducers/oversightSlice";
@@ -96,7 +98,7 @@ it("shows the newest plan even when it is SUPERSEDED", () => {
   expect(group.current[0].status).toBe("SUPERSEDED");
 });
 
-/* ── Stop-work is never collapsed ───────────────────────────────────────────────────────── */
+/* ── One stop-work, always shown, never more than one ───────────────────────────────────── */
 
 it("keeps an in-force stop-work visible under a newer plan", () => {
   /*
@@ -126,18 +128,66 @@ it("does not duplicate a stop-work that is itself the newest plan", () => {
   expect(group.current.map((p) => p.id)).toEqual(["stopwork"]);
 });
 
-it("keeps every stop-work when a shift has more than one", () => {
-  // Two stop-works can coexist: the server only ever supersedes PENDING_APPROVAL, so neither
-  // replaces the other. Both are live instructions.
+it("shows only the latest stop-work when a shift has several", () => {
+  /*
+   * The behaviour this file used to assert the opposite of, and the reason it changed.
+   *
+   * The server genuinely never supersedes an AUTO_DISPATCHED, so two of them do coexist — but
+   * while lightning holds the auto-trigger redrafts every two minutes, so a storm leaves
+   * roughly fifteen on one shift. They are not fifteen instructions; they are one, restated.
+   */
   const items = [
+    plan("sw3", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
     plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
     plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
     plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["sw2", "sw1"]);
-  expect(group.earlier.map((p) => p.id)).toEqual(["old"]);
+  expect(group.current.map((p) => p.id)).toEqual(["sw3"]);
+});
+
+it("keeps the superseded stop-works reachable rather than dropping them", () => {
+  // They are the record of instructions that actually went to a crew. Collapsed, not deleted.
+  const items = [
+    plan("sw3", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
+    plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
+    plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
+    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
+  ];
+
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.earlier.map((p) => p.id)).toEqual(["sw2", "sw1", "old"]);
+});
+
+it("still shows the latest stop-work beneath a newer plan awaiting a decision", () => {
+  /*
+   * The half that did NOT change. A stop-work is a live instruction, so one stays in `current`
+   * even when a newer plan exists — collapsing repeats must not become hiding the last one.
+   */
+  const items = [
+    plan("newer", "shift-a", "2026-08-18T15:40:00Z"),
+    plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
+    plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
+  ];
+
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.current.map((p) => p.id)).toEqual(["newer", "sw2"]);
+  expect(group.earlier.map((p) => p.id)).toEqual(["sw1"]);
+});
+
+it("keeps one stop-work per shift, because each is a different crew", () => {
+  // Collapsing across the site would show one stop-work while a second crew was also stood
+  // down — on the screen a manager uses to see who is affected.
+  const items = [
+    plan("a2", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
+    plan("a1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
+    plan("b2", "shift-b", "2026-08-18T15:28:00Z", "AUTO_DISPATCHED"),
+    plan("b1", "shift-b", "2026-08-18T15:15:00Z", "AUTO_DISPATCHED"),
+  ];
+
+  const groups = groupPlansByShift(items, SHIFTS);
+  expect(groups.map((g) => g.current.map((p) => p.id))).toEqual([["a2"], ["b2"]]);
 });
 
 /* ── Edges ─────────────────────────────────────────────────────────────────────────────── */

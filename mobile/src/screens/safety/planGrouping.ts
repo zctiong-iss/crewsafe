@@ -13,15 +13,26 @@
  * Grouping by shift first means nothing can be hidden by activity somewhere a manager was not
  * looking.
  *
- * ── WHY A STOP-WORK IS NEVER COLLAPSED ──────────────────────────────────────────────────
+ * ── A STOP-WORK IS ALWAYS SHOWN, BUT ONLY THE LATEST ONE ────────────────────────────────
  * An `AUTO_DISPATCHED` plan was sent to a crew without approval (SCRUM-440). It is a live
- * instruction, not a record of one — hiding it because something newer exists would take the
- * most severe thing the system can show off the screen built to oversee it.
+ * instruction, not a record of one, so one is always in `current` — hiding it because
+ * something newer exists would take the most severe thing the system can show off the screen
+ * built to oversee it.
  *
- * Worth knowing, because it is the obvious next question: the server never supersedes one
- * either. `AgentDraftService.supersedeOpenRecommendation` selects only `PENDING_APPROVAL`, so
- * no other status can be superseded by any path. This is a display rule reinforcing an
- * invariant that already holds, not a client-side patch over a server-side gap.
+ * What changed: only the NEWEST stop-work per shift stays there. This file originally kept
+ * every one, on the reasoning that the server never supersedes an `AUTO_DISPATCHED` —
+ * `AgentDraftService.supersedeOpenRecommendation` selects only `PENDING_APPROVAL` — so two
+ * live instructions could genuinely coexist.
+ *
+ * That reasoning was right about the server and wrong about the crew. While lightning holds,
+ * the auto-trigger redrafts every two minutes and each run writes another dispatch, so a
+ * thirty-minute storm leaves roughly fifteen of them on one shift. They are not fifteen
+ * instructions — they are one instruction, restated. Listing them all pushed every other
+ * site's plans off the screen and said the same thing fifteen times, which is how a manager
+ * learns to scroll past the row that matters.
+ *
+ * Nothing is discarded: the older dispatches move to `earlier`, behind the same disclosure as
+ * the rest of a shift's history.
  *
  * @author Justin Chua
  */
@@ -67,21 +78,32 @@ export function groupPlansByShift(
     const [newest, ...rest] = plans;
 
     /*
-     * Any stop-work still in force, other than the newest plan itself.
+     * The one stop-work worth surfacing beneath the newest plan.
      *
-     * Pulled out of `rest` rather than filtered from the whole list, so the newest plan is
-     * never duplicated when it happens to be the stop-work.
+     * `find` rather than `filter`, and that single word is the whole behaviour change: `items`
+     * is newest-first, so the first match is the latest dispatch, and the repeats behind it
+     * fall through to `earlier`.
+     *
+     * Skipped entirely when the newest plan is itself the stop-work — otherwise the same row
+     * would appear twice in `current`.
      */
-    const dispatched = rest.filter((plan) => plan.status === "AUTO_DISPATCHED");
-    const dispatchedIds = new Set(dispatched.map((plan) => plan.id));
+    const latestDispatched =
+      newest.status === "AUTO_DISPATCHED"
+        ? undefined
+        : rest.find((plan) => plan.status === "AUTO_DISPATCHED");
+
+    const current = latestDispatched ? [newest, latestDispatched] : [newest];
+    const currentIds = new Set(current.map((plan) => plan.id));
 
     return {
       shiftId,
       // A plan can reference a shift the fetch did not return — a shift moved site, or was
       // deleted after its plans were drafted. The group still renders; it just has no window.
       shift: shifts.find((shift) => shift.id === shiftId) ?? null,
-      current: [newest, ...dispatched],
-      earlier: rest.filter((plan) => !dispatchedIds.has(plan.id)),
+      current,
+      // Everything not on show, including the superseded stop-works. Derived from `current`
+      // rather than from a separate id set, so the two cannot disagree about what is hidden.
+      earlier: rest.filter((plan) => !currentIds.has(plan.id)),
     };
   });
 }
