@@ -101,7 +101,12 @@ workflow_policy_guard() {
   rg -q -F -- "$DOCKER_BUILD_CMD" "$path" || return 1
   rg -q -F -- 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' "$path" || return 1
   rg -q -F -- 'severity: HIGH,CRITICAL' "$path" || return 1
-  rg -q -F -- "exit-code: '0'" "$path" || return 1
+  rg -q -F -- "exit-code: '1'" "$path" || return 1
+  ! rg -q -F -- "exit-code: '0'" "$path" || return 1
+  rg -q -F -- '.github/scripts/security/validate-trivy-exceptions.sh' "$path" || return 1
+  rg -q -F -- 'if: always()' "$path" || return 1
+  rg -q -F -- 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' "$path" || return 1
+  rg -q -F -- 'retention-days: 7' "$path" || return 1
   rg -q -F -- "$DOCKER_PUSH_CMD" "$path" || return 1
   # SCRUM-270 US1: the pushed image's digest MUST be captured, validated,
   # and surfaced as job outputs -- FR-001/FR-002.
@@ -151,6 +156,11 @@ redeploy_policy_guard() {
   rg -q -F -- 'git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA"' "$path" || return 1
   rg -q -F -- 'aws ecr describe-images' "$path" || return 1
   rg -q -F -- 'imageTag="$IMAGE_TAG"' "$path" || return 1
+  rg -q -F -- 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' "$path" || return 1
+  rg -q -F -- 'image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"' "$path" || return 1
+  rg -q -F -- 'trivy-backend-redeploy-report.json' "$path" || return 1
+  rg -q -F -- 'Scan existing backend image' "$path" || return 1
+  rg -q -F -- 'Upload existing backend Trivy report' "$path" || return 1
   rg -q -F -- 'crewsafe-shared-dev-backend-deploy' "$path" || return 1
   rg -q -F -- 'deploy-backend-staging.sh' "$path" || return 1
   ! rg -q -F -- 'redeploy_image_uri:' "$path" || return 1
@@ -162,7 +172,16 @@ redeploy_policy_guard() {
   ' "$path")"
   [[ "$block" == *'needs: build-test'* ]] || return 1
   [[ "$block" == *'ecr:DescribeImages'* || "$block" == *'describe-images'* ]] || return 1
+  [[ "$block" == *"exit-code: '1'"* ]] || return 1
+  [[ "$block" == *'if: always()'* ]] || return 1
   [[ "$block" != *"$DOCKER_BUILD_CMD"* && "$block" != *"$DOCKER_PUSH_CMD"* ]] || return 1
+  local resolve_line scan_line summary_line upload_line
+  resolve_line="$(rg -n -F -- 'aws ecr describe-images' "$path" | tail -1 | cut -d: -f1)"
+  scan_line="$(rg -n -F -- 'Scan existing backend image' "$path" | tail -1 | cut -d: -f1)"
+  summary_line="$(rg -n -F -- 'Summarize existing backend image scan' "$path" | tail -1 | cut -d: -f1)"
+  upload_line="$(rg -n -F -- 'Upload existing backend Trivy report' "$path" | tail -1 | cut -d: -f1)"
+  [[ -n "$resolve_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
+  [[ "$resolve_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
   return 0
 }
 
@@ -274,7 +293,7 @@ contains_in "publication has OIDC permission" "$WORKFLOW" 'id-token: write'
 contains_in "manual redeploy input exists" "$WORKFLOW" 'redeploy:'
 contains_in "redeploy resolves an existing image job" "$WORKFLOW" 'resolve-existing-image:'
 
-# --- US1 AS1/AS2 (T013): report-only scan step present, correctly configured
+# --- US1 AS1/AS2: blocking scan step present, correctly configured
 contains_in "publication builds backend image" "$WORKFLOW" "$DOCKER_BUILD_CMD"
 contains_in "publication scans image" "$WORKFLOW" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25'
 contains_in "scan uses HIGH,CRITICAL severity" "$WORKFLOW" 'severity: HIGH,CRITICAL'
@@ -282,8 +301,8 @@ contains_in "scan is vulnerability-only" "$WORKFLOW" 'scanners: vuln'
 contains_in "scan emits a JSON report" "$WORKFLOW" 'format: json'
 contains_in "scan writes the JSON report" "$WORKFLOW" 'output: trivy-backend-report.json'
 contains_in "scan does not ignore unfixed findings" "$WORKFLOW" 'ignore-unfixed: false'
-contains_in "scan is report-only (FR-001)" "$WORKFLOW" "exit-code: '0'"
-not_contains_in "scan is not blocking yet (FR-001a is a separate follow-up)" "$WORKFLOW" "exit-code: '1'"
+contains_in "scan is blocking (FR-008)" "$WORKFLOW" "exit-code: '1'"
+not_contains_in "scan is not report-only" "$WORKFLOW" "exit-code: '0'"
 contains_in "publication pushes image" "$WORKFLOW" "$DOCKER_PUSH_CMD"
 not_contains_in "workflow has no static AWS access key" "$WORKFLOW" 'AWS_ACCESS_KEY_ID'
 not_contains_in "workflow has no static AWS secret key" "$WORKFLOW" 'AWS_SECRET_ACCESS_KEY'
@@ -331,6 +350,10 @@ contains_in "scan summary uses the shared redacted helper" "$WORKFLOW" \
   '.github/scripts/security/summarize-trivy-report.sh'
 contains_in "scan summary writes to the GitHub job summary" "$WORKFLOW" \
   'GITHUB_STEP_SUMMARY'
+contains_in "scan summary runs after a failed scan" "$WORKFLOW" \
+  'if: always()'
+contains_in "backend report is uploaded" "$WORKFLOW" \
+  'name: trivy-backend-report'
 assert_order "scan precedes summary" "$WORKFLOW" \
   "$TRIVY_ACTION" 'Summarize backend image scan'
 

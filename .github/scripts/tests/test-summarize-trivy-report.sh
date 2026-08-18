@@ -22,12 +22,14 @@ expect() {
 
 report="$WORK/report.json"
 summary="$WORK/summary.md"
+exceptions="$WORK/active.trivyignore"
 
 printf 'test-summarize-trivy-report\n'
 cat >"$report" <<'JSON'
-{"Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-2026-10001","Severity":"HIGH","PkgName":"unsafe|package<script>","InstalledVersion":"1.0.0","FixedVersion":"1.0.1","Description":"unsafe-description-content"}]}]}
+{"ArtifactName":"crewsafe/ml-service:test","ArtifactType":"container_image","Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-2026-10001","Severity":"HIGH","PkgName":"unsafe|package<script>","InstalledVersion":"1.0.0","FixedVersion":"1.0.1","Description":"unsafe-description-content"}]}]}
 JSON
-expect 0 'summarizes valid report' "$SCRIPT" "$report" "$summary" 'crewsafe/ml-service:test' 'abc123'
+printf '%s\n' 'CVE-2026-10001' >"$exceptions"
+expect 0 'summarizes valid report' "$SCRIPT" "$report" "$summary" 'crewsafe/ml-service:test' 'abc123' 'ML-service container vulnerability scan' "$exceptions"
 content="$(cat "$summary" 2>/dev/null || true)"
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'CVE-2026-10001'* ]]; then pass 'summary contains advisory ID'; else fail 'summary contains advisory ID'; fi
@@ -43,8 +45,22 @@ if [[ "$content" != *'<script>'* ]]; then
 else
   fail 'summary sanitizes unsafe package metadata'
 fi
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ "$content" == *'Decision: BLOCKED'* ]]; then
+  pass 'summary records blocked decision'
+else
+  fail 'summary records blocked decision'
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ "$content" == *'Active exception identifiers supplied to scan:'* && "$content" == *'CVE-2026-10001'* ]]; then
+  pass 'summary records active exception identifiers'
+else
+  fail 'summary records active exception identifiers'
+fi
 
-expect 0 'accepts the backend summary title' "$SCRIPT" "$report" "$summary" 'backend/image:sha' 'def456' 'Backend image vulnerability scan'
+sed 's#crewsafe/ml-service:test#backend/image:sha#g' "$report" >"$report.next"
+mv "$report.next" "$report"
+expect 0 'accepts the backend summary title' "$SCRIPT" "$report" "$summary" 'backend/image:sha' 'def456' 'Backend image vulnerability scan' "$exceptions"
 content="$(cat "$summary" 2>/dev/null || true)"
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'## Backend image vulnerability scan'* ]]; then
@@ -54,6 +70,34 @@ else
 fi
 
 expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" 'Untrusted title'
+
+sed 's#backend/image:sha#another/image:sha#g' "$report" >"$report.next"
+mv "$report.next" "$report"
+expect 1 'rejects an image mismatch' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION"
+
+sed 's#another/image:sha#backend/image:sha#g; s#container_image#filesystem#g' "$report" >"$report.next"
+mv "$report.next" "$report"
+expect 1 'rejects an artifact type mismatch' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION"
+
+printf '{"ArtifactType":"container_image","Results":[]}\n' >"$report"
+expect 1 'rejects missing artifact name' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION"
+
+printf '{"ArtifactName":"backend/image:sha","ArtifactType":"container_image"}\n' >"$report"
+expect 1 'rejects missing results array' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION"
+
+printf '{"ArtifactName":"backend/image:sha","ArtifactType":"container_image","Results":[]}\n' >"$report"
+expect 0 'accepts clean report' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION"
+content="$(cat "$summary" 2>/dev/null || true)"
+TESTS_RUN=$((TESTS_RUN + 1))
+if [[ "$content" == *'HIGH/CRITICAL findings:'* && "$content" == *'Decision: APPROVED'* ]]; then
+  pass 'clean report records approved decision'
+else
+  fail 'clean report records approved decision'
+fi
+
+printf '{"ArtifactName":"backend/image:sha","ArtifactType":"container_image","Results":[]}\n' >"$report"
+printf 'not-an-advisory\n' >"$exceptions"
+expect 1 'rejects unsafe active exception identifier' "$SCRIPT" "$report" "$summary" 'backend/image:sha' "$TEST_REVISION" 'Backend image vulnerability scan' "$exceptions"
 
 printf '{not-json}\n' >"$report"
 expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION"

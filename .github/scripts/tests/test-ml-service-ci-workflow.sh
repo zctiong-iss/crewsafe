@@ -29,6 +29,16 @@ check() {
 contains() { local file="$1" needle="$2"; grep -q -F -- "$needle" "$file"; }
 not_contains() { local file="$1" needle="$2"; ! grep -q -F -- "$needle" "$file"; }
 
+path_filter_count_at_least_two() {
+  local file="$1" needle="$2"
+  awk -v needle="$needle" '
+    /^    paths:$/ { in_paths = 1; next }
+    in_paths && /^  [A-Za-z0-9_-]+:$/ { in_paths = 0 }
+    in_paths && index($0, needle) { count++ }
+    END { exit !(count >= 2) }
+  ' "$file"
+}
+
 ordered() {
   local file="$1"
   shift
@@ -64,6 +74,9 @@ workflow_policy_guard() {
   contains "$path" 'branches: [main]' || return 1
   contains "$path" '"ml-service/**"' || return 1
   contains "$path" '".github/workflows/ml-service-ci.yml"' || return 1
+  contains "$path" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  path_filter_count_at_least_two "$path" '.github/scripts/deploy/deploy-ml-service-staging.sh' || return 1
+  contains "$path" '.github/scripts/tests/test-validate-trivy-exceptions.sh' || return 1
   contains "$path" 'contents: read' || return 1
   contains "$path" "group: ml-service-ci-\${{ github.workflow }}-\${{ github.ref }}" || return 1
   contains "$path" 'cancel-in-progress: true' || return 1
@@ -102,7 +115,7 @@ workflow_policy_guard() {
   contains "$verify_job" 'python -m pytest test_forecast.py' || return 1
   contains "$verify_job" "docker build -t \"\$IMAGE\" ml-service" || return 1
   contains "$verify_job" ".github/scripts/ci/run-ml-service-smoke.sh \"\$IMAGE\"" || return 1
-  contains "$verify_job" '.github/scripts/security/validate-ml-service-trivy-exceptions.sh' || return 1
+  contains "$verify_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
   contains "$verify_job" '.github/scripts/security/filter-trivyignore.sh' || return 1
   contains "$verify_job" '.github/scripts/security/summarize-trivy-report.sh' || return 1
   contains "$verify_job" "image-ref: \"\${{ env.IMAGE }}\"" || return 1
@@ -111,14 +124,16 @@ workflow_policy_guard() {
   not_contains "$verify_job" 'ignorefile: .trivyignore-active-ml-service' || return 1
   contains "$verify_job" 'scanners: vuln' || return 1
   contains "$verify_job" 'severity: HIGH,CRITICAL' || return 1
-  contains "$verify_job" "exit-code: '0'" || return 1
-  not_contains "$verify_job" "exit-code: '1'" || return 1
+  contains "$verify_job" "exit-code: '1'" || return 1
+  not_contains "$verify_job" "exit-code: '0'" || return 1
+  contains "$verify_job" 'if: always()' || return 1
   contains "$verify_job" 'if-no-files-found: error' || return 1
   contains "$verify_job" 'retention-days: 7' || return 1
   contains "$verify_job" 'Run ML-service CI self-tests' || return 1
   contains "$verify_job" 'test-ml-service-ci-workflow.sh' || return 1
   contains "$verify_job" 'test-ml-service-smoke.sh' || return 1
   contains "$verify_job" 'test-validate-ml-service-trivy-exceptions.sh' || return 1
+  contains "$verify_job" 'test-validate-trivy-exceptions.sh' || return 1
   contains "$verify_job" 'test-summarize-trivy-report.sh' || return 1
   not_contains "$verify_job" "$soft_fail" || return 1
   not_contains "$verify_job" 'configure-aws-credentials' || return 1
@@ -158,6 +173,12 @@ workflow_policy_guard() {
   contains "$publish_job" 'aws ecr get-login-password' || return 1
   contains "$publish_job" 'docker login' || return 1
   contains "$publish_job" 'docker push "$REPO:$SHA"' || return 1
+  contains "$publish_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$publish_job" "exit-code: '1'" || return 1
+  not_contains "$publish_job" "exit-code: '0'" || return 1
+  contains "$publish_job" 'if: always()' || return 1
+  contains "$publish_job" 'name: trivy-ml-service-publish-report' || return 1
+  contains "$publish_job" 'retention-days: 7' || return 1
   contains "$publish_job" 'image_digest=' || return 1
   contains "$publish_job" '!inputs.redeploy' || return 1
   not_contains "$publish_job" "$static_key_id" || return 1
@@ -180,17 +201,28 @@ workflow_policy_guard() {
   contains "$resolve_job" 'configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' || return 1
   contains "$resolve_job" 'mask-aws-account-id: true' || return 1
   contains "$resolve_job" 'aws ecr describe-images' || return 1
+  contains "$resolve_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$resolve_job" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' || return 1
+  contains "$resolve_job" 'image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"' || return 1
+  contains "$resolve_job" 'trivy-ml-service-redeploy-report.json' || return 1
+  contains "$resolve_job" 'Scan existing ml-service image' || return 1
+  contains "$resolve_job" 'Upload existing ml-service Trivy report' || return 1
+  contains "$resolve_job" 'if: always()' || return 1
   not_contains "$resolve_job" 'docker build' || return 1
   not_contains "$resolve_job" 'docker push' || return 1
   not_contains "$resolve_job" "$static_key_id" || return 1
   not_contains "$resolve_job" "$static_secret_key" || return 1
   not_contains "$resolve_job" "$soft_fail" || return 1
 
-  # deploy-staging (SCRUM-373 follow-up) only registers the resolved digest
-  # against the shared backend task family and force-deploys — it never
-  # touches the backend container's own image field (deploy-ml-service-staging.sh
-  # owns that guarantee; this job just wires the resolved outputs to it).
-  contains "$deploy_job" 'needs: resolve-existing-image' || return 1
+  # deploy-staging (SCRUM-373 follow-up / SCRUM-455) accepts either a newly
+  # published, gated image or a gated existing-image redeploy. It registers
+  # the selected immutable digest against the shared backend task family and
+  # force-deploys — it never touches the backend container's own image field
+  # (deploy-ml-service-staging.sh owns that guarantee).
+  contains "$deploy_job" 'needs: [publish-image, resolve-existing-image]' || return 1
+  contains "$deploy_job" "needs.publish-image.result == 'success' || needs.resolve-existing-image.result == 'success'" || return 1
+  contains "$deploy_job" 'IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag || needs.resolve-existing-image.outputs.image_tag }}' || return 1
+  contains "$deploy_job" 'IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest || needs.resolve-existing-image.outputs.image_digest }}' || return 1
   contains "$deploy_job" 'id-token: write' || return 1
   contains "$deploy_job" 'CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN' || return 1
   contains "$deploy_job" 'CREWSAFE_BACKEND_ECS_CLUSTER_NAME' || return 1
@@ -204,6 +236,14 @@ workflow_policy_guard() {
   not_contains "$deploy_job" "$static_key_id" || return 1
   not_contains "$deploy_job" "$static_secret_key" || return 1
   not_contains "$deploy_job" "$soft_fail" || return 1
+
+  local resolve_line scan_line summary_line upload_line
+  resolve_line="$(awk 'index($0, "aws ecr describe-images") { print NR; exit }' "$resolve_job")"
+  scan_line="$(awk 'index($0, "Scan existing ml-service image") { print NR; exit }' "$resolve_job")"
+  summary_line="$(awk 'index($0, "Summarize existing ml-service image scan") { print NR; exit }' "$resolve_job")"
+  upload_line="$(awk 'index($0, "Upload existing ml-service Trivy report") { print NR; exit }' "$resolve_job")"
+  [[ -n "$resolve_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
+  [[ "$resolve_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
 
   return 0
 }
@@ -221,11 +261,12 @@ check 'workflow policy contract holds' workflow_policy_guard "$WORKFLOW"
 if [[ -f "$WORKFLOW" ]]; then
   for mutation in \
     'scanners: vuln|scanners: secret' \
-    "exit-code: '0'|exit-code: '1'" \
+    "exit-code: '1'|exit-code: '0'" \
     'if-no-files-found: error|if-no-files-found: ignore' \
     'contents: read|contents: write' \
     '"ml-service/**"|"web/**"' \
     'needs: verify-ml-service|needs: []' \
+    'needs: [publish-image, resolve-existing-image]|needs: resolve-existing-image' \
     'configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c|configure-aws-credentials@0000000000000000000000000000000000000000'; do
     pattern="${mutation%%|*}"
     replacement="${mutation#*|}"

@@ -500,6 +500,18 @@ jobs:
       - name: Backend image workflow self-tests
         run: .github/scripts/tests/test-backend-image-workflow.sh
 
+      # SCRUM-455: keep the ML-service blocking publish/redeploy contract and
+      # shared report projection under the repository-wide guard as well as
+      # the ML-service workflow's own self-test path.
+      - name: ML-service image workflow self-tests
+        run: .github/scripts/tests/test-ml-service-ci-workflow.sh
+
+      - name: Trivy report summary self-tests
+        run: .github/scripts/tests/test-summarize-trivy-report.sh
+
+      - name: ML-service Trivy compatibility-validator self-tests
+        run: .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
+
       # SCRUM-270: extends the same job with the new digest-capture/
       # contract-validation assertions (in the file above) and this new
       # runbook content guard.
@@ -514,6 +526,9 @@ jobs:
 
       - name: Trivy ignorefile filter self-tests
         run: .github/scripts/tests/test-filter-trivyignore.sh
+
+      - name: Trivy exception validator self-tests
+        run: .github/scripts/tests/test-validate-trivy-exceptions.sh
 
       - name: SCA exception applier self-tests
         run: .github/scripts/tests/test-apply-sca-exceptions.sh

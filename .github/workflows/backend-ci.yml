@@ -9,6 +9,11 @@ on:
       - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/scripts/security/validate-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-backend-image-workflow.sh"
+      - ".github/scripts/tests/test-filter-trivyignore.sh"
+      - ".github/scripts/tests/test-summarize-trivy-report.sh"
+      - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/security/backend-image.trivyignore.source"
   push:
     branches: [main]
@@ -18,6 +23,11 @@ on:
       - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
+      - ".github/scripts/security/validate-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-backend-image-workflow.sh"
+      - ".github/scripts/tests/test-filter-trivyignore.sh"
+      - ".github/scripts/tests/test-summarize-trivy-report.sh"
+      - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/security/backend-image.trivyignore.source"
   workflow_dispatch:
     inputs:
@@ -102,6 +112,8 @@ jobs:
           REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
           SHA: ${{ github.sha }}
         run: docker build -t "$REPO:$SHA" backend
+      - name: Validate backend Trivy exceptions
+        run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/backend-image.trivyignore.source
       # SCRUM-269 (User Story 3): filters the reviewed source ignorefile down
       # to only its non-expired entries. trivyignores requires a path
       # RELATIVE TO THE REPOSITORY (verified against the scan action's own
@@ -113,14 +125,9 @@ jobs:
           .github/scripts/security/filter-trivyignore.sh \
             .github/security/backend-image.trivyignore.source \
             .trivyignore-active-backend
-      # SCRUM-269 (User Story 1): report-only for now (exit-code: '0').
-      # backend-ci.yml has never scanned this image before, so its baseline
-      # is unknown -- an immediate hard fail risks blocking every backend PR
-      # on pre-existing, untriaged findings, the same failure mode the
-      # dependency-risk gate's New Code scoping avoids for a known backlog.
-      # Flipping to blocking (matching web-ci.yml's threshold) is a
-      # deliberate, separate follow-up (FR-001a) once this report-only
-      # period's findings have been triaged -- not part of this change.
+      # SCRUM-455: unapproved HIGH/CRITICAL findings block publication. The
+      # summary and artifact still run after a failed scan so the reviewer has
+      # redacted evidence without granting the job a soft-fail path.
       - name: Scan backend image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -130,12 +137,22 @@ jobs:
           output: trivy-backend-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '0'
+          exit-code: '1'
           trivyignores: .trivyignore-active-backend
       - name: Summarize backend image scan
+        if: always()
         env:
           IMAGE: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "Backend image vulnerability scan"
+          EXCEPTIONS: .trivyignore-active-backend
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "Backend image vulnerability scan" "$EXCEPTIONS"
+      - name: Upload backend Trivy report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: trivy-backend-report
+          path: trivy-backend-report.json
+          if-no-files-found: error
+          retention-days: 7
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ECR_PUSH_ROLE_ARN }}
@@ -182,7 +199,8 @@ jobs:
   # correction. ECR intentionally rejects a second push of that immutable SHA
   # tag. This branch accepts a full approved commit SHA, proves it is reachable from the
   # selected main ref, then resolves its image using the existing deploy role.
-  # It accepts no repository, image URI, or digest and never builds/pushes.
+  # It accepts no repository, image URI, or digest, never builds/pushes, and
+  # must scan the resolved digest before its job can feed deployment.
   resolve-existing-image:
     name: Resolve existing image
     needs: build-test
@@ -192,6 +210,8 @@ jobs:
       inputs.redeploy && !inputs.publish &&
       vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN != '' && vars.CREWSAFE_ECR_REPOSITORY_URL != ''
     runs-on: ubuntu-latest
+    env:
+      REPO: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}
     permissions:
       contents: read
       id-token: write
@@ -215,6 +235,10 @@ jobs:
           [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "redeploy_image_tag must be a 40-character lowercase commit SHA" >&2; exit 1; }
           git cat-file -e "$IMAGE_TAG^{commit}" || { echo "redeploy_image_tag is not a repository commit" >&2; exit 1; }
           git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA" || { echo "redeploy_image_tag is not reachable from selected main" >&2; exit 1; }
+      - name: Validate backend Trivy exceptions for redeploy
+        run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/backend-image.trivyignore.source
+      - name: Prepare active backend Trivy ignorefile for redeploy
+        run: .github/scripts/security/filter-trivyignore.sh .github/security/backend-image.trivyignore.source .trivyignore-active-backend
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_BACKEND_DEPLOY_ROLE_ARN }}
@@ -238,8 +262,37 @@ jobs:
             echo '## Existing backend image resolved'
             echo "- Approved commit tag: \`$IMAGE_TAG\`"
             echo "- Content digest: \`$image_digest\`"
-            echo '- Result: ready for deployment without publication'
+            echo '- Result: resolved candidate pending vulnerability gate'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Log in to ECR for backend redeploy scan
+        run: |
+          aws ecr get-login-password --region ap-southeast-1 \
+            | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}"
+      - name: Scan existing backend image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          scanners: vuln
+          format: json
+          output: trivy-backend-redeploy-report.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          trivyignores: .trivyignore-active-backend
+      - name: Summarize existing backend image scan
+        if: always()
+        env:
+          IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          EXCEPTIONS: .trivyignore-active-backend
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${{ inputs.redeploy_image_tag }}" "Backend image vulnerability scan" "$EXCEPTIONS"
+      - name: Upload existing backend Trivy report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: trivy-backend-redeploy-report
+          path: trivy-backend-redeploy-report.json
+          if-no-files-found: error
+          retention-days: 7
 
   deploy-staging:
     name: Deploy staging backend
