@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * REST controller for supervisor call sessions (SCRUM-132/201).
@@ -156,7 +155,7 @@ public class SupervisorCallController {
 
         List<SupervisorCallResponse> responses = history.stream()
             .map(SupervisorCallResponse::from)
-            .collect(Collectors.toList());
+            .toList();
 
         return ResponseEntity.ok(responses);
     }
@@ -180,7 +179,7 @@ public class SupervisorCallController {
 
         List<SupervisorCallResponse> responses = pending.stream()
             .map(SupervisorCallResponse::from)
-            .collect(Collectors.toList());
+            .toList();
 
         return ResponseEntity.ok(responses);
     }

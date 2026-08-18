@@ -16,6 +16,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Maintains a bounded, status-only observation of NEA reachability. */
 @Component
@@ -27,8 +28,9 @@ public class NeaHealthMonitor implements AutoCloseable {
     private final Clock clock;
     private final ExecutorService checkExecutor = Executors.newSingleThreadExecutor(
             daemonThreadFactory("crewsafe-nea-health-check"));
-    private volatile ScheduledExecutorService scheduler;
-    private volatile Observation observation = new Observation(false, null);
+    private final AtomicReference<ScheduledExecutorService> scheduler = new AtomicReference<>();
+    private final AtomicReference<Observation> observation =
+            new AtomicReference<>(new Observation(false, null));
 
     public NeaHealthMonitor(NeaWeatherClient client, NeaHealthProperties properties, Clock clock) {
         this.client = client;
@@ -40,7 +42,7 @@ public class NeaHealthMonitor implements AutoCloseable {
     void start() {
         ScheduledExecutorService newScheduler = Executors.newSingleThreadScheduledExecutor(
                 daemonThreadFactory("crewsafe-nea-health-scheduler"));
-        scheduler = newScheduler;
+        scheduler.set(newScheduler);
         newScheduler.scheduleWithFixedDelay(this::checkSafely, 0,
                 properties.getObservationInterval().toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -51,7 +53,7 @@ public class NeaHealthMonitor implements AutoCloseable {
                 () -> client.checkReachability(properties.getMaxAttempts()));
         try {
             future.get(properties.getObservationTimeout().toMillis(), TimeUnit.MILLISECONDS);
-            observation = new Observation(true, clock.instant());
+            observation.set(new Observation(true, clock.instant()));
         } catch (TimeoutException exception) {
             future.cancel(true);
             recordFailure("timeout");
@@ -67,7 +69,7 @@ public class NeaHealthMonitor implements AutoCloseable {
     }
 
     public boolean isHealthy() {
-        Observation current = observation;
+        Observation current = observation.get();
         return current.up()
                 && current.checkedAt() != null
                 && !clock.instant().isAfter(current.checkedAt()
@@ -89,14 +91,14 @@ public class NeaHealthMonitor implements AutoCloseable {
     }
 
     private void recordFailure(String reason) {
-        observation = new Observation(false, clock.instant());
+        observation.set(new Observation(false, clock.instant()));
         log.warn("nea_health_check_failed reason={}", reason);
     }
 
     @PreDestroy
     @Override
     public void close() {
-        ScheduledExecutorService currentScheduler = scheduler;
+        ScheduledExecutorService currentScheduler = scheduler.get();
         if (currentScheduler != null) {
             currentScheduler.shutdownNow();
         }

@@ -60,12 +60,13 @@ class AuditEventAppendOnlyTest extends AbstractIntegrationTest {
         assertThat(stored.getCorrelationId()).isEqualTo(correlationId);
         assertThat(stored.getOccurredAt()).isNotNull();
 
+        UUID storedId = stored.getId();
         assertThatThrownBy(() -> jdbc.update(
-                "UPDATE audit_event SET detail = ? WHERE id = ?", "tampered", stored.getId()))
+                "UPDATE audit_event SET detail = ? WHERE id = ?", "tampered", storedId))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("audit_event is append-only: UPDATE is forbidden");
         assertThatThrownBy(() -> jdbc.update(
-                "DELETE FROM audit_event WHERE id = ?", stored.getId()))
+                "DELETE FROM audit_event WHERE id = ?", storedId))
                 .isInstanceOf(DataAccessException.class)
                 .hasMessageContaining("audit_event is append-only: DELETE is forbidden");
 
