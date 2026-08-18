@@ -297,8 +297,8 @@ components:
           format: uuid
           nullable: true
           description: >
-            Null for a lightning-immediate or WBGT-max stop-work dispatched automatically
-            with no supervisor approval step at all (SCRUM-440) — see recommendationId,
+            Null for a lightning-immediate stop-work dispatched automatically with no
+            supervisor approval step at all (SCRUM-440) — see recommendationId,
             and Recommendation's AUTO_DISPATCHED status. Present for every other dispatch.
         workerId:
           type: string

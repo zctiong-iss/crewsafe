@@ -58,8 +58,8 @@ const PRESENTATION: Record<
   // either way, so it recedes with the same muted treatment as DRAFT.
   SUPERSEDED: { role: "attribute", tone: "neutral", labelKey: "recommendations.statusSuperseded" },
   /*
-   * SCRUM-440: a lightning-immediate or WBGT-max stop-work that skipped approval entirely and
-   * has already reached workers. Also not a decision — but `danger`, not the muted grey the
+   * SCRUM-440: a lightning-immediate stop-work that skipped approval entirely and has already
+   * reached workers. Also not a decision — but `danger`, not the muted grey the
    * other two non-actionable states use. A stop-work already in effect is not a plan quietly
    * receding into history; it is the most severe thing this screen can show, and the colour
    * should say so even though there is nothing left for the supervisor to tap.

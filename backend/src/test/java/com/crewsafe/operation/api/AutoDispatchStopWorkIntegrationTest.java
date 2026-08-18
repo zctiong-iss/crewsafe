@@ -7,7 +7,6 @@ import com.crewsafe.identity.domain.SiteMembership;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.mitigation.ai.bedrock.AgentDraftClient;
-import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.repository.ActionDispatchRepository;
 import com.crewsafe.operation.repository.ApprovalRepository;
@@ -51,13 +50,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Real-database coverage for SCRUM-440's auto-dispatch path — the part {@code
- * AgentDraftServiceTest}'s mocks cannot prove: that {@code action_dispatch.recommendation_id}
- * actually satisfies its {@code NOT NULL} constraint with no {@code Approval} in the picture,
- * and that the resulting dispatch is genuinely visible through {@code
- * ActionDispatchRepository#findByShiftId} — the exact query that used to reach a dispatch only
- * via {@code approval.recommendation.shiftId}, an implicit inner join that would have hidden
- * a null-approval row from the SCRUM-317 site action-status stream forever.
+ * Real-database coverage for the high-WBGT recommendation path: a WBGT reading at the retained
+ * legacy emergency threshold must continue through the ordinary approval workflow rather than
+ * using SCRUM-440's lightning auto-dispatch path.
  *
  * @author Abu Bakar
  */
@@ -76,10 +71,8 @@ class AutoDispatchStopWorkIntegrationTest extends AbstractIntegrationTest {
     @Autowired private ApprovalRepository approvals;
     @Autowired private ActionDispatchRepository actionDispatches;
 
-    // A WBGT-max emergency stop never calls the model (rejectionReason would demand it anyway),
-    // but modelDraft() still fetches a forecast and, if that model path were reached, would call
-    // this — mocked so the test needs no ml-service, same technique as
-    // AgentDraftTransactionIntegrationTest.
+    // Force the ordinary model path to use AgentDraftService's deterministic fallback so this
+    // test needs no ml-service.
     @MockitoBean private AgentDraftClient agentDraftClient;
 
     private Site site;
@@ -95,7 +88,7 @@ class AutoDispatchStopWorkIntegrationTest extends AbstractIntegrationTest {
 
         policyVersions.save(emergencyStopPolicy(site.getId()));
 
-        // 34.0°C breaches the 33.0°C emergency-stop threshold configured below.
+        // 34.0°C is above the retained legacy emergency-stop threshold configured below.
         weatherObservations.save(observation(site.getId(), new BigDecimal("34.00")));
 
         shift = shifts.save(new Shift(site.getId(), Instant.now().truncatedTo(ChronoUnit.SECONDS),
@@ -107,33 +100,23 @@ class AutoDispatchStopWorkIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("A WBGT-max breach is persisted AUTO_DISPATCHED, with real dispatches and no approval")
-    void wbgtMaxBreachAutoDispatchesForReal() throws Exception {
+    @DisplayName("A high-WBGT breach remains PENDING_APPROVAL with no automatic dispatch")
+    void highWbgtBreachRemainsPendingApproval() throws Exception {
         mockMvc.perform(post("/api/v1/sites/" + site.getId() + "/shifts/" + shift.getId()
                         + "/recommendations/generate")
                         .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.status").value("AUTO_DISPATCHED"));
+                .andExpect(jsonPath("$.status").value("PENDING_APPROVAL"));
 
         List<Recommendation> forShift = recommendations.findByShiftId(shift.getId());
         assertThat(forShift).hasSize(1);
         Recommendation saved = forShift.get(0);
-        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
 
-        // No Approval exists at all -- the whole point of the bypass.
+        // The recommendation awaits the ordinary supervisor decision.
         assertThat(approvals.findByRecommendationId(saved.getId())).isEmpty();
 
-        // The dispatches exist, have no approval, and — the actual regression this test
-        // guards — are visible through the shift-scoped query the SCRUM-317 stream uses.
-        List<ActionDispatch> dispatches = actionDispatches.findByShiftId(shift.getId());
-        assertThat(dispatches).isNotEmpty();
-        assertThat(dispatches).allSatisfy(dispatch -> {
-            assertThat(dispatch.getApproval()).isNull();
-            assertThat(dispatch.getRecommendation().getId()).isEqualTo(saved.getId());
-            assertThat(dispatch.getWorker().getId()).isEqualTo(workerId);
-        });
-        assertThat(dispatches.stream().map(ActionDispatch::getActionCode))
-                .contains("STOP_WORK");
+        assertThat(actionDispatches.findByShiftId(shift.getId())).isEmpty();
     }
 
     private PolicyVersion emergencyStopPolicy(UUID siteId) {
