@@ -90,6 +90,30 @@ neither having replaced the other.
 eventually disagree. If the invariant is ever worth making explicit, the right form is a backend
 test pinning it — not a conditional in the write path.
 
+### SCRUM-TBD-120 — the decision, recorded
+
+Whether to pin the invariant with a dedicated backend test was left open. **Recommendation: yes,
+but not on this branch.**
+
+The reasoning splits. A *conditional* in `supersedeOpenRecommendation` would be redundant today
+and harmful tomorrow — the query already cannot select a non-pending row, so a second check adds
+a branch that is unreachable until someone widens the query, at which point the two disagree and
+the reader has to work out which is authoritative.
+
+A *test* has the opposite property: it fails precisely when someone widens the query, which is
+the moment the invariant stops holding and the only moment anyone needs telling. It costs one
+assertion and no production branch.
+
+It is not on this branch because SCRUM-TBD-110 is frontend-only by requirement, and adding a
+backend test file — even one that touches no production code — would put this change into
+Backend CI and muddy a scope that was explicitly bounded. Raise it as a backend ticket:
+
+> Given a shift with an `AUTO_DISPATCHED` recommendation, when `generateAuto` runs, then the
+> dispatched plan's status is unchanged and only a `PENDING_APPROVAL` plan is superseded.
+
+Until then the invariant is documented here and asserted indirectly by
+`planGrouping.test.ts`, which encodes the client's dependence on it.
+
 ---
 
 ## Testing note worth keeping
