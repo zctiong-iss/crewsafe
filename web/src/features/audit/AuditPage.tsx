@@ -80,6 +80,7 @@ export function AuditPage() {
       subtitle="A faithful copy of the append-only record"
       actions={
         <button
+          type="button"
           className="audit__download"
           onClick={() => void onDownload()}
           disabled={siteId === null || downloading}

@@ -47,13 +47,19 @@ export function AuditTable({
 
       {data.totalEntries > data.pageSize && (
         <nav className="audit__pager" aria-label="Audit pages">
-          <button className="audit__pager-button" onClick={() => onPage(page - 1)} disabled={page === 0}>
+          <button
+            type="button"
+            className="audit__pager-button"
+            onClick={() => onPage(page - 1)}
+            disabled={page === 0}
+          >
             Previous
           </button>
           <span>
             Page {page + 1} of {lastPage + 1}
           </span>
           <button
+            type="button"
             className="audit__pager-button"
             onClick={() => onPage(page + 1)}
             disabled={page >= lastPage}

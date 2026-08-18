@@ -93,4 +93,19 @@ describe("AuditPage", () => {
 
     expect(await screen.findByText("No audit events in this range")).toBeInTheDocument();
   });
+
+  it("marks the download and pagination controls as non-submit buttons", async () => {
+    asSafetyManager();
+    server.use(
+      http.get(`${BASE}/api/v1/sites/:siteId/audit`, () =>
+        HttpResponse.json({ ...seededPage, totalEntries: 51 }),
+      ),
+    );
+    renderAudit();
+
+    await screen.findByText("Shift created");
+    expect(screen.getByRole("button", { name: "Download CSV" })).toHaveAttribute("type", "button");
+    expect(screen.getByRole("button", { name: "Previous" })).toHaveAttribute("type", "button");
+    expect(screen.getByRole("button", { name: "Next" })).toHaveAttribute("type", "button");
+  });
 });
