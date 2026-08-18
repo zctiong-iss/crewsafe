@@ -16,6 +16,10 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { fetchSiteWeather } from "@/api/endpoints/safety";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
+import {
+  fetchSiteWeatherSummary,
+  type SiteWeatherSummary,
+} from "@/api/endpoints/siteWeatherSummary";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
 import type { Site, SiteConditions, WbgtBand } from "@/types/domain";
 
@@ -35,6 +39,15 @@ export interface WeatherState {
    * site-wide obligations that apply to nobody in particular.
    */
   band: WbgtBand | null;
+  /**
+   * One reading per site, keyed by site id — one request covering everything the user oversees.
+   *
+   * Separate from `conditions`, which is the full reading for the selected site alone. These
+   * answer different questions: `conditions` is "how is this site?", this is "which of my sites
+   * is hot?", and a picker built for twenty sites needs the second without paying for twenty of
+   * the first.
+   */
+  summaryBySite: Record<string, SiteWeatherSummary>;
   errorKey: string | null;
   requestId: string | null;
   refreshing: boolean;
@@ -46,6 +59,7 @@ const initialState: WeatherState = {
   selectedSiteId: null,
   conditions: null,
   band: null,
+  summaryBySite: {},
   errorKey: null,
   requestId: null,
   refreshing: false,
@@ -98,6 +112,12 @@ export const loadWeather = createAsyncThunk<
     return rejectWithValue({ errorKey: "errors.unknown", requestId: null });
   }
 });
+
+/** One request covering every site the user oversees; see the endpoint for why it is batched. */
+export const loadSiteWeatherSummary = createAsyncThunk<SiteWeatherSummary[], void>(
+  "weather/loadSiteSummary",
+  async () => fetchSiteWeatherSummary(),
+);
 
 const weatherSlice = createSlice({
   name: "weather",
@@ -158,6 +178,18 @@ const weatherSlice = createSlice({
         state.refreshing = false;
         state.errorKey = action.payload?.errorKey ?? "errors.unknown";
         state.requestId = action.payload?.requestId ?? null;
+      })
+
+      /*
+       * Fire-and-forget, like the oversight plan summary. A failed summary must not raise a
+       * banner over a working screen: the picker degrades to names without readings, which is
+       * exactly what it showed before this existed. The selected site's own conditions are
+       * loaded separately and are unaffected.
+       */
+      .addCase(loadSiteWeatherSummary.fulfilled, (state, action) => {
+        state.summaryBySite = Object.fromEntries(
+          action.payload.map((summary) => [summary.siteId, summary]),
+        );
       })
 
       // Site membership is per-user. Leaving this would show the next person conditions for

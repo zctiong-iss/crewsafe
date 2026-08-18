@@ -264,7 +264,13 @@
       "WINDY": "காற்று வீசுகிறது",
       "RAIN": "மழை",
       "THUNDERY_SHOWERS": "இடியுடன் கூடிய மழை"
-    }
+    },
+    "siteConditionsTitle": "தள நிலைமைகள்",
+    "changeSite": "தளத்தை மாற்று. தற்போது {{site}}",
+    "noReading": "அளவீடு இல்லை",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} டிகிரி, {{band}}",
+    "siteRowNoReading": "{{site}}, அளவீடு இல்லை"
   },
   "forecast": {
     "title": "WBGT முன்னறிவிப்பு",

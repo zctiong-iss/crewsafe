@@ -263,7 +263,13 @@
       "WINDY": "有风",
       "RAIN": "有雨",
       "THUNDERY_SHOWERS": "雷阵雨"
-    }
+    },
+    "siteConditionsTitle": "各工地状况",
+    "changeSite": "切换工地。当前为 {{site}}",
+    "noReading": "无读数",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}，{{value}} 度，{{band}}",
+    "siteRowNoReading": "{{site}}，无读数"
   },
   "forecast": {
     "title": "WBGT 预报",

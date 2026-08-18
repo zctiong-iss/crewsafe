@@ -264,7 +264,13 @@
       "WINDY": "Berangin",
       "RAIN": "Hujan",
       "THUNDERY_SHOWERS": "Hujan berguruh"
-    }
+    },
+    "siteConditionsTitle": "Keadaan tapak",
+    "changeSite": "Tukar tapak. Kini {{site}}",
+    "noReading": "Tiada bacaan",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} darjah, {{band}}",
+    "siteRowNoReading": "{{site}}, tiada bacaan"
   },
   "forecast": {
     "title": "Ramalan WBGT",

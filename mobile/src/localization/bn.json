@@ -264,7 +264,13 @@
       "WINDY": "ঝোড়ো বাতাস",
       "RAIN": "বৃষ্টি",
       "THUNDERY_SHOWERS": "বজ্রসহ বৃষ্টি"
-    }
+    },
+    "siteConditionsTitle": "সাইটের অবস্থা",
+    "changeSite": "সাইট বদলান। বর্তমানে {{site}}",
+    "noReading": "কোনো রিডিং নেই",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} ডিগ্রি, {{band}}",
+    "siteRowNoReading": "{{site}}, কোনো রিডিং নেই"
   },
   "forecast": {
     "title": "WBGT পূর্বাভাস",

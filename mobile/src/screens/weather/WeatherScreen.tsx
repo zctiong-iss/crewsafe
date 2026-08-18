@@ -20,8 +20,9 @@
  *
  * @author Justin Chua
  */
-import { useCallback, useMemo } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
@@ -39,7 +40,8 @@ import FreshnessNotice from "@/components/safety/FreshnessNotice";
 
 import AppSwitch from "@/components/inputs/AppSwitch";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { loadWeather, siteSelected } from "@/store/reducers/weatherSlice";
+import { loadSiteWeatherSummary, loadWeather, siteSelected } from "@/store/reducers/weatherSlice";
+import SiteConditionsPicker from "@/components/weather/SiteConditionsPicker";
 import { isMockApi } from "@/auth/authMode";
 import {
   getNightOverride,
@@ -80,8 +82,19 @@ export default function WeatherScreen() {
   const dispatch = useAppDispatch();
 
   const user = useAppSelector((state) => state.auth.user);
-  const { status, sites, selectedSiteId, conditions, band, errorKey, requestId, refreshing } =
-    useAppSelector((state) => state.weather);
+  const {
+    status,
+    sites,
+    selectedSiteId,
+    conditions,
+    band,
+    summaryBySite,
+    errorKey,
+    requestId,
+    refreshing,
+  } = useAppSelector((state) => state.weather);
+
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const load = useCallback(
     (isRefresh: boolean, siteId?: string) => {
@@ -89,6 +102,9 @@ export default function WeatherScreen() {
       void dispatch(
         loadWeather({ workerId: user.id, siteIds: user.siteIds, siteId, refreshing: isRefresh }),
       );
+      // One request covering every site, so the picker can show which one is hot without
+      // asking per site. Only worth it when there is more than one to compare.
+      if (user.siteIds.length > 1) void dispatch(loadSiteWeatherSummary());
     },
     [dispatch, user],
   );
@@ -166,27 +182,59 @@ export default function WeatherScreen() {
 
         {/* Only when there is a choice to make. A worker on one site should not be asked to
             pick it. */}
+        {/*
+          A collapsed row rather than a radio list. The list read well for two sites and fails at
+          twenty: it fills the screen and pushes the reading a supervisor came for below the
+          fold, and it only ever let them pick a site and look, never see which one is hot.
+        */}
         {sites.length > 1 ? (
-          <View style={styles.block} accessibilityRole="radiogroup">
+          <View style={styles.block}>
             <AppText variant="label" style={styles.sectionLabel}>
               {t("weather.site")}
             </AppText>
-            {sites.map((site) => (
-              <RadioWithTitle
-                key={site.id}
-                title={site.name}
-                selected={site.id === selectedSiteId}
-                onPress={() => {
-                  // Selection first, then the fetch — the slice discards any response
-                  // whose site no longer matches, so a slow answer cannot land under the
-                  // wrong site's name.
-                  dispatch(siteSelected(site.id));
-                  load(true, site.id);
-                }}
+            <Pressable
+              onPress={() => setPickerOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t("weather.changeSite", {
+                site: sites.find((site) => site.id === selectedSiteId)?.name ?? "",
+              })}
+              style={({ pressed }) => [
+                styles.sitePicker,
+                {
+                  minHeight: theme.metrics.minTouchTarget,
+                  borderRadius: theme.metrics.radius,
+                  borderWidth: theme.metrics.borderWidth,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <AppText variant="body" numberOfLines={1} style={styles.sitePickerName}>
+                {sites.find((site) => site.id === selectedSiteId)?.name ?? t("weather.site")}
+              </AppText>
+              <Ionicons
+                name="chevron-down"
+                size={s(18)}
+                color={theme.colors.textSecondary}
               />
-            ))}
+            </Pressable>
           </View>
         ) : null}
+
+        <SiteConditionsPicker
+          visible={pickerOpen}
+          onClose={() => setPickerOpen(false)}
+          sites={sites}
+          selectedSiteId={selectedSiteId}
+          summaryBySite={summaryBySite}
+          onSelect={(siteId) => {
+            // Selection first, then the fetch — the slice discards any response whose site no
+            // longer matches, so a slow answer cannot land under the wrong site's name.
+            dispatch(siteSelected(siteId));
+            load(true, siteId);
+          }}
+        />
 
         {conditions && derived ? (
           <>
@@ -376,6 +424,18 @@ const styles = StyleSheet.create({
   },
   block: {
     marginTop: vs(12),
+  },
+  sitePicker: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: s(12),
+    paddingVertical: vs(8),
+    gap: s(8),
+  },
+  sitePickerName: {
+    // Yields to the chevron rather than pushing it off: site names are free text.
+    flexShrink: 1,
   },
   sectionLabel: {
     marginBottom: vs(4),

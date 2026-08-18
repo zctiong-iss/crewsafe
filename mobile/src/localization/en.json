@@ -263,7 +263,13 @@
       "WINDY": "Windy",
       "RAIN": "Rain",
       "THUNDERY_SHOWERS": "Thundery showers"
-    }
+    },
+    "siteConditionsTitle": "Site conditions",
+    "changeSite": "Change site. Currently {{site}}",
+    "noReading": "No reading",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} degrees, {{band}}",
+    "siteRowNoReading": "{{site}}, no reading"
   },
   "forecast": {
     "title": "WBGT forecast",
