@@ -26,10 +26,13 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 public class GlobalExceptionHandler {
 
+    private static final String BAD_REQUEST = "Bad Request";
+    private static final String INVALID_REQUEST_PARAMETERS = "Invalid request parameters";
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS));
     }
 
     /**
@@ -40,7 +43,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException e) {
         log.debug("bad_request_handled");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS));
     }
 
     /**
@@ -90,13 +93,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException e) {
         log.debug("invalid_argument_handled");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("Bad Request", "Malformed request body"));
+                .body(ErrorResponse.of(BAD_REQUEST, "Malformed request body"));
     }
 
     /**
@@ -108,7 +111,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("Bad Request", "Invalid request parameters"));
+                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS));
     }
 
     /**

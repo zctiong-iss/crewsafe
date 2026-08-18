@@ -11,7 +11,7 @@ const STATUS_LABEL: Record<PolicyVersion["status"], string> = {
   SUPERSEDED: "Superseded",
 };
 
-function StatusPill({ status }: { status: PolicyVersion["status"] }) {
+function StatusPill({ status }: Readonly<{ status: PolicyVersion["status"] }>) {
   return (
     <span className={`pill pill--policy-${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>
   );
@@ -27,7 +27,7 @@ function formatEffectiveDate(effectiveDate: string): string {
   });
 }
 
-export function PolicyVersionCard({ version, activeVersion, canWrite, isActivating, onActivate }: {
+export function PolicyVersionCard({ version, activeVersion, canWrite, isActivating, onActivate }: Readonly<{
   /** Omits siteId so the company-wide default (siteId null) fits this prop too — this card never reads it. */
   version: Omit<PolicyVersion, "siteId">;
   /** The version currently ACTIVE for this site, if any — named in the activate confirmation. */
@@ -35,7 +35,7 @@ export function PolicyVersionCard({ version, activeVersion, canWrite, isActivati
   canWrite: boolean;
   isActivating: boolean;
   onActivate: (versionId: string) => void;
-}) {
+}>) {
   const [open, setOpen] = useState(version.status === "ACTIVE");
   const [confirming, setConfirming] = useState(false);
   const legacyWbgtThreshold = version.wbgtEmergencyStop; // NOSONAR retained compatibility field

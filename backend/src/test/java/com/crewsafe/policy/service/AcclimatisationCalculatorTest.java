@@ -5,6 +5,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -36,51 +38,23 @@ class AcclimatisationCalculatorTest {
     @DisplayName("Day calculation")
     class DayCalculation {
 
-        @Test
-        @DisplayName("Same day assignment → day 1")
-        void sameDay() {
-            Instant startDate = Instant.parse("2026-08-07T10:00:00Z");
-            Instant referenceDate = Instant.parse("2026-08-07T15:00:00Z");
-
+        @ParameterizedTest(name = "{0} → day {3}")
+        @CsvSource({
+                // Same day assignment.
+                "Same day assignment, 2026-08-07T10:00:00Z, 2026-08-07T15:00:00Z, 1",
+                // Next day.
+                "Next day, 2026-08-07T10:00:00Z, 2026-08-08T10:00:00Z, 2",
+                // 7 days later.
+                "7 days later, 2026-08-07T10:00:00Z, 2026-08-14T10:00:00Z, 8",
+                // Start: 2026-08-07 23:59 UTC = 2026-08-08 07:59 SG.
+                // Reference: 2026-08-08 00:01 UTC = 2026-08-08 08:01 SG (still same SG day).
+                "Day boundary crossing (midnight SG time), 2026-08-07T23:59:00Z, 2026-08-08T00:01:00Z, 1",
+        })
+        void calculatesTheAcclimatisationDay(
+                String description, Instant startDate, Instant referenceDate, int expectedDay) {
             int day = calculator.calculateAcclimatisationDay(startDate, referenceDate);
 
-            assertThat(day).isEqualTo(1);
-        }
-
-        @Test
-        @DisplayName("Next day → day 2")
-        void nextDay() {
-            Instant startDate = Instant.parse("2026-08-07T10:00:00Z");
-            Instant referenceDate = Instant.parse("2026-08-08T10:00:00Z");
-
-            int day = calculator.calculateAcclimatisationDay(startDate, referenceDate);
-
-            assertThat(day).isEqualTo(2);
-        }
-
-        @Test
-        @DisplayName("7 days later → day 7")
-        void sevenDaysLater() {
-            Instant startDate = Instant.parse("2026-08-07T10:00:00Z");
-            Instant referenceDate = Instant.parse("2026-08-14T10:00:00Z");
-
-            int day = calculator.calculateAcclimatisationDay(startDate, referenceDate);
-
-            assertThat(day).isEqualTo(8);
-        }
-
-        @Test
-        @DisplayName("Day boundary crossing (midnight SG time)")
-        void dayBoundaryCrossing() {
-            // Start: 2026-08-07 23:59 UTC = 2026-08-08 07:59 SG
-            Instant startDate = Instant.parse("2026-08-07T23:59:00Z");
-            // Reference: 2026-08-08 00:01 UTC = 2026-08-08 08:01 SG (still same SG day)
-            Instant referenceDate = Instant.parse("2026-08-08T00:01:00Z");
-
-            int day = calculator.calculateAcclimatisationDay(startDate, referenceDate);
-
-            // Should be day 1 (same SG date)
-            assertThat(day).isEqualTo(1);
+            assertThat(day).isEqualTo(expectedDay);
         }
 
         @Test

@@ -105,7 +105,16 @@ function plan(id: string, overrides: Partial<Recommendation> = {}): Recommendati
   };
 }
 
+/*
+ * On its OWN shift, deliberately (SCRUM-TBD-110).
+ *
+ * Each shift now shows only its newest plan at rest, with the rest collapsed. Two plans on one
+ * shift would leave one of them behind a disclosure, and every badge assertion below would be
+ * testing the collapse rather than the badge. Two shifts is also the realistic case: a site
+ * runs more than one crew.
+ */
 const DECIDED = plan("rec-2", {
+  shiftId: "shift-2",
   status: "APPROVED",
   approval: {
     id: "ap-1",
@@ -138,8 +147,15 @@ function renderScreen(store = buildStore()) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchSites.mockResolvedValue([site("site-1", "Bishan Park"), site("site-2", "NUS Campus")]);
-  mockFetchShifts.mockResolvedValue([{ id: "shift-1" }]);
-  mockFetchRecommendations.mockResolvedValue([plan("rec-1"), DECIDED]);
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+    { id: "shift-2", startsAt: "2026-08-18T14:00:00Z", endsAt: "2026-08-18T22:00:00Z" },
+  ]);
+  // Keyed by shift: a blanket mockResolvedValue would hand BOTH plans to BOTH shifts and the
+  // site would appear to hold four.
+  mockFetchRecommendations.mockImplementation((_siteId: string, shiftId: string) =>
+    Promise.resolve(shiftId === "shift-1" ? [plan("rec-1")] : [DECIDED]),
+  );
   mockFetchPlanSummary.mockResolvedValue([]);
 });
 
@@ -661,4 +677,124 @@ it("keeps the status and the supervisor on one line for every status", async () 
   const style = pillRow?.props?.style;
   const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
   expect(flattened.flexWrap ?? "nowrap").not.toBe("wrap");
+});
+
+/* ── Only the current plan per shift shows at rest (SCRUM-TBD-110) ──────────────────────── */
+
+it("shows exactly one plan per shift, with no way to unfold more", async () => {
+  /*
+   * A site collects a plan per band transition, and the auto-trigger redrafts every two
+   * minutes while lightning holds. The earlier-plans disclosure that used to sit here was a
+   * second place a stop-work could appear; a manager reads one answer per crew instead.
+   */
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("newest", { createdAt: "2026-08-18T15:26:00Z" }),
+    plan("older", { createdAt: "2026-08-18T15:09:00Z", status: "SUPERSEDED" }),
+    plan("oldest", { createdAt: "2026-08-18T14:39:00Z", status: "SUPERSEDED" }),
+  ]);
+
+  const { getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  // One status pill, because one plan is on screen.
+  await waitFor(() => expect(queryAllByText("recommendations.pending")).toHaveLength(1));
+  expect(queryAllByText(/oversight.earlierPlans/)).toHaveLength(0);
+  expect(queryAllByText("oversight.hideEarlierPlans")).toHaveLength(0);
+});
+
+it("shows the stop-work ALONE when the agent has redrafted over it", async () => {
+  /*
+   * The reported bug. The auto-trigger redrafts every two minutes, so a shift under an active
+   * stop-work is constantly acquiring newer PENDING_APPROVAL plans — and the screen was
+   * showing both, which reads as two competing instructions for one crew.
+   *
+   * The stop-work wins because it is what actually went to the crew; the draft is a proposal
+   * nobody has looked at.
+   */
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("newer", { createdAt: "2026-08-18T15:30:00Z" }),
+    plan("stopwork", { createdAt: "2026-08-18T15:17:00Z", status: "AUTO_DISPATCHED" }),
+    plan("old", { createdAt: "2026-08-18T14:39:00Z", status: "SUPERSEDED" }),
+  ]);
+
+  const { getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() =>
+    expect(queryAllByText("recommendations.statusAutoDispatched")).toHaveLength(1),
+  );
+  // The awaiting-decision banner must NOT sit beside it.
+  expect(queryAllByText("recommendations.pending")).toHaveLength(0);
+});
+
+it("lets an approved plan replace the stop-work once conditions have changed", async () => {
+  // Approval means a supervisor judged the new conditions and signed off. That is now the
+  // instruction standing, and the stop-work it replaced must not linger beside it.
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("approved", { createdAt: "2026-08-18T15:40:00Z", status: "APPROVED" }),
+    plan("stopwork", { createdAt: "2026-08-18T15:17:00Z", status: "AUTO_DISPATCHED" }),
+  ]);
+
+  const { getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(queryAllByText("recommendations.decidedApproved")).toHaveLength(1));
+  expect(queryAllByText("recommendations.statusAutoDispatched")).toHaveLength(0);
+});
+
+it("labels each shift with its window so two crews are distinguishable", async () => {
+  // Without it, two rows reading "Awaiting decision, Aisyah (Supervisor)" look like one row
+  // rendered twice rather than two different crews.
+  const { getAllByLabelText, getAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(getAllByText(/shifts.window/)).toHaveLength(2));
+});
+
+it("keeps the site count totalling every pending plan, even when the card shows fewer", async () => {
+  /*
+   * A DELIBERATE inconsistency, pinned because the obvious "fix" is to reconcile them.
+   *
+   * SCRUM-TBD-110 shows one plan per shift, so an expanded card can show a single row while
+   * the site genuinely has three plans awaiting a decision. The count is not a
+   * description of the card — it is the triage signal that decides which of twenty sites a
+   * manager opens, and making it agree with the visible rows would understate what needs
+   * attention on the screen built to surface it.
+   */
+  mockFetchPlanSummary.mockResolvedValue([
+    { siteId: "site-1", awaitingDecision: 3, totalPlans: 3 },
+    { siteId: "site-2", awaitingDecision: 0, totalPlans: 0 },
+  ]);
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  // Three pending plans on one shift. Only one can be on screen.
+  mockFetchRecommendations.mockResolvedValue([
+    plan("p3", { createdAt: "2026-08-18T15:26:00Z" }),
+    plan("p2", { createdAt: "2026-08-18T15:09:00Z" }),
+    plan("p1", { createdAt: "2026-08-18T14:39:00Z" }),
+  ]);
+
+  const { getByText, getAllByLabelText, queryAllByText } = await renderScreen();
+  await waitFor(() => expect(getByText(/oversight.awaitingCount:3/)).toBeTruthy());
+
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  // One row on show...
+  await waitFor(() => expect(queryAllByText("recommendations.pending")).toHaveLength(1));
+  // ...and the count still reports all three rather than the one row.
+  expect(getByText(/oversight.awaitingCount:3/)).toBeTruthy();
 });

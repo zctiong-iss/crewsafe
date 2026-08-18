@@ -1,6 +1,10 @@
 package com.crewsafe;
 
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -43,7 +47,13 @@ import java.util.Map;
  *
  * @author Jemilin Beulah
  */
+// @Import, not relying on @SpringBootTest's nested-@TestConfiguration auto-detection: that
+// detection only reaches nested classes declared directly on the class actually annotated
+// @SpringBootTest (or its enclosing nesting), not ones inherited from this superclass via
+// extends -- without this, CognitoAdminTestConfig below silently never registers, and
+// CognitoUserProvisioningService gets the production, real-AWS-pointed client instead.
 @SpringBootTest
+@Import(AbstractIntegrationTest.CognitoAdminTestConfig.class)
 public abstract class AbstractIntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES;
@@ -67,9 +77,12 @@ public abstract class AbstractIntegrationTest {
     protected static final String OTHER_POOL_ID;
     protected static final String OTHER_POOL_CLIENT_ID;
 
-    /** Every username {@code DemoDataSeeder} expects to already exist in the pool. */
-    protected static final List<String> DEMO_USERNAMES =
-            List.of("supervisor1", "supervisor2", "worker1", "worker2", "worker3", "manager1", "admin1");
+    /** Every username {@code DemoDataSeeder} expects to already exist in the pool.
+     * admin1 is email-shaped (@synthetic.crewsafe.invalid) — the live shared pool requires
+     * an email-shaped username (username_attributes=["email"]), so the demo admin identity
+     * matches that shape everywhere rather than only where it's actually enforced. */
+    protected static final List<String> DEMO_USERNAMES = List.of("supervisor1", "supervisor2",
+            "worker1", "worker2", "worker3", "manager1", "admin1@synthetic.crewsafe.invalid");
 
     protected static final String TEST_PASSWORD = "Test-Password-2026!";
 
@@ -159,6 +172,12 @@ public abstract class AbstractIntegrationTest {
         registry.add("app.cognito.client-ids", () -> CLIENT_ID + "," + OTHER_POOL_CLIENT_ID);
         registry.add("app.cognito.demo-users-json", AbstractIntegrationTest::demoUsersJson);
 
+        // Non-blank pool id is the only signal CognitoUserProvisioningService needs. Points
+        // at the same emulator pool everything else in this class already talks to (see
+        // CognitoAdminTestConfig below, which points the CognitoIdentityProviderClient bean
+        // at it) — real AdminCreateUser calls, no real AWS involved.
+        registry.add("app.cognito-admin.user-pool-id", () -> POOL_ID);
+
         // Note: do NOT set anything here that a subclass's @TestPropertySource might need
         // to override. @DynamicPropertySource outranks a subclass's @TestPropertySource, so
         // a value set here cannot be overridden by a test that needs a different one.
@@ -173,11 +192,12 @@ public abstract class AbstractIntegrationTest {
                   {"username":"worker2","cognitoSub":"%s","displayName":"Siti (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
                   {"username":"worker3","cognitoSub":"%s","displayName":"Kumar (Worker)","role":"WORKER","siteCodes":["bishan"],"identityKind":"developer","desiredStatus":"preserve"},
                   {"username":"manager1","cognitoSub":"%s","displayName":"Wei Ling (Safety Manager)","role":"SAFETY_MANAGER","siteCodes":["bishan","campus"],"identityKind":"developer","desiredStatus":"preserve"},
-                  {"username":"admin1","cognitoSub":"%s","displayName":"System Administrator","role":"ADMIN","siteCodes":[],"identityKind":"developer","desiredStatus":"preserve"}
+                  {"username":"admin1@synthetic.crewsafe.invalid","cognitoSub":"%s","displayName":"System Administrator","role":"ADMIN","siteCodes":[],"identityKind":"developer","desiredStatus":"preserve"}
                 ]
                 """.formatted(
                 subFor("supervisor1"), subFor("supervisor2"), subFor("worker1"),
-                subFor("worker2"), subFor("worker3"), subFor("manager1"), subFor("admin1"));
+                subFor("worker2"), subFor("worker3"), subFor("manager1"),
+                subFor("admin1@synthetic.crewsafe.invalid"));
     }
 
     /** Creates a Cognito user with a permanent password, ready for {@link #mintAccessToken}. */
@@ -258,5 +278,23 @@ public abstract class AbstractIntegrationTest {
                 .authParameters(Map.of("USERNAME", username, "PASSWORD", TEST_PASSWORD))
                 .build());
         return response.authenticationResult();
+    }
+
+    /**
+     * {@code CognitoAdminClientConfiguration}'s production bean points at real AWS
+     * (ap-southeast-1, the task role's ambient credentials) — pointed here instead at the
+     * same {@code cognito-local} emulator every other admin call in this class already
+     * uses, via the same static {@link #COGNITO} client, so
+     * {@code CognitoUserProvisioningService} gets real integration coverage with no real
+     * AWS calls in CI.
+     */
+    @TestConfiguration
+    static class CognitoAdminTestConfig {
+
+        @Bean
+        @Primary
+        CognitoIdentityProviderClient testCognitoIdentityProviderClient() {
+            return COGNITO;
+        }
     }
 }

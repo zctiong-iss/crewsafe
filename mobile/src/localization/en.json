@@ -668,6 +668,7 @@
     "minuteInput": "Minute"
   },
   "oversight": {
+    "unknownShift": "Shift no longer listed",
     "tabTitle": "Oversight",
     "title": "Oversight",
     "showPlans": "Plans",

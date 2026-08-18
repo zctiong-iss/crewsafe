@@ -34,10 +34,39 @@ function keyFor(error: unknown): string {
   return isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
 }
 
+/** Just enough of a shift to label the plans drafted for it. */
+export interface PlanShift {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+}
+
+/**
+ * Newest drafted first, ties broken by id.
+ *
+ * ── WHY THE SORT LIVES HERE AND NOT IN THE RENDER ───────────────────────────────────────
+ * `items` is assembled by flat-mapping one `fetchRecommendations` call per shift, so its
+ * natural order is "whichever shift resolved first, then whatever the server returned inside
+ * it". That is not chronological in either direction, and the Oversight screen rendered it
+ * raw — which is how a plan drafted at 15:17 came to sit above one drafted at 15:09.
+ *
+ * Sorting at the point the array is built means every consumer inherits it and no future
+ * screen can reintroduce the bug by forgetting to sort. The tie-break on id is not
+ * decoration: two plans can share a `createdAt` to the second, and an unstable sort would let
+ * them swap places between polls — moving a row under a manager's thumb as they reach for it.
+ */
+function byNewestFirst(a: Recommendation, b: Recommendation): number {
+  const byTime = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+  return byTime !== 0 ? byTime : a.id.localeCompare(b.id);
+}
+
 /** What is known about one site's plans. Absent entirely until the site is first expanded. */
 export interface SitePlans {
   status: "loading" | "ready" | "error";
+  /** Newest drafted first. See `byNewestFirst`. */
   items: Recommendation[];
+  /** The site's shifts, so a plan can be labelled with the crew it was drafted for. */
+  shifts: PlanShift[];
   errorKey: string | null;
 }
 
@@ -91,7 +120,7 @@ export const loadOversightSites = createAsyncThunk<
  * that site. The failed shift simply contributes nothing.
  */
 export const loadSitePlans = createAsyncThunk<
-  { siteId: string; items: Recommendation[] },
+  { siteId: string; items: Recommendation[]; shifts: PlanShift[] },
   { siteId: string },
   { rejectValue: { siteId: string; errorKey: string } }
 >("oversight/loadSitePlans", async ({ siteId }, { rejectWithValue }) => {
@@ -103,9 +132,24 @@ export const loadSitePlans = createAsyncThunk<
 
     const items = results
       .filter((r): r is PromiseFulfilledResult<Recommendation[]> => r.status === "fulfilled")
-      .flatMap((r) => r.value);
+      .flatMap((r) => r.value)
+      .sort(byNewestFirst);
 
-    return { siteId, items };
+    /*
+     * The windows come back with the shifts and used to be thrown away, ids and all. Keeping
+     * them costs nothing — the request already happened — and without them a site running two
+     * crews renders two plan rows with nothing saying which is which, so they read as one row
+     * rendered twice rather than as two shifts.
+     */
+    return {
+      siteId,
+      items,
+      shifts: shifts.map((shift) => ({
+        id: shift.id,
+        startsAt: shift.startsAt,
+        endsAt: shift.endsAt,
+      })),
+    };
   } catch (error) {
     return rejectWithValue({ siteId, errorKey: keyFor(error) });
   }
@@ -191,6 +235,9 @@ const oversightSlice = createSlice({
         state.plansBySite[siteId] = {
           status: existing?.items.length ? "ready" : "loading",
           items: existing?.items ?? [],
+          // Kept across a refresh for the same reason the items are: the windows have not
+          // changed, and dropping them would unlabel every row until the fetch lands.
+          shifts: existing?.shifts ?? [],
           errorKey: null,
         };
       })
@@ -198,6 +245,7 @@ const oversightSlice = createSlice({
         state.plansBySite[action.payload.siteId] = {
           status: "ready",
           items: action.payload.items,
+          shifts: action.payload.shifts,
           errorKey: null,
         };
       })
@@ -219,6 +267,7 @@ const oversightSlice = createSlice({
         state.plansBySite[siteId] = {
           status: "error",
           items: [],
+          shifts: [],
           errorKey: action.payload?.errorKey ?? "errors.unknown",
         };
       })

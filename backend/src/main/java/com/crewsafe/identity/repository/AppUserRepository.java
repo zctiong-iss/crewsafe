@@ -21,6 +21,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     Optional<AppUser> findByCognitoSub(String cognitoSub);
 
+    boolean existsByUsername(String username);
+
+    boolean existsByCognitoSub(String cognitoSub);
+
     /**
      * The mirror of {@link com.crewsafe.identity.repository.SiteMembershipRepository
      * #findSiteIdsByUserId} — site to users instead of user to sites. Filters to role and

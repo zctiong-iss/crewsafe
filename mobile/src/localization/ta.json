@@ -668,6 +668,7 @@
     "minuteInput": "நிமிடம்"
   },
   "oversight": {
+    "unknownShift": "பணிநேரம் இனி பட்டியலில் இல்லை",
     "tabTitle": "மேற்பார்வை",
     "title": "மேற்பார்வை",
     "showPlans": "திட்டங்கள்",

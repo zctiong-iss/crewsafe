@@ -26,7 +26,7 @@ export const NAVIGATION: readonly NavItem[] = [
   { to: "/approvals", label: "Approvals" },
   { to: "/insights", label: "Insights" },
   { to: "/audit", label: "Audit Trail" },
-  { to: "/settings", label: "Settings" },
+  { to: "/settings", label: "Admin" },
   { to: "/conditions", label: "Weather Conditions" },
   { to: "/policy", label: "Heat Policy" },
   { to: "/lightning", label: "Lightning" },

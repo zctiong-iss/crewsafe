@@ -669,6 +669,7 @@
     "minuteInput": "မိနစ်"
   },
   "oversight": {
+    "unknownShift": "အလုပ်ဆိုင်း စာရင်းတွင် မရှိတော့ပါ",
     "tabTitle": "ကြီးကြပ်မှု",
     "title": "ကြီးကြပ်မှု",
     "showPlans": "အစီအစဉ်များ",

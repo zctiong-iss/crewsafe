@@ -56,6 +56,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import type { Recommendation, Site } from "@/types/domain";
 import type { OversightStackParamList } from "@/navigation/types";
 import type { SiteSupervisor } from "@/api/endpoints/oversight";
+import { groupPlansByShift } from "./planGrouping";
 
 /**
  * One plan, as a manager reads it: what it is, who decided it, when it was drafted.
@@ -202,7 +203,7 @@ function SitePlanList({
   supervisors: SiteSupervisor[];
   onOpenPlan: (plan: Recommendation) => void;
 }>) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   if (!plans || plans.status === "loading") {
     return (
@@ -231,31 +232,52 @@ function SitePlanList({
     );
   }
 
+  /*
+   * One row per shift, and exactly one.
+   *
+   * A site collects a plan per band transition, and the auto-trigger redrafts every two
+   * minutes while lightning holds — so a shift accumulates rows faster than anyone can read
+   * them, almost all superseded the moment conditions move again. `groupPlansByShift` picks
+   * the one plan that is actually instructing the crew; see it for why a pending draft never
+   * displaces a stop-work.
+   *
+   * The earlier-plans disclosure that used to sit under each group is gone. It was a second
+   * place for a stop-work to appear, and the whole point of this screen is that a manager
+   * reads one answer per crew rather than assembling it from a list.
+   */
+  const groups = groupPlansByShift(plans.items, plans.shifts);
+
   return (
     <View style={styles.siteBody}>
-      {plans.items.map((plan) => (
-        <PlanRow
-          key={plan.id}
-          plan={plan}
-          supervisors={supervisors}
-          onPress={() => onOpenPlan(plan)}
-          /*
-           * The server's name first, then the worker list, then nothing — never the id.
-           *
-           * That last step is the fix. `approverId` was falling through to the badge as a raw
-           * UUID on every decided plan, because the only lookup available returns WORKERs and
-           * an approver is a SUPERVISOR, so the id could never resolve. It read as gibberish
-           * and, being 36 characters with no spaces, could not wrap either.
-           *
-           * The worker lookup is kept for the case it does cover: a plan decided before the
-           * server carried `approverName`, by someone who happens to be in the loaded list.
-           */
-          deciderName={
-            plan.approval
-              ? (plan.approval.approverName ?? workerNameFor(plan.approval.approverId))
-              : null
-          }
-        />
+      {groups.map((group) => (
+        <View key={group.shiftId} style={styles.shiftGroup}>
+          {/*
+            The shift window, so two crews on one site are distinguishable. Without it, two
+            rows reading "Awaiting decision · Aisyah (Supervisor)" look like one row rendered
+            twice rather than like two different crews.
+          */}
+          <AppText variant="caption" tone="secondary">
+            {group.shift
+              ? t("shifts.window", {
+                  start: formatDateTime(group.shift.startsAt, i18n.language),
+                  end: formatDateTime(group.shift.endsAt, i18n.language),
+                })
+              : t("oversight.unknownShift")}
+          </AppText>
+
+          <PlanRow
+            plan={group.plan}
+            supervisors={supervisors}
+            onPress={() => onOpenPlan(group.plan)}
+            deciderName={
+              group.plan.approval
+                ? (group.plan.approval.approverName ??
+                  workerNameFor(group.plan.approval.approverId))
+                : null
+            }
+          />
+
+        </View>
       ))}
     </View>
   );
@@ -521,6 +543,9 @@ const styles = StyleSheet.create({
   siteToggle: {
     justifyContent: "space-between",
     marginTop: vs(6),
+  },
+  shiftGroup: {
+    gap: vs(6),
   },
   siteBody: {
     marginTop: vs(8),

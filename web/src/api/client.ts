@@ -60,7 +60,14 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const requestId = response.headers.get(REQUEST_ID_HEADER);
 
   if (!response.ok) {
-    throw new ApiError(kindFor(response.status), `HTTP ${response.status}`, response.status, requestId);
+    // clone(): the body can only be read once, and messageFor's kind-based fallback must
+    // still work even when the body isn't valid JSON or carries no code at all.
+    const code: string | null = await response
+      .clone()
+      .json()
+      .then((body: unknown) => (body && typeof body === "object" && "code" in body ? String(body.code) : null))
+      .catch(() => null);
+    throw new ApiError(kindFor(response.status), `HTTP ${response.status}`, response.status, requestId, code);
   }
 
   if (response.status === 204) return undefined as T;

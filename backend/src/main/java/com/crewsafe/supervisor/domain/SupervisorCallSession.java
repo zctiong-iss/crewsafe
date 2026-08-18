@@ -3,6 +3,7 @@ package com.crewsafe.supervisor.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.UUID;
 
@@ -67,15 +68,15 @@ public class SupervisorCallSession {
             this.id = UUID.randomUUID();
         }
         if (this.createdAt == null) {
-            this.createdAt = ZonedDateTime.now();
+            this.createdAt = ZonedDateTime.now(ZoneOffset.UTC);
         }
         if (this.updatedAt == null) {
-            this.updatedAt = ZonedDateTime.now();
+            this.updatedAt = ZonedDateTime.now(ZoneOffset.UTC);
         }
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = ZonedDateTime.now();
+        this.updatedAt = ZonedDateTime.now(ZoneOffset.UTC);
     }
 }

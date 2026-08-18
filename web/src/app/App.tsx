@@ -21,6 +21,10 @@ import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
 import { LightningPage } from "@/features/lightning/LightningPage";
+import { AdminSitesPage } from "@/features/admin/AdminSitesPage";
+import { AdminUsersPage } from "@/features/admin/AdminUsersPage";
+import { CreateSitePage } from "@/features/admin/CreateSitePage";
+import { RegisterUserPage } from "@/features/admin/RegisterUserPage";
 import { AuditPage } from "@/features/audit/AuditPage";
 import { SiteProvider } from "@/site/SiteProvider";
 
@@ -107,9 +111,16 @@ export function App() {
         <SiteProvider>
           <Routes>
             {callbackRoute}
+            {/* fallback="/settings": every sign-in lands here first (CallbackPage always
+                navigates to "/"), and an administrator — the one role not in
+                rolesForRoute("/") — belongs at the admin console, not looping back to "/". */}
             <Route
               path="/"
-              element={<RoleRoute roles={rolesForRoute("/")}><HomePage /></RoleRoute>}
+              element={
+                <RoleRoute roles={rolesForRoute("/")} fallback="/settings">
+                  <HomePage />
+                </RoleRoute>
+              }
             />
 
             {/* Every nav destination resolves to something. A link that 404s reads as a bug;
@@ -118,7 +129,8 @@ export function App() {
               (item) =>
                 item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
                 item.to !== "/audit" && item.to !== "/insights" && item.to !== "/readiness" &&
-                item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning",
+                item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning" &&
+                item.to !== "/settings",
             ).map((item) => (
               <Route
                 key={item.to}
@@ -170,6 +182,22 @@ export function App() {
             <Route
               path="/lightning"
               element={<RoleRoute roles={rolesForRoute("/lightning")}><LightningPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/sites/new"
+              element={<RoleRoute roles={rolesForRoute("/settings/sites/new")}><CreateSitePage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/users/new"
+              element={<RoleRoute roles={rolesForRoute("/settings/users/new")}><RegisterUserPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings/users"
+              element={<RoleRoute roles={rolesForRoute("/settings/users")}><AdminUsersPage /></RoleRoute>}
+            />
+            <Route
+              path="/settings"
+              element={<RoleRoute roles={rolesForRoute("/settings")}><AdminSitesPage /></RoleRoute>}
             />
             <Route
               path="/audit"
