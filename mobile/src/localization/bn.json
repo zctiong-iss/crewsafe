@@ -130,7 +130,12 @@
     "display": "প্রদর্শন",
     "about": "সম্পর্কে",
     "aboutVersion": "সংস্করণ {{version}}",
-    "aboutBody": "সিঙ্গাপুরে বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা।"
+    "aboutBody": "সিঙ্গাপুরে বাইরের কর্মীদলের জন্য তাপচাপ নিরাপত্তা।",
+    "notifications": "বিজ্ঞপ্তি",
+    "notificationsLabel": "সতর্কতা ও অনুস্মারক",
+    "notificationsHint": "বিশ্রাম শেষ হলে, বা কোনো পরিকল্পনায় সিদ্ধান্ত দরকার হলে কম্পন।",
+    "notificationsBlockedHint": "আপনার ফোনের সেটিংসে বন্ধ করা আছে। CrewSafe এগুলি আপনার জন্য আবার চালু করতে পারে না।",
+    "notificationsOpenSettings": "ফোনের সেটিংস খুলুন"
   },
   "profile": {
     "title": "প্রোফাইল",
@@ -288,7 +293,16 @@
     "noReading": "কোনো রিডিং নেই",
     "degrees": "{{value}}°C",
     "siteRowReading": "{{site}}, {{value}} ডিগ্রি, {{band}}",
-    "siteRowNoReading": "{{site}}, কোনো রিডিং নেই"
+    "siteRowNoReading": "{{site}}, কোনো রিডিং নেই",
+    "statusButtonLabel": "এই রিডিং সম্পর্কে",
+    "statusButtonHint": "এই রিডিং কেন এভাবে চিহ্নিত তা ব্যাখ্যা করে।",
+    "statusExplain": "আমি এটি কেন দেখছি?",
+    "statusObservedAt": "রিডিং নেওয়া হয়েছে {{time}}-এ।",
+    "statusLiveBody": "এই রিডিংটি বর্তমান। আপনার মনোযোগের প্রয়োজন নেই।",
+    "statusErrorTitle": "আবহাওয়া লোড করা যায়নি",
+    "statusErrorBody": "আপনার ফোন CrewSafe-এ পৌঁছাতে পারেনি। সাইটে এখনও বর্তমান রিডিং থাকতে পারে — সিগন্যাল পেলে আবার চেষ্টা করুন।",
+    "statusUnknownTitle": "অজানা রিডিং অবস্থা",
+    "statusUnknownBody": "এই অ্যাপ এই রিডিংয়ের অবস্থা চিনতে পারছে না। এটিকে অনিশ্চিত ধরে নিন এবং আপনার সাইটের প্রক্রিয়া অনুসরণ করুন।"
   },
   "forecast": {
     "title": "WBGT পূর্বাভাস",
@@ -665,5 +679,17 @@
     "awaitingCount_other": "{{count}} অপেক্ষমাণ",
     "openPlan": "{{time}} এ তৈরি পরিকল্পনা খুলুন",
     "supervisorLabel": "সাইট সুপারভাইজার: {{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "CrewSafe-কে জানাতে দিন",
+    "rationaleBody": "আপনার বিশ্রাম শেষ হলে, এবং কোনো পরিকল্পনায় আপনার সিদ্ধান্ত দরকার হলে CrewSafe আপনার ফোন কাঁপাতে পারে। আর কিছু নয়। আপনি সেটিংসে যেকোনো সময় এটি বন্ধ করতে পারেন।",
+    "rationaleAccept": "চালু করুন",
+    "rationaleDecline": "এখন নয়",
+    "restEndTitle": "বিশ্রাম শেষ",
+    "restEndBody_one": "আপনি {{count}} মিনিট বিশ্রাম নিয়েছেন। আপনি কাজে ফিরতে পারেন।",
+    "restEndBody_other": "আপনি {{count}} মিনিট বিশ্রাম নিয়েছেন। আপনি কাজে ফিরতে পারেন।",
+    "planDraftedTitle": "নতুন পরিকল্পনা তৈরি হয়েছে",
+    "planDraftedBody_one": "AI-এর তৈরি একটি নতুন পরিকল্পনা আপনার সিদ্ধান্তের অপেক্ষায় আছে।",
+    "planDraftedBody_other": "AI-এর তৈরি {{count}}টি নতুন পরিকল্পনা আপনার সিদ্ধান্তের অপেক্ষায় আছে।"
   }
 }
