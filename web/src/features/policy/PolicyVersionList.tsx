@@ -33,7 +33,7 @@ function toApiError(error: unknown): ApiError {
   return error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
 }
 
-export function PolicyVersionList({ siteId, siteSwitcher }: { siteId: string; siteSwitcher?: ReactNode }) {
+export function PolicyVersionList({ siteId, siteSwitcher }: Readonly<{ siteId: string; siteSwitcher?: ReactNode }>) {
   const user = useCurrentUser();
   const canWrite = user.role === "SAFETY_MANAGER" || user.role === "ADMIN";
   const [load, setLoad] = useState<Load>({ status: "loading" });

@@ -147,6 +147,44 @@ public final class AuditEventType {
      * previously active for that site (SCRUM-120). */
     public static final String POLICY_VERSION_ACTIVATED = "POLICY_VERSION_ACTIVATED";
 
+    /** An admin created a new site. */
+    public static final String SITE_CREATED = "SITE_CREATED";
+
+    /** An admin updated a site's name or coordinates. */
+    public static final String SITE_UPDATED = "SITE_UPDATED";
+
+    /** An admin archived a site — soft-removed, not deleted; the row and its history stay. */
+    public static final String SITE_ARCHIVED = "SITE_ARCHIVED";
+
+    /** An admin unarchived a previously archived site. */
+    public static final String SITE_UNARCHIVED = "SITE_UNARCHIVED";
+
+    /** An admin registered a local {@code app_user} row — either bound to a Cognito identity
+     * that already existed (Console, or the SCRUM-190 CI pipeline), or one just provisioned
+     * by {@link #USER_INVITED}. Recorded once per registration regardless of which path
+     * produced the {@code cognitoSub}. */
+    public static final String USER_REGISTERED = "USER_REGISTERED";
+
+    /** An admin invited a brand-new person: the backend called Cognito's
+     * {@code AdminCreateUser} directly and Cognito emailed a temporary password. Recorded by
+     * {@code CognitoUserProvisioningService} against the new Cognito identity itself
+     * ({@code targetType="COGNITO_IDENTITY"}) rather than the local {@code app_user} row,
+     * which does not exist yet at that point — this is also what the daily invite quota
+     * counts, so it stays accurate even if the subsequent local registration fails. */
+    public static final String USER_INVITED = "USER_INVITED";
+
+    /** An admin changed a user's role. */
+    public static final String USER_ROLE_CHANGED = "USER_ROLE_CHANGED";
+
+    /** An admin activated or deactivated a user. */
+    public static final String USER_STATUS_CHANGED = "USER_STATUS_CHANGED";
+
+    /** An admin granted a user access to a site. */
+    public static final String SITE_MEMBERSHIP_GRANTED = "SITE_MEMBERSHIP_GRANTED";
+
+    /** An admin revoked a user's access to a site. */
+    public static final String SITE_MEMBERSHIP_REVOKED = "SITE_MEMBERSHIP_REVOKED";
+
     /**
      * A Safety Manager or Admin exported a site's audit timeline (SCRUM-435/SCRUM-452).
      * Targets the SITE, and the detail carries the range and row count.

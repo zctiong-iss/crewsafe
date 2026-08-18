@@ -668,6 +668,7 @@
     "minuteInput": "মিনিট"
   },
   "oversight": {
+    "unknownShift": "শিফট আর তালিকাভুক্ত নয়",
     "tabTitle": "তত্বাবধান",
     "title": "তত্বাবধান",
     "showPlans": "পরিকল্পনা",

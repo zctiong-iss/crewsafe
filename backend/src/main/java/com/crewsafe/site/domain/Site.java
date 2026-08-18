@@ -45,6 +45,11 @@ public class Site {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** Soft-removed by an admin. An archived site drops out of the normal site switcher, but
+     * the row and its policy/shift history are kept — see {@code V21__site_archived.sql}. */
+    @Column(nullable = false)
+    private boolean archived;
+
     public Site(String name, BigDecimal latitude, BigDecimal longitude) {
         this.id = UUID.randomUUID();
         this.name = name;

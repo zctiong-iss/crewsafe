@@ -1,7 +1,7 @@
 /**
  * @author Jemilin Beulah
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type SubmitEvent, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
@@ -53,7 +53,7 @@ type Submit =
   | { status: "created"; version: PolicyVersion }
   | { status: "error"; message: string; requestId: string | null };
 
-export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: string; siteSwitcher?: ReactNode }) {
+export function CreatePolicyVersionForm({ siteId, siteSwitcher }: Readonly<{ siteId: string; siteSwitcher?: ReactNode }>) {
   const [prefill, setPrefill] = useState<Prefill>({ status: "loading" });
   const [versionLabel, setVersionLabel] = useState("");
   const [source, setSource] = useState("");
@@ -96,7 +96,7 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
     ),
   });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     const draft = buildValidationDraft();
     const found = validatePolicyVersion(draft);
