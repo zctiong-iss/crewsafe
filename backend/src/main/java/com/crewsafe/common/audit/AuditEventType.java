@@ -45,6 +45,10 @@ public final class AuditEventType {
      * as a record (SCRUM-255). */
     public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
 
+    /** A shift was manually closed once it had naturally ended (SCRUM-442). Distinct from
+     * {@link #SHIFT_CANCELLED}: a closed shift ran; a cancelled one didn't. */
+    public static final String SHIFT_CLOSED = "SHIFT_CLOSED";
+
     /** A PLANNED shift was auto-activated by the scheduler once its start time passed
      * (SCRUM-441). System-triggered — actorId is null, the same as {@link #ACTION_LATE}. */
     public static final String SHIFT_ACTIVATED = "SHIFT_ACTIVATED";

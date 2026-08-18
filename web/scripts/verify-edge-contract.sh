@@ -41,16 +41,26 @@ report_only_csp="$(jq -r \
     .Value][0] // empty' \
   <<<"$policy_json")"
 
-if [[ -n "$enforced_csp" && -n "$report_only_csp" ]]; then
-  echo "CSP is present in both enforced and Report-Only forms" >&2
+if [[ -z "$enforced_csp" ]]; then
+  echo "The attached policy has no enforced CSP" >&2
   exit 1
 fi
 
-csp_value="${enforced_csp:-$report_only_csp}"
-[[ -n "$csp_value" ]] || {
-  echo "The attached policy contains no CSP" >&2
+if [[ -n "$report_only_csp" ]]; then
+  echo "The attached policy still emits CSP Report-Only after enforcement" >&2
+  exit 1
+fi
+
+remove_headers_count="$(jq -r \
+  '[.ResponseHeadersPolicy.ResponseHeadersPolicyConfig.RemoveHeadersConfig.Items[]? |
+    select((.Header | ascii_downcase) == "server")] | length' \
+  <<<"$policy_json")"
+[[ "$remove_headers_count" == "1" ]] || {
+  echo "The attached policy does not remove the origin Server header" >&2
   exit 1
 }
+
+csp_value="$enforced_csp"
 
 CSP_VALUE="$csp_value" \
 API_URL="$VITE_API_BASE_URL" \

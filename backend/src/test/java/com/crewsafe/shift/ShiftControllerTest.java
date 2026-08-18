@@ -172,6 +172,18 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of("reason", reason))));
     }
 
+    private ResultActions closeShift(String shiftId, String token) throws Exception {
+        return mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/close")
+                .header("Authorization", "Bearer " + token));
+    }
+
+    /** A shift whose window is already over, so it's eligible to close without faking the clock. */
+    private String createEndedShift() throws Exception {
+        Instant startsAt = Instant.now().minus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        return createShift(startsAt, endsAt);
+    }
+
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
         return objectMapper.readTree(
                         postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
@@ -695,6 +707,106 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         cancelShift(shiftId, supervisorAToken, "   ")
                 .andExpect(status().isBadRequest());
+    }
+
+    // --- SCRUM-442: close a shift ---
+
+    @Test
+    void supervisorClosesAShiftThatHasEnded() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(shiftId))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId)
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CLOSED))
+                .anyMatch(e -> UUID.fromString(shiftId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    /**
+     * The assignment has to be given at creation, not added afterwards: adding one to an
+     * existing shift already rejects an endsAt in the past (SCRUM-266) — the same
+     * "already ended" state close requires.
+     */
+    @Test
+    void closingAShiftKeepsItsAssignmentsInPlace() throws Exception {
+        Instant startsAt = Instant.now().minus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                                        shiftBody(startsAt, endsAt,
+                                                List.of(assignmentBody(workerA.getId(), null, "LIGHT", null))))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("id").asText();
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignments.length()").value(1));
+    }
+
+    /** Close is only valid once endsAt has passed — a shift cannot be closed early. */
+    @Test
+    void closingAShiftBeforeItHasEndedIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    /** CLOSED is terminal (SCRUM-442): there is no un-close, so a second close is rejected. */
+    @Test
+    void closingAnAlreadyClosedShiftIsBadRequest() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorAToken).andExpect(status().isOk());
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void aCancelledShiftCannotBeClosed() throws Exception {
+        String shiftId = createEndedShift();
+
+        cancelShift(shiftId, supervisorAToken).andExpect(status().isOk());
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void closingAnUnknownShiftIs404() throws Exception {
+        closeShift(UUID.randomUUID().toString(), supervisorAToken)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    void workerIsForbiddenFromClosingAShift() throws Exception {
+        String shiftId = createEndedShift();
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        closeShift(shiftId, workerAToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorFromAnotherSiteCannotCloseAShift() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorBToken).andExpect(status().isForbidden());
     }
 
     // --- SCRUM-159/160-fix: correct an assignment ---

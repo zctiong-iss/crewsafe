@@ -8,7 +8,7 @@
 ## 1. Overview
 
 `backend-ci.yml`'s `publish-image` job builds the backend container image, scans it
-(SCRUM-269, report-only — see §5), and pushes it to the `crewsafe/backend` ECR repository.
+(SCRUM-455, date-controlled policy — see §5), and pushes it to the `crewsafe/backend` ECR repository.
 This runbook covers what SCRUM-269 does not: making a published image's identity traceable
 to its source commit and CI run (SCRUM-270), and documenting how to promote and roll back
 using that identity. It mirrors `docs/runbooks/SCRUM-257-build-push-web-image.md`, the
@@ -66,19 +66,19 @@ content-addressed and cannot change once pushed — it is the only reference tha
 you get back exactly the image you intend, byte for byte. Deploying by tag for a rollback
 MUST NOT be used as a substitute for this procedure.
 
-## 5. Report-only scope limitation
+## 5. Date-controlled Trivy policy
 
-The backend image scan (SCRUM-269, `aquasecurity/trivy-action`, `exit-code: '0'`) remains
-**report-only** in Sprint 2: HIGH/CRITICAL findings are visible in the job log and
-ignorefile-filtered output, but they do **not** block `docker push`. A published image's
-digest existing and being traceable (this runbook) is not the same as that image having
-passed a blocking security gate — it has only passed build and test.
+The backend image scan uses the shared
+`.github/scripts/security/resolve-trivy-policy-mode.sh` helper. It is **report-only through
+2026-09-17 UTC**, under the temporary approval of **CrewSafe security team**. HIGH/CRITICAL
+findings remain visible in the job log, redacted summary, and uploaded JSON artifact, but do
+not block publication during that window. From **2026-09-18 UTC**, the same scan is blocking
+and HIGH/CRITICAL findings prevent publication.
 
-Flipping the scan to blocking is a deliberate, separate follow-up tracked under SCRUM-146
-(Sprint 3), once the report-only period's findings are triaged. See
-[`docs/plans/SCRUM-270-273-gate-enforcement-scope-plan.md`](../plans/SCRUM-270-273-gate-enforcement-scope-plan.md)
-for the full scope decision. Do not describe a published backend image as "scan-approved" in
-the blocking sense until that flip happens.
+The job summary records the policy mode, owner, expiry, and evaluation date. A report-only
+result with findings is not a blocking security approval. Scanner, registry, malformed-report,
+identity, summary, upload, and other evidence-generation failures remain fail-closed in both
+modes; report-only applies only to valid vulnerability findings.
 
 ## 6. Local/manual validation
 
@@ -86,6 +86,9 @@ These checks do not use AWS credentials, ECR mutation, or a live push:
 
 ```bash
 .github/scripts/tests/test-backend-image-workflow.sh
+.github/scripts/tests/test-resolve-trivy-policy-mode.sh
+.github/scripts/tests/test-summarize-trivy-report.sh
+.github/scripts/tests/test-ci-guards.sh
 .github/scripts/tests/test-image-promotion-runbook.sh
 
 # Reproduce the digest-capture logic locally (see quickstart.md for the full walkthrough)

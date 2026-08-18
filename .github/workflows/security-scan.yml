@@ -497,8 +497,28 @@ jobs:
         run: .github/scripts/tests/test-dast-staging-workflow.sh
 
       # SCRUM-269: the five new self-tests this feature adds.
+      # SCRUM-455: policy-mode and repository guard wiring must remain
+      # visible in the repository-wide self-test job.
+      - name: CI guard wiring self-tests
+        run: .github/scripts/tests/test-ci-guards.sh
+
+      - name: Trivy policy-mode helper self-tests
+        run: .github/scripts/tests/test-resolve-trivy-policy-mode.sh
+
       - name: Backend image workflow self-tests
         run: .github/scripts/tests/test-backend-image-workflow.sh
+
+      # SCRUM-455: keep the ML-service blocking publish/redeploy contract and
+      # shared report projection under the repository-wide guard as well as
+      # the ML-service workflow's own self-test path.
+      - name: ML-service image workflow self-tests
+        run: .github/scripts/tests/test-ml-service-ci-workflow.sh
+
+      - name: Trivy report summary self-tests
+        run: .github/scripts/tests/test-summarize-trivy-report.sh
+
+      - name: ML-service Trivy compatibility-validator self-tests
+        run: .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
 
       # SCRUM-270: extends the same job with the new digest-capture/
       # contract-validation assertions (in the file above) and this new
@@ -514,6 +534,9 @@ jobs:
 
       - name: Trivy ignorefile filter self-tests
         run: .github/scripts/tests/test-filter-trivyignore.sh
+
+      - name: Trivy exception validator self-tests
+        run: .github/scripts/tests/test-validate-trivy-exceptions.sh
 
       - name: SCA exception applier self-tests
         run: .github/scripts/tests/test-apply-sca-exceptions.sh

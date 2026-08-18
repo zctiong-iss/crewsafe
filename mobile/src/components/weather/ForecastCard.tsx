@@ -34,6 +34,7 @@ import { forecastSiteChanged, loadForecast } from "@/store/reducers/forecastSlic
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { wbgtBandColor } from "@/helpers/wbgtBandColor";
 import type { WeatherStackParamList } from "@/navigation/types";
 
 /** The card previews the nearer horizon only; the screen behind it shows both. */
@@ -67,6 +68,15 @@ export default function ForecastCard({ siteId }: { siteId: string }) {
           ? t("forecast.cardError")
           : t("common.loading");
 
+  /*
+   * The band's colour, from the band the server evaluated (SCRUM-369). Applied to the summary
+   * line rather than a separate label: this card deliberately shows no interval and no band
+   * text for space, so the colour is a hint that the full reading is one tap away — the screen
+   * behind it is where the band is stated in words.
+   */
+  const bandColor =
+    state.status === "ready" ? wbgtBandColor(state.forecast?.band, theme.colors) : null;
+
   // Only the server decides this. `degraded` is authoritative; `basis` names which fallback.
   const basis = state.status === "ready" ? state.forecast?.basis : undefined;
   const degradedTag =
@@ -94,7 +104,11 @@ export default function ForecastCard({ siteId }: { siteId: string }) {
       <View style={styles.row}>
         <View style={styles.text}>
           <AppText variant="label">{t("forecast.cardTitle")}</AppText>
-          <AppText variant="body" tone="secondary" style={styles.summary}>
+          <AppText
+            variant="body"
+            tone="secondary"
+            style={[styles.summary, bandColor ? { color: bandColor } : undefined]}
+          >
             {summary}
           </AppText>
           {/*

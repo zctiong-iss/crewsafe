@@ -129,7 +129,12 @@
     "display": "Display",
     "about": "About",
     "aboutVersion": "Version {{version}}",
-    "aboutBody": "Heat-stress safety for outdoor crews in Singapore."
+    "aboutBody": "Heat-stress safety for outdoor crews in Singapore.",
+    "notifications": "Notifications",
+    "notificationsLabel": "Alerts and reminders",
+    "notificationsHint": "Buzz when a rest ends, or when a plan needs your decision.",
+    "notificationsBlockedHint": "Turned off in your phone's settings. CrewSafe cannot switch these back on for you.",
+    "notificationsOpenSettings": "Open phone settings"
   },
   "profile": {
     "title": "Profile",
@@ -163,7 +168,8 @@
     "status": {
       "PLANNED": "Planned",
       "ACTIVE": "Active",
-      "CLOSED": "Closed"
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
     },
     "detailTitle": "Shift",
     "assignments": "Crew",
@@ -238,7 +244,24 @@
     "removeWorkerBody": "Remove {{name}} from this shift? Their task and acclimatisation day are discarded.",
     "removeWorkerConfirm": "Remove",
     "removeWorkerFailedTitle": "Worker not removed",
-    "viewRecommendations": "Drafted plans for this shift"
+    "viewRecommendations": "Drafted plans for this shift",
+    "closeButton": "Close shift",
+    "closeTitle": "Close this shift?",
+    "closeBody": "This records that the shift ran and is finished. It cannot be undone.",
+    "closeConfirm": "Close shift",
+    "closeNotYetEnded": "A shift can be closed once it has ended.",
+    "closeFailedTitle": "Shift not closed",
+    "closedToast": "Shift closed",
+    "cancelButton": "Cancel shift",
+    "cancelTitle": "Cancel this shift?",
+    "cancelBody": "This records that the shift did not happen. The crew stay listed and the reason is kept. It cannot be undone.",
+    "cancelReasonLabel": "Why is this shift being cancelled?",
+    "cancelReasonRequired": "Give a reason before cancelling.",
+    "cancelConfirm": "Cancel shift",
+    "cancelling": "Cancelling",
+    "cancelFailedTitle": "Shift not cancelled",
+    "cancelledToast": "Shift cancelled",
+    "ending": "Working"
   },
   "weather": {
     "title": "Conditions",
@@ -263,7 +286,22 @@
       "WINDY": "Windy",
       "RAIN": "Rain",
       "THUNDERY_SHOWERS": "Thundery showers"
-    }
+    },
+    "siteConditionsTitle": "Site conditions",
+    "changeSite": "Change site. Currently {{site}}",
+    "noReading": "No reading",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} degrees, {{band}}",
+    "siteRowNoReading": "{{site}}, no reading",
+    "statusButtonLabel": "About this reading",
+    "statusButtonHint": "Explains why this reading is marked the way it is.",
+    "statusExplain": "Why am I seeing this?",
+    "statusObservedAt": "Reading taken at {{time}}.",
+    "statusLiveBody": "This reading is current. Nothing needs your attention.",
+    "statusErrorTitle": "Could not load the weather",
+    "statusErrorBody": "Your phone could not reach CrewSafe. The site may still have a current reading — try again once you have signal.",
+    "statusUnknownTitle": "Unrecognised reading state",
+    "statusUnknownBody": "This app does not recognise the state of this reading. Treat it as unconfirmed and follow your site's procedure."
   },
   "forecast": {
     "title": "WBGT forecast",
@@ -276,7 +314,6 @@
     "generatedAt": "Forecast made {{time}}",
     "unavailableTitle": "No forecast right now",
     "unavailableBody": "This site has no usable reading recent enough to forecast from, or conditions are changing too fast to give a useful range. The current reading is unaffected.",
-    "noBandNote": "No risk band is shown for a forecast. Bands are decided by the heat policy on the server, and one has not yet been evaluated for predicted values.",
     "cardTitle": "Forecast",
     "cardValue_one": "{{value}}°C predicted in {{count}} minute",
     "cardValue_other": "{{value}}°C predicted in {{count}} minutes",
@@ -295,7 +332,9 @@
       "PERSISTENCE": "This carries the last reading forward, because no recent trend could be established. Treat it as a rough guide only."
     },
     "inputAge_one": "From a reading {{count}} minute old",
-    "inputAge_other": "From a reading {{count}} minutes old"
+    "inputAge_other": "From a reading {{count}} minutes old",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "Nothing to acknowledge",
@@ -494,7 +533,7 @@
     "statusAutoDispatched": "Stop-work dispatched",
     "autoDispatchedNotice": "This stop-work order was sent to workers automatically — no approval was required.",
     "supersededNotice": "Conditions changed, so this plan was replaced by a newer one. There is nothing to decide here.",
-    "noModelNotice": "No AI model was available, so this plan was built directly from the heat policy. The required actions are still correct; there is less tailoring to this crew.",
+    "noModelNotice": "AI model unavailable. Heat policy and required actions still apply.",
     "requiredCannotRemove": "Required by the heat policy — you cannot remove this."
   },
   "mitigationCategory": {
@@ -627,5 +666,30 @@
     "minuteDown": "Earlier by five minutes",
     "hourInput": "Hour",
     "minuteInput": "Minute"
+  },
+  "oversight": {
+    "tabTitle": "Oversight",
+    "title": "Oversight",
+    "showPlans": "Plans",
+    "hidePlans": "Hide plans",
+    "showPlansFor": "Show plans for {{site}}",
+    "hidePlansFor": "Hide plans for {{site}}",
+    "noPlans": "No plans drafted for this site yet.",
+    "awaitingCount_one": "{{count}} awaiting",
+    "awaitingCount_other": "{{count}} awaiting",
+    "openPlan": "Open the plan drafted {{time}}",
+    "supervisorLabel": "Site supervisor: {{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "Let CrewSafe tell you",
+    "rationaleBody": "CrewSafe can buzz your phone when your rest is over, and when a plan needs your decision. Nothing else. You can turn this off at any time in Settings.",
+    "rationaleAccept": "Turn on",
+    "rationaleDecline": "Not now",
+    "restEndTitle": "Rest complete",
+    "restEndBody_one": "You rested for {{count}} minute. You can return to work.",
+    "restEndBody_other": "You rested for {{count}} minutes. You can return to work.",
+    "planDraftedTitle": "New plan drafted",
+    "planDraftedBody_one": "A new AI-drafted plan is waiting for your decision.",
+    "planDraftedBody_other": "{{count}} new AI-drafted plans are waiting for your decision."
   }
 }

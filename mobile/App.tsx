@@ -24,6 +24,9 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
+
+import NotificationRouter from "@/notifications/NotificationRouter";
+import { configureNotifications } from "@/notifications/notificationClient";
 import { StatusBar } from "expo-status-bar";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
@@ -129,6 +132,22 @@ export default function App() {
     }
   }, [fontError]);
 
+  /*
+   * Notification setup, before anything can be sent.
+   *
+   * Ordering matters on both platforms and for opposite reasons. Android ignores a channel's
+   * importance and vibration pattern once the channel exists, so it has to be created before
+   * the first notification rather than lazily beside it. iOS shows nothing for a notification
+   * arriving in the foreground unless a handler is registered, and the rest timer fires at a
+   * moment the worker may well be looking at the screen.
+   *
+   * Deliberately not awaited and deliberately unable to reject: a notification channel is not
+   * worth holding the splash screen for, and certainly not worth failing to start over.
+   */
+  useEffect(() => {
+    void configureNotifications();
+  }, []);
+
   const onLayoutRootView = useCallback(() => {
     if (ready) void SplashScreen.hideAsync();
   }, [ready]);
@@ -152,6 +171,9 @@ export default function App() {
                     components with a `visible` prop — there is no provider to install.
                     See `components/sheets/BottomSheet.tsx`. */}
                 <NavigationContainer>
+                  {/* Inside the container so it can reach the navigator, outside every
+                      screen so a tapped notification is routed whatever is on top. */}
+                  <NotificationRouter />
                   <RootNavigator />
                 </NavigationContainer>
                 {/* Outside the navigator on purpose: a toast is usually triggered by an

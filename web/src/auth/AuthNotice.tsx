@@ -47,7 +47,7 @@ export function AuthNotice({
 
         {busy && (
           <output className="auth-notice__busy">
-            <span className="auth-notice__pulse" aria-hidden="true" />
+            <span className="auth-notice__pulse" aria-hidden="true" />{" "}
             Working
           </output>
         )}

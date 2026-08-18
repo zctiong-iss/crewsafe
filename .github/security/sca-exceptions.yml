@@ -20,5 +20,39 @@
 #     reason: <why this is an accepted, time-bounded risk>
 #     expires: <YYYY-MM-DD>
 #
-# No active entries yet -- nothing is currently excepted.
+# SCRUM-295 (SCA dependency-risk backlog burn-down): both entries below have
+# no available fix as of 2026-08-18 -- confirmed by checking each package's
+# latest published release, not merely its latest within a range. Re-check
+# on/before the expiry date in case an upstream fix has since shipped.
 exceptions:
+  - key: 3b2f3299-7646-48fb-a984-6641600f2d80
+    reason: >-
+      org.hdrhistogram:HdrHistogram (CVE-2026-14686) -- 2.2.2 is already the
+      latest version published on Maven Central; no newer release exists to
+      pick up a fix. Pulled in transitively via io.micrometer:micrometer-core,
+      not a direct dependency. LOW severity, CVSS 3.3.
+    expires: 2026-11-16
+  - key: 4d247b9b-7680-4ca0-9d51-b9613eb9dd80
+    reason: >-
+      langgraph-sdk (CVE-2026-14742) -- 0.4.2 is already the latest version
+      published on PyPI; no newer release exists to pick up a fix. Direct
+      dependency of ml-service. LOW severity, CVSS 3.1.
+    expires: 2026-11-16
+  - key: ed5e6dce-9a76-48d2-a05b-df38fa31fd46
+    reason: >-
+      pytest (CVE-2025-71176) -- re-flagged after bumping 8.3.5 -> 8.4.2
+      (SCRUM-295 first round). 8.4.2 is the latest 8.x release; the only
+      newer version is 9.1.1, a major with documented breaking changes for
+      plugins/config, out of scope for a non-breaking dependency bump. No
+      fix available within the 8.x line. INFO severity, CVSS 6.8.
+    expires: 2026-11-16
+  - key: be41fce0-40c2-4980-a7d8-35ec67bada35
+    reason: >-
+      decode-uri-component (CVE-2026-45822) -- re-flagged after bumping
+      0.2.2 -> 0.3.0 (SCRUM-295 first round). The actual fix ships in
+      0.4.0+, but 0.4.0 switched the package to ESM-only ("type": "module"),
+      which breaks Jest's CommonJS transform for query-string's require()
+      of it (confirmed: mobile/'s WorkerTabs.test.tsx fails with "Unexpected
+      token 'export'" at 0.5.0). No fix available without a breaking
+      module-format change this ticket's scope excludes. LOW severity.
+    expires: 2026-11-16

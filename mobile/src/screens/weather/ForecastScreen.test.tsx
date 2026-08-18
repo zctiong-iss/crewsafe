@@ -69,7 +69,13 @@ import { ApiError } from "@/api/errors";
 import ForecastScreen from "./ForecastScreen";
 import type { SiteForecast } from "@/types/domain";
 
-function prediction(horizonMinutes: 30 | 60, predictedValue: number): SiteForecast {
+/** `band` is optional so every pre-existing case keeps exercising the no-band rendering. */
+function prediction(
+  horizonMinutes: 30 | 60,
+  predictedValue: number,
+  band?: SiteForecast["band"],
+  bounds?: { lower: SiteForecast["band"]; upper: SiteForecast["band"] },
+): SiteForecast {
   return {
     metric: "WBGT",
     predictedValue,
@@ -78,6 +84,9 @@ function prediction(horizonMinutes: 30 | 60, predictedValue: number): SiteForeca
     confidenceIntervalLower: predictedValue - 0.3,
     confidenceIntervalUpper: predictedValue + 0.3,
     generatedAt: "2026-08-14T01:00:00Z",
+    band,
+    confidenceIntervalLowerBand: bounds?.lower,
+    confidenceIntervalUpperBand: bounds?.upper,
   };
 }
 
@@ -109,7 +118,12 @@ it("shows a prediction with its interval, never the estimate alone", async () =>
   // The interval is the thing that keeps a forecast from reading as a measurement, so its
   // presence is asserted rather than assumed.
   expect(screen.getAllByText("forecast.rangeLabel").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("forecast.range").length).toBeGreaterThan(0);
+  // Both bounds render. They are separate elements now so each can carry its own band colour;
+  // the intact translated sentence lives on the accessible label so a screen reader hears one
+  // phrase rather than three fragments.
+  expect(screen.getAllByText("32.5").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("33.1").length).toBeGreaterThan(0);
+  expect(screen.getAllByLabelText("forecast.range").length).toBeGreaterThan(0);
 });
 
 it("shows both horizons", async () => {
@@ -168,11 +182,112 @@ it("keeps a good 30 when 60 declines", async () => {
   expect(screen.getAllByText("forecast.unavailableTitle").length).toBe(1);
 });
 
-it("states that no band is shown rather than leaving it absent", async () => {
+it("states the band in words, not by colour alone", async () => {
+  answerWith((h) => Promise.resolve(prediction(h, 32.8, "32_TO_BELOW_33")));
+
+  await renderScreen();
+
+  /*
+   * Colour alone fails WCAG 1.4.1, and outdoors it also fails to sunlight flattening hue and to
+   * red/green colour-vision deficiency. The words are the actual signal; the colour is a
+   * shortcut to them.
+   */
+  await waitFor(() => expect(screen.getAllByText("wbgt.band.32_TO_BELOW_33").length).toBe(2));
+});
+
+it("renders no band when the server classified none, rather than the coolest one", async () => {
+  // An unknown reading shown green would turn "we do not know" into "it is safe".
   answerWith((h) => Promise.resolve(prediction(h, 32.8)));
 
   await renderScreen();
 
-  // Someone who sees bands elsewhere in the app would read a band-less forecast as broken.
-  await waitFor(() => expect(screen.getByText("forecast.noBandNote")).toBeTruthy());
+  await waitFor(() => expect(screen.getAllByText("forecast.rangeLabel").length).toBe(2));
+  expect(screen.queryByText(/wbgt\.band\./)).toBeNull();
+});
+
+it("colours each interval bound by its own band when the range crosses a boundary", async () => {
+  /*
+   * The case the split exists for. A half-width can reach 4°C, so a range straddling 31 or 33
+   * is routine — and painting it all in the point estimate's colour would assert it stays in
+   * one band while the range beside it says it might not.
+   */
+  answerWith((h) =>
+    Promise.resolve(
+      prediction(h, 30.9, "BELOW_31", { lower: "BELOW_31", upper: "31_TO_BELOW_32" }),
+    ),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("30.6").length).toBe(2));
+  const lower = screen.getAllByText("30.6")[0];
+  const upper = screen.getAllByText("31.2")[0];
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  // Different bands, so different colours — that difference is the warning.
+  expect(colorOf(lower)).not.toBe(colorOf(upper));
+});
+
+it("colours the degree symbol with the value it qualifies", async () => {
+  answerWith((h) =>
+    Promise.resolve(prediction(h, 26.3, "BELOW_31", { lower: "BELOW_31", upper: "BELOW_31" })),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  // The unit used to sit grey beside a coloured number, which read as two different readings.
+  expect(colorOf(screen.getAllByText("°C")[0])).toBe(colorOf(screen.getAllByText("26.3")[0]));
+});
+
+it("gives the range's shared degree symbol the hotter bound's colour", async () => {
+  /*
+   * One unit for two bounds, so it follows the upper one. The other way round would let an
+   * amber upper bound trail off in green, softening exactly the crossing the split exists to
+   * make visible.
+   */
+  answerWith((h) =>
+    Promise.resolve(
+      prediction(h, 30.9, "BELOW_31", { lower: "BELOW_31", upper: "31_TO_BELOW_32" }),
+    ),
+  );
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("31.2").length).toBe(2));
+
+  const colorOf = (node: { props: { style?: unknown } }) => {
+    const style = node.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {})).color;
+  };
+
+  const rangeUnit = screen.getAllByText("forecast.rangeUnit")[0];
+  expect(colorOf(rangeUnit)).toBe(colorOf(screen.getAllByText("31.2")[0]));
+  expect(colorOf(rangeUnit)).not.toBe(colorOf(screen.getAllByText("30.6")[0]));
+});
+
+it("keeps the degree symbol on its quiet default when no band came down", async () => {
+  // Falls back to the secondary tone, not to a band colour. An unknown reading rendered in
+  // green would turn "we do not know" into "it is safe".
+  answerWith((h) => Promise.resolve(prediction(h, 26.3)));
+
+  await renderScreen();
+
+  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+
+  const style = screen.getAllByText("°C")[0].props.style;
+  const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
+  const { colors } = jest.requireActual("@/styles/theme").defaultTheme;
+  expect(flattened.color).toBe(colors.textSecondary);
+  expect(flattened.color).not.toBe(colors.success);
 });
