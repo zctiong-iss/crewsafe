@@ -6,11 +6,11 @@ export function SessionTimeoutNotice({
   warning,
   onContinue,
   onSignOut,
-}: {
+}: Readonly<{
   warning: SessionWarning | null;
   onContinue: () => void;
   onSignOut: () => void;
-}) {
+}>) {
   if (warning === null) return null;
 
   const absolute = warning.kind === "absolute";

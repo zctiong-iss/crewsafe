@@ -25,7 +25,7 @@ export function AuthNotice({
   reference,
   busy = false,
   tone = "neutral",
-}: {
+}: Readonly<{
   title: string;
   body: ReactNode;
   action?: AuthNoticeAction;
@@ -34,7 +34,7 @@ export function AuthNotice({
   reference?: string | null;
   busy?: boolean;
   tone?: "neutral" | "warning";
-}) {
+}>) {
   return (
     <main className="auth-notice">
       <div className={`auth-notice__panel auth-notice__panel--${tone}`}>
@@ -46,10 +46,10 @@ export function AuthNotice({
         </div>
 
         {busy && (
-          <p className="auth-notice__busy" role="status">
-            <span className="auth-notice__pulse" aria-hidden="true" />
+          <output className="auth-notice__busy">
+            <span className="auth-notice__pulse" aria-hidden="true" />{" "}
             Working
-          </p>
+          </output>
         )}
 
         {(action ?? secondary) && (

@@ -79,6 +79,17 @@ public class Shift {
     }
 
     /**
+     * Marks the shift closed (SCRUM-442) once it has naturally ended — the counterpart to
+     * {@link #cancel()} for a shift that ran rather than one that was called off. Which
+     * statuses may reach this method, and how "ended" is judged, is a transition rule, not
+     * an invariant of this object, so it's enforced by the caller — see
+     * {@link com.crewsafe.shift.service.ShiftService#closeShift}.
+     */
+    public void close() {
+        this.status = ShiftStatus.CLOSED;
+    }
+
+    /**
      * Marks the shift active (SCRUM-441) once its start time has passed. Which statuses
      * may reach this method is a transition rule, not an invariant of this object, so
      * it's enforced by the caller — see

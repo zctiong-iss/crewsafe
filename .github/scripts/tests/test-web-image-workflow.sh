@@ -249,13 +249,18 @@ contains_in "scan step passes the active ignorefile via trivyignores" "$WORKFLOW
 assert_order "ignorefile prep precedes the scan step" "$WORKFLOW" \
   'filter-trivyignore.sh' 'aquasecurity/trivy-action'
 
-contains_in "Docker build stage uses Node 22" "$DOCKERFILE" 'FROM node:22'
+contains_in "Docker build stage is digest-only pinned" "$DOCKERFILE" 'FROM node@sha256:'
+contains_in "Docker build stage tag is preserved as a comment" "$DOCKERFILE" 'node:22-bookworm'
 contains_in "Docker build stage is digest pinned" "$DOCKERFILE" '@sha256:'
 contains_in "Docker uses lockfile installation" "$DOCKERFILE" 'npm ci'
+contains_in "Docker build stage ignores npm lifecycle scripts" "$DOCKERFILE" 'npm ci --ignore-scripts'
+contains_in "Docker runtime stage is digest-only pinned" "$DOCKERFILE" 'FROM nginxinc/nginx-unprivileged@sha256:'
+contains_in "Docker runtime stage tag is preserved as a comment" "$DOCKERFILE" 'nginx-unprivileged:1.31.3-alpine3.24'
 contains_in "Docker runtime uses unprivileged nginx" "$DOCKERFILE" 'nginxinc/nginx-unprivileged'
 contains_in "Docker copies production assets" "$DOCKERFILE" 'COPY --from=build /app/dist'
 contains_in "Docker declares non-privileged port" "$DOCKERFILE" 'EXPOSE 8080'
 contains_in "Docker declares non-root runtime" "$DOCKERFILE" 'USER nginx'
+not_contains_in "nginx.conf copy grants no runtime-user ownership" "$DOCKERFILE" '--chown=nginx:nginx'
 contains_in "nginx serves SPA fallback" "$NGINX_CONF" "try_files \$uri /index.html"
 contains_in "nginx listens on non-privileged port" "$NGINX_CONF" 'listen 8080'
 contains_in "Docker ignores git metadata" "$DOCKERIGNORE" '.git'

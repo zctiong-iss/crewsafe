@@ -195,6 +195,16 @@ public class ShiftController {
 
     }
 
+    @PostMapping("/{shiftId}/close")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<ShiftResponse> closeShift(@PathVariable UUID siteId, @PathVariable UUID shiftId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+
+        Shift shift = shiftService.closeShift(siteId, principal.getId(), shiftId)
+                .orElseThrow(() -> noSuchShift(siteId, shiftId));
+        return ResponseEntity.ok(ShiftResponse.from(shift, shiftService.assignmentsFor(shift.getId())));
+    }
+
     @PostMapping("/{shiftId}/assignments")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMIN') and @siteAccess.canAccess(#siteId)")
     public ResponseEntity<ShiftResponse> addShiftAssignment(@PathVariable UUID siteId, @PathVariable UUID shiftId,

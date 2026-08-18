@@ -8,13 +8,13 @@ export function ShiftTimeFields({
   onStartChange,
   onEndChange,
   endError,
-}: {
+}: Readonly<{
   startsAt: Date | null;
   endsAt: Date | null;
   onStartChange: (d: Date | null) => void;
   onEndChange: (d: Date | null) => void;
   endError?: string;
-}) {
+}>) {
   return (
     <>
       <label htmlFor="startsAt">Starts at</label>

@@ -27,4 +27,25 @@ describe("assessFreshness", () => {
       assessFreshness(reading({ observedAt: minsAgo(1), qualityStatus: "STALE" }), NOW).level,
     ).toBe("stale");
   });
+
+  // SCRUM-420 / S3358 — exact boundary values, locking in the `>=` comparison semantics
+  // before the nested ternary is extracted to levelForAge().
+  it("is delayed at exactly the 20-minute boundary (>=, not >)", () => {
+    expect(assessFreshness(reading({ observedAt: minsAgo(20) }), NOW).level).toBe("delayed");
+  });
+  it("is fresh one second inside the 20-minute boundary", () => {
+    expect(
+      assessFreshness(reading({ observedAt: new Date(NOW.getTime() - (20 * 60 - 1) * 1000).toISOString() }), NOW)
+        .level,
+    ).toBe("fresh");
+  });
+  it("is stale at exactly the 45-minute boundary (>=, not >)", () => {
+    expect(assessFreshness(reading({ observedAt: minsAgo(45) }), NOW).level).toBe("stale");
+  });
+  it("is delayed one second inside the 45-minute boundary", () => {
+    expect(
+      assessFreshness(reading({ observedAt: new Date(NOW.getTime() - (45 * 60 - 1) * 1000).toISOString() }), NOW)
+        .level,
+    ).toBe("delayed");
+  });
 });

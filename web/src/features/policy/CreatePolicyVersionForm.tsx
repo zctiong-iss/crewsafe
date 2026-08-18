@@ -126,7 +126,7 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
   if (prefill.status === "loading") {
     return (
       <AppShell title="Create Policy Version" siteSwitcher={siteSwitcher}>
-        <p role="status">Loading current policy…</p>
+        <output style={{ display: "block" }}>Loading current policy…</output>
       </AppShell>
     );
   }
@@ -151,14 +151,14 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
     <AppShell title="Create Policy Version" siteSwitcher={siteSwitcher}>
       <form className="policy-form" onSubmit={handleSubmit}>
         {prefill.status === "unavailable" && (
-          <p className="policy-form__note" role="status">
+          <output className="policy-form__note">
             Could not load the site's current policy to pre-fill thresholds. Enter them from scratch below.
-          </p>
+          </output>
         )}
         {prefill.status === "ready" && !prefill.active && (
-          <p className="policy-form__note" role="status">
+          <output className="policy-form__note">
             This site has no policy version yet — this one becomes active immediately once created.
-          </p>
+          </output>
         )}
 
         <section className="policy-form__section">

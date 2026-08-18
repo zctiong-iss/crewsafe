@@ -8,11 +8,11 @@ const OPTIONS: { value: Intensity; label: string }[] = [
   { value: "HEAVY", label: "Heavy" },
 ];
 
-export function WorkIntensitySegmented({ name, value, onChange }: {
+export function WorkIntensitySegmented({ name, value, onChange }: Readonly<{
   name: string;               
   value: Intensity | "";
   onChange: (next: Intensity) => void;
-}) {
+}>) {
   return (
     <fieldset className="intensity">
       <legend className="intensity__legend">Intensity</legend>

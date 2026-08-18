@@ -9,16 +9,16 @@ const STATUS_LABEL: Record<Shift["status"], string> = {
   PLANNED: "Planned", ACTIVE: "Active", CLOSED: "Closed", CANCELLED: "Cancelled",
 };
 
-function StatusPill({ status }: { status: Shift["status"] }) {
+function StatusPill({ status }: Readonly<{ status: Shift["status"] }>) {
   return <span className={`pill pill--status pill--${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>;
 }
 
-function IntensityPill({ intensity }: { intensity: Intensity }) {
+function IntensityPill({ intensity }: Readonly<{ intensity: Intensity }>) {
   const label = intensity.charAt(0) + intensity.slice(1).toLowerCase();
   return <span className={`pill pill--intensity pill--intensity-${intensity.toLowerCase()}`}>{label}</span>;
 }
 
-export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: {
+export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: Readonly<{
   shift: Shift;
   workerNames: Map<string, string>;
   siteNames: Map<string, string>;
@@ -26,7 +26,7 @@ export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewSc
   crewScope?: "all" | "self";
   /** Show the Edit entry point. Management-only; the route is MANAGEMENT_ROLES-guarded. */
   canManage?: boolean;
-}) {
+}>) {
 
   const isAssigned = Boolean(currentUserId && shift.assignments.some((a) => a.workerId === currentUserId));
   const [open, setOpen] = useState(isAssigned);

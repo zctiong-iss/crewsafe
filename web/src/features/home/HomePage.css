@@ -1,4 +1,5 @@
 .home__loading {
+  display: block;
   color: var(--ink-muted);
 }
 

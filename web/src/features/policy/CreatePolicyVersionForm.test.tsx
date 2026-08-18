@@ -64,7 +64,34 @@ describe("CreatePolicyVersionForm", () => {
     await screen.findByLabelText("Version label");
 
     expect(thresholdInput("Unacclimatised", "Light")).toHaveValue(null);
-    expect(screen.getByText(/this one becomes active immediately once created/)).toBeInTheDocument();
+    const note = screen.getByText(/this one becomes active immediately once created/);
+    expect(note).toBeInTheDocument();
+    // SCRUM-420 / S6819 — this note must be a native <output> status region, not role=status.
+    expect(note.tagName).toBe("OUTPUT");
+    expect(note).toHaveClass("policy-form__note");
+  });
+
+  it("renders the loading message as an <output> status region (SCRUM-420 / S6819)", async () => {
+    server.use(
+      http.get("*/api/v1/sites/:siteId/policy-versions/active", () => new Promise(() => {})),
+    );
+    renderApp();
+
+    const status = await screen.findByText("Loading current policy…");
+    expect(status.tagName).toBe("OUTPUT");
+  });
+
+  it("renders the 'could not pre-fill' note as an <output> status region when prefill fails (SCRUM-420 / S6819)", async () => {
+    server.use(
+      http.get("*/api/v1/sites/:siteId/policy-versions/active", () =>
+        HttpResponse.json({}, { status: 500 }),
+      ),
+    );
+    renderApp();
+
+    const note = await screen.findByText(/Could not load the site's current policy to pre-fill/);
+    expect(note.tagName).toBe("OUTPUT");
+    expect(note).toHaveClass("policy-form__note");
   });
 
   it("AC — creates a version on the happy path, saved as a draft", async () => {

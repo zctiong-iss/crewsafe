@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
  * Deliberately not a 404. The section is real and planned; saying so is more honest than
  * pretending the URL is wrong, and it keeps the shell navigable while features land.
  */
-export function PlaceholderPage({ title }: { title: string }) {
+export function PlaceholderPage({ title }: Readonly<{ title: string }>) {
   return (
     <AppShell title={title}>
       <EmptyState

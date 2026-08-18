@@ -12,6 +12,7 @@
 }
 
 .conditions-panel__loading {
+  display: block;
   font-size: var(--text-base);
   color: var(--ink-secondary);
 }
