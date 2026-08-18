@@ -176,7 +176,6 @@
 
   .shell__nav {
     flex-direction: row;
-    flex: 1;
     flex-wrap: wrap;
     flex: 1 1 100%;
     gap: var(--space-1);
