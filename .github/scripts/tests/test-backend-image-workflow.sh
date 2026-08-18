@@ -173,6 +173,9 @@ redeploy_policy_guard() {
   rg -q -F -- 'resolve-existing-image:' "$path" || return 1
   rg -q -F -- 'github.event_name == '"'"'workflow_dispatch'"'"'' "$path" || return 1
   rg -q -F -- 'inputs.redeploy_image_tag' "$path" || return 1
+  rg -q -F -- 'IMAGE_TAG: ${{ inputs.redeploy_image_tag }}' "$path" || return 1
+  ! rg -q -F -- '"$IMAGE" "${{ inputs.redeploy_image_tag }}"' "$path" || return 1
+  rg -q -F -- '"$IMAGE" "$IMAGE_TAG"' "$path" || return 1
   rg -q -F -- 'fetch-depth: 0' "$path" || return 1
   rg -q -F -- 'git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA"' "$path" || return 1
   rg -q -F -- 'aws ecr describe-images' "$path" || return 1

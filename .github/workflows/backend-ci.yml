@@ -288,8 +288,9 @@ jobs:
         if: always()
         env:
           IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          IMAGE_TAG: "${{ inputs.redeploy_image_tag }}"
           EXCEPTIONS: .trivyignore-active-backend
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${{ inputs.redeploy_image_tag }}" "Backend image vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "Backend image vulnerability scan" "$EXCEPTIONS"
       - name: Upload existing backend Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/ml-service-ci.yml"
+readonly VALIDATE_TRIVY_EXCEPTIONS_SCRIPT='.github/scripts/security/validate-trivy-exceptions.sh'
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
@@ -74,7 +75,7 @@ workflow_policy_guard() {
   contains "$path" 'branches: [main]' || return 1
   contains "$path" '"ml-service/**"' || return 1
   contains "$path" '".github/workflows/ml-service-ci.yml"' || return 1
-  contains "$path" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$path" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
   path_filter_count_at_least_two "$path" '.github/scripts/deploy/deploy-ml-service-staging.sh' || return 1
   contains "$path" '.github/scripts/tests/test-validate-trivy-exceptions.sh' || return 1
   contains "$path" 'contents: read' || return 1
@@ -115,7 +116,7 @@ workflow_policy_guard() {
   contains "$verify_job" 'python -m pytest test_forecast.py' || return 1
   contains "$verify_job" "docker build -t \"\$IMAGE\" ml-service" || return 1
   contains "$verify_job" ".github/scripts/ci/run-ml-service-smoke.sh \"\$IMAGE\"" || return 1
-  contains "$verify_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$verify_job" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
   contains "$verify_job" '.github/scripts/security/filter-trivyignore.sh' || return 1
   contains "$verify_job" '.github/scripts/security/summarize-trivy-report.sh' || return 1
   contains "$verify_job" "image-ref: \"\${{ env.IMAGE }}\"" || return 1
@@ -173,7 +174,7 @@ workflow_policy_guard() {
   contains "$publish_job" 'aws ecr get-login-password' || return 1
   contains "$publish_job" 'docker login' || return 1
   contains "$publish_job" 'docker push "$REPO:$SHA"' || return 1
-  contains "$publish_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$publish_job" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
   contains "$publish_job" "exit-code: '1'" || return 1
   not_contains "$publish_job" "exit-code: '0'" || return 1
   contains "$publish_job" 'if: always()' || return 1
@@ -201,7 +202,10 @@ workflow_policy_guard() {
   contains "$resolve_job" 'configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' || return 1
   contains "$resolve_job" 'mask-aws-account-id: true' || return 1
   contains "$resolve_job" 'aws ecr describe-images' || return 1
-  contains "$resolve_job" '.github/scripts/security/validate-trivy-exceptions.sh' || return 1
+  contains "$resolve_job" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
+  contains "$resolve_job" 'IMAGE_TAG: ${{ inputs.redeploy_image_tag }}' || return 1
+  not_contains "$resolve_job" '"$IMAGE" "${{ inputs.redeploy_image_tag }}"' || return 1
+  contains "$resolve_job" '"$IMAGE" "$IMAGE_TAG"' || return 1
   contains "$resolve_job" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' || return 1
   contains "$resolve_job" 'image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"' || return 1
   contains "$resolve_job" 'trivy-ml-service-redeploy-report.json' || return 1

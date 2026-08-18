@@ -347,8 +347,9 @@ jobs:
         if: always()
         env:
           IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          IMAGE_TAG: "${{ inputs.redeploy_image_tag }}"
           EXCEPTIONS: .trivyignore-active-ml-service
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${{ inputs.redeploy_image_tag }}" "ML-service container vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "ML-service container vulnerability scan" "$EXCEPTIONS"
       - name: Upload existing ml-service Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
