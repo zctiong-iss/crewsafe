@@ -59,8 +59,8 @@ function shiftPresentation(
   canEndNow: boolean,
 ) {
   return {
-    hasAssignments: shift != null && shift.assignments.length > 0,
-    hasNoAssignments: shift != null && shift.assignments.length === 0,
+    hasAssignments: (shift?.assignments.length ?? 0) > 0,
+    hasNoAssignments: shift?.assignments.length === 0,
     canEdit: editable,
     showEndControls: canEndShift && canEndNow,
   };

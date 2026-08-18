@@ -17,9 +17,8 @@ import {
 } from "./stacks";
 import { tabScreenOptions } from "./tabOptions";
 import { useTheme } from "@/theme/ThemeProvider";
-import { useAppSelector } from "@/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadConcerns, selectOpenConcernCount } from "@/store/reducers/wellbeingSlice";
-import { useAppDispatch } from "@/store/hooks";
 import { useEffect } from "react";
 import type { SupervisorTabParamList } from "./types";
 

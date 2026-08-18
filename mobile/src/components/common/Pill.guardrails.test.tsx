@@ -23,7 +23,12 @@
  * the fill — only that nothing clamps and nothing caps the width. Confirming the wrap renders
  * correctly is the judgement half of the gate and is called out in the plan doc.
  */
-import { guardrailCases, renderUnderGuardrails, expectNoClipping, expectPillsBordered } from "@/testing/guardrails";
+import { guardrailCases, renderUnderGuardrails, expectNoClipping, expectPillsBordered, formatDiagnosticValue } from "@/testing/guardrails";
+
+it("formats primitive and object-shaped clamp diagnostics deterministically", () => {
+  expect(formatDiagnosticValue(1)).toBe("1");
+  expect(formatDiagnosticValue({ limit: 1, source: "test" })).toBe('{"limit":1,"source":"test"}');
+});
 
 let mockTheme = jest.requireActual("@/styles/theme").buildTheme(false, 1);
 let mockLanguage = "en";

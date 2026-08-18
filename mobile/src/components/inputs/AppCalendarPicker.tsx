@@ -147,6 +147,11 @@ function monthLabel(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(date);
 }
 
+/** Stable local-calendar identity for a non-interactive grid cell. */
+export function calendarCellKey(date: Date): string {
+  return `blank-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
 /** The full date, spoken. Screen readers should not have to read a bare number out of a grid. */
 function spokenDate(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(date);
@@ -395,7 +400,12 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
               if (!day) {
                 const blankDate = new Date(gridStart);
                 blankDate.setDate(gridStart.getDate() + index);
-                return <View key={`blank-${blankDate.toISOString()}`} style={[styles.cell, { width: cellSize }]} />;
+                return (
+                  <View
+                    key={calendarCellKey(blankDate)}
+                    style={[styles.cell, { width: cellSize }]}
+                  />
+                );
               }
               const selected = isSameDay(day, draft);
               const isToday = isSameDay(day, today);

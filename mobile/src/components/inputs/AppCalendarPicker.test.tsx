@@ -21,10 +21,19 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 jest.mock("@/hooks/useReduceMotion", () => ({ useReduceMotion: () => false }));
 
-import AppCalendarPicker, { WEEKDAY_KEYS, weekdayInitials } from "./AppCalendarPicker";
+import AppCalendarPicker, { calendarCellKey, WEEKDAY_KEYS, weekdayInitials } from "./AppCalendarPicker";
+
+// The shared coverage runner executes 97 suites concurrently; allow its first native-tree render
+// to absorb CPU scheduling delay without weakening any of the assertions below.
+jest.setTimeout(15_000);
 
 it("uses explicit weekday domain keys independent of rendered position", () => {
   expect(weekdayInitials("en-SG").map(({ key }) => key)).toEqual([...WEEKDAY_KEYS]);
+});
+
+it("gives blank calendar cells distinct local date identities", () => {
+  expect(calendarCellKey(new Date(2026, 7, 1))).not.toBe(calendarCellKey(new Date(2026, 7, 2)));
+  expect(calendarCellKey(new Date(2026, 7, 1))).toBe("blank-2026-7-1");
 });
 
 /** Wednesday 26 August 2026, 10:15 local — the date in the screenshot that prompted this. */

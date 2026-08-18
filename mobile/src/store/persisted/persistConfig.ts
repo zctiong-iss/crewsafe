@@ -155,8 +155,6 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
         preferences: {
           notificationsMuted: false,
           notificationRationaleShown: false,
-          // No `?? {}` guard: object spread already treats undefined as nothing to spread,
-          // so the fallback would only be an empty object spread over an empty object.
           ...previous.preferences,
         },
       };

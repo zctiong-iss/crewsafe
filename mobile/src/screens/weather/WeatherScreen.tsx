@@ -173,6 +173,32 @@ export default function WeatherScreen() {
       ]
     : [];
 
+  /*
+   * A site with nothing ingested yet. Only reachable live — the mock always has a
+   * reading — and previously it rendered an empty screen under a site picker, which
+   * reads as a broken app rather than as "no data for this site".
+   *
+   * `selectedSiteId !== null` inside `weatherPresentation` separates this from the
+   * no-memberships case, which is also conditions-less and would otherwise stack two
+   * empty states.
+   */
+  const noReadingContent = noReading ? (
+    <View style={styles.empty}>
+      <AppText variant="title" style={styles.centre}>
+        {t("weather.noReadingTitle")}
+      </AppText>
+      <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
+        {t("weather.noReadingBody")}
+      </AppText>
+      <AppButton
+        title={t("weather.statusExplain")}
+        variant="secondary"
+        onPress={() => setStatusSubject("NO_READING")}
+        style={styles.retry}
+      />
+    </View>
+  ) : null;
+
   return (
     <AppSafeView>
       <ScrollView
@@ -404,30 +430,9 @@ export default function WeatherScreen() {
               </View>
             </View>
           </>
-        ) : noReading ? (
-          /*
-           * A site with nothing ingested yet. Only reachable live — the mock always has a
-           * reading — and previously it rendered an empty screen under a site picker, which
-           * reads as a broken app rather than as "no data for this site".
-           *
-           * `selectedSiteId !== null` is what separates this from the no-memberships case
-           * above, which is also conditions-less and would otherwise stack two empty states.
-           */
-          <View style={styles.empty}>
-            <AppText variant="title" style={styles.centre}>
-              {t("weather.noReadingTitle")}
-            </AppText>
-            <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
-              {t("weather.noReadingBody")}
-            </AppText>
-            <AppButton
-              title={t("weather.statusExplain")}
-              variant="secondary"
-              onPress={() => setStatusSubject("NO_READING")}
-              style={styles.retry}
-            />
-          </View>
-        ) : null}
+        ) : (
+          noReadingContent
+        )}
 
         {/* Without this only FAIR is reachable — the fixture returns one set of metrics, so
             five of the six animations and the whole night variant would be unreviewable.

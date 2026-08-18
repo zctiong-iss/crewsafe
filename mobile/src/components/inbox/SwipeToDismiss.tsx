@@ -69,7 +69,7 @@ const SwipeToDismiss: FC<Readonly<SwipeToDismissProps>> = ({ enabled, onDismiss,
    * all the gesture is undiscoverable and a half-swipe gives no feedback — which on a gloved
    * hand is most swipes.
    *
-   * `dragX` is interpolated in both directions because the gesture is accepted either way: a
+   * `translation` is interpolated in both directions because the gesture is accepted either way: a
    * worker should not have to remember which.
    */
   return (

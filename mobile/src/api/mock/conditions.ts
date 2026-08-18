@@ -70,14 +70,18 @@ function evaluatePolicy(wbgt: number, intensity: Intensity, workerId: string): P
 
   switch (currentBand) {
     case "BELOW_31":
-      advisory.push(action("HYDRATE_REGULARLY", "HS-BASE-HYDRATE", workerId));
-      advisory.push(action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId));
+      advisory.push(
+        action("HYDRATE_REGULARLY", "HS-BASE-HYDRATE", workerId),
+        action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId),
+      );
       break;
 
     case "31_TO_BELOW_32":
       mandatory.push(action("HYDRATE_HOURLY", "HS-31-HYDRATE", workerId));
-      advisory.push(action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId));
-      advisory.push(action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId));
+      advisory.push(
+        action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId),
+        action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId),
+      );
       break;
 
     case "32_TO_BELOW_33":
@@ -90,8 +94,10 @@ function evaluatePolicy(wbgt: number, intensity: Intensity, workerId: string): P
     case "33_AND_ABOVE":
       mandatory.push(action("HYDRATE_HOURLY", "HS-31-HYDRATE", workerId));
       if (heavy) mandatory.push(action("REST_15_MIN_HOURLY", "HS-33-HEAVY", workerId));
-      advisory.push(action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId));
-      advisory.push(action("CLOSE_MONITORING", "HS-33-MONITOR", workerId));
+      advisory.push(
+        action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId),
+        action("CLOSE_MONITORING", "HS-33-MONITOR", workerId),
+      );
       break;
   }
 

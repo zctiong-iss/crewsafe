@@ -17,8 +17,6 @@
  *
  * @author Justin Chua
  */
-import "react-native-gesture-handler";
-
 import { useCallback, useEffect } from "react";
 import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";

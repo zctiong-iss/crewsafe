@@ -61,7 +61,6 @@ function horizonPresentation(state: HorizonState) {
   return {
     forecast,
     loading: state.status === "loading" || state.status === "idle",
-    ready: forecast !== null,
     unavailable: state.status === "unavailable",
     failed: state.status === "error",
   };
