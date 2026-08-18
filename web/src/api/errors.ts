@@ -31,13 +31,25 @@ export class ApiError extends Error {
   readonly status: number | null;
   /** The X-Request-Id the API issued, if the response carried one. */
   readonly requestId: string | null;
+  /** The backend's ErrorCode, when the response body carried one — see
+   * ErrorCode.java. Most errors don't have one; a caller that needs to branch on a
+   * specific code should always fall back to messageFor when this is null, same as
+   * ErrorCode's own javadoc requires of every client. */
+  readonly code: string | null;
 
-  constructor(kind: ApiErrorKind, message: string, status: number | null, requestId: string | null) {
+  constructor(
+    kind: ApiErrorKind,
+    message: string,
+    status: number | null,
+    requestId: string | null,
+    code: string | null = null,
+  ) {
     super(message);
     this.name = "ApiError";
     this.kind = kind;
     this.status = status;
     this.requestId = requestId;
+    this.code = code;
   }
 }
 

@@ -1,0 +1,152 @@
+/** @author Jemilin Beulah */
+
+/* Admin console: tab nav + Sites/Users list. Grammar: status pills FILL, attribute pills OUTLINE
+   (design/pill.css) — same as ShiftList/PolicyVersionList. */
+
+.admin-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+.admin-tabs__link {
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--weight-medium);
+  color: var(--ink-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+}
+.admin-tabs__link--active {
+  color: var(--ink);
+  border-bottom-color: var(--action);
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: var(--content-max);
+}
+
+/* Create link, rendered in the AppShell actions slot + empty state — same shape as
+   .shift-list__create. */
+.admin-list__create {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--action-ink);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+.admin-list__create:hover { background: var(--action-hover); }
+
+.admin-list__card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.admin-list__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.admin-list__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  margin: 0 0 var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.admin-list__badge {
+  color: var(--ink-muted);
+  border-color: var(--ink-muted);
+}
+.admin-list__meta {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.admin-list__status-active { color: var(--status-ok); border-color: var(--status-ok); }
+.admin-list__status-inactive { color: var(--status-none); border-color: var(--status-none); }
+
+.admin-list__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.admin-list__actions button,
+.admin-list__actions select {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.admin-list__actions button:hover { background: var(--surface-sunken); }
+.admin-list__actions button:disabled,
+.admin-list__actions select:disabled { opacity: 0.6; cursor: default; }
+
+.admin-list__inline-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+
+.admin-list__confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+.admin-list__confirm button {
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.admin-list__hint {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+.admin-list__error {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+
+.admin-list__memberships {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.admin-list__membership-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--ink);
+}

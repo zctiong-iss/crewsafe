@@ -82,6 +82,21 @@ class DemoDataSeederMappingTest {
     }
 
     @Test
+    void acceptsAnEmailShapedDeveloperUsernameInTheSyntheticNamespace() {
+        // A developer identity that needs to exist on the live shared pool
+        // (username_attributes=["email"]) — still "developer" kind and "preserve" status,
+        // just shaped like the email that pool requires.
+        String emailShaped = VALID.replace("developer-one", "admin1@synthetic.crewsafe.invalid");
+
+        assertThat(DemoDataSeeder.parseAndValidateMappings(MAPPER, emailShaped))
+                .singleElement()
+                .satisfies(mapping -> {
+                    assertThat(mapping.identityKind()).isEqualTo("developer");
+                    assertThat(mapping.username()).isEqualTo("admin1@synthetic.crewsafe.invalid");
+                });
+    }
+
+    @Test
     void rejectsMissingOrUnsupportedStatusAndCrossKindUsernames() {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> DemoDataSeeder.parseAndValidateMappings(

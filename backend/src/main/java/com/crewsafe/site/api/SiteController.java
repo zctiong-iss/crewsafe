@@ -75,10 +75,11 @@ public class SiteController {
             @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
 
         List<Site> visible = principal.getRole() == Role.ADMIN
-                ? sites.findAll()
+                ? sites.findByArchivedFalse()
                 : sites.findAllById(memberships.findSiteIdsByUserId(principal.getId()));
 
         return ResponseEntity.ok(visible.stream()
+                .filter(site -> !site.isArchived())
                 .sorted(Comparator.comparing(Site::getName))
                 .map(SiteResponse::from)
                 .toList());
