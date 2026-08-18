@@ -669,6 +669,10 @@
     "minuteInput": "မိနစ်"
   },
   "oversight": {
+    "earlierPlans_one": "အစောပိုင်း အစီအစဉ် {{count}} ခု",
+    "earlierPlans_other": "အစောပိုင်း အစီအစဉ် {{count}} ခု",
+    "hideEarlierPlans": "အစောပိုင်းအစီအစဉ်များ ဖျှောက်ရန်",
+    "unknownShift": "အလုပ်ဆိုင်း စာရင်းတွင် မရှိတော့ပါ",
     "tabTitle": "ကြီးကြပ်မှု",
     "title": "ကြီးကြပ်မှု",
     "showPlans": "အစီအစဉ်များ",

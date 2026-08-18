@@ -668,6 +668,10 @@
     "minuteInput": "Minute"
   },
   "oversight": {
+    "earlierPlans_one": "{{count}} earlier plan",
+    "earlierPlans_other": "{{count}} earlier plans",
+    "hideEarlierPlans": "Hide earlier plans",
+    "unknownShift": "Shift no longer listed",
     "tabTitle": "Oversight",
     "title": "Oversight",
     "showPlans": "Plans",

@@ -105,7 +105,16 @@ function plan(id: string, overrides: Partial<Recommendation> = {}): Recommendati
   };
 }
 
+/*
+ * On its OWN shift, deliberately (SCRUM-TBD-110).
+ *
+ * Each shift now shows only its newest plan at rest, with the rest collapsed. Two plans on one
+ * shift would leave one of them behind a disclosure, and every badge assertion below would be
+ * testing the collapse rather than the badge. Two shifts is also the realistic case: a site
+ * runs more than one crew.
+ */
 const DECIDED = plan("rec-2", {
+  shiftId: "shift-2",
   status: "APPROVED",
   approval: {
     id: "ap-1",
@@ -138,8 +147,15 @@ function renderScreen(store = buildStore()) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFetchSites.mockResolvedValue([site("site-1", "Bishan Park"), site("site-2", "NUS Campus")]);
-  mockFetchShifts.mockResolvedValue([{ id: "shift-1" }]);
-  mockFetchRecommendations.mockResolvedValue([plan("rec-1"), DECIDED]);
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+    { id: "shift-2", startsAt: "2026-08-18T14:00:00Z", endsAt: "2026-08-18T22:00:00Z" },
+  ]);
+  // Keyed by shift: a blanket mockResolvedValue would hand BOTH plans to BOTH shifts and the
+  // site would appear to hold four.
+  mockFetchRecommendations.mockImplementation((_siteId: string, shiftId: string) =>
+    Promise.resolve(shiftId === "shift-1" ? [plan("rec-1")] : [DECIDED]),
+  );
   mockFetchPlanSummary.mockResolvedValue([]);
 });
 
@@ -661,4 +677,63 @@ it("keeps the status and the supervisor on one line for every status", async () 
   const style = pillRow?.props?.style;
   const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
   expect(flattened.flexWrap ?? "nowrap").not.toBe("wrap");
+});
+
+/* ── Only the current plan per shift shows at rest (SCRUM-TBD-110) ──────────────────────── */
+
+it("shows one plan per shift and collapses the history behind a count", async () => {
+  /*
+   * A site collects a plan per band transition — five within an hour on a volatile day — and
+   * almost all are superseded the moment conditions move again. Listing them all made a
+   * manager scroll past four dead rows to reach the live one.
+   */
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("newest", { createdAt: "2026-08-18T15:26:00Z" }),
+    plan("older", { createdAt: "2026-08-18T15:09:00Z", status: "SUPERSEDED" }),
+    plan("oldest", { createdAt: "2026-08-18T14:39:00Z", status: "SUPERSEDED" }),
+  ]);
+
+  const { getAllByLabelText, getByText, queryByLabelText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  // Two earlier plans, behind one control.
+  await waitFor(() => expect(getByText("oversight.earlierPlans:2")).toBeTruthy());
+
+  // Expanding reveals them; nothing was discarded.
+  await fireEvent.press(queryByLabelText("oversight.earlierPlans:2")!);
+  await waitFor(() => expect(getByText("oversight.hideEarlierPlans")).toBeTruthy());
+});
+
+it("keeps an in-force stop-work visible under a newer plan", async () => {
+  // AUTO_DISPATCHED went to a crew without approval (SCRUM-440). Hiding it because something
+  // newer exists would take the most severe thing the system shows off the oversight screen.
+  mockFetchShifts.mockResolvedValue([
+    { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
+  ]);
+  mockFetchRecommendations.mockResolvedValue([
+    plan("newer", { createdAt: "2026-08-18T15:30:00Z" }),
+    plan("stopwork", { createdAt: "2026-08-18T15:17:00Z", status: "AUTO_DISPATCHED" }),
+    plan("old", { createdAt: "2026-08-18T14:39:00Z", status: "SUPERSEDED" }),
+  ]);
+
+  const { getAllByLabelText, getByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  // Only "old" is collapsed — the stop-work stays out with the newest plan.
+  await waitFor(() => expect(getByText("oversight.earlierPlans:1")).toBeTruthy());
+});
+
+it("labels each shift with its window so two crews are distinguishable", async () => {
+  // Without it, two rows reading "Awaiting decision, Aisyah (Supervisor)" look like one row
+  // rendered twice rather than two different crews.
+  const { getAllByLabelText, getAllByText } = await renderScreen();
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
+
+  await waitFor(() => expect(getAllByText(/shifts.window/).length).toBe(2));
 });

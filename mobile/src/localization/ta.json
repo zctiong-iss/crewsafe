@@ -668,6 +668,10 @@
     "minuteInput": "நிமிடம்"
   },
   "oversight": {
+    "earlierPlans_one": "{{count}} முந்தைய திட்டம்",
+    "earlierPlans_other": "{{count}} முந்தைய திட்டங்கள்",
+    "hideEarlierPlans": "முந்தைய திட்டங்களை மறை",
+    "unknownShift": "பணிநேரம் இனி பட்டியலில் இல்லை",
     "tabTitle": "மேற்பார்வை",
     "title": "மேற்பார்வை",
     "showPlans": "திட்டங்கள்",

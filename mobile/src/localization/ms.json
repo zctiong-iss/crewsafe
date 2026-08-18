@@ -668,6 +668,10 @@
     "minuteInput": "Minit"
   },
   "oversight": {
+    "earlierPlans_one": "{{count}} pelan terdahulu",
+    "earlierPlans_other": "{{count}} pelan terdahulu",
+    "hideEarlierPlans": "Sembunyikan pelan terdahulu",
+    "unknownShift": "Syif tidak lagi disenaraikan",
     "tabTitle": "Pengawasan",
     "title": "Pengawasan",
     "showPlans": "Pelan",
