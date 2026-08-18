@@ -62,6 +62,31 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.66.0"
   },
+  "//overrides": [
+    "SCRUM-295: pins for transitive-only SonarCloud dependency-risk findings.",
+    "None of these three are direct dependencies -- npm ls confirms they come",
+    "in via @react-navigation/native -> @react-navigation/core -> query-string",
+    "(decode-uri-component) and expo-splash-screen -> @expo/config-plugins ->",
+    "@expo/plist / xcode (@xmldom/xmldom, uuid). Their immediate parent",
+    "packages (@expo/plist, xcode, query-string) have not released newer",
+    "versions that pick up the fix, so a parent-package bump cannot resolve",
+    "these -- an override is the only available remediation short of an",
+    "upstream Expo/React Navigation release. All three are leaf utility",
+    "packages (URI decoding, XML parsing, UUID generation) used only inside",
+    "build-time tooling, not shipped app runtime code, so the API surface",
+    "risk from forcing a newer major version is low; verified by the",
+    "existing Jest suite (T022) after this override is applied.",
+    "decode-uri-component is pinned to 0.3.0, not the newer 0.4.x/0.5.0 --",
+    "0.4.0 switched the package to ESM-only ('type: module'), which breaks",
+    "Jest's default CommonJS transform for query-string's require() of it",
+    "(confirmed: 0.5.0 crashed WorkerTabs.test.tsx with 'Unexpected token",
+    "export'). 0.3.0 carries the same fix while staying CommonJS."
+  ],
+  "overrides": {
+    "decode-uri-component": "0.3.0",
+    "@xmldom/xmldom": "0.9.11",
+    "uuid": "14.0.1"
+  },
   "//port": [
     "Metro runs on 8082, not its default 8081.",
     "8081 is a crowded port — Apache ships on it in several bundles (XAMPP, and the httpd",
