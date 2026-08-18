@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.13</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
@@ -17,9 +17,20 @@
     <name>crewsafe-backend</name>
     <description>CrewSafe SG - shared backend</description>
 
+    <!-- SCRUM-295: dependency-risk backlog burn-down. The 3.5.13 -> 3.5.16
+         parent bump above moves the BOM-managed Tomcat/Netty/Jackson/Spring
+         Security/Spring Data/postgresql cluster. The four properties below
+         override artifacts the BOM still pins to an older, flagged version
+         at 3.5.16 (confirmed by diffing spring-boot-dependencies 3.5.13 vs
+         3.5.16); each target is the latest stable (non-alpha/beta) release
+         available on Maven Central as of 2026-08-18. -->
     <properties>
         <java.version>21</java.version>
         <lombok.version>1.18.38</lombok.version>
+        <log4j2.version>2.26.1</log4j2.version>
+        <commons-lang3.version>3.20.0</commons-lang3.version>
+        <httpclient5.version>5.6.4</httpclient5.version>
+        <httpcore5.version>5.4.3</httpcore5.version>
     </properties>
 
     <dependencies>
@@ -137,6 +148,19 @@
         </dependency>
 
     </dependencies>
+
+    <!-- SCRUM-295: commons-compress has no corresponding Boot BOM property
+         (it's pulled in transitively, test-scope, via testcontainers) so it
+         needs an explicit override rather than a property bump. -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-compress</artifactId>
+                <version>1.28.0</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>
