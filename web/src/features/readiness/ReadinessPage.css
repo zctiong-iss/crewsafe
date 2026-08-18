@@ -1,0 +1,99 @@
+.readiness__site-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.readiness__site-picker select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+.readiness__loading {
+  color: var(--ink-secondary);
+}
+.readiness__shifts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.readiness-card {
+  padding: var(--space-4) var(--space-5);
+}
+.readiness-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.readiness-card__when {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+}
+.readiness-card__flag {
+  background: var(--band-high-wash);
+  color: var(--band-high);
+}
+.readiness-card__empty {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+}
+
+.readiness-card__counts {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-sm);
+}
+.readiness-count--ok {
+  color: var(--status-ok);
+}
+.readiness-count--waiting {
+  color: var(--status-waiting);
+}
+.readiness-count--none {
+  color: var(--status-none);
+}
+
+.readiness-card__roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.readiness-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.readiness-row__name {
+  flex: 1;
+}
+.readiness-row__status--ok {
+  background: var(--status-ok-wash);
+  color: var(--status-ok);
+}
+.readiness-row__status--waiting {
+  background: var(--status-waiting-wash);
+  color: var(--status-waiting);
+}
+.readiness-row__status--none {
+  background: var(--status-none-wash);
+  color: var(--status-none);
+}
+.readiness-row__unfit {
+  color: var(--band-high);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+.readiness-row__symptom {
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+}
