@@ -71,3 +71,38 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     throw new ApiError("server", "Response was not valid JSON", response.status, requestId);
   }
 }
+
+/**
+ * Like {@link apiFetch}, but for a file download: attaches the bearer token, returns the raw
+ * body as a Blob plus the filename the server suggests in Content-Disposition. Exists because a
+ * guarded file endpoint cannot be reached by a plain <a href> — the link carries no token, so it
+ * 401s. This is the standard authenticated-download pattern.
+ */
+export async function apiDownload(
+  path: string,
+  init: RequestInit = {},
+): Promise<{ blob: Blob; filename: string }> {
+  const token = await getToken();
+
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError("network", "Request did not complete", null, null);
+  }
+
+  const requestId = response.headers.get(REQUEST_ID_HEADER);
+  if (!response.ok) {
+    throw new ApiError(kindFor(response.status), `HTTP ${response.status}`, response.status, requestId);
+  }
+
+  // Content-Disposition: attachment; filename="crewsafe-audit-site-1-2026-08-16.csv"
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? "crewsafe-audit-export.csv"; // ?? not || (S6606)
+
+  return { blob: await response.blob(), filename };
+}

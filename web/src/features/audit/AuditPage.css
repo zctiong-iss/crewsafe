@@ -1,0 +1,72 @@
+.audit__site-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.audit__site-picker select {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+.audit__loading {
+  color: var(--ink-secondary);
+}
+
+/* The download control lives in the AppShell actions slot; no shared .button--primary exists,
+   so it is styled here from tokens (the CVD-audited --action accent). */
+.audit__download {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--action);
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.audit__download:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.audit-table th,
+.audit-table td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.audit-table thead th {
+  color: var(--ink-muted);
+  font-weight: var(--weight-medium);
+}
+.audit-table__detail {
+  color: var(--ink-secondary);
+}
+
+.audit__pager {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+.audit__pager-button {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.audit__pager-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
