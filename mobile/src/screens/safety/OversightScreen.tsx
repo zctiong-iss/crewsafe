@@ -233,11 +233,17 @@ function SitePlanList({
   }
 
   /*
-   * One group per shift, each showing its current plan and hiding the history behind a count.
+   * One row per shift, and exactly one.
    *
-   * A site collects a plan per band transition — five within an hour on a volatile day — and
-   * almost all of them are superseded the moment conditions move again. Listing them all made
-   * a manager scroll past four dead rows to reach the live one.
+   * A site collects a plan per band transition, and the auto-trigger redrafts every two
+   * minutes while lightning holds — so a shift accumulates rows faster than anyone can read
+   * them, almost all superseded the moment conditions move again. `groupPlansByShift` picks
+   * the one plan that is actually instructing the crew; see it for why a pending draft never
+   * displaces a stop-work.
+   *
+   * The earlier-plans disclosure that used to sit under each group is gone. It was a second
+   * place for a stop-work to appear, and the whole point of this screen is that a manager
+   * reads one answer per crew rather than assembling it from a list.
    */
   const groups = groupPlansByShift(plans.items, plans.shifts);
 
@@ -259,58 +265,18 @@ function SitePlanList({
               : t("oversight.unknownShift")}
           </AppText>
 
-          {group.current.map((plan) => (
-            <PlanRow
-              key={plan.id}
-              plan={plan}
-              supervisors={supervisors}
-              onPress={() => onOpenPlan(plan)}
-              deciderName={
-                plan.approval
-                  ? (plan.approval.approverName ?? workerNameFor(plan.approval.approverId))
-                  : null
-              }
-            />
-          ))}
+          <PlanRow
+            plan={group.plan}
+            supervisors={supervisors}
+            onPress={() => onOpenPlan(group.plan)}
+            deciderName={
+              group.plan.approval
+                ? (group.plan.approval.approverName ??
+                  workerNameFor(group.plan.approval.approverId))
+                : null
+            }
+          />
 
-          {/*
-            History, kept rather than dropped: a manager asking why a plan was superseded needs
-            the plan it replaced, and that question is what oversight is for.
-
-            Uncontrolled `Disclosure` — unlike the site rows above, these live inside an
-            already-expanded card rather than in the FlatList's recycling path, so holding their
-            own state is correct and does not need hoisting.
-          */}
-          {group.earlier.length > 0 ? (
-            <Disclosure
-              label={(open) =>
-                open
-                  ? t("oversight.hideEarlierPlans")
-                  : t("oversight.earlierPlans", { count: group.earlier.length })
-              }
-              accessibilityLabel={(open) =>
-                open
-                  ? t("oversight.hideEarlierPlans")
-                  : t("oversight.earlierPlans", { count: group.earlier.length })
-              }
-            >
-              <View style={styles.earlierPlans}>
-                {group.earlier.map((plan) => (
-                  <PlanRow
-                    key={plan.id}
-                    plan={plan}
-                    supervisors={supervisors}
-                    onPress={() => onOpenPlan(plan)}
-                    deciderName={
-                      plan.approval
-                        ? (plan.approval.approverName ?? workerNameFor(plan.approval.approverId))
-                        : null
-                    }
-                  />
-                ))}
-              </View>
-            </Disclosure>
-          ) : null}
         </View>
       ))}
     </View>
@@ -580,10 +546,6 @@ const styles = StyleSheet.create({
   },
   shiftGroup: {
     gap: vs(6),
-  },
-  earlierPlans: {
-    marginTop: vs(8),
-    gap: vs(8),
   },
   siteBody: {
     marginTop: vs(8),

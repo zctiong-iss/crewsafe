@@ -668,9 +668,6 @@
     "minuteInput": "মিনিট"
   },
   "oversight": {
-    "earlierPlans_one": "{{count}}টি আগের পরিকল্পনা",
-    "earlierPlans_other": "{{count}}টি আগের পরিকল্পনা",
-    "hideEarlierPlans": "আগের পরিকল্পনা লুকান",
     "unknownShift": "শিফট আর তালিকাভুক্ত নয়",
     "tabTitle": "তত্বাবধান",
     "title": "তত্বাবধান",

@@ -52,7 +52,6 @@ const LONGEST: Record<string, string> = {
   "oversight.showPlans": "အစီအစဉ်များကို ပြရန်",
   "oversight.hidePlans": "အစီအစဉ်များ ဖျှောက်ရန်",
   "oversight.awaitingCount": "ဆုံးဖြတ်ချက် စောင့်ဆိုင်းနေသည် ၃ ခု",
-  "oversight.earlierPlans": "အစောပိုင်း အစီအစဉ် ၂ ခု",
   "shifts.window": "၂၀၂၆ ခုနှစ် သြဂုတ်လ ၁၈ ရက် ၁၄:၃၆ မှ ၁၉ ရက် ၁၄:၃၆ အထိ",
 };
 
@@ -166,8 +165,9 @@ beforeEach(() => {
   mockFetchShifts.mockResolvedValue([
     { id: "shift-1", startsAt: "2026-08-18T06:00:00Z", endsAt: "2026-08-18T14:00:00Z" },
   ]);
-  /* The worst case the screen can hold: a stop-work kept out alongside the newest plan, plus
-     history behind a count, plus a long decider name on the approved one. */
+  /* The worst case the screen can hold. Only one of these ever renders — the stop-work, which
+     outranks the newer draft — but the fixture keeps the others so the gate would catch a
+     regression that put a second row back beside it. */
   mockFetchRecommendations.mockResolvedValue([
     plan("newest", "2026-08-18T15:26:00Z", "PENDING_APPROVAL"),
     plan("stopwork", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
@@ -218,14 +218,23 @@ describe.each(guardrailCases())("guardrail gate — $label", ({ theme, language 
     expectTouchTargets(tree);
   });
 
-  it("keeps a stop-work and the newest plan on screen together", async () => {
-    // Not a layout assertion: the gate is where a future tidy-up that collapses an in-force
-    // stop-work would be caught, in every language rather than only the one someone tested.
+  it("shows the stop-work alone, in every language", async () => {
+    /*
+     * Not a layout assertion. The gate is where a regression that puts a second plan back
+     * beside an in-force stop-work gets caught — in every language and text size, rather than
+     * only the one someone happened to look at.
+     *
+     * This has regressed twice: once as "every stop-work is live, keep them all", once as
+     * "keep the newest stop-work beneath a newer plan". Both read as two competing
+     * instructions for one crew.
+     */
     const tree = await renderUnderGuardrails(screen());
     await fireEvent.press(await tree.findByLabelText(/oversight.showPlansFor/));
 
-    // Two current plans, and the two remaining behind the earlier-plans control.
-    await tree.findByText(LONGEST["oversight.earlierPlans"]);
+    await tree.findByText("recommendations.statusAutoDispatched");
+    expect(tree.queryAllByText("recommendations.statusAutoDispatched")).toHaveLength(1);
+    expect(tree.queryAllByText("recommendations.pending")).toHaveLength(0);
+    expect(tree.queryAllByText("recommendations.decidedApproved")).toHaveLength(0);
     expectNoClipping(tree);
   });
 });

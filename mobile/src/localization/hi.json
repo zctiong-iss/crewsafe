@@ -667,9 +667,6 @@
     "minuteInput": "मिनट"
   },
   "oversight": {
-    "earlierPlans_one": "{{count}} पिछली योजना",
-    "earlierPlans_other": "{{count}} पिछली योजनाएँ",
-    "hideEarlierPlans": "पिछली योजनाएँ छिपाएँ",
     "unknownShift": "शिफ़्ट अब सूचीबद्ध नहीं है",
     "tabTitle": "निगरानी",
     "title": "निगरानी",

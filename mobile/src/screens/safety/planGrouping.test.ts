@@ -2,10 +2,16 @@
  * Which plans a manager sees at rest, and which are collapsed (SCRUM-TBD-110).
  *
  * ── THE CASE THAT MATTERS MOST ──────────────────────────────────────────────────────────
+ * A pending draft must never displace a stop-work. The agent redrafts every two minutes, so a
+ * shift under an active stop-work is constantly acquiring newer PENDING_APPROVAL plans — and
+ * under newest-wins the "Stop-work dispatched" banner would disappear two minutes after a crew
+ * was told to shelter. Most of the cases below exist to hold that line from both directions.
+ *
+ * ── AND WHY TWO SHIFTS KEEP APPEARING ───────────────────────────────────────────────────
  * Grouping by shift is not cosmetic. A site's plans arrive from every shift on it, so
  * "the site's latest plan" would hide a decision awaiting a supervisor on one crew because an
- * unrelated crew got a newer draft. Several cases below use two shifts for exactly that
- * reason — a single-shift fixture passes whether or not the grouping works.
+ * unrelated crew got a newer draft. A single-shift fixture passes whether or not the grouping
+ * works.
  *
  * @author Justin Chua
  */
@@ -48,172 +54,170 @@ const NEWEST_FIRST = [
 
 it("splits plans into one group per shift", () => {
   const groups = groupPlansByShift(NEWEST_FIRST, SHIFTS);
+
   expect(groups.map((g) => g.shiftId)).toEqual(["shift-a", "shift-b"]);
 });
 
-it("shows only the newest plan per shift at rest", () => {
+it("shows exactly one plan per shift", () => {
+  // The shape says so too - `plan` is a single Recommendation, not a list - but this is the
+  // behaviour that kept regressing, so it is asserted rather than assumed.
   const groups = groupPlansByShift(NEWEST_FIRST, SHIFTS);
 
-  expect(groups[0].current.map((p) => p.id)).toEqual(["p5"]);
-  expect(groups[1].current.map((p) => p.id)).toEqual(["p4"]);
+  expect(groups.map((g) => g.plan.id)).toEqual(["p5", "p1"]);
 });
 
 it("does not let one crew's newer plan hide another crew's", () => {
-  /*
-   * The reason grouping is per shift. p5 (shift-a, 15:26) is the site's newest plan overall;
-   * a site-level "latest" would show it alone and hide p4, which is shift-b's current plan
-   * and may be awaiting a decision.
-   */
-  const groups = groupPlansByShift(NEWEST_FIRST, SHIFTS);
-  const shown = groups.flatMap((g) => g.current.map((p) => p.id));
-
-  expect(shown).toContain("p5");
-  expect(shown).toContain("p4");
-});
-
-it("collapses the rest, newest first, losing nothing", () => {
   const groups = groupPlansByShift(NEWEST_FIRST, SHIFTS);
 
-  expect(groups[0].earlier.map((p) => p.id)).toEqual(["p3", "p2"]);
-  expect(groups[1].earlier.map((p) => p.id)).toEqual(["p1"]);
-
-  // Every plan is reachable: nothing is dropped, only moved behind a control.
-  const all = groups.flatMap((g) => [...g.current, ...g.earlier].map((p) => p.id));
-  expect(all.sort()).toEqual(["p1", "p2", "p3", "p4", "p5"]);
+  expect(groups).toHaveLength(2);
+  expect(groups.map((g) => g.shiftId).sort()).toEqual(["shift-a", "shift-b"]);
 });
 
-it("shows the newest plan even when it is SUPERSEDED", () => {
+/* -- A pending draft never displaces what is in force ----------------------------------- */
+
+it("keeps the stop-work when the agent redrafts over it", () => {
   /*
-   * Status never decides what is current. A superseded plan is only newest when the draft
-   * that replaced it failed — which is the one case worth seeing, so filtering by status
-   * would hide exactly the signal that something went wrong.
+   * The reported bug, and the reason this file exists in its current form. The auto-trigger
+   * runs every two minutes, so a newer PENDING_APPROVAL plan appears almost immediately after
+   * a dispatch - and showing it would take "a crew has been told to shelter" off the screen
+   * built to oversee exactly that.
    */
   const items = [
-    plan("s2", "shift-a", "2026-08-18T15:09:00Z", "SUPERSEDED"),
-    plan("s1", "shift-a", "2026-08-18T14:39:00Z", "APPROVED"),
+    plan("redraft", "shift-a", "2026-08-18T15:30:00Z"),
+    plan("stopwork", "shift-a", "2026-08-18T15:28:00Z", "AUTO_DISPATCHED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["s2"]);
-  expect(group.current[0].status).toBe("SUPERSEDED");
+  expect(group.plan.id).toBe("stopwork");
 });
 
-/* ── One stop-work, always shown, never more than one ───────────────────────────────────── */
-
-it("keeps an in-force stop-work visible under a newer plan", () => {
-  /*
-   * An AUTO_DISPATCHED plan was sent to a crew without approval (SCRUM-440). It is a live
-   * instruction, and hiding it because something newer exists would take the most severe
-   * thing the system can show off the screen built to oversee it.
-   */
+it("keeps an approved plan when the agent redrafts over it", () => {
+  // A regenerated draft is a proposal. It does not replace what a supervisor signed off.
   const items = [
-    plan("newer", "shift-a", "2026-08-18T15:30:00Z"),
-    plan("stopwork", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
-    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
+    plan("redraft", "shift-a", "2026-08-18T15:30:00Z"),
+    plan("approved", "shift-a", "2026-08-18T15:28:00Z", "APPROVED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-
-  expect(group.current.map((p) => p.id)).toEqual(["newer", "stopwork"]);
-  expect(group.earlier.map((p) => p.id)).toEqual(["old"]);
+  expect(group.plan.id).toBe("approved");
 });
 
-it("does not duplicate a stop-work that is itself the newest plan", () => {
+it("shows a pending draft when nothing precedes it", () => {
+  // The other half of the rule: with no instruction in force there is nothing to protect, so
+  // the draft awaiting a decision is the most useful thing to show.
   const items = [
-    plan("stopwork", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
-    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
+    plan("pending", "shift-a", "2026-08-18T15:30:00Z"),
+    plan("old", "shift-a", "2026-08-18T15:00:00Z", "SUPERSEDED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["stopwork"]);
+  expect(group.plan.id).toBe("pending");
 });
+
+it("shows a pending draft on a shift that has only ever had drafts", () => {
+  const items = [plan("only", "shift-a", "2026-08-18T15:30:00Z")];
+
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.plan.id).toBe("only");
+});
+
+/* -- Stop-work and approval supersede each other, newest wins --------------------------- */
 
 it("shows only the latest stop-work when a shift has several", () => {
   /*
-   * The behaviour this file used to assert the opposite of, and the reason it changed.
-   *
-   * The server genuinely never supersedes an AUTO_DISPATCHED, so two of them do coexist — but
-   * while lightning holds the auto-trigger redrafts every two minutes, so a storm leaves
-   * roughly fifteen on one shift. They are not fifteen instructions; they are one, restated.
+   * A thirty-minute storm leaves roughly fifteen dispatches on one shift. They are not fifteen
+   * instructions - they are one instruction restated.
    */
   const items = [
     plan("sw3", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
     plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
     plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
-    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["sw3"]);
+  expect(group.plan.id).toBe("sw3");
 });
 
-it("keeps the superseded stop-works reachable rather than dropping them", () => {
-  // They are the record of instructions that actually went to a crew. Collapsed, not deleted.
+it("lets an approval supersede an earlier stop-work", () => {
+  // Conditions changed, a supervisor approved the new plan, and that is now what stands.
   const items = [
-    plan("sw3", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
-    plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
-    plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
-    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
+    plan("approved", "shift-a", "2026-08-18T15:40:00Z", "APPROVED"),
+    plan("stopwork", "shift-a", "2026-08-18T15:28:00Z", "AUTO_DISPATCHED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.earlier.map((p) => p.id)).toEqual(["sw2", "sw1", "old"]);
+  expect(group.plan.id).toBe("approved");
 });
 
-it("still shows the latest stop-work beneath a newer plan awaiting a decision", () => {
+it("lets a stop-work supersede an earlier approval", () => {
+  // Lightning arrived after the approval. The newest instruction is the one standing.
+  const items = [
+    plan("stopwork", "shift-a", "2026-08-18T15:40:00Z", "AUTO_DISPATCHED"),
+    plan("approved", "shift-a", "2026-08-18T15:28:00Z", "APPROVED"),
+  ];
+
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.plan.id).toBe("stopwork");
+});
+
+it("never shows a stop-work and anything else together", () => {
   /*
-   * The half that did NOT change. A stop-work is a live instruction, so one stays in `current`
-   * even when a newer plan exists — collapsing repeats must not become hiding the last one.
+   * The literal requirement, asserted as such: whatever else a shift holds, the group carries
+   * one plan. A list-shaped field is what let a second row come back twice before.
    */
   const items = [
-    plan("newer", "shift-a", "2026-08-18T15:40:00Z"),
-    plan("sw2", "shift-a", "2026-08-18T15:26:00Z", "AUTO_DISPATCHED"),
+    plan("redraft", "shift-a", "2026-08-18T15:35:00Z"),
+    plan("sw2", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
     plan("sw1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
+    plan("approved", "shift-a", "2026-08-18T15:10:00Z", "APPROVED"),
+    plan("old", "shift-a", "2026-08-18T14:39:00Z", "SUPERSEDED"),
   ];
 
   const [group] = groupPlansByShift(items, SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["newer", "sw2"]);
-  expect(group.earlier.map((p) => p.id)).toEqual(["sw1"]);
+  expect(group.plan.id).toBe("sw2");
 });
 
-it("keeps one stop-work per shift, because each is a different crew", () => {
-  // Collapsing across the site would show one stop-work while a second crew was also stood
-  // down — on the screen a manager uses to see who is affected.
+/* -- History, when nothing is in force --------------------------------------------------- */
+
+it("shows the newest plan even when it is SUPERSEDED", () => {
+  // Nothing is instructing anyone, so the newest plan is simply what there is to show.
   const items = [
-    plan("a2", "shift-a", "2026-08-18T15:30:00Z", "AUTO_DISPATCHED"),
-    plan("a1", "shift-a", "2026-08-18T15:17:00Z", "AUTO_DISPATCHED"),
-    plan("b2", "shift-b", "2026-08-18T15:28:00Z", "AUTO_DISPATCHED"),
-    plan("b1", "shift-b", "2026-08-18T15:15:00Z", "AUTO_DISPATCHED"),
+    plan("newest", "shift-a", "2026-08-18T15:30:00Z", "SUPERSEDED"),
+    plan("older", "shift-a", "2026-08-18T15:00:00Z", "SUPERSEDED"),
   ];
 
-  const groups = groupPlansByShift(items, SHIFTS);
-  expect(groups.map((g) => g.current.map((p) => p.id))).toEqual([["a2"], ["b2"]]);
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.plan.id).toBe("newest");
 });
 
-/* ── Edges ─────────────────────────────────────────────────────────────────────────────── */
+it("does not treat a rejected plan as in force", () => {
+  // A rejection is a decision NOT to act. It must not outrank a stop-work.
+  const items = [
+    plan("rejected", "shift-a", "2026-08-18T15:30:00Z", "REJECTED"),
+    plan("stopwork", "shift-a", "2026-08-18T15:20:00Z", "AUTO_DISPATCHED"),
+  ];
+
+  const [group] = groupPlansByShift(items, SHIFTS);
+  expect(group.plan.id).toBe("stopwork");
+});
+
+/* -- Edges ------------------------------------------------------------------------------- */
 
 it("attaches each group's shift window", () => {
   const groups = groupPlansByShift(NEWEST_FIRST, SHIFTS);
+
   expect(groups[0].shift?.id).toBe("shift-a");
-  expect(groups[1].shift?.startsAt).toBe("2026-08-18T14:00:00Z");
+  expect(groups[1].shift?.id).toBe("shift-b");
 });
 
 it("still groups a plan whose shift was not returned", () => {
-  // A shift can move site or be deleted after its plans were drafted. The group renders with
-  // no window rather than the plan vanishing.
-  const items = [plan("orphan", "shift-gone", "2026-08-18T15:00:00Z")];
+  const items = [plan("orphan", "shift-gone", "2026-08-18T15:30:00Z")];
 
   const [group] = groupPlansByShift(items, SHIFTS);
   expect(group.shift).toBeNull();
-  expect(group.current.map((p) => p.id)).toEqual(["orphan"]);
+  expect(group.plan.id).toBe("orphan");
 });
 
 it("returns nothing for a site with no plans", () => {
   expect(groupPlansByShift([], SHIFTS)).toEqual([]);
-});
-
-it("leaves earlier empty when a shift has only one plan", () => {
-  const [group] = groupPlansByShift([plan("only", "shift-a", "2026-08-18T15:00:00Z")], SHIFTS);
-  expect(group.current.map((p) => p.id)).toEqual(["only"]);
-  expect(group.earlier).toEqual([]);
 });

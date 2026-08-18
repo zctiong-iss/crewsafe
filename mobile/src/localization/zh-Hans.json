@@ -667,9 +667,6 @@
     "minuteInput": "分钟"
   },
   "oversight": {
-    "earlierPlans_one": "{{count}} 个较早的计划",
-    "earlierPlans_other": "{{count}} 个较早的计划",
-    "hideEarlierPlans": "隐藏较早的计划",
     "unknownShift": "班次已不在列表中",
     "tabTitle": "监管",
     "title": "监管",
