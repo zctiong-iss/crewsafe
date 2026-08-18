@@ -22,18 +22,37 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export type ToastTone = "success" | "danger" | "info";
 
-export interface ToastState {
+export interface UiState {
   /** i18n key, translated at render so it follows a language change. */
   messageKey: string | null;
   tone: ToastTone;
   /** Bumped on every show so an identical repeat message still restarts the timer. */
   nonce: number;
+  /**
+   * True while the supervisor is actually looking at the plans list (SCRUM-TBD-NOTIFY).
+   *
+   * ── WHY THE STORE HAS TO KNOW WHICH SCREEN IS OPEN ──────────────────────────────────
+   * The plans list already announces a newly-arrived plan with a toast, and the store's
+   * notification listener announces the same plan with an OS notification. Both are correct
+   * in isolation and together they are one event reported twice, half a second apart, to
+   * someone who is already looking at the row it is about.
+   *
+   * The rule the file header states resolves it: a notice is for a result that is NOT
+   * visible on the screen the user is on. The toast wins while the list is open; the
+   * notification is for every other moment, which is the case it was built for.
+   *
+   * Transient, and `ui` is deliberately not persisted — a `true` rehydrated from disk would
+   * silently suppress notifications for a screen nobody has open.
+   */
+  plansListFocused: boolean;
 }
 
-const initialState: ToastState = {
+
+const initialState: UiState = {
   messageKey: null,
   tone: "info",
   nonce: 0,
+  plansListFocused: false,
 };
 
 const uiSlice = createSlice({
@@ -48,9 +67,13 @@ const uiSlice = createSlice({
     hideToast: (state) => {
       state.messageKey = null;
     },
+    /** Set from the plans list's focus effect, cleared when it blurs. */
+    plansListFocusChanged: (state, action: PayloadAction<boolean>) => {
+      state.plansListFocused = action.payload;
+    },
   },
 });
 
-export const { showToast, hideToast } = uiSlice.actions;
+export const { showToast, hideToast, plansListFocusChanged } = uiSlice.actions;
 
 export default uiSlice.reducer;

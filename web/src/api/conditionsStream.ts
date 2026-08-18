@@ -1,4 +1,4 @@
-/** @author Tang Chee Seng, Jemilin Beulah (with assistance from Claude and ChatGPT) */
+/** @author Tang Chee Seng, Jemilin Beulahcd*/
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { apiBaseUrl } from "@/auth/authConfig";
 import { currentAccessToken } from "./client";
@@ -10,9 +10,14 @@ import {
 
 export type WeatherSource = "NEA" | "MANUAL" | "CACHED";
 export type WeatherFreshness = "LIVE" | "DELAYED" | "STALE" | "SIMULATED";
+export type WbgtBand = "BELOW_31" | "31_TO_BELOW_32" | "32_TO_BELOW_33" | "33_AND_ABOVE";
 
 export interface ConditionsPayload {
-  wbgt: number; temperature: number; humidity: number;
+  wbgt: number;
+  currentBand: WbgtBand | null;    // ← add — server-classified, we only paint it
+  forecastBand: WbgtBand | null;   // ← add — 30-min forecast band, null when none
+  forecastWbgt30m: number | null;  // ← add — raw 30-min forecast value, shown beside the chip
+  temperature: number; humidity: number;
   windSpeed: number; rainfall: number;
   observedAt: string; source: WeatherSource; freshness: WeatherFreshness;
 }

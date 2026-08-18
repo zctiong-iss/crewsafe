@@ -24,6 +24,8 @@ past="$(date -u -d '-1 day' +%F 2>/dev/null || date -u -v-1d +%F)"
 write_fixture() { printf '%s\n' "$@" >"$WORK/source"; }
 
 printf 'test-validate-ml-service-trivy-exceptions\n'
+# SCRUM-455: the compatibility entry point must retain the same strict
+# post-expiry exception semantics as the shared validator.
 write_fixture "CVE-2026-10001  # owner:security-team exp:${future} reason:tracked-risk"
 expect 0 'accepts a complete future exception' "$SCRIPT" "$WORK/source"
 

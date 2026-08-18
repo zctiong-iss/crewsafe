@@ -72,6 +72,34 @@ export interface PreferencesState {
   reduceMotionByUser: Record<string, ReduceMotionChoice>;
   /** False until the user picks a language explicitly; until then we follow the device. */
   languageChosenExplicitly: boolean;
+  /**
+   * Whether the user has muted CrewSafe's notifications from inside the app.
+   *
+   * ── WHY THIS IS NOT "notificationsEnabled" ──────────────────────────────────────────
+   * The operating system owns whether this app may notify at all, and that answer can change
+   * outside the app at any time. A local `enabled` boolean would be a second copy of a fact
+   * we do not own, and the two would drift the first time someone revoked permission in the
+   * OS settings — leaving Settings showing a switch that says "on" for notifications that
+   * cannot arrive.
+   *
+   * So the OS is asked every time (`getPermission`) and this records only the thing the OS
+   * cannot know: that someone with permission granted would nonetheless rather not be
+   * buzzed. Effective state is `granted && !muted`, computed rather than stored.
+   *
+   * Device-level, not per-user, unlike `reduceMotionByUser`. The permission it qualifies is
+   * itself device-level and cannot be re-asked per person, so a per-user mute would promise
+   * a granularity the platform underneath does not have.
+   */
+  notificationsMuted: boolean;
+  /**
+   * Whether the in-app explanation has already been shown ahead of the system prompt.
+   *
+   * iOS displays its authorisation prompt exactly once per install and a refusal cannot be
+   * re-asked from inside the app. This flag is what stops a second attempt being spent on a
+   * dialog the OS will never follow with a prompt — and stops the app nagging someone who
+   * has already said no once.
+   */
+  notificationRationaleShown: boolean;
 }
 
 /**
@@ -91,6 +119,10 @@ export const initialPreferencesState: PreferencesState = {
   // the default or overrides it — including the very first one on a brand-new install.
   reduceMotionByUser: {},
   languageChosenExplicitly: false,
+  // Not muted by default: someone who granted the OS permission has already said yes once,
+  // and making them say it twice would leave the common case silently doing nothing.
+  notificationsMuted: false,
+  notificationRationaleShown: false,
 };
 
 const initialState = initialPreferencesState;
@@ -118,6 +150,20 @@ const preferencesSlice = createSlice({
     },
     setHighContrast: (state, action: PayloadAction<boolean>) => {
       state.highContrast = action.payload;
+    },
+    /** The Settings switch, for someone who has permission but does not want the buzz. */
+    setNotificationsMuted: (state, action: PayloadAction<boolean>) => {
+      state.notificationsMuted = action.payload;
+    },
+    /**
+     * Recorded the moment the explanation is shown, not when it is answered.
+     *
+     * Deliberately not conditional on the answer. Someone who read it and said "not now" has
+     * been asked; asking again on their next acknowledgement would be nagging, and on iOS the
+     * system prompt behind it may already have been spent anyway.
+     */
+    notificationRationaleShown: (state) => {
+      state.notificationRationaleShown = true;
     },
     toggleHighContrast: (state) => {
       state.highContrast = !state.highContrast;
@@ -158,6 +204,8 @@ export const {
   toggleHighContrast,
   setReduceMotion,
   reduceMotionCleared,
+  setNotificationsMuted,
+  notificationRationaleShown,
 } = preferencesSlice.actions;
 
 /**

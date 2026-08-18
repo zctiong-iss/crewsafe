@@ -1,26 +1,5 @@
 package com.crewsafe.conditions.service;
 
-import com.crewsafe.conditions.api.ActiveShiftPayload;
-import com.crewsafe.conditions.api.ConditionsPayload;
-import com.crewsafe.conditions.api.ConditionsSnapshot;
-import com.crewsafe.lightning.api.LightningRiskPayload;
-import com.crewsafe.lightning.domain.LightningRiskState;
-import com.crewsafe.lightning.risk.LightningRiskDerivationService;
-import com.crewsafe.shift.domain.Shift;
-import com.crewsafe.shift.domain.ShiftStatus;
-import com.crewsafe.shift.repository.ShiftRepository;
-import com.crewsafe.weather.domain.WeatherObservation;
-import com.crewsafe.weather.domain.WeatherQualityStatus;
-import com.crewsafe.weather.domain.WeatherSource;
-import com.crewsafe.weather.ingestion.WeatherFreshnessClassifier;
-import com.crewsafe.weather.repository.WeatherObservationRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import java.lang.reflect.Constructor;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -30,11 +9,37 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import org.mockito.Mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import com.crewsafe.conditions.api.ActiveShiftPayload;
+import com.crewsafe.conditions.api.ConditionsPayload;
+import com.crewsafe.conditions.api.ConditionsSnapshot;
+import com.crewsafe.forecast.service.ForecastUnavailableException;
+import com.crewsafe.forecast.service.SiteForecastService;
+import com.crewsafe.lightning.api.LightningRiskPayload;
+import com.crewsafe.lightning.domain.LightningRiskState;
+import com.crewsafe.lightning.risk.LightningRiskDerivationService;
+import com.crewsafe.shift.domain.Shift;
+import com.crewsafe.shift.domain.ShiftStatus;
+import com.crewsafe.shift.repository.ShiftRepository;
+import com.crewsafe.weather.domain.WbgtBand;
+import com.crewsafe.weather.domain.WeatherObservation;
+import com.crewsafe.weather.domain.WeatherQualityStatus;
+import com.crewsafe.weather.domain.WeatherSource;
+import com.crewsafe.weather.ingestion.WeatherFreshnessClassifier;
+import com.crewsafe.weather.repository.WeatherObservationRepository;
 
 /**
  * Covers freshness recomputation (stored status is never trusted as-is, except
@@ -61,21 +66,26 @@ class ConditionsSnapshotServiceTest {
     @Mock
     private LightningRiskDerivationService lightningRiskDerivationService;
 
+    @Mock
+    private SiteForecastService siteForecastService;
+
     private ConditionsSnapshotService service;
 
     @BeforeEach
     void setUp() {
-        service = new ConditionsSnapshotService(observations, shifts, freshnessClassifier,
-                lightningRiskDerivationService, Clock.fixed(NOW, ZoneOffset.UTC));
+    service = new ConditionsSnapshotService(observations, shifts, freshnessClassifier,
+            lightningRiskDerivationService, siteForecastService,          // ← inserted before Clock
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
-        // All three sources default to "nothing found"; individual tests override only the
-        // one they exercise.
         when(observations.findFirstBySiteIdOrderByObservedAtDesc(SITE_ID)).thenReturn(Optional.empty());
         when(shifts.findFirstBySiteIdAndStatusOrderByStartsAtDesc(SITE_ID, ShiftStatus.ACTIVE))
-                .thenReturn(Optional.empty());
+            .thenReturn(Optional.empty());
         when(lightningRiskDerivationService.deriveForSite(eq(SITE_ID), any(Instant.class)))
-                .thenReturn(Optional.empty());
-    }
+            .thenReturn(Optional.empty());
+        // lenient: getSnapshot always calls forecast, but the guard test overrides this with a
+        // throw, which would otherwise trip strict-stubs on this setUp stub.
+        lenient().when(siteForecastService.forecast(eq(SITE_ID), anyInt())).thenReturn(Optional.empty());
+        }
 
     @Test
     void conditionsIsNullWhenNoObservationHasEverBeenIngested() {
@@ -152,6 +162,38 @@ class ConditionsSnapshotServiceTest {
         assertThat(activeShift.endsAt()).isEqualTo(shift.getEndsAt());
     }
 
+    @Test
+    void classifiesCurrentBandAndLeavesForecastBandNullWithoutAForecast() {
+    WeatherObservation observation = observationWithWbgt(new BigDecimal("32.5"));  // reuse your fixture helper
+    when(observations.findFirstBySiteIdOrderByObservedAtDesc(SITE_ID))
+            .thenReturn(Optional.of(observation));
+    when(freshnessClassifier.classify(any(Instant.class), any(Instant.class)))
+            .thenReturn(WeatherQualityStatus.LIVE);
+    // siteForecastService default from setUp = Optional.empty()
+
+    ConditionsPayload payload = service.getSnapshot(SITE_ID).conditions();
+
+    assertThat(payload.currentBand()).isEqualTo(WbgtBand.BAND_32_TO_BELOW_33);
+    assertThat(payload.forecastBand()).isNull();
+}
+
+    @Test
+    void keepsTheSnapshotWhenTheForecastDependencyIsUnavailable() {
+        when(observations.findFirstBySiteIdOrderByObservedAtDesc(SITE_ID))
+                .thenReturn(Optional.of(observationWithWbgt(new BigDecimal("32.5"))));
+        when(freshnessClassifier.classify(any(Instant.class), any(Instant.class)))
+                .thenReturn(WeatherQualityStatus.LIVE);
+        when(siteForecastService.forecast(eq(SITE_ID), anyInt()))
+                .thenThrow(new ForecastUnavailableException("no usable reading"));
+
+        ConditionsPayload payload = service.getSnapshot(SITE_ID).conditions();
+
+        assertThat(payload).isNotNull();                                        // forecast outage != fatal
+        assertThat(payload.currentBand()).isEqualTo(WbgtBand.BAND_32_TO_BELOW_33);
+        assertThat(payload.forecastBand()).isNull();
+        assertThat(payload.forecastWbgt30m()).isNull();
+    }
+
     /**
      * {@link WeatherObservation} only exposes a protected no-arg constructor by design, so
      * reflection is the only way to build one here for a mocked return value.
@@ -174,5 +216,11 @@ class ConditionsSnapshotServiceTest {
         } catch (ReflectiveOperationException exception) {
             throw new IllegalStateException(exception);
         }
+    }
+
+    private static WeatherObservation observationWithWbgt(BigDecimal wbgt) {
+        WeatherObservation observation = observation(WeatherQualityStatus.LIVE);
+        ReflectionTestUtils.setField(observation, "wbgt", wbgt);
+        return observation;
     }
 }

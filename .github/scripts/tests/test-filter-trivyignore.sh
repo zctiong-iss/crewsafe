@@ -18,6 +18,9 @@ write_source() {
 }
 
 # --- User Story 3 (T025): expiry filtering, malformed handling --------------
+# SCRUM-455: report-only mode keeps valid HIGH/CRITICAL findings visible; this
+# helper only materializes exact, currently valid exception identifiers. It
+# must not turn a report-only finding into an implicit clean decision.
 
 work="$(make_tmpdir)"
 future="$(date -u -d '+30 days' +%F 2>/dev/null || date -u -v+30d +%F)"

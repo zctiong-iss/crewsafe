@@ -448,6 +448,21 @@ run "public_edge" {
     condition     = tolist(aws_cloudfront_distribution.main.default_cache_behavior[0].cached_methods) == tolist(["GET", "HEAD"])
     error_message = "Only safe methods may be cacheable (FR-023)."
   }
+
+  assert {
+    condition     = aws_cloudfront_distribution.main.default_cache_behavior[0].response_headers_policy_id == aws_cloudfront_response_headers_policy.api_security.id
+    error_message = "The backend distribution must attach the API response-headers policy."
+  }
+
+  assert {
+    condition     = aws_cloudfront_response_headers_policy.api_security.security_headers_config[0].strict_transport_security[0].access_control_max_age_sec == 31536000
+    error_message = "The API response-headers policy must enforce one year of HSTS."
+  }
+
+  assert {
+    condition     = anytrue([for item in aws_cloudfront_response_headers_policy.api_security.remove_headers_config[0].items : lower(item.header) == "server"])
+    error_message = "The API response-headers policy must remove the origin Server header."
+  }
 }
 
 # SCRUM-443, terraform:S6258 — the public ALB itself had no access logging.
@@ -1369,6 +1384,24 @@ run "web_distribution_edge" {
       behavior.response_headers_policy_id == aws_cloudfront_response_headers_policy.web_security.id
     ])
     error_message = "The /index.html behaviour must attach the security response-headers policy."
+  }
+
+  assert {
+    condition     = aws_cloudfront_response_headers_policy.web_security.security_headers_config[0].content_security_policy[0].content_security_policy == local.web_csp
+    error_message = "The web response-headers policy must emit the validated CSP as an enforced security header."
+  }
+
+  assert {
+    condition = alltrue([
+      for config in aws_cloudfront_response_headers_policy.web_security.custom_headers_config :
+      alltrue([for item in config.items : lower(item.header) != "content-security-policy-report-only"])
+    ])
+    error_message = "The web response-headers policy must not retain a Report-Only CSP after enforcement."
+  }
+
+  assert {
+    condition     = anytrue([for item in aws_cloudfront_response_headers_policy.web_security.remove_headers_config[0].items : lower(item.header) == "server"])
+    error_message = "The web response-headers policy must remove the origin Server header."
   }
 
   # FR-007's actual hostname-distinctness guarantee is the two separate

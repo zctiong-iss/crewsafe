@@ -17,6 +17,8 @@
  * `useAutoRefresh` is captured rather than exercised: it owns focus/AppState behaviour and has
  * its own coverage, and running its real timer here would test React Navigation instead of this
  * screen. Holding the registered callback lets the guard be invoked directly.
+ *
+ * @author Justin Chua
  */
 import { configureStore } from "@reduxjs/toolkit";
 import { Provider } from "react-redux";
@@ -45,6 +47,13 @@ jest.mock("@/hooks/useAutoRefresh", () => ({
 
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
+  // Runs the effect once and never cleans up, which is what a permanently-focused screen
+  // looks like. The screen uses it to tell the store its list is open, so that a drafted
+  // plan is announced by the toast here rather than twice — see `uiSlice.plansListFocused`.
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual("react");
+    useEffect(effect, [effect]);
+  },
 }));
 
 const mockFetchShifts = jest.fn().mockResolvedValue([]);
@@ -62,6 +71,9 @@ jest.mock("@/api/endpoints/recommendations", () => ({
 const mockShowToast = jest.fn((payload: unknown) => ({ type: "ui/showToast", payload }));
 jest.mock("@/store/reducers/uiSlice", () => ({
   showToast: (payload: unknown) => mockShowToast(payload),
+  // A real action, because the screen dispatches it into a real store on focus. The toast
+  // above is captured instead of dispatched, which is why that one can be a bare spy.
+  plansListFocusChanged: (focused: boolean) => ({ type: "ui/plansListFocusChanged", payload: focused }),
 }));
 jest.mock("@/store/reducers/shiftsSlice", () => ({
   loadShifts: () => ({ type: "shifts/noop" }),
@@ -71,6 +83,7 @@ import recommendationsReducer, {
   type RecommendationsState,
 } from "@/store/reducers/recommendationsSlice";
 import RecommendationsScreen from "./RecommendationsScreen";
+import preferencesReducer from "@/store/reducers/preferencesSlice";
 import type { CurrentUser, Recommendation } from "@/types/domain";
 
 const SUPERVISOR: CurrentUser = {
@@ -111,6 +124,13 @@ function buildStore(items: Recommendation[], overrides: Partial<RecommendationsS
       recommendations: recommendationsReducer,
       shifts: (s = { shifts: [], selectedSiteId: "site-1", workers: [] } as unknown) => s,
       auth: (s = { user: SUPERVISOR } as unknown) => s,
+      // The mocked module above has no default export, so the store gets a stub reducer
+      // rather than the real one. Nothing in this file asserts on `ui` state — the toast is
+      // captured at the action creator — and the screen only ever writes to it.
+      ui: (state = { plansListFocused: false } as unknown) => state,
+      // Real, for the same reason as in the inbox test: the screen asks about notification
+      // permission on focus, and that decision is read from here.
+      preferences: preferencesReducer,
     },
     preloadedState: { recommendations: state },
   });
@@ -269,4 +289,36 @@ it("stays quiet when a poll returns the same plans", async () => {
   });
 
   expect(mockShowToast).not.toHaveBeenCalled();
+});
+
+it("keeps the shift window to one line beside the status pill", async () => {
+  /*
+   * A window is two dates and two times. At `subtitle` it wrapped to two lines and pushed the
+   * status pill up against the first, so the two read as separate rows rather than one heading.
+   * The single-line rule is what keeps the row height fixed whatever the text setting.
+   */
+  const store = configureStore({
+    reducer: {
+      recommendations: (s = { status: "ready", items: [recommendation("rec-1")], errorKey: null,
+        refreshing: false, decidingId: null, generating: false, lastSeenIds: [] } as unknown) => s,
+      shifts: (s = {
+        shifts: [{ id: "shift-1", startsAt: "2026-08-18T00:00:00Z", endsAt: "2026-08-19T00:00:00Z" }],
+        selectedSiteId: "site-1",
+        workers: [],
+      } as unknown) => s,
+      auth: (s = { user: SUPERVISOR } as unknown) => s,
+      ui: (s = { plansListFocused: false } as unknown) => s,
+      // This test builds its own store rather than using `buildStore`, so it needs the same
+      // two slices the screen reads on focus.
+      preferences: preferencesReducer,
+    },
+  });
+
+  const { getByLabelText } = await renderScreen(store as ReturnType<typeof buildStore>);
+
+  // The i18n mock renders key and interpolations as one string, so match by prefix.
+  await waitFor(() => expect(getByLabelText(/^shifts.window:/)).toBeTruthy());
+  // Ellipsises rather than reflowing, so the pill never moves and the full window stays on the
+  // accessible label for a screen reader.
+  expect(getByLabelText(/^shifts.window:/).props.numberOfLines).toBe(1);
 });

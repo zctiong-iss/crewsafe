@@ -25,6 +25,8 @@ import {
   mockUpdateAssignment,
   mockUpdateShift,
   mockCreateShift,
+  mockCancelShift,
+  mockCloseShift,
   mockDeleteShift,
   mockGetShift,
   mockListShifts,
@@ -68,6 +70,41 @@ export function fetchShift(siteId: string, shiftId: string): Promise<Shift> {
 export function fetchSiteWorkers(siteId: string): Promise<SiteWorker[]> {
   if (isMockApi()) return delay(() => mockListSiteWorkers(siteId));
   return request<SiteWorker[]>({ url: `/api/v1/sites/${siteId}/workers`, method: "GET" });
+}
+
+/**
+ * `POST /api/v1/sites/{siteId}/shifts/{shiftId}/cancel` — the shift was called off (SCRUM-442).
+ *
+ * PLANNED or ACTIVE only, and terminal: there is no un-cancel. `reason` is required by the
+ * server (`@NotBlank`, max 500) and lands in the audit trail, so it is the record of *why* a
+ * crew was stood down rather than a formality.
+ *
+ * Distinct from `deleteShift`, which erases the shift and its assignments outright. A cancelled
+ * shift stays visible as "this did not happen"; a deleted one leaves nothing behind.
+ */
+export function cancelShift(siteId: string, shiftId: string, reason: string): Promise<Shift> {
+  if (isMockApi()) return delay(() => mockCancelShift(siteId, shiftId, reason));
+  return request<Shift>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/cancel`,
+    method: "POST",
+    data: { reason },
+  });
+}
+
+/**
+ * `POST /api/v1/sites/{siteId}/shifts/{shiftId}/close` — the shift ran and is finished (SCRUM-442).
+ *
+ * PLANNED or ACTIVE only, terminal, and — unlike cancel — refused while `endsAt` is still in
+ * the future. `ShiftService.closeShift` states the rule plainly: a shift cannot be closed
+ * early, and cancel is the tool for calling one off before it ends. No body: closing records
+ * that time ran out, which needs no explanation the way calling one off does.
+ */
+export function closeShift(siteId: string, shiftId: string): Promise<Shift> {
+  if (isMockApi()) return delay(() => mockCloseShift(siteId, shiftId));
+  return request<Shift>({
+    url: `/api/v1/sites/${siteId}/shifts/${shiftId}/close`,
+    method: "POST",
+  });
 }
 
 /** `DELETE /api/v1/sites/{siteId}/shifts/{shiftId}` — removes the shift and its assignments. */

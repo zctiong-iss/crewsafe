@@ -14,6 +14,7 @@ import { rolesForRoute } from "./routeAccess";
 import { CreateShiftPage } from "@/features/shifts/CreateShiftPage";
 import { ShiftsPage } from "@/features/shifts/ShiftsPage";
 import { ConditionsPage } from "@/features/conditions/ConditionsPage";
+import { InsightsPage } from "@/features/insights/InsightsPage";
 import { EditShiftPage } from "@/features/shifts/EditShiftPage";
 import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
@@ -115,7 +116,7 @@ export function App() {
             {NAVIGATION.filter(
               (item) =>
                 item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
-                item.to !== "/audit" &&
+                item.to !== "/audit" && item.to !== "/insights" &&
                 item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning",
             ).map((item) => (
               <Route
@@ -144,6 +145,10 @@ export function App() {
             <Route
               path="/conditions"
               element={<RoleRoute roles={rolesForRoute("/conditions")}><ConditionsPage /></RoleRoute>}
+            />
+            <Route
+              path="/insights"
+              element={<RoleRoute roles={rolesForRoute("/insights")}><InsightsPage /></RoleRoute>}
             />
             <Route
               path="/approvals"
