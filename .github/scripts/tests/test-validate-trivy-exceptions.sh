@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-SCRIPT="$ROOT/.github/scripts/security/validate-ml-service-trivy-exceptions.sh"
+SCRIPT="$ROOT/.github/scripts/security/validate-trivy-exceptions.sh"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT INT TERM
 TESTS_RUN=0
@@ -20,29 +20,41 @@ expect() {
 }
 
 future="$(date -u -d '+30 days' +%F 2>/dev/null || date -u -v+30d +%F)"
+today="$(date -u +%F)"
 past="$(date -u -d '-1 day' +%F 2>/dev/null || date -u -v-1d +%F)"
 write_fixture() { printf '%s\n' "$@" >"$WORK/source"; }
 
-printf 'test-validate-ml-service-trivy-exceptions\n'
-# SCRUM-455: the compatibility entry point must retain the same strict
-# post-expiry exception semantics as the shared validator.
-write_fixture "CVE-2026-10001  # owner:security-team exp:${future} reason:tracked-risk"
-expect 0 'accepts a complete future exception' "$SCRIPT" "$WORK/source"
+printf 'test-validate-trivy-exceptions\n'
+# SCRUM-455: these strict owner/reason/expiry checks remain the only exception
+# path that can suppress a finding once the temporary report-only policy ends.
+write_fixture \
+  "CVE-2026-10001  # owner:security-team exp:${future} reason:tracked-risk" \
+  "GHSA-abcd-efgh-ijkl  # owner:platform-team exp:${future} reason:second-risk"
+expect 0 'accepts complete future CVE and GHSA exceptions' "$SCRIPT" "$WORK/source"
 
 write_fixture "CVE-2026-10001  # owner:security-team exp:${past} reason:expired-risk"
 expect 1 'rejects expired exception' "$SCRIPT" "$WORK/source"
 
+write_fixture "CVE-2026-10001  # owner:security-team exp:${today} reason:expires-today"
+expect 1 'rejects exception expiring today' "$SCRIPT" "$WORK/source"
+
 write_fixture "CVE-2026-10001  # exp:${future} reason:missing-owner"
 expect 1 'rejects exception missing owner' "$SCRIPT" "$WORK/source"
+
+write_fixture "CVE-2026-10001  # owner: exp:${future} reason:empty-owner"
+expect 1 'rejects exception with empty owner' "$SCRIPT" "$WORK/source"
 
 write_fixture "CVE-2026-10001  # owner:security-team exp:${future}"
 expect 1 'rejects exception missing reason' "$SCRIPT" "$WORK/source"
 
 write_fixture "CVE-2026-10001  # owner:security-team exp:${future} reason:#"
-expect 1 'rejects exception with empty reason marker' "$SCRIPT" "$WORK/source"
+expect 1 'rejects exception with empty reason' "$SCRIPT" "$WORK/source"
 
 write_fixture "not-an-advisory  # owner:security-team exp:${future} reason:bad-id"
 expect 1 'rejects unsupported advisory identifier' "$SCRIPT" "$WORK/source"
+
+write_fixture "*  # owner:security-team exp:${future} reason:wildcard"
+expect 1 'rejects wildcard advisory identifier' "$SCRIPT" "$WORK/source"
 
 write_fixture "CVE-2026-10001  # owner:security-team exp:not-a-date reason:bad-date"
 expect 1 'rejects malformed expiry' "$SCRIPT" "$WORK/source"
