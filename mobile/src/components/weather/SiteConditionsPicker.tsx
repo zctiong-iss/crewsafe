@@ -30,7 +30,6 @@
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import type { FC } from "react";
 import { useTranslation } from "react-i18next";
-import { Ionicons } from "@expo/vector-icons";
 import { s, vs } from "react-native-size-matters";
 
 import AppText from "@/components/texts/AppText";
@@ -104,13 +103,39 @@ const SiteConditionsPicker: FC<SiteConditionsPickerProps> = ({
                   minHeight: theme.metrics.minTouchTarget,
                   borderRadius: theme.metrics.radius,
                   borderWidth: theme.metrics.borderWidth,
-                  // The selected row is outlined in ink rather than filled: a fill would
-                  // compete with the band colour sitting next to it.
                   borderColor: selected ? theme.colors.borderStrong : theme.colors.border,
+                  // Fill is a second cue in the default theme only — `surfaceAlt` collapses to
+                  // `surface` in high contrast, so it carries nothing there. The bar below is
+                  // what actually holds the state in both themes.
+                  backgroundColor: selected ? theme.colors.surfaceAlt : theme.colors.surface,
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}
             >
+              {/*
+                An accent bar rather than a checkmark, and absolutely positioned so it occupies
+                no layout space at all.
+
+                A trailing tick pushed the reading column left on whichever row happened to be
+                selected, so the temperatures no longer lined up between rows — on a list whose
+                whole job is comparing readings down a column, that is the one thing it must not
+                do. Rendered on every row and merely transparent when unselected, so selecting a
+                different site cannot reflow anything.
+
+                A bar and not a border colour or a fill, because in high contrast `border` and
+                `borderStrong` are both #000000 and `surface` and `surfaceAlt` are both #FFFFFF
+                — neither of those changes is visible there. Black against transparent is.
+              */}
+              <View
+                style={[
+                  styles.accent,
+                  {
+                    backgroundColor: selected ? theme.colors.primary : "transparent",
+                    borderTopStartRadius: theme.metrics.radius,
+                    borderBottomStartRadius: theme.metrics.radius,
+                  },
+                ]}
+              />
               <View style={styles.name}>
                 <AppText variant="body" numberOfLines={2}>
                   {item.name}
@@ -142,14 +167,6 @@ const SiteConditionsPicker: FC<SiteConditionsPickerProps> = ({
                 )}
               </View>
 
-              {selected ? (
-                <Ionicons
-                  name="checkmark"
-                  size={s(18)}
-                  color={theme.colors.textPrimary}
-                  style={styles.check}
-                />
-              ) : null}
             </Pressable>
           );
         }}
@@ -177,7 +194,13 @@ const styles = StyleSheet.create({
   reading: {
     alignItems: "flex-end",
   },
-  check: {
-    marginStart: s(2),
+  accent: {
+    position: "absolute",
+    // `start`/`bottom`, not `left`: mirrors correctly under RTL, which Tamil and Bengali do
+    // not need but which costs nothing to get right.
+    start: 0,
+    top: 0,
+    bottom: 0,
+    width: s(4),
   },
 });

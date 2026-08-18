@@ -127,3 +127,41 @@ it("marks the current site as selected", async () => {
   const current = screen.getByLabelText(/^weather.siteRowReading:Bishan Park/);
   expect(current.props.accessibilityState.selected).toBe(true);
 });
+
+it("shows selection without changing what the row contains", async () => {
+  /*
+   * The regression this replaced a checkmark for. A trailing tick on the selected row pushed
+   * the reading column left on that row alone, so temperatures no longer lined up down the
+   * list — on a list built for comparing readings, the one thing it must not do.
+   *
+   * Asserted structurally: the selected row and an unselected one hold the same children, so
+   * moving the selection cannot reflow anything. The accent bar is absolutely positioned and
+   * present on every row, merely transparent when unselected.
+   */
+  await renderPicker();
+
+  const selected = screen.getByLabelText(/^weather.siteRowReading:Bishan Park/);
+  const unselected = screen.getByLabelText(/^weather.siteRowReading:NUS Campus/);
+
+  expect(selected.children.length).toBe(unselected.children.length);
+});
+
+it("carries selection on a bar that survives high contrast", async () => {
+  /*
+   * Not a border colour and not a fill: in high contrast `border` and `borderStrong` are both
+   * #000000 and `surface` and `surfaceAlt` are both #FFFFFF, so neither of those changes is
+   * visible there. Black against transparent is.
+   */
+  await renderPicker();
+
+  const { colors } = jest.requireActual("@/styles/theme").defaultTheme;
+  const barOf = (row: { children: unknown[] }) => {
+    const bar = row.children[0] as { props: { style?: unknown } };
+    const style = bar.props.style;
+    return (Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {}))
+      .backgroundColor;
+  };
+
+  expect(barOf(screen.getByLabelText(/^weather.siteRowReading:Bishan Park/))).toBe(colors.primary);
+  expect(barOf(screen.getByLabelText(/^weather.siteRowReading:NUS Campus/))).toBe("transparent");
+});
