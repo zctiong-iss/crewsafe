@@ -92,8 +92,8 @@ export function PolicyVersionCard({ version, activeVersion, canWrite, isActivati
           </div>
 
           <p className="policy-card__stop">
-            Emergency stop <strong>{version.wbgtEmergencyStop}°C</strong> — no work above this,
-            regardless of acclimatisation.
+            Legacy WBGT threshold <strong>{version.wbgtEmergencyStop}°C</strong> — retained for
+            compatibility; it is not enforced as a stop-work rule.
           </p>
 
           {version.notes && <p className="policy-card__notes">{version.notes}</p>}

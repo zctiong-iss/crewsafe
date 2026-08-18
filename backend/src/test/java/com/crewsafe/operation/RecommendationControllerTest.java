@@ -290,11 +290,11 @@ class RecommendationControllerTest extends AbstractIntegrationTest {
                 .shiftId(shiftA.getId())
                 .policyVersion("HS-32-HEAVY-v1")
                 .draftPlan(DRAFT_PLAN)
-                // SCRUM-440: a lightning-immediate or WBGT-max stop-work skips approval
-                // entirely and is dispatched straight to workers -- no Approval row exists
-                // for it either, same as SUPERSEDED, but for a different reason.
+                // SCRUM-440: a lightning-immediate stop-work skips approval entirely and is
+                // dispatched straight to workers -- no Approval row exists for it either,
+                // same as SUPERSEDED, but for a different reason.
                 .status(Recommendation.RecommendationStatus.AUTO_DISPATCHED)
-                .rationale("WBGT 34.0°C exceeds emergency stop threshold 33.0°C")
+                .rationale("Lightning detected within the stop-work radius")
                 .createdAt(Instant.now())
                 .build());
 

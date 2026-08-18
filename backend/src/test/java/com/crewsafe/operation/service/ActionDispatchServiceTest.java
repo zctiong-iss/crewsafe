@@ -164,8 +164,8 @@ class ActionDispatchServiceTest {
     }
 
     /**
-     * SCRUM-440: the auto-dispatch path used for a lightning-immediate or WBGT-max stop-work,
-     * with no {@link Approval} in the picture at all.
+     * SCRUM-440: the auto-dispatch path used for a lightning-immediate stop-work, with no
+     * {@link Approval} in the picture at all.
      */
     @Test
     void testAutoDispatchAction_Success() {

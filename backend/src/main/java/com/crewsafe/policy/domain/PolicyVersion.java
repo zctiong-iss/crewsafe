@@ -130,11 +130,12 @@ public class PolicyVersion {
     private BigDecimal wbgtThresholdFullHeavy;
 
     /**
-     * Emergency stop threshold (°C).
-     * Above this, no work permitted regardless of acclimatisation.
-     * Default: 33°C per MOM official guidelines (Band 3: WBGT ≥ 33°C).
-     * Reference: MOM Heat Stress Management Standards
+     * Legacy emergency stop threshold (°C).
+     *
+     * @deprecated retained for persisted policy/API compatibility; the policy engine no longer
+     *             uses this field to create a WBGT {@code STOP_WORK} action.
      */
+    @Deprecated(since = "2026.08", forRemoval = false)
     @NotNull
     @Min(20)
     private BigDecimal wbgtEmergencyStop;

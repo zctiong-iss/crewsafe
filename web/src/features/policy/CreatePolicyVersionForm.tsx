@@ -231,7 +231,8 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
         </section>
 
         <section className="policy-form__section">
-          <h2 className="policy-form__section-title">Emergency stop</h2>
+          <h2 className="policy-form__section-title">Legacy WBGT threshold</h2>
+          <p>This field is retained for compatibility and is not enforced as a stop-work rule.</p>
           <label htmlFor="wbgtEmergencyStop">WBGT emergency stop (°C)</label>
           <input
             id="wbgtEmergencyStop"

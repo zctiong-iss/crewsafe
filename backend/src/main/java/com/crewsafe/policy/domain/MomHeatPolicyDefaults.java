@@ -62,7 +62,12 @@ public final class MomHeatPolicyDefaults {
     public static final BigDecimal FULL_MODERATE = new BigDecimal("26.0");
     public static final BigDecimal FULL_HEAVY = new BigDecimal("24.0");
 
-    /** MOM Band 3: at or above this, all work stops regardless of acclimatisation or intensity. */
+    /**
+     * Legacy compatibility value retained in seeded policy versions.
+     *
+     * @deprecated WBGT no longer creates a STOP_WORK action; lightning owns automatic stop-work.
+     */
+    @Deprecated(since = "2026.08", forRemoval = false)
     public static final BigDecimal EMERGENCY_STOP = new BigDecimal("33.0");
 
     private MomHeatPolicyDefaults() {

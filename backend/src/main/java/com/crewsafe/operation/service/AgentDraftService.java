@@ -170,16 +170,12 @@ public class AgentDraftService {
         RecommendationEvidence evidence = evidence(
                 latestWeather, decision, draft.forecastWbgt30m(), lightningState, observedWbgt);
 
-        // SCRUM-440: a lightning-immediate stop-work or a WBGT-max mandatory stop-work skips
-        // supervisor approval entirely, per the team's four-rule alert policy -- whether this
-        // draft was auto-triggered or a supervisor pressed "Generate" themselves and it turned
-        // out to be one of these two. Checked here, not against the persisted plan later:
-        // decision.isEmergencyStop() and lightningState are live at draft time and this is the
-        // only place both are still in hand -- neither survives into the persisted Recommendation
-        // row, so a model-suggested STOP_WORK that was never actually mandatory cannot be
-        // mistaken for one after the fact.
-        boolean autoDispatch = lightningState == LightningRiskState.STOP_WORK
-                || (decision != null && decision.isEmergencyStop());
+        // SCRUM-440: only an active lightning stop-work skips supervisor approval entirely.
+        // Heat policy decisions, including legacy decisions that still contain STOP_WORK, must
+        // remain ordinary PENDING_APPROVAL recommendations. This check uses the live lightning
+        // state rather than the persisted plan so a model-suggested STOP_WORK cannot create an
+        // automatic dispatch on a heat-only recommendation.
+        boolean autoDispatch = lightningState == LightningRiskState.STOP_WORK;
 
         Recommendation saved = recommendations.save(Recommendation.builder()
                 .id(UUID.randomUUID())

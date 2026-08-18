@@ -210,14 +210,17 @@ public class PolicyEngineService {
      * Make policy decision based on thresholds.
      *
      * Decision logic:
-     * 1. WBGT >= emergency stop → mandatory STOP_WORK + mandatory CLOSE_MONITORING
-     * 2. WBGT >= site threshold → mandatory rest (10 or 15 min, hourly, by severity) +
+     * 1. WBGT >= site threshold → mandatory rest (10 or 15 min, hourly, by severity) +
      *    mandatory HYDRATE_HOURLY + advisory CLOSE_MONITORING; heavy-intensity work also
      *    gets advisory RESCHEDULE_HEAVY_WORK, and an unacclimatised worker on heavy
      *    intensity additionally gets advisory ROTATE_TO_LIGHT_DUTY
      *    - Unacclimatised + moderate/heavy = REST_15_MIN_HOURLY (the more severe tier)
      *    - Everyone else = REST_10_MIN_HOURLY
-     * 3. WBGT < threshold → advisory HYDRATE_REGULARLY + advisory SHADE_RECOVERY
+     * 2. WBGT < threshold → advisory HYDRATE_REGULARLY + advisory SHADE_RECOVERY
+     *
+     * <p>{@code wbgtEmergencyStop} is retained on policy records for compatibility but is
+     * deprecated and intentionally ignored here. Heat controls must not become a universal
+     * stop-work order; the lightning risk path owns automatic stop-work decisions.
      *
      * currentBand/forecastBand come from {@link WbgtBand#classify}, the same global,
      * server-authoritative classification the weather module exposes over HTTP — not a
@@ -244,21 +247,6 @@ public class PolicyEngineService {
         List<String> workerIds = appliesTo.stream().map(UUID::toString).toList();
         List<PolicyDecision.PolicyAction> mandatoryActions = new ArrayList<>();
         List<PolicyDecision.PolicyAction> advisoryActions = new ArrayList<>();
-
-        // Emergency stop: WBGT critical
-        if (BigDecimal.valueOf(wbgt).compareTo(policy.getWbgtEmergencyStop()) >= 0) {
-            String reasoning = String.format(
-                    "WBGT %.1f°C exceeds emergency stop threshold %.1f°C; "
-                            + "worker at imminent heat illness risk",
-                    wbgt, policy.getWbgtEmergencyStop()
-            );
-            mandatoryActions.add(new PolicyDecision.PolicyAction(
-                    PolicyActionCode.STOP_WORK, "EMERGENCY_STOP_RULE", workerIds, reasoning));
-            mandatoryActions.add(new PolicyDecision.PolicyAction(
-                    PolicyActionCode.CLOSE_MONITORING, "EMERGENCY_STOP_RULE", workerIds,
-                    "Worker requires close monitoring following an emergency stop"));
-            return new PolicyDecision(policyVersion, currentBand, forecastBand, mandatoryActions, advisoryActions);
-        }
 
         // WBGT exceeds site threshold: rest and hydration required
         if (BigDecimal.valueOf(wbgt).compareTo(threshold) >= 0) {
