@@ -85,4 +85,13 @@ commits = [
   "40aaf60251b5fed7ecff81d52a1553a533aff1cf",
 ]
 
+[[allowlists]]
+description = "SCRUM-295: SonarCloud dependency-risk finding keys (UUIDs) in sca-exceptions.yml's `key:` field are identifiers from search_dependency_risks / the Dependency Risks UI, not credentials -- flagged by the default ruleset's Generic API Key rule on high-entropy hex. Scoped to this one file and to the UUID shape itself, not the whole file, so a real secret typed into this file's `reason:` field (or anywhere else) is still caught."
+paths = [
+  '''^\.github/security/sca-exceptions\.yml$''',
+]
+regexes = [
+  '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}''',
+]
+
 # New entries go below, one per finding, each with its own description.
