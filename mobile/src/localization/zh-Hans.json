@@ -163,7 +163,8 @@
     "status": {
       "PLANNED": "已计划",
       "ACTIVE": "进行中",
-      "CLOSED": "已结束"
+      "CLOSED": "已结束",
+      "CANCELLED": "已取消"
     },
     "detailTitle": "班次",
     "assignments": "作业班组",
@@ -238,7 +239,24 @@
     "removeWorkerBody": "要将 {{name}} 移出此班次吗？其任务和适应天数将被清除。",
     "removeWorkerConfirm": "移除",
     "removeWorkerFailedTitle": "未能移除工人",
-    "viewRecommendations": "此班次的拟定方案"
+    "viewRecommendations": "此班次的拟定方案",
+    "closeButton": "结束班次",
+    "closeTitle": "结束此班次？",
+    "closeBody": "这会记录该班次已执行并已完成，且无法撤销。",
+    "closeConfirm": "结束班次",
+    "closeNotYetEnded": "班次结束后方可关闭。",
+    "closeFailedTitle": "班次未结束",
+    "closedToast": "班次已结束",
+    "cancelButton": "取消班次",
+    "cancelTitle": "取消此班次？",
+    "cancelBody": "这会记录该班次未发生。班组仍会列出，取消原因会被保留，且无法撤销。",
+    "cancelReasonLabel": "为何取消此班次？",
+    "cancelReasonRequired": "取消前请填写原因。",
+    "cancelConfirm": "取消班次",
+    "cancelling": "正在取消",
+    "cancelFailedTitle": "班次未取消",
+    "cancelledToast": "班次已取消",
+    "ending": "处理中"
   },
   "weather": {
     "title": "环境状况",

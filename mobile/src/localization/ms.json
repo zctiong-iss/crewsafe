@@ -164,7 +164,8 @@
     "status": {
       "PLANNED": "Dirancang",
       "ACTIVE": "Aktif",
-      "CLOSED": "Ditutup"
+      "CLOSED": "Ditutup",
+      "CANCELLED": "Dibatalkan"
     },
     "detailTitle": "Syif",
     "assignments": "Kru",
@@ -239,7 +240,24 @@
     "removeWorkerBody": "Keluarkan {{name}} daripada syif ini? Tugas dan hari penyesuaian mereka akan dibuang.",
     "removeWorkerConfirm": "Keluarkan",
     "removeWorkerFailedTitle": "Pekerja tidak dikeluarkan",
-    "viewRecommendations": "Pelan draf untuk syif ini"
+    "viewRecommendations": "Pelan draf untuk syif ini",
+    "closeButton": "Tutup syif",
+    "closeTitle": "Tutup syif ini?",
+    "closeBody": "Ini merekodkan bahawa syif telah berjalan dan selesai. Ia tidak boleh dibatalkan.",
+    "closeConfirm": "Tutup syif",
+    "closeNotYetEnded": "Syif boleh ditutup setelah ia tamat.",
+    "closeFailedTitle": "Syif tidak ditutup",
+    "closedToast": "Syif ditutup",
+    "cancelButton": "Batalkan syif",
+    "cancelTitle": "Batalkan syif ini?",
+    "cancelBody": "Ini merekodkan bahawa syif tidak berlaku. Kru kekal disenaraikan dan sebabnya disimpan. Ia tidak boleh dibatalkan.",
+    "cancelReasonLabel": "Mengapa syif ini dibatalkan?",
+    "cancelReasonRequired": "Berikan sebab sebelum membatalkan.",
+    "cancelConfirm": "Batalkan syif",
+    "cancelling": "Membatalkan",
+    "cancelFailedTitle": "Syif tidak dibatalkan",
+    "cancelledToast": "Syif dibatalkan",
+    "ending": "Sedang diproses"
   },
   "weather": {
     "title": "Keadaan",

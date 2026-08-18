@@ -163,7 +163,8 @@
     "status": {
       "PLANNED": "Planned",
       "ACTIVE": "Active",
-      "CLOSED": "Closed"
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
     },
     "detailTitle": "Shift",
     "assignments": "Crew",
@@ -238,7 +239,24 @@
     "removeWorkerBody": "Remove {{name}} from this shift? Their task and acclimatisation day are discarded.",
     "removeWorkerConfirm": "Remove",
     "removeWorkerFailedTitle": "Worker not removed",
-    "viewRecommendations": "Drafted plans for this shift"
+    "viewRecommendations": "Drafted plans for this shift",
+    "closeButton": "Close shift",
+    "closeTitle": "Close this shift?",
+    "closeBody": "This records that the shift ran and is finished. It cannot be undone.",
+    "closeConfirm": "Close shift",
+    "closeNotYetEnded": "A shift can be closed once it has ended.",
+    "closeFailedTitle": "Shift not closed",
+    "closedToast": "Shift closed",
+    "cancelButton": "Cancel shift",
+    "cancelTitle": "Cancel this shift?",
+    "cancelBody": "This records that the shift did not happen. The crew stay listed and the reason is kept. It cannot be undone.",
+    "cancelReasonLabel": "Why is this shift being cancelled?",
+    "cancelReasonRequired": "Give a reason before cancelling.",
+    "cancelConfirm": "Cancel shift",
+    "cancelling": "Cancelling",
+    "cancelFailedTitle": "Shift not cancelled",
+    "cancelledToast": "Shift cancelled",
+    "ending": "Working"
   },
   "weather": {
     "title": "Conditions",

@@ -163,7 +163,8 @@
     "status": {
       "PLANNED": "नियोजित",
       "ACTIVE": "चालू",
-      "CLOSED": "समाप्त"
+      "CLOSED": "समाप्त",
+      "CANCELLED": "रद्द"
     },
     "detailTitle": "शिफ़्ट",
     "assignments": "क्रू",
@@ -238,7 +239,24 @@
     "removeWorkerBody": "{{name}} को इस शिफ्ट से हटाएँ? उनका कार्य और अनुकूलन दिवस हट जाएगा।",
     "removeWorkerConfirm": "हटाएँ",
     "removeWorkerFailedTitle": "कर्मचारी नहीं हटाया गया",
-    "viewRecommendations": "इस शिफ्ट की तैयार योजनाएँ"
+    "viewRecommendations": "इस शिफ्ट की तैयार योजनाएँ",
+    "closeButton": "शिफ़्ट बंद करें",
+    "closeTitle": "इस शिफ़्ट को बंद करें?",
+    "closeBody": "यह दर्ज करता है कि शिफ़्ट चली और पूरी हुई। इसे पूर्ववत नहीं किया जा सकता।",
+    "closeConfirm": "शिफ़्ट बंद करें",
+    "closeNotYetEnded": "शिफ़्ट समाप्त होने के बाद ही बंद की जा सकती है।",
+    "closeFailedTitle": "शिफ़्ट बंद नहीं हुई",
+    "closedToast": "शिफ़्ट बंद कर दी गई",
+    "cancelButton": "शिफ़्ट रद्द करें",
+    "cancelTitle": "इस शिफ़्ट को रद्द करें?",
+    "cancelBody": "यह दर्ज करता है कि शिफ़्ट नहीं हुई। क्रू सूचीबद्ध रहेगा और कारण सुरक्षित रहेगा। इसे पूर्ववत नहीं किया जा सकता।",
+    "cancelReasonLabel": "यह शिफ़्ट क्यों रद्द की जा रही है?",
+    "cancelReasonRequired": "रद्द करने से पहले कारण बताएँ।",
+    "cancelConfirm": "शिफ़्ट रद्द करें",
+    "cancelling": "रद्द किया जा रहा है",
+    "cancelFailedTitle": "शिफ़्ट रद्द नहीं हुई",
+    "cancelledToast": "शिफ़्ट रद्द कर दी गई",
+    "ending": "चल रहा है"
   },
   "weather": {
     "title": "मौसम की स्थिति",
