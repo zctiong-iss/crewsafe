@@ -38,6 +38,8 @@ import java.util.UUID;
 @Slf4j
 public class ActionDispatchService {
 
+    private static final String ACTION_DISPATCH_NOT_FOUND = "ActionDispatch not found: ";
+
     private static final String AUDIT_TARGET_TYPE = "ACTION_DISPATCH";
 
     private final ActionDispatchRepository actionDispatchRepository;
@@ -136,7 +138,7 @@ public class ActionDispatchService {
     @Transactional
     public ActionDispatch acknowledgeDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
-                .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+                .orElseThrow(() -> new IllegalArgumentException(ACTION_DISPATCH_NOT_FOUND + dispatchId));
 
         // Authorization: verify the worker owns this dispatch
         if (!dispatch.getWorker().getId().equals(principal.getId())) {
@@ -165,7 +167,7 @@ public class ActionDispatchService {
     @Transactional
     public ActionDispatch completeDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
-                .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+                .orElseThrow(() -> new IllegalArgumentException(ACTION_DISPATCH_NOT_FOUND + dispatchId));
 
         // Authorization: verify the worker owns this dispatch
         if (!dispatch.getWorker().getId().equals(principal.getId())) {
@@ -288,7 +290,7 @@ public class ActionDispatchService {
 
     public ActionDispatch getDispatch(UUID dispatchId, @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         ActionDispatch dispatch = actionDispatchRepository.findById(dispatchId)
-                .orElseThrow(() -> new IllegalArgumentException("ActionDispatch not found: " + dispatchId));
+                .orElseThrow(() -> new IllegalArgumentException(ACTION_DISPATCH_NOT_FOUND + dispatchId));
 
         // Authorization: verify the worker owns this dispatch (or is supervisor/safety manager)
         if (!dispatch.getWorker().getId().equals(principal.getId()) &&

@@ -22,7 +22,7 @@ public class TestBedrockController {
     private final BedrockApiClient bedrockApiClient;
 
     @GetMapping("/access")
-    public ResponseEntity<?> checkBedrockAccess() {
+    public ResponseEntity<Object> checkBedrockAccess() {
         try {
             var status = bedrockApiClient.checkBedrockAccess();
             return ResponseEntity.ok(status);
@@ -38,7 +38,7 @@ public class TestBedrockController {
     }
 
     @PostMapping("/mitigations")
-    public ResponseEntity<?> generateMitigations(@RequestBody MitigationContextRequest request) {
+    public ResponseEntity<Object> generateMitigations(@RequestBody MitigationContextRequest request) {
         try {
             MitigationSuggestion.Batch batch = bedrockApiClient.generateMitigations(request.context());
             return ResponseEntity.ok(batch);
