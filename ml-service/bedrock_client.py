@@ -46,7 +46,7 @@ class BedrockClient:
 
             start = time.time()
             # one call — replaces client.invoke_model(modelId=..., body=json.dumps(...))
-            response = self.client.messages.create(
+            self.client.messages.create(
                 model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
                 max_tokens=10,
                 messages=[{"role": "user", "content": "OK"}],
