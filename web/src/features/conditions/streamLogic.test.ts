@@ -6,7 +6,8 @@ import type { ConditionsSnapshot } from "@/api/conditionsStream";
 const snap = (observedAt: string | null, wbgt = 31): ConditionsSnapshot => ({
   siteId: "s1", asOf: "2026-08-06T00:00:00Z", activeShift: null, lightning: null,
   conditions: observedAt === null ? null : {
-    wbgt, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+    wbgt, currentBand: null, forecastBand: null, forecastWbgt30m: null,
+    temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
     observedAt, source: "NEA", freshness: "LIVE",
   },
 });

@@ -172,10 +172,27 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .content(objectMapper.writeValueAsString(Map.of("reason", reason))));
     }
 
+    private ResultActions closeShift(String shiftId, String token) throws Exception {
+        return mockMvc.perform(post("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/close")
+                .header("Authorization", "Bearer " + token));
+    }
+
+    /** A shift whose window is already over, so it's eligible to close without faking the clock. */
+    private String createEndedShift() throws Exception {
+        Instant startsAt = Instant.now().minus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        return createShift(startsAt, endsAt);
+    }
+
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
+        return createShiftWithAssignments(startsAt, endsAt, List.of());
+    }
+
+    private String createShiftWithAssignments(Instant startsAt, Instant endsAt,
+            List<Map<String, Object>> assignments) throws Exception {
         return objectMapper.readTree(
                         postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                                        shiftBody(startsAt, endsAt, List.of()))
+                                        shiftBody(startsAt, endsAt, assignments))
                                 .andExpect(status().isCreated())
                                 .andReturn().getResponse().getContentAsString())
                 .get("id").asText();
@@ -695,6 +712,171 @@ class ShiftControllerTest extends AbstractIntegrationTest {
 
         cancelShift(shiftId, supervisorAToken, "   ")
                 .andExpect(status().isBadRequest());
+    }
+
+    // --- SCRUM-442: close a shift ---
+
+    @Test
+    void supervisorClosesAShiftThatHasEnded() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(shiftId))
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+        mockMvc.perform(get("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId)
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CLOSED"));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CLOSED))
+                .anyMatch(e -> UUID.fromString(shiftId).equals(e.getTargetId())
+                        && supervisorA.getId().equals(e.getActorId()));
+    }
+
+    /**
+     * The assignment has to be given at creation, not added afterwards: adding one to an
+     * existing shift already rejects an endsAt in the past (SCRUM-266) — the same
+     * "already ended" state close requires.
+     */
+    @Test
+    void closingAShiftKeepsItsAssignmentsInPlace() throws Exception {
+        Instant startsAt = Instant.now().minus(10, ChronoUnit.HOURS).truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = objectMapper.readTree(
+                        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                                        shiftBody(startsAt, endsAt,
+                                                List.of(assignmentBody(workerA.getId(), null, "LIGHT", null))))
+                                .andExpect(status().isCreated())
+                                .andReturn().getResponse().getContentAsString())
+                .get("id").asText();
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignments.length()").value(1));
+    }
+
+    /** Close is only valid once endsAt has passed — a shift cannot be closed early. */
+    @Test
+    void closingAShiftBeforeItHasEndedIsBadRequest() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(8, ChronoUnit.HOURS);
+        String shiftId = createShift(startsAt, endsAt);
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    /** CLOSED is terminal (SCRUM-442): there is no un-close, so a second close is rejected. */
+    @Test
+    void closingAnAlreadyClosedShiftIsBadRequest() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorAToken).andExpect(status().isOk());
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void aCancelledShiftCannotBeClosed() throws Exception {
+        String shiftId = createEndedShift();
+
+        cancelShift(shiftId, supervisorAToken).andExpect(status().isOk());
+
+        closeShift(shiftId, supervisorAToken)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Bad Request"));
+    }
+
+    @Test
+    void closingAnUnknownShiftIs404() throws Exception {
+        closeShift(UUID.randomUUID().toString(), supervisorAToken)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    void workerIsForbiddenFromClosingAShift() throws Exception {
+        String shiftId = createEndedShift();
+        String workerAToken = mintAccessToken(workerA.getUsername());
+
+        closeShift(shiftId, workerAToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorFromAnotherSiteCannotCloseAShift() throws Exception {
+        String shiftId = createEndedShift();
+
+        closeShift(shiftId, supervisorBToken).andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-452: staffing a worker onto a shift is audited, from either path ---
+
+    /**
+     * The trail recorded assignment corrections and removals from the start but never the
+     * original assignment, so it could show a worker being taken off a shift while staying
+     * silent on who put them there. Found by generating a real audit export (US-15) and
+     * noticing the assignment was missing from it.
+     */
+    @Test
+    void addingAWorkerToAnExistingShiftIsAudited() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        String shiftId = createShift(startsAt, startsAt.plus(8, ChronoUnit.HOURS));
+        String assignmentId = addAssignment(shiftId, "HEAVY");
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_ADDED))
+                .filteredOn(e -> UUID.fromString(assignmentId).equals(e.getTargetId()))
+                .singleElement()
+                .satisfies(e -> {
+                    assertThat(e.getActorId()).isEqualTo(supervisorA.getId());
+                    assertThat(e.getDetail())
+                            .contains("Assigned worker " + workerA.getId())
+                            .contains("to shift " + shiftId)
+                            .contains("intensity HEAVY");
+                });
+    }
+
+    /** Same fact, other path: assignments given at creation must be audited identically. */
+    @Test
+    void workersStaffedAtShiftCreationAreEachAudited() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        AppUser secondWorker = user(Role.WORKER);
+        memberships.save(new SiteMembership(secondWorker.getId(), siteA.getId()));
+
+        String shiftId = createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS), List.of(
+                assignmentBody(workerA.getId(), "Excavation", "HEAVY", 2),
+                assignmentBody(secondWorker.getId(), null, "LIGHT", null)));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_ADDED))
+                .filteredOn(e -> e.getDetail() != null && e.getDetail().contains("to shift " + shiftId))
+                .hasSize(2)
+                .satisfiesExactlyInAnyOrder(
+                        e -> assertThat(e.getDetail())
+                                .contains("intensity HEAVY")
+                                .contains("acclimatisation day 2")
+                                .contains("task Excavation"),
+                        // A null acclimatisation day means fully acclimatised, and says so
+                        // rather than leaving the clause out and reading as lost data.
+                        e -> assertThat(e.getDetail())
+                                .contains("intensity LIGHT")
+                                .contains("fully acclimatised"));
+    }
+
+    /** SHIFT_CREATED stays one-per-shift; the assignment rows are additional, not a change to it. */
+    @Test
+    void staffingAtCreationStillWritesExactlyOneShiftCreatedEvent() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+
+        UUID shiftId = UUID.fromString(createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS),
+                List.of(assignmentBody(workerA.getId(), null, "MODERATE", null))));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED))
+                .filteredOn(e -> shiftId.equals(e.getTargetId()))
+                .hasSize(1);
     }
 
     // --- SCRUM-159/160-fix: correct an assignment ---

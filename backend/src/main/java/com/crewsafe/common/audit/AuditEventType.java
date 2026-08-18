@@ -45,9 +45,27 @@ public final class AuditEventType {
      * as a record (SCRUM-255). */
     public static final String SHIFT_CANCELLED = "SHIFT_CANCELLED";
 
+    /** A shift was manually closed once it had naturally ended (SCRUM-442). Distinct from
+     * {@link #SHIFT_CANCELLED}: a closed shift ran; a cancelled one didn't. */
+    public static final String SHIFT_CLOSED = "SHIFT_CLOSED";
+
     /** A PLANNED shift was auto-activated by the scheduler once its start time passed
      * (SCRUM-441). System-triggered — actorId is null, the same as {@link #ACTION_LATE}. */
     public static final String SHIFT_ACTIVATED = "SHIFT_ACTIVATED";
+
+    /**
+     * A worker was put on a shift (SCRUM-452), whether at shift creation or added to an
+     * existing shift afterwards. One per assignment, so a shift created with three workers
+     * writes one {@link #SHIFT_CREATED} and three of these.
+     *
+     * <p>Added late: the trail recorded {@link #SHIFT_ASSIGNMENT_UPDATED} and
+     * {@link #SHIFT_ASSIGNMENT_REMOVED} from the start but never the original assignment,
+     * so it could show a worker being taken off a shift or having their intensity corrected
+     * while staying silent on who put them there. "Who assigned this worker to heavy work on
+     * acclimatisation day 2" is the first thing an inspector asks, so the detail carries the
+     * intensity and acclimatisation state, not just the ids.
+     */
+    public static final String SHIFT_ASSIGNMENT_ADDED = "SHIFT_ASSIGNMENT_ADDED";
 
     /** An assignment's task, intensity or acclimatisation day was corrected
      * (SCRUM-159/160-fix). Never recorded for a workerId change — that isn't possible
@@ -101,8 +119,8 @@ public final class AuditEventType {
      * actorId is null, the same as {@link #SHIFT_ACTIVATED}. */
     public static final String RECOMMENDATION_SUPERSEDED = "RECOMMENDATION_SUPERSEDED";
 
-    /** A lightning-immediate or WBGT-max stop-work recommendation skipped supervisor approval
-     * and was dispatched straight to workers (SCRUM-440). Recorded once per recommendation,
+    /** A lightning-immediate stop-work recommendation skipped supervisor approval and was
+     * dispatched straight to workers (SCRUM-440). Recorded once per recommendation,
      * alongside one {@link #ACTION_AUTO_DISPATCHED} per worker/action actually dispatched.
      * System-triggered -- actorId is null. */
     public static final String RECOMMENDATION_AUTO_DISPATCHED = "RECOMMENDATION_AUTO_DISPATCHED";
@@ -128,6 +146,16 @@ public final class AuditEventType {
     /** A Safety Manager activated a heat policy version, superseding whichever version was
      * previously active for that site (SCRUM-120). */
     public static final String POLICY_VERSION_ACTIVATED = "POLICY_VERSION_ACTIVATED";
+
+    /**
+     * A Safety Manager or Admin exported a site's audit timeline (SCRUM-435/SCRUM-452).
+     * Targets the SITE, and the detail carries the range and row count.
+     *
+     * <p>Pulling the evidence is itself an event worth having evidence of: this is the one
+     * endpoint that reads the whole trail out of the system, and an audit trail that cannot
+     * say who took a copy of it has a hole in exactly the place an inspector would look.
+     */
+    public static final String AUDIT_EXPORTED = "AUDIT_EXPORTED";
 
     private AuditEventType() {
     }

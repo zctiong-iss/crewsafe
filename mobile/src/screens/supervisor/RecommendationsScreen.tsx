@@ -17,7 +17,7 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import { FlatList, RefreshControl, StyleSheet, TouchableOpacity, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
@@ -31,8 +31,9 @@ import RecommendationStatusPill from "@/components/recommendations/Recommendatio
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { loadRecommendations } from "@/store/reducers/recommendationsSlice";
 import { loadShifts } from "@/store/reducers/shiftsSlice";
-import { showToast } from "@/store/reducers/uiSlice";
+import { plansListFocusChanged, showToast } from "@/store/reducers/uiSlice";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
+import { useNotificationPermission } from "@/notifications/useNotificationPermission";
 import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -115,6 +116,29 @@ export default function RecommendationsScreen() {
    * rather than an Alert: this screen is a decision surface, and a modal would interrupt
    * someone mid-judgement to tell them about something less urgent than what they are doing.
    */
+  /*
+   * Tell the store when this list is on screen, and ask about notifications while it is.
+   *
+   * The focus flag is what stops a newly-drafted plan being reported twice — the toast below
+   * and the OS notification from `notificationListeners` are the same event, and a supervisor
+   * looking at the row does not need both. See `uiSlice.plansListFocused`.
+   *
+   * The permission request rides along for the same reason it does on the worker's
+   * acknowledgement: this is a supervisor who has deliberately opened the screen that
+   * notifications would be about, which is the one moment the single iOS prompt is worth
+   * spending. It resolves to false and does nothing on every visit after the first.
+   */
+  const { ensure: ensureNotifications } = useNotificationPermission();
+  useFocusEffect(
+    useCallback(() => {
+      dispatch(plansListFocusChanged(true));
+      void ensureNotifications();
+      return () => {
+        dispatch(plansListFocusChanged(false));
+      };
+    }, [dispatch, ensureNotifications]),
+  );
+
   const seenIds = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (status !== "ready") return;
@@ -220,7 +244,22 @@ export default function RecommendationsScreen() {
               ]}
             >
               <View style={styles.cardHeader}>
-                <AppText variant="subtitle" style={styles.cardTitle}>
+                {/*
+                  One line, at `label` rather than `subtitle`. A shift window is two dates and
+                  two times, which wrapped at 18pt and pushed the status pill up against the
+                  first line — the pill and the window then read as two rows rather than one
+                  heading. 14pt fits the usual case on a phone.
+
+                  `numberOfLines` guarantees it: at a large text setting the string ellipsises
+                  rather than reflowing, so the row height never changes and the pill stays put.
+                  The full window survives in the accessible label, and on the detail screen.
+                */}
+                <AppText
+                  variant="label"
+                  numberOfLines={1}
+                  accessibilityLabel={window ?? t("recommendations.title")}
+                  style={styles.cardTitle}
+                >
                   {window ?? t("recommendations.title")}
                 </AppText>
                 <RecommendationStatusPill status={item.status} />
@@ -275,10 +314,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    // Centred, not top-aligned: with a single-line title the two sit on one axis. `flex-start`
+    // was right while the title could wrap to two lines and the pill had to hug the first.
+    alignItems: "center",
     justifyContent: "space-between",
   },
   cardTitle: {
+    // Yields to the pill rather than the other way round — the status is short and fixed, the
+    // window is long and variable, so the window is the one that should give way.
     flex: 1,
     marginEnd: s(10),
   },

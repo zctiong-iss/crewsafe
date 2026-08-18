@@ -23,6 +23,16 @@ def test_container_installs_locked_runtime_dependencies_as_non_root() -> None:
     assert "USER appuser" in dockerfile
 
 
+def test_container_applies_available_os_security_updates_before_dependencies() -> None:
+    """Supported base-image package fixes must be applied before the scan gate."""
+
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert "apt-get update" in dockerfile
+    assert "apt-get upgrade -y --no-install-recommends" in dockerfile
+    assert "rm -rf /var/lib/apt/lists/*" in dockerfile
+
+
 def test_container_bakes_the_staging_bundle_as_read_only() -> None:
     """The deployed image must contain, but cannot modify, the reviewed bundle."""
 

@@ -11,6 +11,8 @@ AUTOMATION="$ROOT/.github/security/dast/automation.yaml"
 METHOD_GUARD="$ROOT/.github/security/dast/active-scan-method-guard.js"
 RUNBOOK="$ROOT/docs/runbooks/SCRUM-273-authenticated-staging-dast.md"
 PLAN="$ROOT/docs/plans/SCRUM-273-authenticated-staging-dast-plan.md"
+SANITIZER="$ROOT/.github/scripts/security/sanitize-dast-report.sh"
+SCRUM453_RUNBOOK="$ROOT/docs/runbooks/SCRUM-453-dast-security-header-remediation.md"
 TESTS_RUN=0
 TESTS_FAILED=0
 
@@ -50,6 +52,7 @@ script_accepts() {
 file_exists "reusable DAST workflow exists" "$WORKFLOW"
 file_exists "DAST validator exists" "$VALIDATOR"
 file_exists "DAST runner exists" "$RUNNER"
+file_exists "DAST report sanitizer exists" "$SANITIZER"
 file_exists "ZAP automation policy exists" "$AUTOMATION"
 file_exists "active-scan method guard exists" "$METHOD_GUARD"
 file_exists "DAST operating procedure exists" "$RUNBOOK"
@@ -61,7 +64,9 @@ contains "workflow is reusable" "$WORKFLOW" "workflow_call:"
 contains "workflow is read-only" "$WORKFLOW" "contents: read"
 not_contains "workflow has no AWS identity permission" "$WORKFLOW" "id-token: write"
 not_contains "workflow never inherits every secret" "$WORKFLOW" "secrets: inherit"
-contains "workflow uploads the DAST report artifact" "$WORKFLOW" "actions/upload-artifact"
+contains "workflow uploads the redacted DAST report artifact" "$WORKFLOW" "actions/upload-artifact"
+contains "workflow names the redacted DAST artifact" "$WORKFLOW" "dast-report-redacted.json"
+not_contains "workflow never uploads the raw DAST report" "$WORKFLOW" "path: \${{ runner.temp }}/dast-report.json"
 contains "workflow skips the upload when no report was produced" "$WORKFLOW" "if-no-files-found: ignore"
 contains "workflow retains the DAST report only briefly" "$WORKFLOW" "retention-days: 14"
 not_contains "workflow does not create GitHub issues" "$WORKFLOW" "issues: write"
@@ -70,6 +75,7 @@ contains "workflow requires web allowlist entry" "$WORKFLOW" "approved_web_base_
 contains "workflow requires backend allowlist entry" "$WORKFLOW" "approved_backend_base_url"
 contains "workflow runs preflight before scanner" "$WORKFLOW" "validate-dast-staging-contract.sh"
 contains "workflow runs redacted scanner wrapper" "$WORKFLOW" "run-authenticated-dast.sh"
+contains "workflow preserves the SCRUM-297 gate owner" "$WORKFLOW" "SCRUM-297"
 contains "runner uses an ephemeral temporary directory" "$RUNNER" 'mktemp -d /tmp/crewsafe-dast.XXXXXX'
 contains "runner cleans up ephemeral scan data" "$RUNNER" "trap cleanup EXIT INT TERM"
 contains "runner requires envsubst to resolve the policy" "$RUNNER" "command -v envsubst"
@@ -105,6 +111,12 @@ not_contains "runner does not mount the full ZAP home" "$RUNNER" 'zap_home="$tmp
 contains "runner classifies authentication failures" "$RUNNER" "browser authentication or session setup failed"
 contains "runner classifies target reachability failures" "$RUNNER" "could not reach a staging target"
 contains "runner reports whether a failed plan produced a report" "$RUNNER" "report_state"
+contains "runner invokes the standalone sanitizer" "$RUNNER" "sanitize-dast-report.sh"
+contains "runner summarizes bounded finding counts" "$RUNNER" ".finding_counts.high"
+contains "sanitizer emits a verification timestamp" "$SANITIZER" "generated_at"
+contains "sanitizer emits affected host metadata" "$SANITIZER" "host:"
+contains "sanitizer checks forbidden output keys" "$SANITIZER" "forbidden_key"
+contains "sanitizer checks secret-like output values" "$SANITIZER" "secret-like"
 contains "runner counts scanned sites" "$RUNNER" 'sites_scanned="$(jq'
 contains "runner counts scanned endpoints" "$RUNNER" 'endpoints_scanned="$(jq'
 contains "runner fails on zero scanned endpoints" "$RUNNER" "endpoints_scanned == 0"
@@ -112,12 +124,14 @@ contains "runner surfaces endpoint coverage in the summary" "$RUNNER" "Endpoint 
 contains "runner builds a per-alert findings table" "$RUNNER" 'findings_table="$(jq -r'
 not_contains "runner findings table excludes raw evidence fields" "$RUNNER" ".evidence"
 not_contains "runner findings table excludes raw otherinfo fields" "$RUNNER" ".otherinfo"
-contains "runner strips query strings from findings table URLs" "$RUNNER" 'sub("\\?.*$"; "")'
+contains "sanitizer strips query strings from report paths" "$SANITIZER" 'sub("\\?.*$"; "")'
 contains "runner escapes pipes before rendering markdown table cells" "$RUNNER" 'gsub("\\|"; "\\|")'
-contains "runner copies the report for artifact upload" "$RUNNER" 'report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report.json"'
-not_contains "runner does not classify the expected report filename as an error" "$RUNNER" "dast-report\\.json'"
+contains "runner copies only the redacted report for artifact upload" "$RUNNER" 'report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report-redacted.json"'
+not_contains "runner never copies the raw report to the artifact directory" "$RUNNER" 'report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report.json"'
+not_contains "runner does not classify the raw report filename as an uploadable artifact" "$RUNNER" "dast-report\\.json'"
 not_contains "runner never prints raw ZAP logs" "$RUNNER" 'cat "$run_log"'
 not_contains "runner never uploads raw scanner artifacts" "$RUNNER" "upload-artifact"
+not_contains "runner never copies the raw report outside private temp" "$RUNNER" 'cp "$report" "$report_copy"'
 
 contains "backend caller depends on deployment" "$BACKEND_WORKFLOW" "needs: deploy-staging"
 contains "backend caller invokes reusable DAST workflow" "$BACKEND_WORKFLOW" "uses: ./.github/workflows/dast-staging.yml"
@@ -162,6 +176,10 @@ contains "runbook names SCRUM-297 handoff" "$RUNBOOK" "SCRUM-297"
 contains "runbook forbids secrets in evidence" "$RUNBOOK" "Never record"
 contains "runbook includes recovery path" "$RUNBOOK" "Recovery"
 contains "durable plan states constitution compliance" "$PLAN" "Constitution compliance"
+contains "SCRUM-453 runbook has remediated disposition state" "$SCRUM453_RUNBOOK" "remediated"
+contains "SCRUM-453 runbook has exception disposition state" "$SCRUM453_RUNBOOK" "exception"
+contains "SCRUM-453 runbook marks stale evidence non-passing" "$SCRUM453_RUNBOOK" "non-passing"
+contains "SCRUM-453 runbook records before and after counts" "$SCRUM453_RUNBOOK" "Before count"
 
 if [[ -x "$VALIDATOR" ]]; then
   script_accepts "validator accepts reviewed contract" env \

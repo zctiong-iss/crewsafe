@@ -35,8 +35,15 @@ export interface SiteWorker {
 /** Mirrors the `Intensity` schema in `docs/api/shift.yaml`. Fixed set — never free text. */
 export type Intensity = "LIGHT" | "MODERATE" | "HEAVY";
 
-/** Mirrors `ShiftStatus`. Server-controlled: a client cannot set it. */
-export type ShiftStatus = "PLANNED" | "ACTIVE" | "CLOSED";
+/**
+ * Mirrors `ShiftStatus`. Server-controlled: a client cannot set it.
+ *
+ * CANCELLED was missing here until SCRUM-442, while the backend enum and the DB check
+ * constraint carried it from the start and the cancel endpoint had existed for some time. A
+ * cancelled shift therefore already arrived as a status nothing here admitted - and
+ * `ShiftStatusPill` indexes a Record by it, so it did not render oddly, it threw.
+ */
+export type ShiftStatus = "PLANNED" | "ACTIVE" | "CLOSED" | "CANCELLED";
 
 /** Mirrors the `ShiftAssignment` schema in `docs/api/shift.yaml`. */
 export interface ShiftAssignment {
@@ -204,6 +211,27 @@ export interface SiteForecast {
   inputAgeMinutes?: number;
   /** True for any basis other than MODEL. The server decides this; the client never infers it. */
   degraded?: boolean;
+  /**
+   * The MOM band the predicted value falls in, evaluated server-side (SCRUM-369).
+   *
+   * This is what the "do not add a derived one" note above was waiting for. The band is still
+   * never computed here — `WbgtBand.classify` runs on the server against `predictedValue`, so
+   * there remains exactly one authority for what a WBGT number means (FR-15, §12.2).
+   *
+   * Optional because a backend predating it omits it; a missing band renders as no colour and
+   * no label rather than as the coolest band, which would turn "unknown" into "safe".
+   */
+  band?: WbgtBand | null;
+  /**
+   * The bands the interval's own bounds fall in, evaluated server-side.
+   *
+   * An interval routinely crosses a boundary — the half-width can reach 4°C — and painting the
+   * whole range in the point estimate's colour would assert it stays in one band while the
+   * range beside it says otherwise. These let each bound carry its own colour, which is how
+   * "this could already be in the rest-required band" becomes visible at a glance.
+   */
+  confidenceIntervalLowerBand?: WbgtBand | null;
+  confidenceIntervalUpperBand?: WbgtBand | null;
 }
 
 /**
@@ -356,6 +384,17 @@ export type ApprovalDecision = "APPROVED" | "REJECTED" | "EDITED";
 export interface Approval {
   id: string;
   approverId: string;
+  /**
+   * Who decided, ready to render.
+   *
+   * `approverId` alone is unresolvable here: the only name lookup available is
+   * `GET /sites/{siteId}/workers`, which returns WORKERs, and an approver is a SUPERVISOR. So
+   * the id could never be matched to a person and the oversight screen rendered the raw UUID.
+   *
+   * Optional because a backend predating it omits it — callers must fall back to showing
+   * nothing rather than to showing the id.
+   */
+  approverName?: string | null;
   decision: ApprovalDecision;
   reason: string | null;
   /** Present only for an EDITED decision — what the supervisor actually approved. */
@@ -377,9 +416,9 @@ export interface Approval {
  * decided on it. No `Approval` row exists for it, so it is not "decided" in the sense `decided`
  * checks elsewhere in this app — handled explicitly for the same reason `DRAFT` is.
  *
- * `AUTO_DISPATCHED` (SCRUM-440): a lightning-immediate or WBGT-max stop-work skipped approval
- * entirely and was dispatched straight to workers. Also has no `Approval` row — same reasoning
- * as `SUPERSEDED`, but this one is a plan that already took effect, not one that was replaced.
+ * `AUTO_DISPATCHED` (SCRUM-440): a lightning-immediate stop-work skipped approval entirely and
+ * was dispatched straight to workers. Also has no `Approval` row — same reasoning as
+ * `SUPERSEDED`, but this one is a plan that already took effect, not one that was replaced.
  */
 export type RecommendationStatus =
   | "DRAFT"
@@ -431,6 +470,24 @@ export interface Recommendation {
    * the same claim as "a template wrote this".
    */
   modelVersion: string | null;
+  /**
+   * Everyone this plan's mitigations name, resolved server-side.
+   *
+   * The client used to turn `appliesTo` ids into names against `shiftsSlice.workers`, which
+   * belongs to whichever site the shifts screen last loaded — and nothing on the recommendation
+   * screens loads it. A supervisor saw names only because they had passed through a screen that
+   * happened to populate it; a safety manager, who has no shifts tab, saw present workers
+   * reported as "no longer on this site".
+   *
+   * Optional because a backend predating it omits it, in which case the old lookup still runs.
+   */
+  workers?: PlanWorker[] | null;
+}
+
+/** Mirrors `RecommendationController.PlanWorker`. */
+export interface PlanWorker {
+  id: string;
+  displayName: string;
 }
 
 /**
@@ -539,7 +596,10 @@ export interface PolicyVersion {
   wbgtThresholdFullLight: number;
   wbgtThresholdFullModerate: number;
   wbgtThresholdFullHeavy: number;
-  /** Stop work at or above this, whatever the acclimatisation. Server bounds it to 20..40. */
+  /**
+   * @deprecated Retained for persisted/API compatibility; ignored by WBGT policy enforcement.
+   * Server still bounds it to 20..40.
+   */
   wbgtEmergencyStop: number;
 
   notes: string | null;

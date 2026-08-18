@@ -2,8 +2,9 @@
  * @author Jemilin Beulah
  */
 import type { Site } from "@/api/identity";
+import type { subscribeToConditions } from "@/api/conditionsStream";
+import { SiteConditionsSummary } from "./SiteConditionsSummary";
 import "./SiteCard.css";
-
 /**
  * One site on the live board.
  *
@@ -12,7 +13,10 @@ import "./SiteCard.css";
  * status from the design go — the card is laid out for them now so that adding them is a
  * change to this component alone.
  */
-export function SiteCard({ site }: Readonly<{ site: Site }>) {
+export function SiteCard({
+  site,
+  subscribe,
+}: Readonly<{ site: Site; subscribe?: typeof subscribeToConditions }>) {
   return (
     <article className="site-card card">
       <header className="site-card__header">
@@ -26,14 +30,8 @@ export function SiteCard({ site }: Readonly<{ site: Site }>) {
         </p>
       </header>
 
-      {/* Readings slot — WBGT, forecast band and crew status land here. */}
-      <div className="site-card__pending">
-        <p className="eyebrow">Live conditions</p>
-        <p className="site-card__pending-text">
-          Not connected yet. Weather ingest and the WBGT reading arrive with the monitoring
-          service; this card will show the current band, the forecast and crew status once
-          it does.
-        </p>
+      <div className="site-card__body">
+        <SiteConditionsSummary siteId={site.id} subscribe={subscribe} />
       </div>
     </article>
   );

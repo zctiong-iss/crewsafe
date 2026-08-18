@@ -94,11 +94,11 @@ public class ActionDispatchService {
     }
 
     /**
-     * The SCRUM-440 counterpart to {@link #dispatchAction}: a lightning-immediate or
-     * WBGT-max stop-work skips the approval step entirely, so there is no {@code Approval}
+     * The SCRUM-440 counterpart to {@link #dispatchAction}: a lightning-immediate stop-work
+     * skips the approval step entirely, so there is no {@code Approval}
      * to attribute this to. {@code actorId} is still whoever's request produced the draft --
      * null for the SCRUM-291 auto-trigger, but a real supervisor id when they pressed
-     * "Generate" themselves and the draft happened to be a mandatory stop-work; either way,
+     * "Generate" themselves and the draft happened to be a lightning stop-work; either way,
      * nobody made an approve/reject decision, which is what {@link #dispatchAction} attributes
      * an {@code Approval} to.
      *

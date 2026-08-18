@@ -1,4 +1,5 @@
 .site-card {
+  position: relative;   /* anchors the band spine */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -6,6 +7,7 @@
 
 .site-card__header {
   padding: var(--space-4) var(--space-5);
+  padding-left: calc(var(--space-5) + var(--space-2));   /* clear the 8px spine */
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
@@ -21,12 +23,9 @@
   color: var(--ink-muted);
 }
 
-/*
- * The pending slot reads as unfinished on purpose — sunken, not a card of its own. It
- * should never be mistaken for a reading of zero.
- */
-.site-card__pending {
+.site-card__body {
   padding: var(--space-4) var(--space-5);
+  padding-left: calc(var(--space-5) + var(--space-2));   /* clear the 8px spine */
   background: var(--surface-sunken);
   border-top: 1px solid var(--line);
   display: flex;
@@ -35,8 +34,53 @@
   flex: 1;
 }
 
-.site-card__pending-text {
-  font-size: var(--text-sm);
-  color: var(--ink-secondary);
-  text-wrap: pretty;
+.site-card__live { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* Section header: "Live conditions" label left, freshness pill right — the trust signal up top. */
+.site-card__meta { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+
+/* Band-coloured risk spine — 8px (the app's card-accent width), full card height, scannable across the board. */
+.site-card__spine { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; }
+.site-card__spine--idle { background: var(--line); }
+.site-card__spine--low { background: var(--band-low); }
+.site-card__spine--moderate { background: var(--band-moderate); }
+.site-card__spine--high { background: var(--band-high); }
+.site-card__spine--extreme { background: var(--band-extreme); }
+
+.site-card__status { font-size: var(--text-sm); color: var(--ink-secondary); }
+.site-card__status--closed { color: var(--band-high); }
+
+.site-card__reading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
+.site-card__wbgt { display: flex; flex-direction: column; }
+/* The one figure read across a room — the design's reading size. */
+.site-card__wbgt-value { font-size: var(--text-reading); line-height: 1; font-weight: var(--weight-semibold); }
+
+.site-card__badges { display: flex; gap: var(--space-2); align-items: center; }
+
+/* Band chip: the WBGT-risk scale tokens (distinct from freshness). Modifiers match BAND_TONE. */
+.site-card__band--low { background: var(--band-low-wash); color: var(--band-low); }
+.site-card__band--moderate { background: var(--band-moderate-wash); color: var(--band-moderate); }
+.site-card__band--high { background: var(--band-high-wash); color: var(--band-high); }
+.site-card__band--extreme { background: var(--band-extreme-wash); color: var(--band-extreme); }
+
+/* Forecast row + its chip: "later" reads quieter than "now" — wash only, no strong fill. */
+.site-card__forecast { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.site-card__forecast-value { color: var(--ink-secondary); font-weight: var(--weight-medium); }
+.site-card__band--forecast { opacity: 0.85; }
+
+/* Freshness pill: status tokens, never a raw hex. Modifiers match c.freshness.toLowerCase(). */
+.site-card__freshness--live { background: var(--status-ok-wash); color: var(--status-ok); }
+.site-card__freshness--delayed { background: var(--status-waiting-wash); color: var(--status-waiting); }
+.site-card__freshness--stale,
+.site-card__freshness--simulated { background: var(--status-none-wash); color: var(--status-none); }
+
+.site-card__degraded { font-size: var(--text-sm); color: var(--band-high); }
+.site-card__shift { font-size: var(--text-sm); color: var(--status-ok); font-weight: var(--weight-medium); }
+
+/* Status footer: a hairline divider sets active-shift apart as a quiet card-level status. */
+.site-card__footer { padding-top: var(--space-3); border-top: 1px solid var(--line); }

@@ -132,7 +132,7 @@ class ShiftEditabilityTest {
         Shift shift = finishedShift();
         when(shifts.findByIdAndSiteId(any(), any())).thenReturn(Optional.of(shift));
 
-        assertThatThrownBy(() -> service.addAssignment(SITE, shift.getId(),
+        assertThatThrownBy(() -> service.addAssignment(SITE, ACTOR, shift.getId(),
                 new ShiftService.AssignmentInput(UUID.randomUUID(), "Task", Intensity.LIGHT, 1)))
                 .isInstanceOf(BadRequestException.class);
 

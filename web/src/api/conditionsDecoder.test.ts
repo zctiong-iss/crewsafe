@@ -72,6 +72,39 @@ describe("decodeConditionsSnapshot", () => {
     expect(decoded.warnings).toEqual([]);
   });
 
+  it("decodes server-classified current and forecast bands", () => {
+    const decoded = decodeConditionsSnapshot(encode((value) => {
+      const conditions = child(value, "conditions");
+      conditions.currentBand = "32_TO_BELOW_33";
+      conditions.forecastBand = "33_AND_ABOVE";
+      conditions.forecastWbgt30m = 33.2;
+    }));
+
+    expect(decoded.snapshot.conditions?.currentBand).toBe("32_TO_BELOW_33");
+    expect(decoded.snapshot.conditions?.forecastBand).toBe("33_AND_ABOVE");
+    expect(decoded.snapshot.conditions?.forecastWbgt30m).toBe(33.2);
+  });
+
+  it("tolerates a null forecast band and value", () => {
+    const decoded = decodeConditionsSnapshot(encode((value) => {
+      const conditions = child(value, "conditions");
+      conditions.currentBand = "BELOW_31";
+      conditions.forecastBand = null;
+      conditions.forecastWbgt30m = null;
+    }));
+
+    expect(decoded.snapshot.conditions?.forecastBand).toBeNull();
+    expect(decoded.snapshot.conditions?.forecastWbgt30m).toBeNull();
+  });
+
+  it("rejects an unknown band string at the boundary", () => {
+    expect(() =>
+      decodeConditionsSnapshot(encode((value) => {
+        child(value, "conditions").currentBand = "SCORCHING";
+      })),
+    ).toThrow(InvalidConditionsPayloadError);
+  });
+
   it("accepts a null nearestStrikeKm on a CLEAR lightning state", () => {
     const decoded = decodeConditionsSnapshot(encode((value) => {
       child(value, "lightning").nearestStrikeKm = null;

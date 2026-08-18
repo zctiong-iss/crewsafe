@@ -75,10 +75,10 @@ public class Recommendation {
         SUPERSEDED,
 
         /**
-         * A lightning-immediate or WBGT-max stop-work (SCRUM-440): dispatched straight to
-         * workers with no supervisor approval step at all, per the team's four-rule alert
+         * A lightning-immediate stop-work (SCRUM-440): dispatched straight to workers with no
+         * supervisor approval step at all, per the team's four-rule alert
          * policy. Terminal, like APPROVED/REJECTED, but reached without an {@link Approval}
-         * ever existing -- see {@code AgentDraftService#doGenerate} for the two conditions
+         * ever existing -- see {@code AgentDraftService#doGenerate} for the lightning condition
          * that reach it and {@code RecommendationService#assertCanDecide} for why one can no
          * longer be decided on.
          */

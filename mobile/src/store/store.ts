@@ -25,9 +25,12 @@ import ui from "./reducers/uiSlice";
 import profile from "./reducers/profileSlice";
 import dispatchInbox from "./reducers/dispatchInboxSlice";
 import recommendations from "./reducers/recommendationsSlice";
+import oversight from "./reducers/oversightSlice";
 import wellbeing from "./reducers/wellbeingSlice";
 import policy from "./reducers/policySlice";
 import forecast from "./reducers/forecastSlice";
+import notifications from "./reducers/notificationsSlice";
+import { notificationListener } from "./notificationListeners";
 
 const rootReducer = combineReducers({
   preferences,
@@ -38,6 +41,10 @@ const rootReducer = combineReducers({
   // Not persisted: a decision is recorded server-side, and a stale pending item rehydrated
   // from disk would invite a supervisor to decide something already decided.
   recommendations,
+  // Not persisted, for the same reason as `recommendations` and more so: this is a safety
+  // manager's view across many sites, and a stale plan rehydrated from disk would understate
+  // how much is outstanding on a site they are about to judge.
+  oversight,
   // Not persisted: a rest logged on this device is a fact the server holds, and rehydrating a
   // stale "logged at" would tell a worker they rested when the write never landed.
   wellbeing,
@@ -50,6 +57,13 @@ const rootReducer = combineReducers({
   forecast,
   ui,
   profile,
+  /*
+   * Persisted, via the root allowlist. It records which drafted plans this device has already
+   * announced, and the whole point of it is surviving a restart: starting empty would make
+   * every plan on the site look new on the next poll, and a supervisor's phone would fire a
+   * burst of notifications for plans drafted days ago. See `notificationsSlice`.
+   */
+  notifications,
   // Nested persist: this slice needs two of its fields kept and the rest discarded. See
   // `dispatchInboxPersistConfig` for why `pending` and `inFlight` must not survive.
   dispatchInbox: persistReducer(dispatchInboxPersistConfig, dispatchInbox),
@@ -69,7 +83,15 @@ export const store = configureStore({
         // which is where it actually earns its keep.
         ignoredActions: [FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER],
       },
-    }),
+      /*
+       * Prepended, not appended.
+       *
+       * A listener runs after the reducers have handled the action, and prepending puts it
+       * ahead of the default middleware so it sees the action even if something later in the
+       * chain swallows it. It is also where RTK's own documentation puts it, and the ordering
+       * is not worth diverging from for its own sake.
+       */
+    }).prepend(notificationListener.middleware),
 });
 
 export const persistor = persistStore(store);

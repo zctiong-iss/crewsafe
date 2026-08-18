@@ -38,7 +38,7 @@ contains_in "has Overview section" "$RUNBOOK" '## 1. Overview'
 contains_in "has Reference lookup section" "$RUNBOOK" '## 2. Reference lookup'
 contains_in "has Promotion procedure section" "$RUNBOOK" '## 3. Promotion procedure'
 contains_in "has Rollback procedure section" "$RUNBOOK" '## 4. Rollback procedure'
-contains_in "has Report-only scope limitation section" "$RUNBOOK" '## 5. Report-only scope limitation'
+contains_in "has date-controlled Trivy policy section" "$RUNBOOK" '## 5. Date-controlled Trivy policy'
 contains_in "has Local/manual validation section" "$RUNBOOK" '## 6. Local/manual validation'
 contains_in "has Failure and recovery section" "$RUNBOOK" '## 7. Failure and recovery'
 
@@ -51,9 +51,9 @@ contains_in "documents run_id/run_url output" "$RUNBOOK" 'run_id'
 contains_in "states rollback is digest-only" "$RUNBOOK" 'by digest'
 contains_in "states a mutable tag/re-push MUST NOT be used for rollback" "$RUNBOOK" 'MUST NOT'
 
-# --- FR-008: report-only scope limitation, linked to the binding decision --
-contains_in "links the SCRUM-270/273 gate enforcement scope plan" "$RUNBOOK" \
-  'docs/plans/SCRUM-270-273-gate-enforcement-scope-plan.md'
+# --- FR-008: report-only policy, linked to the binding decision -------------
+contains_in "documents the SCRUM-455 policy expiry" "$RUNBOOK" \
+  '2026-09-17 UTC'
 contains_in "states scan findings do not yet block publication" "$RUNBOOK" 'report-only'
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
