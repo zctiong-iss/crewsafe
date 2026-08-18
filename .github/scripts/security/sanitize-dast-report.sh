@@ -36,8 +36,8 @@ if ! jq -e 'type == "object"' "$raw_report" >/dev/null 2>&1; then
   fail 'report is not valid JSON object data'
 fi
 
-scanner_version="$(jq -r '.about.version // empty' "$raw_report")"
-generated_at="$(jq -r '.about.generated // .about.generatedAt // empty' "$raw_report")"
+scanner_version="$(jq -r '."@version" // .about.version // empty' "$raw_report")"
+generated_at="$(jq -r '."@generated" // .created // .about.generated // .about.generatedAt // empty' "$raw_report")"
 sites_scanned="$(jq -r '[.site[]?] | length' "$raw_report")"
 endpoints_scanned="$(jq -r '[.insights[]? | select(.key == "insight.endpoint.total") | (.statistic | tonumber?)] | add // 0' "$raw_report")"
 
@@ -70,7 +70,7 @@ if ! jq -e \
         risk: ($alert.riskdesc // $alert.risk | text_or_unknown),
         confidence: ($alert.confidence | text_or_unknown),
         cwe_id: ($alert.cweid // $alert.cwe // null),
-        host: ($site.name // "unknown" | clean_host),
+        host: ($site["@name"] // $site.name // "unknown" | clean_host),
         paths: [($alert.instances // [])[]?.uri? | clean_path] | unique | .[0:10],
         instance_count: (($alert.instances // []) | length),
         risk_code: (($alert.riskcode // "0") | tostring)
