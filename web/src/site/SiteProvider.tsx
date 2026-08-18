@@ -1,7 +1,7 @@
 /**
  * @author Jemilin Beulah
  */
-import { createContext, useCallback, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { fetchAccessibleSites, type Site } from "@/api/identity";
 import { useCurrentUser } from "@/auth/useAuth";
 
@@ -27,7 +27,7 @@ export const SiteContext = createContext<SiteContextValue | null>(null);
  * attacker-controlled value out of the request path; a `sessionStorage`-backed selector
  * keeps that property while still letting a multi-site user switch what they're looking at.
  */
-export function SiteProvider({ children }: { children: ReactNode }) {
+export function SiteProvider({ children }: Readonly<{ children: ReactNode }>) {
   const user = useCurrentUser();
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState<string | null>(() => {
@@ -62,7 +62,7 @@ export function SiteProvider({ children }: { children: ReactNode }) {
     [user.siteIds],
   );
 
-  return (
-    <SiteContext.Provider value={{ sites, siteId, selectSite }}>{children}</SiteContext.Provider>
-  );
+  const value = useMemo(() => ({ sites, siteId, selectSite }), [sites, siteId, selectSite]);
+
+  return <SiteContext.Provider value={value}>{children}</SiteContext.Provider>;
 }

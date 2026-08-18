@@ -39,11 +39,15 @@ class DemoDataSeederTest extends AbstractIntegrationTest {
         assertThat(users.findByUsername("supervisor1")).isPresent();
         assertThat(users.findByUsername("worker1")).isPresent();
         assertThat(users.findByUsername("manager1")).isPresent();
-        assertThat(users.findByUsername("admin1")).isPresent();
+        // Email-shaped: the live shared pool requires it (username_attributes=["email"]),
+        // so the admin demo identity is kept consistent with that shape everywhere, local
+        // included, rather than only on the pool that actually enforces it.
+        assertThat(users.findByUsername("admin1@synthetic.crewsafe.invalid")).isPresent();
 
         assertThat(users.findByUsername("worker1").orElseThrow().getRole()).isEqualTo(Role.WORKER);
         assertThat(users.findByUsername("manager1").orElseThrow().getRole()).isEqualTo(Role.SAFETY_MANAGER);
-        assertThat(users.findByUsername("admin1").orElseThrow().getRole()).isEqualTo(Role.ADMIN);
+        assertThat(users.findByUsername("admin1@synthetic.crewsafe.invalid").orElseThrow().getRole())
+                .isEqualTo(Role.ADMIN);
     }
 
     @Test

@@ -11,6 +11,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class HealthEndpointJsonConfiguration {
 
+    private HealthEndpointJsonConfiguration() {
+    }
+
     @Bean
     static BeanPostProcessor healthEndpointObjectMapperCustomizer() {
         return new BeanPostProcessor() {

@@ -196,11 +196,16 @@ WEB_CLIENT=$(cog CreateUserPoolClient \
 # navigation paths were unreachable and nobody could tell whether they worked.
 #
 # `site_codes` values are the only two the seeder reconciles; anything else is rejected.
+# admin1's username is email-shaped (@synthetic.crewsafe.invalid): the live shared pool
+# requires it (username_attributes=["email"], infra/terraform/cognito/main.tf), so the local
+# demo identity matches that shape too rather than only where AWS actually enforces it.
+ADMIN_USERNAME='admin1@synthetic.crewsafe.invalid'
+
 declare -A SUBS
 declare -A ROLE=(
   [supervisor1]=SUPERVISOR [supervisor2]=SUPERVISOR
   [worker1]=WORKER [worker2]=WORKER [worker3]=WORKER
-  [manager1]=SAFETY_MANAGER [admin1]=ADMIN
+  [manager1]=SAFETY_MANAGER ["$ADMIN_USERNAME"]=ADMIN
 )
 declare -A SITES=(
   [supervisor1]='["bishan"]' [supervisor2]='["campus"]'
@@ -208,15 +213,15 @@ declare -A SITES=(
   [manager1]='["bishan","campus"]'
   # An administrator holds every permission a supervisor does but belongs to no site — that
   # is the case that catches code assuming a membership always exists.
-  [admin1]='[]'
+  ["$ADMIN_USERNAME"]='[]'
 )
 declare -A LABEL=(
   [supervisor1]='Aisyah (Supervisor)' [supervisor2]='Rajesh (Supervisor)'
   [worker1]='Meng Hui (Worker)' [worker2]='Siti (Worker)' [worker3]='Kumar (Worker)'
-  [manager1]='Wei Ling (Safety Manager)' [admin1]='System Administrator'
+  [manager1]='Wei Ling (Safety Manager)' ["$ADMIN_USERNAME"]='System Administrator'
 )
 
-USERNAMES=(supervisor1 supervisor2 worker1 worker2 worker3 manager1 admin1)
+USERNAMES=(supervisor1 supervisor2 worker1 worker2 worker3 manager1 "$ADMIN_USERNAME")
 
 for username in "${USERNAMES[@]}"; do
   CREATED=$(cog AdminCreateUser \
@@ -345,11 +350,11 @@ Every account below uses the password $PASSWORD
   supervisor1                 SUPERVISOR      Shifts / Weather / Profile  (Bishan)
   supervisor2                 SUPERVISOR      Shifts / Weather / Profile  (NUS Campus)
   manager1                    SAFETY_MANAGER  Shifts / Weather / Profile  (both sites)
-  admin1                      ADMIN           Shifts / Weather / Profile  (no site)
+  $ADMIN_USERNAME  ADMIN           Shifts / Weather / Profile  (no site)
 
 Only a WORKER sees My shift and Alerts: /shifts/me is scoped to the caller's own assignment
 and the dispatch inbox is WORKER-only, so those tabs would be dead ends for anyone else.
-admin1 belongs to no site and is the account that shows the empty-membership state.
+$ADMIN_USERNAME belongs to no site and is the account that shows the empty-membership state.
 EOF
 
 if [[ "$PRINT_TOKEN" == true ]]; then

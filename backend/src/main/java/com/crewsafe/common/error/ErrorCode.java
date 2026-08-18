@@ -24,6 +24,7 @@ package com.crewsafe.common.error;
  * status-derived message — see {@code messageKeyFor} in mobile's {@code api/errors.ts}.
  *
  * @author Justin Chua
+ * @author Jemilin Beulah
  */
 public enum ErrorCode {
 
@@ -42,5 +43,27 @@ public enum ErrorCode {
      * The site has no WBGT reading a plan could be based on: either no observation at all, or
      * one outside the 15–40°C sanity band, which is a sensor fault rather than weather.
      */
-    NO_USABLE_WBGT;
+    NO_USABLE_WBGT,
+
+    /**
+     * {@code CognitoUserProvisioningService} has not yet been switched on for this
+     * environment — its IAM grant and Cognito user pool config are applied by Terraform
+     * separately from a code deploy. The fix is using the existing bind-an-existing-identity
+     * path instead until this environment's Terraform is confirmed applied.
+     */
+    COGNITO_PROVISIONING_DISABLED,
+
+    /**
+     * Cognito already has an identity under this email — most likely someone already
+     * registered it, through this app or directly in the Console. The fix is binding that
+     * existing identity's sub rather than retrying the registration.
+     */
+    EMAIL_ALREADY_REGISTERED_IN_COGNITO,
+
+    /**
+     * The chosen username is already registered locally. Distinct from
+     * {@link #EMAIL_ALREADY_REGISTERED_IN_COGNITO}: this is a same-app collision the admin
+     * can fix by picking a different username, not a Cognito-side conflict.
+     */
+    USERNAME_ALREADY_REGISTERED;
 }

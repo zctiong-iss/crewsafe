@@ -41,11 +41,15 @@ describe("navigation", () => {
     expect(withSettings).toEqual(["ADMIN"]);
   });
 
-  it("gives every non-worker role the heat policy catalogue, but not a worker", () => {
+  it("gives supervisors and safety managers the heat policy catalogue, not a worker or an administrator", () => {
     const withPolicy = (["WORKER", "SUPERVISOR", "SAFETY_MANAGER", "ADMIN"] as Role[]).filter(
       (role) => navigationFor(role).some((item) => item.to === "/policy"),
     );
-    expect(withPolicy).toEqual(["SUPERVISOR", "SAFETY_MANAGER", "ADMIN"]);
+    expect(withPolicy).toEqual(["SUPERVISOR", "SAFETY_MANAGER"]);
+  });
+
+  it("gives an administrator only the admin console, nothing operational", () => {
+    expect(navigationFor("ADMIN").map((item) => item.to)).toEqual(["/settings"]);
   });
 
   it("has no route that no role can reach", () => {

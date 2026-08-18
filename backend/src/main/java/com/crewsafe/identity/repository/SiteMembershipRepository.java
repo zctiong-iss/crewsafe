@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -22,4 +23,8 @@ public interface SiteMembershipRepository extends JpaRepository<SiteMembership, 
     List<UUID> findSiteIdsByUserId(UUID userId);
 
     List<SiteMembership> findByUserId(UUID userId);
+
+    /** Used by admin revoke — find-then-delete, matching how {@code DemoDataSeeder} already
+     * reconciles memberships rather than a derived delete query. */
+    Optional<SiteMembership> findByUserIdAndSiteId(UUID userId, UUID siteId);
 }

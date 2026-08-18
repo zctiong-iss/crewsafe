@@ -51,6 +51,9 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DemoDataSeeder implements ApplicationRunner {
 
+    private static final String IDENTITY_KIND_DEVELOPER = "developer";
+    private static final String IDENTITY_KIND_SYNTHETIC_TEST = "synthetic-test";
+
     private final AppUserRepository users;
     private final SiteRepository sites;
     private final SiteMembershipRepository memberships;
@@ -192,9 +195,15 @@ public class DemoDataSeeder implements ApplicationRunner {
             throw new IllegalArgumentException("Mappings must contain unique usernames and Cognito subjects.");
         }
         for (DemoUserMapping mapping : mappings) {
-            boolean developerUsername = "developer".equals(mapping.identityKind())
-                    && mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$");
-            boolean syntheticUsername = "synthetic-test".equals(mapping.identityKind())
+            // A developer identity is normally a bare handle ("admin1"), but the live shared
+            // pool sets username_attributes=["email"] (infra/terraform/cognito/main.tf) — an
+            // account meant to exist there needs an email-shaped username too. Scoped to the
+            // same reserved @synthetic.crewsafe.invalid namespace synthetic-test already uses,
+            // so this never opens the door to a real address, just a second accepted shape.
+            boolean developerUsername = IDENTITY_KIND_DEVELOPER.equals(mapping.identityKind())
+                    && (mapping.username().matches("^[a-z0-9]++([._-][a-z0-9]++)*+$")
+                        || mapping.username().matches("^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$"));
+            boolean syntheticUsername = IDENTITY_KIND_SYNTHETIC_TEST.equals(mapping.identityKind())
                     && mapping.username().matches(
                             "^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$")
                     && mapping.displayName() != null
@@ -207,11 +216,11 @@ public class DemoDataSeeder implements ApplicationRunner {
                     || mapping.siteCodes().stream().anyMatch(java.util.Objects::isNull)
                     || mapping.siteCodes().stream().distinct().count() != mapping.siteCodes().size()
                     || mapping.identityKind() == null
-                    || !List.of("developer", "synthetic-test").contains(mapping.identityKind())
+                    || !List.of(IDENTITY_KIND_DEVELOPER, IDENTITY_KIND_SYNTHETIC_TEST).contains(mapping.identityKind())
                     || mapping.desiredStatus() == null
-                    || ("developer".equals(mapping.identityKind())
+                    || (IDENTITY_KIND_DEVELOPER.equals(mapping.identityKind())
                         && !"preserve".equals(mapping.desiredStatus()))
-                    || ("synthetic-test".equals(mapping.identityKind())
+                    || (IDENTITY_KIND_SYNTHETIC_TEST.equals(mapping.identityKind())
                         && !List.of("enabled", "disabled").contains(mapping.desiredStatus()))
                     || mapping.siteCodes().stream().anyMatch(code -> !List.of("bishan", "campus").contains(code))) {
                 throw new IllegalArgumentException("Mapping contains an unsafe subject, identity kind, or site code.");
