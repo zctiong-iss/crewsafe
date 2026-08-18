@@ -22,8 +22,11 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HexFormat;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -159,6 +162,82 @@ class AuditControllerTest extends AbstractIntegrationTest {
         assertThat(csv).contains("'=1+1").doesNotContain(",=1+1");
     }
 
+    /**
+     * The trail is DB-enforced insert-only (V5's trigger), but that protects the table, not a
+     * file already handed to an inspector. The trailer's printed SHA-256 lets them verify the
+     * copy they hold is what the system produced, with the exact command the trailer itself
+     * names.
+     */
+    @Test
+    void csvExportCarriesAVerifiableChecksumOfTheDataSection() throws Exception {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+
+        String csv = exportCsv(managerToken)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String printed = csv.lines()
+                .filter(line -> line.startsWith("# sha256,"))
+                .map(line -> line.split(",")[1])
+                .findFirst().orElseThrow();
+
+        assertThat(printed).isEqualTo(sha256(dataSection(csv)));
+    }
+
+    /** Tampering with a data row must be visible: it changes the section the checksum covers. */
+    @Test
+    void tamperingWithADataRowBreaksTheChecksum() throws Exception {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+
+        String csv = exportCsv(managerToken)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String printed = csv.lines()
+                .filter(line -> line.startsWith("# sha256,"))
+                .map(line -> line.split(",")[1])
+                .findFirst().orElseThrow();
+        String tampered = dataSection(csv).replace("SHIFT_CREATED", "SHIFT_DELETED");
+
+        assertThat(sha256(tampered)).isNotEqualTo(printed);
+    }
+
+    /** Every line — data and trailer alike — stays the header's width, so the file still opens
+     *  in a standard CSV viewer instead of the header being read as one column wide. */
+    @Test
+    void everyLineInTheExportHasTheSameColumnCount() throws Exception {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+
+        String csv = exportCsv(managerToken)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        long expectedColumns = csv.lines().findFirst().orElseThrow().chars().filter(c -> c == ',').count() + 1;
+        assertThat(csv.lines())
+                .allSatisfy(line -> assertThat(countFields(line))
+                        .describedAs("column count of: %s", line)
+                        .isEqualTo(expectedColumns));
+    }
+
+    /** Pulling the whole trail is itself worth a trace: the export is targeted at the SITE. */
+    @Test
+    void exportingIsRecordedToTheAuditTrail() throws Exception {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+
+        exportCsv(managerToken).andExpect(status().isOk());
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.AUDIT_EXPORTED))
+                .anyMatch(e -> site.getId().equals(e.getTargetId()) && manager.getId().equals(e.getActorId()));
+    }
+
     @Test
     void aSupervisorCannotReadTheAuditTrail() throws Exception {
         // The trail records what supervisors did — reading it is a manager/oversight surface.
@@ -203,5 +282,31 @@ class AuditControllerTest extends AbstractIntegrationTest {
                 .andExpect(request().asyncStarted())
                 .andReturn();
         return mockMvc.perform(asyncDispatch(started));
+    }
+
+    /** Everything above the '#' trailer — the bytes the printed SHA-256 covers. */
+    private static String dataSection(String csv) {
+        return csv.lines()
+                .takeWhile(line -> !line.startsWith("#"))
+                .reduce("", (acc, line) -> acc + line + "\r\n");
+    }
+
+    private static String sha256(String content) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(content.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    /** Counts CSV fields honouring quoting, so a quoted comma is not miscounted as a separator. */
+    private static long countFields(String line) {
+        long fields = 1;
+        boolean inQuotes = false;
+        for (char c : line.toCharArray()) {
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                fields++;
+            }
+        }
+        return fields;
     }
 }

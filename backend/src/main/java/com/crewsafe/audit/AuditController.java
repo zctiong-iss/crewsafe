@@ -1,10 +1,12 @@
 package com.crewsafe.audit;
 
+import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -25,6 +27,7 @@ import java.util.UUID;
  * {@code @siteAccess}-scoped, so a manager only reads sites they are a member of.
  *
  * @author Tang Chee Seng
+ * @author Abu Bakar
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/audit")
@@ -52,10 +55,11 @@ public class AuditController {
     @PreAuthorize(MANAGER_ON_SITE)
     public ResponseEntity<StreamingResponseBody> export(
             @PathVariable UUID siteId,
+            @AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @RequestParam Instant from,
             @RequestParam Instant to) {
 
-        StreamingResponseBody body = out -> audit.writeCsv(out, siteId, from, to);
+        StreamingResponseBody body = out -> audit.writeCsv(out, siteId, principal.getId(), from, to);
         String filename = audit.filenameFor(siteId, to);
 
         return ResponseEntity.ok()
