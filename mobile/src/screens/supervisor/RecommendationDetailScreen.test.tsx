@@ -139,9 +139,9 @@ it("offers approve/edit/reject to a supervisor who may decide", async () => {
 });
 
 it("shows the auto-dispatched notice, not decision buttons, even to a supervisor who may decide", async () => {
-  // SCRUM-440: a lightning-immediate or WBGT-max stop-work has no Approval at all -- it
-  // skipped that step entirely -- so this must not fall into the "offers buttons" branch just
-  // because `approval` is null and the caller can decide. It already happened.
+  // SCRUM-440: a lightning-immediate stop-work has no Approval at all -- it skipped that step
+  // entirely -- so this must not fall into the "offers buttons" branch just because `approval`
+  // is null and the caller can decide. It already happened.
   const store = buildStore(SUPERVISOR, [recommendation({ status: "AUTO_DISPATCHED" })]);
 
   const { queryByText } = await render(

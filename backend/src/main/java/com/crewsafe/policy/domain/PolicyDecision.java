@@ -77,7 +77,10 @@ public record PolicyDecision(
     }
 
     /**
-     * Check if emergency stop is required.
+     * Check whether this decision contains a STOP_WORK action.
+     *
+     * <p>The heat policy engine no longer produces that action from WBGT. The predicate remains
+     * for compatibility with callers that inspect arbitrary policy decisions.
      */
     public boolean isEmergencyStop() {
         return mandatoryActions.stream()

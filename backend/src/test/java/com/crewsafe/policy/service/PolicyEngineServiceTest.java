@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
  * - Policy evaluation logic (WBGT thresholds)
  * - Acclimatisation level effects
  * - Work intensity modifiers
- * - Emergency stop conditions
+ * - High-WBGT rest and hydration conditions
  * - Input validation
  * - Missing policy handling
  * - Per-worker targeting and multi-worker shift merging (SCRUM-118 delta 1)
@@ -207,31 +207,49 @@ class PolicyEngineServiceTest {
     }
 
     @Nested
-    @DisplayName("Emergency stop conditions")
-    class EmergencyStop {
+    @DisplayName("High-WBGT conditions")
+    class HighWbgt {
 
         @Test
-        @DisplayName("WBGT >= 33°C → STOP_WORK (emergency, MOM Band 3)")
-        void emergencyStopExactThreshold() {
+        @DisplayName("WBGT exactly at the deprecated emergency threshold follows rest and hydration")
+        void exactDeprecatedEmergencyThresholdUsesHeatControls() {
             var decision = policyEngine.evaluate(
                     siteId, workerId, 33.0, WorkIntensity.LIGHT, 7
             );
 
             assertThat(decision.mandatoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
-                    .containsExactly(PolicyActionCode.STOP_WORK, PolicyActionCode.CLOSE_MONITORING);
-            assertThat(decision.mandatoryActions().get(0).reasoning()).contains("emergency stop");
+                    .contains(PolicyActionCode.REST_10_MIN_HOURLY, PolicyActionCode.HYDRATE_HOURLY)
+                    .doesNotContain(PolicyActionCode.STOP_WORK);
+            assertThat(decision.isEmergencyStop()).isFalse();
         }
 
         @Test
-        @DisplayName("WBGT > 33°C → STOP_WORK (emergency, MOM Band 3)")
-        void emergencyStopAboveThreshold() {
+        @DisplayName("WBGT just below the deprecated emergency threshold follows rest and hydration")
+        void belowDeprecatedEmergencyThresholdUsesHeatControls() {
+            var decision = policyEngine.evaluate(
+                    siteId, workerId, 32.9, WorkIntensity.LIGHT, 7
+            );
+
+            assertThat(decision.mandatoryActions())
+                    .extracting(PolicyDecision.PolicyAction::code)
+                    .contains(PolicyActionCode.REST_10_MIN_HOURLY, PolicyActionCode.HYDRATE_HOURLY)
+                    .doesNotContain(PolicyActionCode.STOP_WORK);
+            assertThat(decision.isEmergencyStop()).isFalse();
+        }
+
+        @Test
+        @DisplayName("WBGT above the deprecated emergency threshold follows mandatory rest and hydration")
+        void aboveDeprecatedEmergencyThresholdUsesHeatControls() {
             var decision = policyEngine.evaluate(
                     siteId, workerId, 35.0, WorkIntensity.HEAVY, 1
             );
 
-            assertThat(decision.mandatoryActions().get(0).code()).isEqualTo(PolicyActionCode.STOP_WORK);
-            assertThat(decision.isEmergencyStop()).isTrue();
+            assertThat(decision.mandatoryActions())
+                    .extracting(PolicyDecision.PolicyAction::code)
+                    .contains(PolicyActionCode.REST_15_MIN_HOURLY, PolicyActionCode.HYDRATE_HOURLY)
+                    .doesNotContain(PolicyActionCode.STOP_WORK);
+            assertThat(decision.isEmergencyStop()).isFalse();
         }
     }
 
@@ -424,12 +442,12 @@ class PolicyEngineServiceTest {
         }
 
         @Test
-        @DisplayName("Decision.isEmergencyStop() returns true only for STOP_WORK")
+        @DisplayName("High WBGT does not produce an emergency stop decision")
         void isEmergencyStopProperty() {
-            var emergency = policyEngine.evaluate(
+            var highWbgt = policyEngine.evaluate(
                     siteId, workerId, 33.0, WorkIntensity.LIGHT, 1
             );
-            assertThat(emergency.isEmergencyStop()).isTrue();
+            assertThat(highWbgt.isEmergencyStop()).isFalse();
 
             var normal = policyEngine.evaluate(
                     siteId, workerId, 24.0, WorkIntensity.LIGHT, 1
@@ -481,19 +499,20 @@ class PolicyEngineServiceTest {
         @Test
         @DisplayName("Rule references distinguish between policies")
         void ruleReferences() {
-            // Emergency stop has specific rule
-            var emergency = policyEngine.evaluate(
+            // High WBGT uses the ordinary heat-stress rest rule, regardless of the
+            // retained legacy wbgtEmergencyStop value.
+            var highWbgt = policyEngine.evaluate(
                     siteId, workerId, 33.0, WorkIntensity.LIGHT, 1
             );
-            assertThat(emergency.mandatoryActions().get(0).ruleReference())
-                    .isEqualTo("EMERGENCY_STOP_RULE");
+            assertThat(highWbgt.mandatoryActions().get(0).ruleReference())
+                    .isEqualTo("HEAT_STRESS_REST_RULE");
 
             // Regular rest has different rule
             var rest = policyEngine.evaluate(
                     siteId, workerId, 25.0, WorkIntensity.LIGHT, 1
             );
             assertThat(rest.mandatoryActions().get(0).ruleReference())
-                    .isNotEqualTo("EMERGENCY_STOP_RULE");
+                    .isEqualTo("HEAT_STRESS_REST_RULE");
         }
     }
 
@@ -691,12 +710,15 @@ class PolicyEngineServiceTest {
         }
 
         @Test
-        @DisplayName("Emergency stop pairs with mandatory close monitoring")
-        void emergencyStopPairsWithMonitoring() {
+        @DisplayName("High WBGT keeps close monitoring as an advisory heat control")
+        void highWbgtKeepsCloseMonitoringAdvisory() {
             var decision = policyEngine.evaluate(
                     siteId, workerId, 33.0, WorkIntensity.LIGHT, 7
             );
             assertThat(decision.mandatoryActions())
+                    .extracting(PolicyDecision.PolicyAction::code)
+                    .doesNotContain(PolicyActionCode.CLOSE_MONITORING, PolicyActionCode.STOP_WORK);
+            assertThat(decision.advisoryActions())
                     .extracting(PolicyDecision.PolicyAction::code)
                     .contains(PolicyActionCode.CLOSE_MONITORING);
         }

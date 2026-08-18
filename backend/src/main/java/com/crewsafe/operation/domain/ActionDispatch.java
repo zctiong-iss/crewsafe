@@ -40,9 +40,9 @@ public class ActionDispatch {
     private Recommendation recommendation;
 
     /**
-     * Null for a stop-work dispatched automatically, with no supervisor decision at all
-     * (SCRUM-440) -- {@link Recommendation.RecommendationStatus#AUTO_DISPATCHED}. Present for
-     * every other dispatch, which always follows a supervisor's {@code APPROVED}/{@code
+     * Null for a lightning stop-work dispatched automatically, with no supervisor decision at
+     * all (SCRUM-440) -- {@link Recommendation.RecommendationStatus#AUTO_DISPATCHED}. Present
+     * for every other dispatch, which always follows a supervisor's {@code APPROVED}/{@code
      * EDITED} decision.
      */
     @ManyToOne(fetch = FetchType.LAZY)

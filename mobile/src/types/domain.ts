@@ -416,9 +416,9 @@ export interface Approval {
  * decided on it. No `Approval` row exists for it, so it is not "decided" in the sense `decided`
  * checks elsewhere in this app — handled explicitly for the same reason `DRAFT` is.
  *
- * `AUTO_DISPATCHED` (SCRUM-440): a lightning-immediate or WBGT-max stop-work skipped approval
- * entirely and was dispatched straight to workers. Also has no `Approval` row — same reasoning
- * as `SUPERSEDED`, but this one is a plan that already took effect, not one that was replaced.
+ * `AUTO_DISPATCHED` (SCRUM-440): a lightning-immediate stop-work skipped approval entirely and
+ * was dispatched straight to workers. Also has no `Approval` row — same reasoning as
+ * `SUPERSEDED`, but this one is a plan that already took effect, not one that was replaced.
  */
 export type RecommendationStatus =
   | "DRAFT"
@@ -596,7 +596,10 @@ export interface PolicyVersion {
   wbgtThresholdFullLight: number;
   wbgtThresholdFullModerate: number;
   wbgtThresholdFullHeavy: number;
-  /** Stop work at or above this, whatever the acclimatisation. Server bounds it to 20..40. */
+  /**
+   * @deprecated Retained for persisted/API compatibility; ignored by WBGT policy enforcement.
+   * Server still bounds it to 20..40.
+   */
   wbgtEmergencyStop: number;
 
   notes: string | null;

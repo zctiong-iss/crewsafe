@@ -119,8 +119,8 @@ public final class AuditEventType {
      * actorId is null, the same as {@link #SHIFT_ACTIVATED}. */
     public static final String RECOMMENDATION_SUPERSEDED = "RECOMMENDATION_SUPERSEDED";
 
-    /** A lightning-immediate or WBGT-max stop-work recommendation skipped supervisor approval
-     * and was dispatched straight to workers (SCRUM-440). Recorded once per recommendation,
+    /** A lightning-immediate stop-work recommendation skipped supervisor approval and was
+     * dispatched straight to workers (SCRUM-440). Recorded once per recommendation,
      * alongside one {@link #ACTION_AUTO_DISPATCHED} per worker/action actually dispatched.
      * System-triggered -- actorId is null. */
     public static final String RECOMMENDATION_AUTO_DISPATCHED = "RECOMMENDATION_AUTO_DISPATCHED";
