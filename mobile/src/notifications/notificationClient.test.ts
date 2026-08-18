@@ -246,18 +246,25 @@ describe("taps", () => {
     /*
      * The case that is invisible in testing and is the whole point in the field. A tap that
      * starts the app fires no listener — it happened before any JavaScript was running — and
-     * lives in `getLastNotificationResponseAsync` instead.
+     * is held in `getLastNotificationResponse` instead.
      */
-    mocked.getLastNotificationResponseAsync.mockResolvedValue({
+    mocked.getLastNotificationResponse.mockReturnValue({
       notification: { request: { content: { data: { kind: "plan-drafted" } } } },
     });
     const handler = jest.fn();
 
     onNotificationTapped(handler);
-    await Promise.resolve();
-    await Promise.resolve();
 
     expect(handler).toHaveBeenCalledWith({ data: { kind: "plan-drafted" } });
+  });
+
+  it("delivers nothing when the app was not launched from a notification", async () => {
+    mocked.getLastNotificationResponse.mockReturnValue(null);
+    const handler = jest.fn();
+
+    onNotificationTapped(handler);
+
+    expect(handler).not.toHaveBeenCalled();
   });
 
   it("delivers a tap that arrives while the app is running", async () => {
@@ -280,36 +287,16 @@ describe("taps", () => {
     expect(remove).toHaveBeenCalled();
   });
 
-  it("does not deliver a launch notification after unsubscribing", async () => {
-    /*
-     * The launch lookup is asynchronous, so a component that mounts and unmounts quickly can
-     * have its handler resolve after it is gone — which in React means setting state on an
-     * unmounted tree, or here, navigating a screen the user has already left.
-     */
-    let resolveLaunch: (value: unknown) => void = () => {};
-    mocked.getLastNotificationResponseAsync.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveLaunch = resolve;
-      }),
-    );
-    const handler = jest.fn();
-
-    const unsubscribe = onNotificationTapped(handler);
-    unsubscribe();
-    resolveLaunch({ notification: { request: { content: { data: { kind: "plan-drafted" } } } } });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(handler).not.toHaveBeenCalled();
-  });
-
-  it("survives a launch lookup that fails", async () => {
-    mocked.getLastNotificationResponseAsync.mockRejectedValueOnce(new Error("nope"));
+  it("still subscribes when the launch lookup throws", async () => {
+    // A tap that cannot be read is not worth losing every later one over.
+    mocked.getLastNotificationResponse.mockImplementationOnce(() => {
+      throw new Error("nope");
+    });
     const handler = jest.fn();
 
     expect(() => onNotificationTapped(handler)).not.toThrow();
-    await Promise.resolve();
     expect(handler).not.toHaveBeenCalled();
+    expect(mocked.addNotificationResponseReceivedListener).toHaveBeenCalled();
   });
 });
 

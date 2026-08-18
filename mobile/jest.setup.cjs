@@ -78,7 +78,8 @@ const notificationMocks = {
   cancelScheduledNotificationAsync: jest.fn(() => Promise.resolve()),
   cancelAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve()),
   getAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve([])),
-  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  // Synchronous, matching the non-deprecated API the client now uses.
+  getLastNotificationResponse: jest.fn(() => null),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
 };
 
@@ -97,8 +98,7 @@ jest.mock("expo-notifications/build/NotificationPermissions", () => ({
 jest.mock("expo-notifications/build/NotificationsEmitter", () => ({
   addNotificationResponseReceivedListener: (...args) =>
     notificationMocks.addNotificationResponseReceivedListener(...args),
-  getLastNotificationResponseAsync: (...args) =>
-    notificationMocks.getLastNotificationResponseAsync(...args),
+  getLastNotificationResponse: (...args) => notificationMocks.getLastNotificationResponse(...args),
 }));
 jest.mock("expo-notifications/build/scheduleNotificationAsync", () => ({
   scheduleNotificationAsync: (...args) => notificationMocks.scheduleNotificationAsync(...args),

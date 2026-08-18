@@ -60,7 +60,7 @@ import {
 } from "expo-notifications/build/NotificationPermissions";
 import {
   addNotificationResponseReceivedListener,
-  getLastNotificationResponseAsync,
+  getLastNotificationResponse,
 } from "expo-notifications/build/NotificationsEmitter";
 import { scheduleNotificationAsync } from "expo-notifications/build/scheduleNotificationAsync";
 import { cancelScheduledNotificationAsync } from "expo-notifications/build/cancelScheduledNotificationAsync";
@@ -360,30 +360,31 @@ export interface NotificationTap {
  * ── WHY THE LAUNCH CASE NEEDS SEPARATE HANDLING ─────────────────────────────────────────
  * Tapping a notification while the app is running fires the listener. Tapping one that starts
  * the app from cold does not — the tap happened before any JavaScript was running to hear it,
- * and expo-notifications keeps it in `getLastNotificationResponseAsync` instead. Subscribing
+ * and expo-notifications holds it in `getLastNotificationResponse` instead. Subscribing
  * without also asking for that one produces a feature that works in testing, where the app is
  * always already open, and does nothing for the case it was built for.
+ *
+ * ── WHY THE SYNCHRONOUS FORM ────────────────────────────────────────────────────────────
+ * `getLastNotificationResponseAsync` is deprecated in favour of this one, and the synchronous
+ * signature removes a real race rather than merely quieting a warning: the async version
+ * resolved after the caller might already have unmounted, so a component that mounted and
+ * unmounted quickly could navigate a screen the user had left. Read synchronously there is no
+ * window for that at all, and no unsubscribe flag needed to guard it.
  *
  * Returns an unsubscribe function.
  */
 export function onNotificationTapped(handler: (tap: NotificationTap) => void): () => void {
-  let active = true;
-
-  void getLastNotificationResponseAsync()
-    .then((response) => {
-      if (!active || !response) return;
-      handler({ data: response.notification.request.content.data ?? {} });
-    })
-    .catch(() => {
-      // No launch notification, or none readable. Nothing to route to.
-    });
+  try {
+    const launch = getLastNotificationResponse();
+    if (launch) handler({ data: launch.notification.request.content.data ?? {} });
+  } catch {
+    // No launch notification, or none readable. Nothing to route to, and a tap that cannot be
+    // read is not worth failing the subscription that handles every later one.
+  }
 
   const subscription = addNotificationResponseReceivedListener((response) => {
     handler({ data: response.notification.request.content.data ?? {} });
   });
 
-  return () => {
-    active = false;
-    subscription.remove();
-  };
+  return () => subscription.remove();
 }

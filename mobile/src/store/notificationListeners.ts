@@ -159,12 +159,13 @@ notificationListener.startListening({
     const fresh = awaiting.filter((plan) => !seen.includes(plan.id));
     if (fresh.length === 0) return;
 
-    const sent = plansListOpen
-      ? false
-      : await announceDraftedPlans(fresh, action.meta.arg.siteId);
+    if (!plansListOpen) {
+      await announceDraftedPlans(fresh, action.meta.arg.siteId);
+    }
 
     /*
-     * Recorded whether or not the notification was actually delivered.
+     * Recorded whether or not the notification was actually delivered, which is why the
+     * result above is not consulted.
      *
      * The alternative — only recording on success — sounds more careful and is worse: with
      * permission refused, `announceDraftedPlans` returns false every time, so the same plans
@@ -173,7 +174,6 @@ notificationListener.startListening({
      *
      * The set records what this device has HAD THE CHANCE to announce, not what arrived.
      */
-    void sent;
     api.dispatch(planIdsAnnounced({ userId: user.id, planIds: fresh.map((plan) => plan.id) }));
   },
 });

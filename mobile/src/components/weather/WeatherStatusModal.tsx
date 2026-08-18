@@ -32,6 +32,7 @@ import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import { sharedPaddingHorizontal } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import type { AppPalette } from "@/styles/colors";
 import type { WeatherQualityStatus } from "@/types/domain";
 
 /**
@@ -104,6 +105,21 @@ const PRESENTATION: Record<WeatherStatusSubject, Presentation> = {
   },
 };
 
+/**
+ * Which palette entry each tone draws from.
+ *
+ * A lookup rather than a chain of ternaries. The tones are a closed set, so a map turns an
+ * unhandled one into a type error at the point it is added, whereas a ternary chain silently
+ * falls through to whatever the last branch happens to be — which here is the neutral colour,
+ * and "unrecognised" rendering as "nothing to see" is the wrong direction to fail in.
+ */
+const TONE_COLOURS: Record<Presentation["tone"], keyof AppPalette> = {
+  danger: "danger",
+  warning: "warning",
+  simulated: "simulated",
+  neutral: "textSecondary",
+};
+
 /** Degrades to a neutral explanation rather than throwing on a status this build predates. */
 const UNKNOWN: Presentation = {
   icon: "help-circle",
@@ -137,14 +153,7 @@ const WeatherStatusModal: FC<WeatherStatusModalProps> = ({
 
   const { icon, tone, titleKey, bodyKey } = PRESENTATION[subject] ?? UNKNOWN;
 
-  const iconColour =
-    tone === "danger"
-      ? theme.colors.danger
-      : tone === "warning"
-        ? theme.colors.warning
-        : tone === "simulated"
-          ? theme.colors.simulated
-          : theme.colors.textSecondary;
+  const iconColour = theme.colors[TONE_COLOURS[tone]];
 
   return (
     // `onRequestClose` is what makes the Android back gesture dismiss this. Without it the
