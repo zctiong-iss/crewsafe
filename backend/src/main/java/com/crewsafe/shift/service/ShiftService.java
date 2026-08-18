@@ -52,6 +52,7 @@ public class ShiftService {
     private static final DateTimeFormatter LOCAL_DATE = DateTimeFormatter.ofPattern("d MMM uuuu", Locale.UK);
     private static final DateTimeFormatter LOCAL_TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.UK);
     private static final String AUDIT_TARGET_TYPE = "SHIFT";
+    private static final String AUDIT_ASSIGNMENT_TARGET_TYPE = "SHIFT_ASSIGNMENT";
 
     public record AssignmentInput(UUID workerId, String taskName, Intensity intensity,
                                    Integer acclimatisationDay) {
@@ -256,7 +257,7 @@ public class ShiftService {
             return assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
                 assignment.correct(taskName, intensity, acclimatisationDay);
                 afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_UPDATED,
-                        "SHIFT_ASSIGNMENT", assignmentId, "Corrected assignment on shift " + shiftId));
+                        AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, "Corrected assignment on shift " + shiftId));
                 return shift;
             });
         });
@@ -278,7 +279,7 @@ public class ShiftService {
         return assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
             assignments.delete(assignment);
             afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_REMOVED,
-                    "SHIFT_ASSIGNMENT", assignmentId, "Removed assignment from shift " + shiftId));
+                    AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, "Removed assignment from shift " + shiftId));
             return true;
         }).orElse(false);
     }
@@ -390,7 +391,7 @@ public class ShiftService {
         String recorded = detail.append(')').toString();
 
         afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_ADDED,
-                "SHIFT_ASSIGNMENT", assignmentId, recorded));
+                AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, recorded));
     }
 
     /**
