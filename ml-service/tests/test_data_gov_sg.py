@@ -433,11 +433,14 @@ class DatasetIoTest(unittest.TestCase):
                 metrics=(WeatherMetric.WBGT,),
             )
 
+            resumed_start_date = date(2025, 3, 1)
+            mismatched_end_date = date(2025, 3, 2)
+
             with self.assertRaisesRegex(ValueError, "different dates or metrics"):
                 build_historical_dataset(
                     client,
-                    start_date=date(2025, 3, 1),
-                    end_date=date(2025, 3, 2),
+                    start_date=resumed_start_date,
+                    end_date=mismatched_end_date,
                     output_directory=output_directory,
                     metrics=(WeatherMetric.WBGT,),
                 )
