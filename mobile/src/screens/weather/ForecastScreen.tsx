@@ -52,6 +52,7 @@ import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { formatTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { wbgtBandColor } from "@/helpers/wbgtBandColor";
 import type { ForecastHorizonMinutes } from "@/types/domain";
 import type { WeatherStackParamList } from "@/navigation/types";
 
@@ -109,12 +110,9 @@ export default function ForecastScreen() {
           />
         ))}
 
-        {/* Stated rather than left as an absence. A supervisor who knows the app shows bands
-            elsewhere will otherwise read the missing band as something broken, and the true
-            answer — nobody has evaluated one for a predicted value yet — is more useful. */}
-        <AppText variant="caption" tone="secondary" style={styles.footnote}>
-          {t("forecast.noBandNote")}
-        </AppText>
+        {/* The note explaining why no band was shown is gone along with the reason for it:
+            SCRUM-369 means a forecast now carries one. A card whose band the server did not
+            classify still renders plainly, which is the honest reading of that absence. */}
       </ScrollView>
     </AppSafeView>
   );
@@ -131,6 +129,23 @@ function HorizonCard({
 }) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
+
+  // Null when the server sent no band, which renders as ordinary text — never as the coolest
+  // band, since an unknown reading shown in green would read as a safe one.
+  const bandColor =
+    state.status === "ready" && state.forecast
+      ? wbgtBandColor(state.forecast.band, theme.colors)
+      : null;
+
+  // The interval's bounds carry their own bands, so a range crossing 31 or 33 shows it.
+  const lowerBandColor =
+    state.status === "ready" && state.forecast
+      ? wbgtBandColor(state.forecast.confidenceIntervalLowerBand, theme.colors)
+      : null;
+  const upperBandColor =
+    state.status === "ready" && state.forecast
+      ? wbgtBandColor(state.forecast.confidenceIntervalUpperBand, theme.colors)
+      : null;
 
   return (
     <View
@@ -150,22 +165,88 @@ function HorizonCard({
 
       {state.status === "ready" && state.forecast ? (
         <View style={styles.cardBody}>
+          {/*
+            Coloured by the band MOM's poster uses, so a supervisor who knows that wall chart
+            reads the risk level before reading the number. The band comes evaluated from the
+            server (SCRUM-369) — the client colours it, it does not decide it.
+          */}
           <View style={styles.valueRow}>
-            <AppText variant="display">{state.forecast.predictedValue.toFixed(1)}</AppText>
-            <AppText variant="subtitle" tone="secondary" style={styles.unit}>
+            <AppText
+              variant="display"
+              style={bandColor ? { color: bandColor } : undefined}
+            >
+              {state.forecast.predictedValue.toFixed(1)}
+            </AppText>
+            {/*
+              The unit takes the band colour but keeps its smaller size. `tone` is dropped when
+              a colour applies, because tone sets a colour of its own and the two would fight —
+              the explicit style wins in `AppText`, but leaving `secondary` on would make the
+              intent unreadable to the next person.
+            */}
+            <AppText
+              variant="subtitle"
+              tone={bandColor ? undefined : "secondary"}
+              style={[styles.unit, bandColor ? { color: bandColor } : null]}
+            >
               °C
             </AppText>
           </View>
+
+          {/*
+            The band in words, directly under the value it describes.
+
+            Not decoration: colour alone fails WCAG 1.4.1, and on site it also fails to sunlight
+            flattening hue and to red/green colour-vision deficiency. This is the signal the
+            colour is only a shortcut to — and it carries the 31-to-32 versus 32-to-33
+            distinction that the poster's single amber column cannot.
+          */}
+          {state.forecast.band ? (
+            <AppText
+              variant="label"
+              style={[styles.bandLabel, bandColor ? { color: bandColor } : undefined]}
+            >
+              {t(`wbgt.band.${state.forecast.band}`)}
+            </AppText>
+          ) : null}
 
           {/* Always present, never behind a tap. The uncertainty is part of the reading. */}
           <AppText variant="caption" tone="secondary">
             {t("forecast.rangeLabel")}
           </AppText>
-          <AppText variant="subtitle">
-            {t("forecast.range", {
+          {/*
+            Each bound in its own band's colour, because an interval routinely crosses a
+            boundary — the half-width reaches 4°C — and one colour across the whole range would
+            assert it stays in one band while the range itself says it might not. A green lower
+            bound beside an amber upper one is the range saying "this could already be in the
+            rest-required band", which is the most useful thing it has to tell a supervisor.
+
+            The nested elements are for colour only. `accessibilityLabel` carries the intact
+            translated sentence, so a screen reader hears one phrase rather than three
+            fragments, and the localised whole is never assembled from parts.
+          */}
+          <AppText
+            variant="subtitle"
+            accessibilityLabel={t("forecast.range", {
               lower: state.forecast.confidenceIntervalLower.toFixed(1),
               upper: state.forecast.confidenceIntervalUpper.toFixed(1),
             })}
+          >
+            <AppText variant="subtitle" style={lowerBandColor ? { color: lowerBandColor } : undefined}>
+              {state.forecast.confidenceIntervalLower.toFixed(1)}
+            </AppText>
+            {t("forecast.rangeSeparator")}
+            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+              {state.forecast.confidenceIntervalUpper.toFixed(1)}
+            </AppText>
+            {/*
+              One unit for two bounds, so it follows the hotter end. On a range that crosses a
+              boundary the trailing colour then reinforces the stricter band rather than
+              softening it — the wrong way round would let an amber upper bound trail off in
+              green.
+            */}
+            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+              {t("forecast.rangeUnit")}
+            </AppText>
           </AppText>
 
           {/*
@@ -244,6 +325,10 @@ const styles = StyleSheet.create({
     // Wraps rather than clips once the text setting makes the pair too wide.
     flexWrap: "wrap",
     marginBottom: vs(6),
+  },
+  bandLabel: {
+    marginTop: vs(2),
+    marginBottom: vs(8),
   },
   unit: {
     marginStart: s(4),

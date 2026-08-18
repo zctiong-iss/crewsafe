@@ -58,9 +58,20 @@ interface PillProps {
    * never render in hazard red because of who they are.
    */
   tone?: PillTone;
+  /**
+   * What a screen reader announces, when the visible label alone is not self-describing.
+   *
+   * A pill is often shorthand that a sighted reader resolves from position and context — a bare
+   * name sitting opposite a status pill reads as "who owns this", and read aloud in isolation it
+   * is just a name. Supplying the long form here keeps the visible pill short without making the
+   * spoken one ambiguous.
+   *
+   * Defaults to `label`, so every existing caller is unchanged.
+   */
+  accessibilityLabel?: string;
 }
 
-const Pill: FC<PillProps> = ({ role, label, tone = "neutral" }) => {
+const Pill: FC<PillProps> = ({ role, label, tone = "neutral", accessibilityLabel }) => {
   const theme = useTheme();
 
   /*
@@ -110,6 +121,10 @@ const Pill: FC<PillProps> = ({ role, label, tone = "neutral" }) => {
 
   return (
     <View
+      /* Grouped into one node only when an override is given, so the pill reads as a single
+         thing rather than announcing its label twice. Untouched otherwise. */
+      accessible={accessibilityLabel ? true : undefined}
+      accessibilityLabel={accessibilityLabel}
       style={[
         styles.pill,
         surface,

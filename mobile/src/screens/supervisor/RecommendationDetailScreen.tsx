@@ -191,10 +191,25 @@ export default function RecommendationDetailScreen() {
    * would understate who an action covers.
    */
   const workers = useAppSelector((state) => state.shifts.workers);
+
+  /*
+   * The plan's own worker list first, then the shifts slice, then the fallback.
+   *
+   * That order is the fix. `shifts.workers` belongs to whichever site the shifts screen last
+   * loaded, and nothing on this screen loads it — so a supervisor resolved names only because
+   * they had passed through a screen that happened to populate it, and a safety manager, who
+   * has no shifts tab and can arrive straight from oversight, resolved none at all. Present
+   * workers rendered as "no longer on this site", on a safety record.
+   *
+   * The slice lookup is kept for plans served by a backend predating `workers`, and because it
+   * costs nothing when the server did send them.
+   */
   const workerNameFor = useCallback(
     (workerId: string) =>
-      workers.find((worker) => worker.id === workerId)?.displayName ?? t("shifts.unknownWorker"),
-    [workers, t],
+      recommendation?.workers?.find((worker) => worker.id === workerId)?.displayName ??
+      workers.find((worker) => worker.id === workerId)?.displayName ??
+      t("shifts.unknownWorker"),
+    [recommendation?.workers, workers, t],
   );
   useEffect(() => {
     void dispatch(loadPolicyVersions({ siteId }));
@@ -379,8 +394,24 @@ export default function RecommendationDetailScreen() {
           much the supervisor's own judgement is carrying, which is exactly the kind of thing
           US-08 says they are entitled to see.
         */}
+        {/*
+          The bottom margin belongs here rather than on the section below it. "Why this was
+          drafted" has no `gapTop`, unlike every other section title on this screen, because the
+          card above it already carries `marginBottom` — correct until this banner appears
+          between them and butts straight into the heading. Spacing the banner fixes the case
+          that is broken without double-spacing the one that is not.
+        */}
         {recommendation.modelVersion === DETERMINISTIC_FALLBACK_MODEL ? (
-          <MessageBanner message={t("recommendations.noModelNotice")} tone="info" />
+          <View style={styles.noticeGap}>
+            {/* Centred: this is a short standalone notice in a card of its own, where a
+                left-aligned block with a short final line looks stranded. The error banners
+                elsewhere stay left-aligned — they run longer and often carry a request id. */}
+            <MessageBanner
+              message={t("recommendations.noModelNotice")}
+              tone="info"
+              align="center"
+            />
+          </View>
         ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
@@ -571,6 +602,11 @@ const styles = StyleSheet.create({
   },
   metaLine: {
     marginTop: vs(8),
+  },
+  noticeGap: {
+    // The same 12 the cards and `gapTop` use, so the banner sits in this screen's rhythm
+    // rather than introducing a spacing of its own.
+    marginBottom: vs(12),
   },
   sectionTitle: {
     marginBottom: vs(8),

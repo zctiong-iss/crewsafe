@@ -220,7 +220,22 @@ export default function RecommendationsScreen() {
               ]}
             >
               <View style={styles.cardHeader}>
-                <AppText variant="subtitle" style={styles.cardTitle}>
+                {/*
+                  One line, at `label` rather than `subtitle`. A shift window is two dates and
+                  two times, which wrapped at 18pt and pushed the status pill up against the
+                  first line — the pill and the window then read as two rows rather than one
+                  heading. 14pt fits the usual case on a phone.
+
+                  `numberOfLines` guarantees it: at a large text setting the string ellipsises
+                  rather than reflowing, so the row height never changes and the pill stays put.
+                  The full window survives in the accessible label, and on the detail screen.
+                */}
+                <AppText
+                  variant="label"
+                  numberOfLines={1}
+                  accessibilityLabel={window ?? t("recommendations.title")}
+                  style={styles.cardTitle}
+                >
                   {window ?? t("recommendations.title")}
                 </AppText>
                 <RecommendationStatusPill status={item.status} />
@@ -275,10 +290,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    // Centred, not top-aligned: with a single-line title the two sit on one axis. `flex-start`
+    // was right while the title could wrap to two lines and the pill had to hug the first.
+    alignItems: "center",
     justifyContent: "space-between",
   },
   cardTitle: {
+    // Yields to the pill rather than the other way round — the status is short and fixed, the
+    // window is long and variable, so the window is the one that should give way.
     flex: 1,
     marginEnd: s(10),
   },

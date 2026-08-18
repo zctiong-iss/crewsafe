@@ -263,7 +263,13 @@
       "WINDY": "有风",
       "RAIN": "有雨",
       "THUNDERY_SHOWERS": "雷阵雨"
-    }
+    },
+    "siteConditionsTitle": "各工地状况",
+    "changeSite": "切换工地。当前为 {{site}}",
+    "noReading": "无读数",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}，{{value}} 度，{{band}}",
+    "siteRowNoReading": "{{site}}，无读数"
   },
   "forecast": {
     "title": "WBGT 预报",
@@ -276,7 +282,6 @@
     "generatedAt": "预报生成于 {{time}}",
     "unavailableTitle": "暂无预报",
     "unavailableBody": "本工地没有足够新的可用读数可供预测，或条件变化过快，无法给出有意义的范围。当前读数不受影响。",
-    "noBandNote": "预报不显示风险等级。等级由服务器上的高温政策判定，目前尚未对预测值进行评定。",
     "cardTitle": "预报",
     "cardValue_one": "{{count}} 分钟后预计 {{value}}°C",
     "cardValue_other": "{{count}} 分钟后预计 {{value}}°C",
@@ -295,7 +300,9 @@
       "PERSISTENCE": "无法建立近期趋势，此为沿用上一次读数，仅供粗略参考。"
     },
     "inputAge_one": "来自 {{count}} 分钟前的读数",
-    "inputAge_other": "来自 {{count}} 分钟前的读数"
+    "inputAge_other": "来自 {{count}} 分钟前的读数",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "暂无待确认事项",
@@ -493,7 +500,7 @@
     "statusAutoDispatched": "已自动停工",
     "autoDispatchedNotice": "此停工指令已自动发送给工人 — 无需批准。",
     "supersededNotice": "现场条件已变化，此计划已被新计划取代。无需在此做出决定。",
-    "noModelNotice": "当时无法使用 AI 模型，因此本计划直接根据高温政策生成。必需措施仍然正确，但针对本班组的调整较少。",
+    "noModelNotice": "AI 模型不可用。高温政策与必需措施仍然适用。",
     "requiredCannotRemove": "高温规则要求此项，无法删除。"
   },
   "mitigationCategory": {
@@ -626,5 +633,18 @@
     "minuteDown": "提前五分钟",
     "hourInput": "小时",
     "minuteInput": "分钟"
+  },
+  "oversight": {
+    "tabTitle": "监管",
+    "title": "监管",
+    "showPlans": "计划",
+    "hidePlans": "隐藏计划",
+    "showPlansFor": "显示 {{site}} 的计划",
+    "hidePlansFor": "隐藏 {{site}} 的计划",
+    "noPlans": "此工地尚未生成计划。",
+    "awaitingCount_one": "{{count}} 项待处理",
+    "awaitingCount_other": "{{count}} 项待处理",
+    "openPlan": "打开 {{time}} 拟定的计划",
+    "supervisorLabel": "工地主管：{{name}}"
   }
 }
