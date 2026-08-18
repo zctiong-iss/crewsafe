@@ -9,20 +9,29 @@ fail() {
   exit 1
 }
 
-[[ $# -ge 4 && $# -le 6 ]] \
-  || fail "usage: summarize-trivy-report.sh <report.json> <summary.md> <image> <revision> [title] [active-ignorefile]"
+[[ $# -ge 5 && $# -le 7 ]] \
+  || fail "usage: summarize-trivy-report.sh <report.json> <summary.md> <image> <revision> <policy-mode> [title] [active-ignorefile]"
 REPORT="$1"
 SUMMARY="$2"
 IMAGE="$3"
 REVISION="$4"
+POLICY_MODE="$5"
 TITLE='ML-service container vulnerability scan'
 EXCEPTIONS=''
-if (( $# >= 5 )); then TITLE="$5"; fi
-if (( $# >= 6 )); then EXCEPTIONS="$6"; fi
+if (( $# >= 6 )); then TITLE="$6"; fi
+if (( $# >= 7 )); then EXCEPTIONS="$7"; fi
 case "$TITLE" in
   'ML-service container vulnerability scan'|'Backend image vulnerability scan') ;;
   *) fail "unsupported summary title" ;;
 esac
+case "$POLICY_MODE" in
+  report-only|blocking) ;;
+  *) fail "unsupported Trivy policy mode" ;;
+esac
+
+POLICY_OWNER="${POLICY_OWNER:-CrewSafe security team}"
+POLICY_EXPIRES="${POLICY_EXPIRES:-2026-09-17}"
+POLICY_EVALUATED_ON="${POLICY_EVALUATED_ON:-not-provided}"
 
 [[ -s "$REPORT" ]] || fail "Trivy report is missing or empty"
 command -v jq >/dev/null 2>&1 || fail "jq is required to summarize the Trivy report"
@@ -59,8 +68,13 @@ fi
 [[ -n "$exception_list" ]] || exception_list='none'
 
 high_critical_count="$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH" or .Severity == "CRITICAL")] | length' "$REPORT")"
-decision='APPROVED'
-[[ "$high_critical_count" -eq 0 ]] || decision='BLOCKED'
+if [[ "$high_critical_count" -eq 0 ]]; then
+  decision='clean'
+elif [[ "$POLICY_MODE" == 'report-only' ]]; then
+  decision='report-only-with-findings'
+else
+  decision='blocked'
+fi
 safe_rows="$(jq -r '
   def clean: tostring | gsub("[^A-Za-z0-9._+:/@=\\-]"; "?") | .[0:160];
   .Results[]?.Vulnerabilities[]?
@@ -78,6 +92,10 @@ trap 'rm -f "$tmp_summary"' EXIT INT TERM
   printf -- '- Image: %s\n' "$safe_image"
   printf -- '- HIGH/CRITICAL findings: %s\n' "$high_critical_count"
   printf -- '- Decision: %s\n' "$decision"
+  printf -- '- Policy mode: %s\n' "$(clean_scalar "$POLICY_MODE")"
+  printf -- '- Policy owner: %s\n' "$(clean_scalar "$POLICY_OWNER")"
+  printf -- '- Policy expiry (UTC): %s\n' "$(clean_scalar "$POLICY_EXPIRES")"
+  printf -- '- Policy evaluated on (UTC): %s\n' "$(clean_scalar "$POLICY_EVALUATED_ON")"
   printf -- '- Active exception identifiers supplied to scan: %s\n' "$(clean_scalar "$exception_list")"
   if [[ -n "$safe_rows" ]]; then
     printf '\n%s\n' '| Advisory | Severity | Package | Installed | Fixed |'
@@ -88,3 +106,5 @@ trap 'rm -f "$tmp_summary"' EXIT INT TERM
 } >"$tmp_summary"
 
 cat "$tmp_summary" >>"$SUMMARY"
+
+[[ "$decision" != 'blocked' ]] || exit 1

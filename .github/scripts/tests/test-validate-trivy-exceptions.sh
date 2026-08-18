@@ -25,6 +25,8 @@ past="$(date -u -d '-1 day' +%F 2>/dev/null || date -u -v-1d +%F)"
 write_fixture() { printf '%s\n' "$@" >"$WORK/source"; }
 
 printf 'test-validate-trivy-exceptions\n'
+# SCRUM-455: these strict owner/reason/expiry checks remain the only exception
+# path that can suppress a finding once the temporary report-only policy ends.
 write_fixture \
   "CVE-2026-10001  # owner:security-team exp:${future} reason:tracked-risk" \
   "GHSA-abcd-efgh-ijkl  # owner:platform-team exp:${future} reason:second-risk"

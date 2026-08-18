@@ -497,6 +497,14 @@ jobs:
         run: .github/scripts/tests/test-dast-staging-workflow.sh
 
       # SCRUM-269: the five new self-tests this feature adds.
+      # SCRUM-455: policy-mode and repository guard wiring must remain
+      # visible in the repository-wide self-test job.
+      - name: CI guard wiring self-tests
+        run: .github/scripts/tests/test-ci-guards.sh
+
+      - name: Trivy policy-mode helper self-tests
+        run: .github/scripts/tests/test-resolve-trivy-policy-mode.sh
+
       - name: Backend image workflow self-tests
         run: .github/scripts/tests/test-backend-image-workflow.sh
 

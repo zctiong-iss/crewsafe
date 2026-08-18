@@ -8,10 +8,13 @@ on:
       - ".github/workflows/backend-ci.yml"
       - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/tests/test-backend-image-workflow.sh"
       - ".github/scripts/tests/test-filter-trivyignore.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-summarize-trivy-report.sh"
       - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/security/backend-image.trivyignore.source"
@@ -22,10 +25,13 @@ on:
       - ".github/workflows/backend-ci.yml"
       - ".github/scripts/deploy/deploy-backend-staging.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/tests/test-backend-image-workflow.sh"
       - ".github/scripts/tests/test-filter-trivyignore.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-summarize-trivy-report.sh"
       - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/security/backend-image.trivyignore.source"
@@ -130,9 +136,13 @@ jobs:
           .github/scripts/security/filter-trivyignore.sh \
             .github/security/backend-image.trivyignore.source \
             .trivyignore-active-backend
-      # SCRUM-455: unapproved HIGH/CRITICAL findings block publication. The
-      # summary and artifact still run after a failed scan so the reviewer has
-      # redacted evidence without granting the job a soft-fail path.
+      # SCRUM-455: the CrewSafe security team's temporary report-only policy
+      # remains active through UTC 2026-09-17 and returns to blocking on
+      # 2026-09-18. Valid findings remain explicit evidence; scanner, registry,
+      # policy, report-integrity, and identity failures always fail closed.
+      - name: Resolve backend Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
       - name: Scan backend image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -142,14 +152,18 @@ jobs:
           output: trivy-backend-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
           trivyignores: .trivyignore-active-backend
       - name: Summarize backend image scan
         if: always()
         env:
           IMAGE: ${{ vars.CREWSAFE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
           EXCEPTIONS: .trivyignore-active-backend
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "Backend image vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "$POLICY_MODE" "Backend image vulnerability scan" "$EXCEPTIONS"
       - name: Upload backend Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -269,6 +283,9 @@ jobs:
             echo "- Content digest: \`$image_digest\`"
             echo '- Result: resolved candidate pending vulnerability gate'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Resolve backend Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
       - name: Log in to ECR for backend redeploy scan
         run: |
           aws ecr get-login-password --region ap-southeast-1 \
@@ -282,15 +299,19 @@ jobs:
           output: trivy-backend-redeploy-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
           trivyignores: .trivyignore-active-backend
       - name: Summarize existing backend image scan
         if: always()
         env:
           IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
           IMAGE_TAG: "${{ inputs.redeploy_image_tag }}"
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
           EXCEPTIONS: .trivyignore-active-backend
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "Backend image vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-backend-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "$POLICY_MODE" "Backend image vulnerability scan" "$EXCEPTIONS"
       - name: Upload existing backend Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

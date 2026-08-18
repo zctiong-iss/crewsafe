@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/ml-service-ci.yml"
 readonly VALIDATE_TRIVY_EXCEPTIONS_SCRIPT='.github/scripts/security/validate-trivy-exceptions.sh'
+readonly POLICY_HELPER='.github/scripts/security/resolve-trivy-policy-mode.sh'
+readonly POLICY_EXIT_OUTPUT='exit-code: ${{ steps.trivy_policy.outputs.exit_code }}'
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
@@ -78,6 +80,8 @@ workflow_policy_guard() {
   contains "$path" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
   path_filter_count_at_least_two "$path" '.github/scripts/deploy/deploy-ml-service-staging.sh' || return 1
   contains "$path" '.github/scripts/tests/test-validate-trivy-exceptions.sh' || return 1
+  contains "$path" "$POLICY_HELPER" || return 1
+  contains "$path" '.github/scripts/tests/test-resolve-trivy-policy-mode.sh' || return 1
   contains "$path" 'contents: read' || return 1
   contains "$path" "group: ml-service-ci-\${{ github.workflow }}-\${{ github.ref }}" || return 1
   contains "$path" 'cancel-in-progress: true' || return 1
@@ -125,7 +129,14 @@ workflow_policy_guard() {
   not_contains "$verify_job" 'ignorefile: .trivyignore-active-ml-service' || return 1
   contains "$verify_job" 'scanners: vuln' || return 1
   contains "$verify_job" 'severity: HIGH,CRITICAL' || return 1
-  contains "$verify_job" "exit-code: '1'" || return 1
+  contains "$verify_job" "$POLICY_HELPER" || return 1
+  contains "$verify_job" 'id: trivy_policy' || return 1
+  contains "$verify_job" "$POLICY_EXIT_OUTPUT" || return 1
+  contains "$verify_job" 'POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}' || return 1
+  contains "$verify_job" 'POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}' || return 1
+  contains "$verify_job" 'POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}' || return 1
+  contains "$verify_job" 'POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}' || return 1
+  not_contains "$verify_job" "exit-code: '1'" || return 1
   not_contains "$verify_job" "exit-code: '0'" || return 1
   contains "$verify_job" 'if: always()' || return 1
   contains "$verify_job" 'if-no-files-found: error' || return 1
@@ -135,6 +146,7 @@ workflow_policy_guard() {
   contains "$verify_job" 'test-ml-service-smoke.sh' || return 1
   contains "$verify_job" 'test-validate-ml-service-trivy-exceptions.sh' || return 1
   contains "$verify_job" 'test-validate-trivy-exceptions.sh' || return 1
+  contains "$verify_job" 'test-resolve-trivy-policy-mode.sh' || return 1
   contains "$verify_job" 'test-summarize-trivy-report.sh' || return 1
   not_contains "$verify_job" "$soft_fail" || return 1
   not_contains "$verify_job" 'configure-aws-credentials' || return 1
@@ -151,6 +163,7 @@ workflow_policy_guard() {
     'Run ML-service container smoke checks' \
     'Validate ML-service Trivy exceptions' \
     'Prepare active ML-service Trivy ignorefile' \
+    'Resolve ML-service Trivy policy' \
     'Generate ML-service Trivy report' \
     'Summarize ML-service Trivy report' \
     'Upload ML-service Trivy report' || return 1
@@ -175,7 +188,14 @@ workflow_policy_guard() {
   contains "$publish_job" 'docker login' || return 1
   contains "$publish_job" 'docker push "$REPO:$SHA"' || return 1
   contains "$publish_job" "$VALIDATE_TRIVY_EXCEPTIONS_SCRIPT" || return 1
-  contains "$publish_job" "exit-code: '1'" || return 1
+  contains "$publish_job" "$POLICY_HELPER" || return 1
+  contains "$publish_job" 'id: trivy_policy' || return 1
+  contains "$publish_job" "$POLICY_EXIT_OUTPUT" || return 1
+  contains "$publish_job" 'POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}' || return 1
+  contains "$publish_job" 'POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}' || return 1
+  contains "$publish_job" 'POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}' || return 1
+  contains "$publish_job" 'POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}' || return 1
+  not_contains "$publish_job" "exit-code: '1'" || return 1
   not_contains "$publish_job" "exit-code: '0'" || return 1
   contains "$publish_job" 'if: always()' || return 1
   contains "$publish_job" 'name: trivy-ml-service-publish-report' || return 1
@@ -209,6 +229,13 @@ workflow_policy_guard() {
   contains "$resolve_job" 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' || return 1
   contains "$resolve_job" 'image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"' || return 1
   contains "$resolve_job" 'trivy-ml-service-redeploy-report.json' || return 1
+  contains "$resolve_job" "$POLICY_HELPER" || return 1
+  contains "$resolve_job" 'id: trivy_policy' || return 1
+  contains "$resolve_job" "$POLICY_EXIT_OUTPUT" || return 1
+  contains "$resolve_job" 'POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}' || return 1
+  contains "$resolve_job" 'POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}' || return 1
+  contains "$resolve_job" 'POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}' || return 1
+  contains "$resolve_job" 'POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}' || return 1
   contains "$resolve_job" 'Scan existing ml-service image' || return 1
   contains "$resolve_job" 'Upload existing ml-service Trivy report' || return 1
   contains "$resolve_job" 'if: always()' || return 1
@@ -241,13 +268,14 @@ workflow_policy_guard() {
   not_contains "$deploy_job" "$static_secret_key" || return 1
   not_contains "$deploy_job" "$soft_fail" || return 1
 
-  local resolve_line scan_line summary_line upload_line
+  local resolve_line policy_line scan_line summary_line upload_line
   resolve_line="$(awk 'index($0, "aws ecr describe-images") { print NR; exit }' "$resolve_job")"
+  policy_line="$(awk 'index($0, "Resolve ML-service Trivy policy") { print NR; exit }' "$resolve_job")"
   scan_line="$(awk 'index($0, "Scan existing ml-service image") { print NR; exit }' "$resolve_job")"
   summary_line="$(awk 'index($0, "Summarize existing ml-service image scan") { print NR; exit }' "$resolve_job")"
   upload_line="$(awk 'index($0, "Upload existing ml-service Trivy report") { print NR; exit }' "$resolve_job")"
-  [[ -n "$resolve_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
-  [[ "$resolve_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
+  [[ -n "$resolve_line" && -n "$policy_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
+  [[ "$resolve_line" -lt "$policy_line" && "$policy_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
 
   return 0
 }
@@ -265,7 +293,7 @@ check 'workflow policy contract holds' workflow_policy_guard "$WORKFLOW"
 if [[ -f "$WORKFLOW" ]]; then
   for mutation in \
     'scanners: vuln|scanners: secret' \
-    "exit-code: '1'|exit-code: '0'" \
+    '.github/scripts/security/resolve-trivy-policy-mode.sh|.github/scripts/security/missing-trivy-policy-mode.sh' \
     'if-no-files-found: error|if-no-files-found: ignore' \
     'contents: read|contents: write' \
     '"ml-service/**"|"web/**"' \

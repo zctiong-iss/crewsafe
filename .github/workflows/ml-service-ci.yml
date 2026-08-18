@@ -12,7 +12,10 @@ on:
       - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-smoke.sh"
       - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
       - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
@@ -29,7 +32,10 @@ on:
       - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-smoke.sh"
       - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
       - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
@@ -79,6 +85,7 @@ jobs:
           .github/scripts/tests/test-ml-service-smoke.sh
           .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
           .github/scripts/tests/test-validate-trivy-exceptions.sh
+          .github/scripts/tests/test-resolve-trivy-policy-mode.sh
           .github/scripts/tests/test-summarize-trivy-report.sh
 
       - name: Install ML-service dependencies
@@ -108,6 +115,14 @@ jobs:
       - name: Prepare active ML-service Trivy ignorefile
         run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
 
+      # SCRUM-455: the CrewSafe security team's temporary report-only policy
+      # remains active through UTC 2026-09-17 and returns to blocking on
+      # 2026-09-18. Valid findings remain explicit evidence; scanner, registry,
+      # policy, report-integrity, and identity failures always fail closed.
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
+
       - name: Generate ML-service Trivy report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -117,13 +132,18 @@ jobs:
           trivyignores: .trivyignore-active-ml-service
           format: json
           output: trivy-ml-service-report.json
-          exit-code: '1'
+          ignore-unfixed: false
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
 
       - name: Summarize ML-service Trivy report
         if: always()
         env:
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
           EXCEPTIONS: .trivyignore-active-ml-service
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "ML-service container vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
 
       - name: Upload ML-service Trivy report
         if: always()
@@ -187,9 +207,14 @@ jobs:
         run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
       - name: Prepare active ML-service Trivy ignorefile
         run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
-      # SCRUM-455: the exact ECR-tagged candidate is blocked on any
-      # unapproved HIGH/CRITICAL finding. Summary and artifact steps retain
-      # redacted evidence after a failed scan without soft-failing the job.
+      # SCRUM-455: the CrewSafe security team's temporary report-only policy
+      # remains active through UTC 2026-09-17 and returns to blocking on
+      # 2026-09-18. Findings remain explicit evidence and are never reported
+      # as clean; scanner, registry, policy, and evidence failures fail closed.
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
+
       - name: Scan ml-service image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -199,14 +224,18 @@ jobs:
           output: trivy-ml-service-publish-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
           trivyignores: .trivyignore-active-ml-service
       - name: Summarize ml-service image scan
         if: always()
         env:
           IMAGE: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}:${{ github.sha }}
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
           EXCEPTIONS: .trivyignore-active-ml-service
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "ML-service container vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
       - name: Upload ml-service publish Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -328,6 +357,9 @@ jobs:
             echo "- Content digest: \`$image_digest\`"
             echo '- Result: resolved candidate pending vulnerability gate'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
       - name: Log in to ECR for ml-service redeploy scan
         run: |
           aws ecr get-login-password --region ap-southeast-1 \
@@ -341,15 +373,19 @@ jobs:
           output: trivy-ml-service-redeploy-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '1'
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
           trivyignores: .trivyignore-active-ml-service
       - name: Summarize existing ml-service image scan
         if: always()
         env:
           IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
           IMAGE_TAG: "${{ inputs.redeploy_image_tag }}"
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
           EXCEPTIONS: .trivyignore-active-ml-service
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "ML-service container vulnerability scan" "$EXCEPTIONS"
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
       - name: Upload existing ml-service Trivy report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

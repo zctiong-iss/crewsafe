@@ -9,6 +9,8 @@ TMP_DIRS=()
 readonly DOCKER_BUILD_CMD='docker build'
 readonly DOCKER_PUSH_CMD='docker push'
 readonly TRIVY_ACTION='aquasecurity/trivy-action'
+readonly POLICY_HELPER='.github/scripts/security/resolve-trivy-policy-mode.sh'
+readonly POLICY_EXIT_OUTPUT='exit-code: ${{ steps.trivy_policy.outputs.exit_code }}'
 
 cleanup() {
   local dir
@@ -122,7 +124,14 @@ workflow_policy_guard() {
   rg -q -F -- "$DOCKER_BUILD_CMD" "$path" || return 1
   rg -q -F -- 'aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25' "$path" || return 1
   rg -q -F -- 'severity: HIGH,CRITICAL' "$path" || return 1
-  rg -q -F -- "exit-code: '1'" "$path" || return 1
+  rg -q -F -- "$POLICY_HELPER" "$path" || return 1
+  rg -q -F -- 'id: trivy_policy' "$path" || return 1
+  rg -q -F -- "$POLICY_EXIT_OUTPUT" "$path" || return 1
+  rg -q -F -- 'POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}' "$path" || return 1
+  rg -q -F -- 'POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}' "$path" || return 1
+  rg -q -F -- 'POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}' "$path" || return 1
+  rg -q -F -- 'POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}' "$path" || return 1
+  ! rg -q -F -- "exit-code: '1'" "$path" || return 1
   ! rg -q -F -- "exit-code: '0'" "$path" || return 1
   rg -q -F -- '.github/scripts/security/validate-trivy-exceptions.sh' "$path" || return 1
   rg -q -F -- 'if: always()' "$path" || return 1
@@ -196,16 +205,22 @@ redeploy_policy_guard() {
   ' "$path")"
   [[ "$block" == *'needs: build-test'* ]] || return 1
   [[ "$block" == *'ecr:DescribeImages'* || "$block" == *'describe-images'* ]] || return 1
-  [[ "$block" == *"exit-code: '1'"* ]] || return 1
+  [[ "$block" == *"$POLICY_HELPER"* ]] || return 1
+  [[ "$block" == *'id: trivy_policy'* ]] || return 1
+  [[ "$block" == *"$POLICY_EXIT_OUTPUT"* ]] || return 1
+  [[ "$block" == *'POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}'* ]] || return 1
+  [[ "$block" != *"exit-code: '1'"* ]] || return 1
+  [[ "$block" != *"exit-code: '0'"* ]] || return 1
   [[ "$block" == *'if: always()'* ]] || return 1
   [[ "$block" != *"$DOCKER_BUILD_CMD"* && "$block" != *"$DOCKER_PUSH_CMD"* ]] || return 1
-  local resolve_line scan_line summary_line upload_line
+  local resolve_line policy_line scan_line summary_line upload_line
   resolve_line="$(rg -n -F -- 'aws ecr describe-images' "$path" | tail -1 | cut -d: -f1)"
+  policy_line="$(rg -n -F -- 'Resolve backend Trivy policy' "$path" | tail -1 | cut -d: -f1)"
   scan_line="$(rg -n -F -- 'Scan existing backend image' "$path" | tail -1 | cut -d: -f1)"
   summary_line="$(rg -n -F -- 'Summarize existing backend image scan' "$path" | tail -1 | cut -d: -f1)"
   upload_line="$(rg -n -F -- 'Upload existing backend Trivy report' "$path" | tail -1 | cut -d: -f1)"
-  [[ -n "$resolve_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
-  [[ "$resolve_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
+  [[ -n "$resolve_line" && -n "$policy_line" && -n "$scan_line" && -n "$summary_line" && -n "$upload_line" ]] || return 1
+  [[ "$resolve_line" -lt "$policy_line" && "$policy_line" -lt "$scan_line" && "$scan_line" -lt "$summary_line" && "$summary_line" -lt "$upload_line" ]] || return 1
   return 0
 }
 
@@ -325,8 +340,10 @@ contains_in "scan is vulnerability-only" "$WORKFLOW" 'scanners: vuln'
 contains_in "scan emits a JSON report" "$WORKFLOW" 'format: json'
 contains_in "scan writes the JSON report" "$WORKFLOW" 'output: trivy-backend-report.json'
 contains_in "scan does not ignore unfixed findings" "$WORKFLOW" 'ignore-unfixed: false'
-contains_in "scan is blocking (FR-008)" "$WORKFLOW" "exit-code: '1'"
-not_contains_in "scan is not report-only" "$WORKFLOW" "exit-code: '0'"
+contains_in "scan resolves the shared policy mode" "$WORKFLOW" "$POLICY_HELPER"
+contains_in "scan passes the resolved exit code" "$WORKFLOW" "$POLICY_EXIT_OUTPUT"
+not_contains_in "scan has no static blocking exit code" "$WORKFLOW" "exit-code: '1'"
+not_contains_in "scan has no static report-only exit code" "$WORKFLOW" "exit-code: '0'"
 contains_in "publication pushes image" "$WORKFLOW" "$DOCKER_PUSH_CMD"
 not_contains_in "workflow has no static AWS access key" "$WORKFLOW" 'AWS_ACCESS_KEY_ID'
 not_contains_in "workflow has no static AWS secret key" "$WORKFLOW" 'AWS_SECRET_ACCESS_KEY'
@@ -345,8 +362,8 @@ else
   fail "build-test builds the local backend image after Maven verification without side effects"
 fi
 
-assert_order "build -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
-  'Build backend image' "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
+assert_order "build -> policy -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
+  'Build backend image' 'Resolve backend Trivy policy' "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
 
 # --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
 contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
@@ -376,8 +393,8 @@ contains_in "ignorefile prep step references the source exceptions file" "$WORKF
   'backend-image.trivyignore.source'
 contains_in "ignorefile prep step invokes filter-trivyignore.sh" "$WORKFLOW" \
   'filter-trivyignore.sh'
-assert_order "ignorefile prep precedes the scan step" "$WORKFLOW" \
-  'filter-trivyignore.sh' "$TRIVY_ACTION"
+assert_order "ignorefile prep precedes policy resolution and scan" "$WORKFLOW" \
+  'filter-trivyignore.sh' 'Resolve backend Trivy policy' "$TRIVY_ACTION"
 contains_in "scan step passes the active ignorefile via trivyignores" "$WORKFLOW" \
   'trivyignores: .trivyignore-active-backend'
 contains_in "scan summary uses the shared redacted helper" "$WORKFLOW" \
