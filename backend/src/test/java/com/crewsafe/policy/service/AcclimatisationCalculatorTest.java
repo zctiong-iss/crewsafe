@@ -7,8 +7,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.*;
@@ -25,7 +23,6 @@ import static org.assertj.core.api.Assertions.*;
 class AcclimatisationCalculatorTest {
 
     private AcclimatisationCalculator calculator;
-    private static final ZoneId SG_ZONE = ZoneId.of("Asia/Singapore");
 
     @BeforeEach
     void setUp() {
