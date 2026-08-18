@@ -19,8 +19,7 @@
  * @author Justin Chua
  */
 import type { FC } from "react";
-import { StyleSheet, View } from "react-native";
-import { vs } from "react-native-size-matters";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import FreshnessBadge from "@/components/safety/FreshnessBadge";
 import WeatherStatusButton from "./WeatherStatusButton";
@@ -39,12 +38,21 @@ export const WEATHER_STATUS_ROW_TEST_ID = "weather-status-row";
 interface WeatherStatusRowProps {
   status: WeatherQualityStatus;
   onExplain: () => void;
+  /**
+   * Placement, supplied by whoever is laying this out.
+   *
+   * The row used to carry its own `marginTop`, which was fine while the weather hero was its
+   * only caller and wrong the moment the heat card wanted the same pairing inside a header
+   * that already had its own spacing. Margin is a fact about where a thing sits, not about
+   * what it is.
+   */
+  style?: StyleProp<ViewStyle>;
 }
 
-const WeatherStatusRow: FC<WeatherStatusRowProps> = ({ status, onExplain }) => (
+const WeatherStatusRow: FC<WeatherStatusRowProps> = ({ status, onExplain, style }) => (
   /* The pill reports, the button explains. Two elements rather than one tappable pill,
      because ADR-0017 keeps pills out of the control role — see `WeatherStatusButton`. */
-  <View style={styles.row} testID={WEATHER_STATUS_ROW_TEST_ID}>
+  <View style={[styles.row, style]} testID={WEATHER_STATUS_ROW_TEST_ID}>
     <FreshnessBadge status={status} />
     <WeatherStatusButton subject={status} onPress={onExplain} />
   </View>
@@ -61,6 +69,5 @@ const styles = StyleSheet.create({
      * paired with it.
      */
     alignItems: "center",
-    marginTop: vs(12),
   },
 });

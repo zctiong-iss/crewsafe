@@ -64,4 +64,28 @@ export const features = {
    *     was refused (shift closed, no WBGT reading for the site), never that the model misbehaved.
    */
   draftPlanTrigger: true,
+
+  /**
+   * The safety manager's Plans tab.
+   *
+   * OFF at the product owner's request. Hidden, deliberately NOT deleted — the screen, its
+   * stack, its tests and its translations all stay compiled and typechecked behind this
+   * boolean, so turning it back on is one edit rather than a rebuild.
+   *
+   * ── WHAT IS LOST WHILE THIS IS OFF ──────────────────────────────────────────────────
+   * A safety manager can no longer browse the raw plan list, or open a plan from it. They
+   * keep the Oversight tab, which since SCRUM-TBD-110 shows one plan per shift per site —
+   * the plan actually in force — and which is the surface built for the oversight question.
+   * The Plans tab was the older, flatter view of the same data.
+   *
+   * A manager could not decide a plan from here anyway: approve and reject are the
+   * supervisor's, and `RecommendationDetailScreen` already renders read-only for anyone
+   * without decision rights. So nothing that was theirs to do has been taken away.
+   *
+   * ── SUPERVISORS ARE UNAFFECTED ──────────────────────────────────────────────────────
+   * This flag gates the SAFETY MANAGER's tab only. The supervisor's Plans tab is where plans
+   * are approved and rejected, and hiding it would remove the app's only decision surface.
+   * `SupervisorTabs` does not read this flag, on purpose.
+   */
+  safetyManagerPlansTab: false,
 } as const;

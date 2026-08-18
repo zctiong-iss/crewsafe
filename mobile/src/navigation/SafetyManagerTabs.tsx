@@ -19,6 +19,8 @@
  */
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+
+import { features } from "@/constants/features";
 import { useTranslation } from "react-i18next";
 import { useEffect } from "react";
 
@@ -85,14 +87,29 @@ export default function SafetyManagerTabs() {
               : t("wellbeing.concernsTab"),
         }}
       />
-      <Tab.Screen
-        name="RecommendationsTab"
-        component={RecommendationsStack}
-        options={{
-          title: t("recommendations.tabTitle"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="clipboard" size={size} color={color} />,
-        }}
-      />
+      {/*
+        The Plans tab, switched off behind `features.safetyManagerPlansTab`.
+
+        NOT RENDERED AT ALL, rather than rendered with `tabBarButton: () => null`. A hidden
+        tab button leaves the route registered, so a deep link or a stray `navigate()` still
+        reaches the screen — hidden from the tab bar is not the same as unreachable, and the
+        request was for the latter. Omitting the `Tab.Screen` removes the route with it.
+
+        `RecommendationsStack` is still imported and still compiles; see the flag for what a
+        manager loses while it is off, and why supervisors are deliberately unaffected.
+      */}
+      {features.safetyManagerPlansTab ? (
+        <Tab.Screen
+          name="RecommendationsTab"
+          component={RecommendationsStack}
+          options={{
+            title: t("recommendations.tabTitle"),
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="clipboard" size={size} color={color} />
+            ),
+          }}
+        />
+      ) : null}
       <Tab.Screen
         name="WeatherTab"
         component={WeatherStack}
