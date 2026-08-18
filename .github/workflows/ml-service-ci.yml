@@ -7,12 +7,18 @@ on:
       - "ml-service/**"
       - ".github/workflows/ml-service-ci.yml"
       - ".github/scripts/ci/run-ml-service-smoke.sh"
+      - ".github/scripts/deploy/deploy-ml-service-staging.sh"
       - ".github/scripts/security/validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-smoke.sh"
       - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/scripts/tests/test-summarize-trivy-report.sh"
       - ".github/security/ml-service-image.trivyignore.source"
   push:
@@ -21,12 +27,18 @@ on:
       - "ml-service/**"
       - ".github/workflows/ml-service-ci.yml"
       - ".github/scripts/ci/run-ml-service-smoke.sh"
+      - ".github/scripts/deploy/deploy-ml-service-staging.sh"
       - ".github/scripts/security/validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/security/validate-trivy-exceptions.sh"
       - ".github/scripts/security/summarize-trivy-report.sh"
       - ".github/scripts/security/filter-trivyignore.sh"
+      - ".github/scripts/security/resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-ci-workflow.sh"
+      - ".github/scripts/tests/test-ci-guards.sh"
+      - ".github/scripts/tests/test-resolve-trivy-policy-mode.sh"
       - ".github/scripts/tests/test-ml-service-smoke.sh"
       - ".github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh"
+      - ".github/scripts/tests/test-validate-trivy-exceptions.sh"
       - ".github/scripts/tests/test-summarize-trivy-report.sh"
       - ".github/security/ml-service-image.trivyignore.source"
   workflow_dispatch:
@@ -72,6 +84,8 @@ jobs:
           .github/scripts/tests/test-ml-service-ci-workflow.sh
           .github/scripts/tests/test-ml-service-smoke.sh
           .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
+          .github/scripts/tests/test-validate-trivy-exceptions.sh
+          .github/scripts/tests/test-resolve-trivy-policy-mode.sh
           .github/scripts/tests/test-summarize-trivy-report.sh
 
       - name: Install ML-service dependencies
@@ -96,10 +110,18 @@ jobs:
         run: .github/scripts/ci/run-ml-service-smoke.sh "$IMAGE"
 
       - name: Validate ML-service Trivy exceptions
-        run: .github/scripts/security/validate-ml-service-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
+        run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
 
       - name: Prepare active ML-service Trivy ignorefile
         run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
+
+      # SCRUM-455: the CrewSafe security team's temporary report-only policy
+      # remains active through UTC 2026-09-17 and returns to blocking on
+      # 2026-09-18. Valid findings remain explicit evidence; scanner, registry,
+      # policy, report-integrity, and identity failures always fail closed.
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
 
       - name: Generate ML-service Trivy report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -110,12 +132,21 @@ jobs:
           trivyignores: .trivyignore-active-ml-service
           format: json
           output: trivy-ml-service-report.json
-          exit-code: '0'
+          ignore-unfixed: false
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
 
       - name: Summarize ML-service Trivy report
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}"
+        if: always()
+        env:
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
+          EXCEPTIONS: .trivyignore-active-ml-service
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
 
       - name: Upload ML-service Trivy report
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: trivy-ml-service-report
@@ -172,12 +203,18 @@ jobs:
           REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
           SHA: ${{ github.sha }}
         run: docker build -t "$REPO:$SHA" ml-service
+      - name: Validate ml-service Trivy exceptions
+        run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
       - name: Prepare active ML-service Trivy ignorefile
         run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
-      # Report-only for now (exit-code: '0'), matching backend-ci.yml's own
-      # publish-time scan: this is the first time this exact, ECR-tagged image
-      # is scanned (verify-ml-service scans a locally-tagged build, not this
-      # one), so its baseline is unknown.
+      # SCRUM-455: the CrewSafe security team's temporary report-only policy
+      # remains active through UTC 2026-09-17 and returns to blocking on
+      # 2026-09-18. Findings remain explicit evidence and are never reported
+      # as clean; scanner, registry, policy, and evidence failures fail closed.
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
+
       - name: Scan ml-service image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
@@ -187,17 +224,26 @@ jobs:
           output: trivy-ml-service-publish-report.json
           severity: HIGH,CRITICAL
           ignore-unfixed: false
-          exit-code: '0'
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
           trivyignores: .trivyignore-active-ml-service
       - name: Summarize ml-service image scan
+        if: always()
         env:
           IMAGE: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}:${{ github.sha }}
-        # No fifth (title) argument: summarize-trivy-report.sh only allowlists
-        # 'ML-service container vulnerability scan' and 'Backend image
-        # vulnerability scan' (its own guard against free-form title
-        # injection into a CI summary). Omitting it defaults to the former,
-        # the same title verify-ml-service's own summary step already uses.
-        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}"
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
+          EXCEPTIONS: .trivyignore-active-ml-service
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-publish-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "${GITHUB_SHA::12}" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
+      - name: Upload ml-service publish Trivy report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: trivy-ml-service-publish-report
+          path: trivy-ml-service-publish-report.json
+          if-no-files-found: error
+          retention-days: 7
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_ECR_PUSH_ROLE_ARN }}
@@ -244,7 +290,10 @@ jobs:
   # the sidecar). Mirrors backend-ci.yml's resolve-existing-image job exactly:
   # accepts a full commit SHA, proves it is reachable from the selected main
   # ref, then resolves its image using the dedicated ml-service deploy role.
-  # Never builds or pushes.
+  # It never builds or pushes, and must scan the resolved digest before its
+  # job can feed deployment. The shared deploy-staging job also accepts the
+  # successful publish-image path, so a gated main-branch publication rolls
+  # out automatically using the digest captured by that job.
   resolve-existing-image:
     name: Resolve existing ml-service image
     needs: verify-ml-service
@@ -254,6 +303,8 @@ jobs:
       inputs.redeploy && !inputs.publish &&
       vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN != '' && vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL != ''
     runs-on: ubuntu-latest
+    env:
+      REPO: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
     permissions:
       contents: read
       id-token: write
@@ -277,6 +328,10 @@ jobs:
           [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo "redeploy_image_tag must be a 40-character lowercase commit SHA" >&2; exit 1; }
           git cat-file -e "$IMAGE_TAG^{commit}" || { echo "redeploy_image_tag is not a repository commit" >&2; exit 1; }
           git merge-base --is-ancestor "$IMAGE_TAG" "$GITHUB_SHA" || { echo "redeploy_image_tag is not reachable from selected main" >&2; exit 1; }
+      - name: Validate ml-service Trivy exceptions for redeploy
+        run: .github/scripts/security/validate-trivy-exceptions.sh .github/security/ml-service-image.trivyignore.source
+      - name: Prepare active ml-service Trivy ignorefile for redeploy
+        run: .github/scripts/security/filter-trivyignore.sh .github/security/ml-service-image.trivyignore.source .trivyignore-active-ml-service
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
         with:
           role-to-assume: ${{ vars.CREWSAFE_ML_SERVICE_DEPLOY_ROLE_ARN }}
@@ -300,21 +355,65 @@ jobs:
             echo '## Existing ml-service image resolved'
             echo "- Approved commit tag: \`$IMAGE_TAG\`"
             echo "- Content digest: \`$image_digest\`"
-            echo '- Result: ready for deployment without publication'
+            echo '- Result: resolved candidate pending vulnerability gate'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Resolve ML-service Trivy policy
+        id: trivy_policy
+        run: .github/scripts/security/resolve-trivy-policy-mode.sh
+      - name: Log in to ECR for ml-service redeploy scan
+        run: |
+          aws ecr get-login-password --region ap-southeast-1 \
+            | docker login --username AWS --password-stdin "${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}"
+      - name: Scan existing ml-service image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          scanners: vuln
+          format: json
+          output: trivy-ml-service-redeploy-report.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: ${{ steps.trivy_policy.outputs.exit_code }}
+          trivyignores: .trivyignore-active-ml-service
+      - name: Summarize existing ml-service image scan
+        if: always()
+        env:
+          IMAGE: "${{ env.REPO }}@${{ steps.resolve.outputs.image_digest }}"
+          IMAGE_TAG: "${{ inputs.redeploy_image_tag }}"
+          POLICY_MODE: ${{ steps.trivy_policy.outputs.mode }}
+          POLICY_OWNER: ${{ steps.trivy_policy.outputs.owner }}
+          POLICY_EXPIRES: ${{ steps.trivy_policy.outputs.expires }}
+          POLICY_EVALUATED_ON: ${{ steps.trivy_policy.outputs.evaluated_on }}
+          EXCEPTIONS: .trivyignore-active-ml-service
+        run: .github/scripts/security/summarize-trivy-report.sh trivy-ml-service-redeploy-report.json "$GITHUB_STEP_SUMMARY" "$IMAGE" "$IMAGE_TAG" "$POLICY_MODE" "ML-service container vulnerability scan" "$EXCEPTIONS"
+      - name: Upload existing ml-service Trivy report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: trivy-ml-service-redeploy-report
+          path: trivy-ml-service-redeploy-report.json
+          if-no-files-found: error
+          retention-days: 7
 
   deploy-staging:
     name: Deploy staging ml-service
-    needs: resolve-existing-image
-    if: always() && needs.resolve-existing-image.result == 'success'
+    needs: [publish-image, resolve-existing-image]
+    if: >
+      always() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.publish-image.result == 'success' || needs.resolve-existing-image.result == 'success') &&
+      (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && ((inputs.publish && !inputs.redeploy) || (inputs.redeploy && !inputs.publish)))
+      )
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     env:
       REPOSITORY: ${{ vars.CREWSAFE_ML_SERVICE_ECR_REPOSITORY_URL }}
-      IMAGE_TAG: ${{ needs.resolve-existing-image.outputs.image_tag }}
-      IMAGE_DIGEST: ${{ needs.resolve-existing-image.outputs.image_digest }}
+      IMAGE_TAG: ${{ needs.publish-image.outputs.image_tag || needs.resolve-existing-image.outputs.image_tag }}
+      IMAGE_DIGEST: ${{ needs.publish-image.outputs.image_digest || needs.resolve-existing-image.outputs.image_digest }}
       CLUSTER: ${{ vars.CREWSAFE_BACKEND_ECS_CLUSTER_NAME }}
       SERVICE: ${{ vars.CREWSAFE_BACKEND_ECS_SERVICE_NAME }}
     steps:

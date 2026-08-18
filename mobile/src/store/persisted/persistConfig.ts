@@ -20,7 +20,7 @@ import { initialPreferencesState } from "../reducers/preferencesSlice";
  * produce — the hardest kind of bug to reproduce, because it only exists on devices that
  * upgraded rather than installed fresh.
  */
-const PERSIST_VERSION = 4;
+const PERSIST_VERSION = 5;
 
 export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
   storage: typeof AsyncStorage;
@@ -132,13 +132,43 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
         },
       };
     },
+
+    /*
+     * v4 → v5 adds the two notification preferences.
+     *
+     * Both default to `false`, so a device that skipped this migration would happen to
+     * behave correctly — `undefined` is falsy and every read of them is a boolean test. That
+     * is exactly the accident the v2 note warns about, and it is not a reason to skip the
+     * migration: the next person to change one of these defaults to `true` would otherwise
+     * ship a bug that works perfectly on every fresh install and fails silently on every
+     * upgraded one, which is the hardest possible shape to reproduce.
+     *
+     * Spread under the stored values, so anything the device already chose still wins.
+     */
+    5: (state) => {
+      if (!state) return state;
+      const previous = state as typeof state & {
+        preferences?: Record<string, unknown>;
+      };
+      return {
+        ...previous,
+        preferences: {
+          notificationsMuted: false,
+          notificationRationaleShown: false,
+          // No `?? {}` guard: object spread already treats undefined as nothing to spread,
+          // so the fallback would only be an empty object spread over an empty object.
+          ...previous.preferences,
+        },
+      };
+    },
   }),
 
   /*
    * What survives a restart, and why:
    *
-   *   preferences    Language, font size, high contrast, reduce motion. A worker who set the
-   *                  app up for sunlight must not have to do it again every morning.
+   *   preferences    Language, font size, high contrast, reduce motion, and whether
+   *                  notifications are muted. A worker who set the app up for sunlight must
+   *                  not have to do it again every morning.
    *
    * What deliberately does NOT:
    *
@@ -149,6 +179,11 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
    *   safety         Has a validity window. Rehydrating yesterday's stop-work warning would
    *                  be worse than showing nothing.
    *
+   *   notifications  Which drafted plans this device has already announced, keyed by user id.
+   *                  Persisted because it is the only thing standing between a restart and a
+   *                  burst of notifications for every plan already on the site — see
+   *                  `notificationsSlice` for why an empty set is the dangerous state.
+   *
    *   profile        Avatar URIs, keyed by user id. Persisted so a photo survives a restart;
    *                  keyed so it never resolves for anyone but the person who set it. See
    *                  the note in `profileSlice` on why a face cannot be device-level the
@@ -157,7 +192,7 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
    *   dispatchInbox  Handled by the nested config below — this slice needs field-level
    *                  granularity that a slice-level allowlist cannot express.
    */
-  whitelist: ["preferences", "profile"],
+  whitelist: ["preferences", "profile", "notifications"],
 };
 
 /**

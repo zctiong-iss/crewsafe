@@ -25,7 +25,8 @@ const wrap = (ui: React.ReactElement) =>
 const liveSnapshot = (wbgt: number, observedAt: string) => ({
   siteId: "s1", asOf: "2026-08-06T07:40:12Z", activeShift: null, lightning: null,
   conditions: {
-    wbgt, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+    wbgt, currentBand: null, forecastBand: null, forecastWbgt30m: null,
+    temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
     observedAt, source: "NEA" as const, freshness: "LIVE" as const,
   },
 });
@@ -50,7 +51,8 @@ describe("ConditionsPanel — degraded on staleness", () => {
       handlers.onSnapshot({
         siteId: "s1", asOf: "2026-08-06T07:40:12Z", activeShift: null,
         conditions: {
-          wbgt: 31, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+          wbgt: 31, currentBand: null, forecastBand: null, forecastWbgt30m: null,
+          temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
           observedAt: "2026-08-06T07:40:00Z", source: "NEA", freshness: "LIVE",
         },
         lightning: {
@@ -180,7 +182,8 @@ describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)
           {
             siteId: "s1", asOf: "2026-08-06T07:40:12Z", activeShift: null, lightning: null,
             conditions: {
-              wbgt: 31, temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
+              wbgt: 31, currentBand: null, forecastBand: null, forecastWbgt30m: null,
+              temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
               observedAt: "2026-08-06T07:40:00Z", source: "NEA", freshness,
             },
           },

@@ -28,10 +28,13 @@ container.
 The job then validates and filters the dedicated Trivy exception source,
 creates an ephemeral active ignorefile, produces a vulnerability-only JSON
 report, appends a redacted summary, and uploads the report for seven days.
-Following the current backend policy, HIGH/CRITICAL findings are report-only
-for now; scanner, report, summary, or upload failures still fail the check.
-Moving the ML-service scan to blocking is a separate future decision after
-findings are triaged.
+Under SCRUM-455, valid HIGH/CRITICAL findings are report-only through
+2026-09-17 UTC with approval owned by **CrewSafe security team**; the policy
+becomes blocking on 2026-09-18 UTC unless superseded by a newer approval.
+Scanner, registry, malformed-report, identity, summary, upload, and other
+evidence-generation failures still fail the check in both modes. The summary
+records the policy mode, owner, expiry, and evaluation date, so a report-only
+result must not be described as a blocking security approval.
 
 `backend-ci.yml` follows the same report-only policy. Its existing backend image
 scan now writes a vulnerability-only JSON report and appends a redacted
@@ -86,6 +89,8 @@ These checks do not require cloud credentials:
 .github/scripts/tests/test-validate-ml-service-trivy-exceptions.sh
 .github/scripts/tests/test-summarize-trivy-report.sh
 .github/scripts/tests/test-filter-trivyignore.sh
+.github/scripts/tests/test-resolve-trivy-policy-mode.sh
+.github/scripts/tests/test-ci-guards.sh
 
 docker build -t crewsafe-ml-service:local ml-service
 .github/scripts/ci/run-ml-service-smoke.sh crewsafe-ml-service:local

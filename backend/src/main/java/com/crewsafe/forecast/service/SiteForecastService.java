@@ -7,6 +7,7 @@ import com.crewsafe.forecast.client.ForecastApiClient.ForecastContext;
 import com.crewsafe.forecast.client.ForecastApiClient.ForecastObservation;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
+import com.crewsafe.weather.domain.WbgtBand;
 import com.crewsafe.weather.domain.WeatherObservation;
 import com.crewsafe.weather.domain.WeatherQualityStatus;
 import com.crewsafe.weather.repository.WeatherObservationRepository;
@@ -436,7 +437,15 @@ public class SiteForecastService {
                 Instant.now(),
                 basis,
                 inputAge.toMinutes(),
-                basis != ForecastBasis.MODEL);
+                basis != ForecastBasis.MODEL,
+                // Classified from the predicted value, not the observed one — a forecast that
+                // reported the current band would be describing the present, which is the one
+                // thing a forecast is not for.
+                WbgtBand.classify(predicted),
+                // The bounds get their own bands, because an interval that crosses a boundary
+                // is saying something the point estimate alone cannot.
+                WbgtBand.classify(predicted.subtract(halfWidth)),
+                WbgtBand.classify(predicted.add(halfWidth)));
     }
 
     private SiteForecast fromApi(ForecastApiResponse response, ForecastBasis basis,
@@ -462,7 +471,12 @@ public class SiteForecastService {
                 response.timestamp(),
                 basis,
                 inputAge.toMinutes(),
-                basis != ForecastBasis.MODEL);
+                basis != ForecastBasis.MODEL,
+                // Same classifier on the model's own prediction, so a model result and a
+                // fallback are banded by one rule rather than two.
+                WbgtBand.classify(predicted),
+                WbgtBand.classify(predicted.subtract(halfWidth)),
+                WbgtBand.classify(predicted.add(halfWidth)));
     }
 
     private static ForecastObservation toForecastObservation(WeatherObservation observation,
@@ -516,6 +530,41 @@ public class SiteForecastService {
             Instant generatedAt,
             ForecastBasis basis,
             long inputAgeMinutes,
-            boolean degraded) {
+            boolean degraded,
+            /**
+             * The MOM band the predicted value falls in, evaluated here (SCRUM-369).
+             *
+             * <p>Closes the gap mobile's {@code SiteForecast} comment described: the app wanted to
+             * colour and label a forecast by band and was told not to derive one, because §12.2
+             * forbids a client deciding what a WBGT number means and a client-side copy of the
+             * boundaries is a second authority that can disagree with this one.
+             *
+             * <p>Evaluated from {@code predictedValue}, not copied from the observed band — the
+             * whole point of a forecast is that it differs from the current reading, and
+             * {@code AgentDraftService} already classifies its forecast figure exactly this way
+             * for the same reason.
+             *
+             * <p>Note this is the band of a <em>prediction</em>. It says where the reading is
+             * heading, not what anyone is owed right now; the work-rest obligations still come
+             * from the policy engine against the observed value.
+             */
+            WbgtBand band,
+
+            /**
+             * The bands the interval's own bounds fall in.
+             *
+             * <p>They exist because an interval routinely spans a boundary — the half-width can
+             * reach {@link #MAX_USEFUL_HALF_WIDTH}, so a range eight degrees wide is possible and
+             * even a narrow one crosses 31 or 33 often. Painting such a range in the point
+             * estimate's colour would assert the forecast stays in one band while the interval
+             * beside it says it might not, and "this could already be in the rest-required band"
+             * is the most useful thing an interval has to say.
+             *
+             * <p>Classified here rather than on the device for the same reason {@link #band} is:
+             * §12.2 leaves no room for a client to decide what a WBGT number means, and that
+             * applies to a bound exactly as it does to a point.
+             */
+            WbgtBand confidenceIntervalLowerBand,
+            WbgtBand confidenceIntervalUpperBand) {
     }
 }

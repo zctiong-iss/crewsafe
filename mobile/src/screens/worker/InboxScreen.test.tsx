@@ -5,6 +5,8 @@
  * PENDING rows and this device's own acknowledgements (see the file's own header comment).
  * Asserts the loading, error/retry, empty, and populated states using the real
  * `dispatchInboxSlice` reducer, with only the network boundary mocked.
+ *
+ * @author Justin Chua
  */
 jest.mock("@/theme/ThemeProvider", () => ({
   useTheme: () => jest.requireActual("@/styles/theme").defaultTheme,
@@ -55,6 +57,7 @@ import { Provider } from "react-redux";
 import { render } from "@testing-library/react-native";
 
 import dispatchInboxReducer, { type DispatchInboxState } from "@/store/reducers/dispatchInboxSlice";
+import preferencesReducer from "@/store/reducers/preferencesSlice";
 import InboxScreen from "./InboxScreen";
 import type { ActionDispatch, CurrentUser } from "@/types/domain";
 
@@ -99,6 +102,10 @@ function buildStore(inboxOverrides: Partial<DispatchInboxState> = {}) {
     reducer: {
       dispatchInbox: dispatchInboxReducer,
       auth: (state = { user: WORKER } as unknown) => state,
+      // The real reducer, not a stub: the screen asks about notification permission when a
+      // rest is acknowledged, and that reads whether notifications are muted and whether the
+      // rationale has already been shown. A stub would have to keep both in step by hand.
+      preferences: preferencesReducer,
     },
     preloadedState: { dispatchInbox: dispatchInboxState },
   });

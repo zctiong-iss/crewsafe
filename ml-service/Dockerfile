@@ -3,14 +3,21 @@
 # against it, so the tag is decorative and can drift into an outright lie about which image
 # this is. The digest is the half that carries the guarantee, so the digest is the half kept.
 #
-# This digest was pinned from python:3.11-slim, and the image must stay a Python 3.11 base:
+# This digest was pinned from python:3.11.16-slim-trixie, and the image must stay a Python 3.11 base:
 # ml-service is analysed as `sonar.python.version=3.11`, CI installs and tests on 3.11, and
 # requirements*.txt is compiled against it. Re-pin deliberately when moving Python version,
 # and update this comment in the same change - it is the only remaining record of what the
 # digest is supposed to be.
-FROM python@sha256:90744cff8f32887f075c47d747a173ff333e9e98801667af93c357fa9f5e28ff
+FROM python@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7
 
 WORKDIR /app
+
+# Apply currently available Debian security fixes in the digest-pinned base
+# before installing runtime dependencies. Keep the package index in this layer
+# only so the final image does not retain stale package metadata.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install dependencies as root (before user switch)
 COPY requirements-runtime.txt .
