@@ -195,7 +195,7 @@ it("fetches NO plans until a site is expanded", async () => {
 it("fetches a site's plans on first expand", async () => {
   const { getAllByLabelText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(mockFetchShifts).toHaveBeenCalledTimes(1));
@@ -204,7 +204,7 @@ it("fetches a site's plans on first expand", async () => {
 it("does not refetch a site whose plans it already has", async () => {
   const { getAllByLabelText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(mockFetchShifts).toHaveBeenCalledTimes(1));
 
@@ -220,7 +220,7 @@ it("does not refetch a site whose plans it already has", async () => {
 it("names the decider on a decided plan and nobody on a pending one", async () => {
   const { getAllByLabelText, getByText, queryByText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(getByText("Meng Hui")).toBeTruthy());
@@ -250,7 +250,7 @@ it("names the approver from the server rather than looking them up", async () =>
   ]);
 
   const { getAllByLabelText, getByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(getByText("Zhong Cheng")).toBeTruthy());
@@ -277,7 +277,7 @@ it("shows no badge rather than a raw id when the approver cannot be named", asyn
   ]);
 
   const { getAllByLabelText, queryByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(queryByText(/oversight.openPlan/)).not.toBeUndefined());
@@ -290,7 +290,7 @@ it("keeps the other sites readable when one site fails to load", async () => {
   mockFetchShifts.mockRejectedValue(new Error("boom"));
 
   const { getAllByLabelText, getByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   // The failed site says so, and the other one is still on screen and still expandable.
@@ -302,7 +302,7 @@ it("says so when a site has no plans rather than rendering an empty box", async 
   mockFetchRecommendations.mockResolvedValue([]);
 
   const { getAllByLabelText, getByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(getByText("oversight.noPlans")).toBeTruthy());
@@ -368,7 +368,7 @@ it("sorts a site with work outstanding above one without, before any expansion",
   const { getAllByText } = await renderScreen();
 
   // "NUS Campus" is site-2 and alphabetically second; the outstanding work must lift it.
-  await waitFor(() => expect(getAllByText(/Bishan Park|NUS Campus/).length).toBe(2));
+  await waitFor(() => expect(getAllByText(/Bishan Park|NUS Campus/)).toHaveLength(2));
   const names = getAllByText(/Bishan Park|NUS Campus/).map((node) => node.props.children);
   expect(names[0]).toBe("NUS Campus");
 });
@@ -417,7 +417,7 @@ it("opens the full plan when a plan row is tapped", async () => {
 it("outlines the plan row at rest, with no chevron", async () => {
   const { getAllByLabelText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(getAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
 
@@ -434,7 +434,7 @@ it("outlines the plan row at rest, with no chevron", async () => {
 it("darkens the outline on focus rather than relying on hover", async () => {
   const { getAllByLabelText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(getAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
 
@@ -464,7 +464,7 @@ it("darkens the outline on focus rather than relying on hover", async () => {
 it("refreshes the plans of expanded sites, not just the site list", async () => {
   const { getAllByLabelText, getByTestId } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(mockFetchShifts).toHaveBeenCalledTimes(1));
 
@@ -485,7 +485,7 @@ it("does not blank an expanded site while it refreshes", async () => {
    */
   const { getAllByLabelText, queryAllByLabelText } = await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(queryAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
 
@@ -498,7 +498,7 @@ it("keeps showing plans when a background refresh fails", async () => {
   const { getAllByLabelText, queryAllByLabelText, queryByText, getByTestId } =
     await renderScreen();
 
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
   await waitFor(() => expect(queryAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
 
@@ -536,15 +536,15 @@ it("names the site supervisor on every plan, whatever the status", async () => {
   ]);
 
   const { getAllByLabelText, getAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   // Two plans in the fixture: one PENDING_APPROVAL, one APPROVED. Both carry the pill.
   // Two plans in the fixture: one PENDING_APPROVAL, one APPROVED. Both carry the pill, and the
   // pill shows the bare name -- the "Site supervisor:" prefix lives on the accessible label
   // only, because it doubled the pill width and pushed it onto a second row.
-  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
-  expect(getAllByLabelText(/oversight.supervisorLabel/).length).toBe(2);
+  await waitFor(() => expect(getAllByText("Meng Hui")).toHaveLength(2));
+  expect(getAllByLabelText(/oversight.supervisorLabel/)).toHaveLength(2);
 });
 
 it("lists every supervisor when a site has more than one", async () => {
@@ -561,13 +561,13 @@ it("lists every supervisor when a site has more than one", async () => {
   ]);
 
   const { getAllByLabelText, getAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   // Two supervisors x two plans. Names render bare; the spoken form keeps the context.
-  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
-  expect(getAllByText("Zhong Cheng").length).toBe(2);
-  expect(getAllByLabelText(/oversight.supervisorLabel/).length).toBe(4);
+  await waitFor(() => expect(getAllByText("Meng Hui")).toHaveLength(2));
+  expect(getAllByText("Zhong Cheng")).toHaveLength(2);
+  expect(getAllByLabelText(/oversight.supervisorLabel/)).toHaveLength(4);
 });
 
 it("does not repeat a name when the decider is the site supervisor", async () => {
@@ -599,10 +599,10 @@ it("does not repeat a name when the decider is the site supervisor", async () =>
   ]);
 
   const { getAllByLabelText, queryAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
-  await waitFor(() => expect(queryAllByText(/Meng Hui/).length).toBe(1));
+  await waitFor(() => expect(queryAllByText(/Meng Hui/)).toHaveLength(1));
 });
 
 it("still names a decider who is not one of the site's supervisors", async () => {
@@ -631,7 +631,7 @@ it("still names a decider who is not one of the site's supervisors", async () =>
   ]);
 
   const { getAllByLabelText, getByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(getByText("Abu Bakar")).toBeTruthy());
@@ -645,11 +645,11 @@ it("renders no supervisor pill when the summary names none", async () => {
   ]);
 
   const { getAllByLabelText, queryAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(getAllByLabelText(/oversight.openPlan/).length).toBeGreaterThan(0));
-  expect(queryAllByText(/oversight.supervisorLabel/).length).toBe(0);
+  expect(queryAllByText(/oversight.supervisorLabel/)).toHaveLength(0);
 });
 
 it("keeps the status and the supervisor on one line for every status", async () => {
@@ -668,9 +668,9 @@ it("keeps the status and the supervisor on one line for every status", async () 
   ]);
 
   const { getAllByLabelText, getAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
-  await waitFor(() => expect(getAllByText("Meng Hui").length).toBe(2));
+  await waitFor(() => expect(getAllByText("Meng Hui")).toHaveLength(2));
 
   // The pill row must not wrap: a wrapping container is what put the owner on its own line.
   const pillRow = getAllByText("Meng Hui")[0].parent?.parent?.parent;
@@ -697,7 +697,7 @@ it("shows exactly one plan per shift, with no way to unfold more", async () => {
   ]);
 
   const { getAllByLabelText, queryAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   // One status pill, because one plan is on screen.
@@ -725,7 +725,7 @@ it("shows the stop-work ALONE when the agent has redrafted over it", async () =>
   ]);
 
   const { getAllByLabelText, queryAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() =>
@@ -747,7 +747,7 @@ it("lets an approved plan replace the stop-work once conditions have changed", a
   ]);
 
   const { getAllByLabelText, queryAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
   await waitFor(() => expect(queryAllByText("recommendations.decidedApproved")).toHaveLength(1));
@@ -758,10 +758,10 @@ it("labels each shift with its window so two crews are distinguishable", async (
   // Without it, two rows reading "Awaiting decision, Aisyah (Supervisor)" look like one row
   // rendered twice rather than two different crews.
   const { getAllByLabelText, getAllByText } = await renderScreen();
-  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/).length).toBe(2));
+  await waitFor(() => expect(getAllByLabelText(/oversight.showPlansFor/)).toHaveLength(2));
   await fireEvent.press(getAllByLabelText(/oversight.showPlansFor/)[0]);
 
-  await waitFor(() => expect(getAllByText(/shifts.window/).length).toBe(2));
+  await waitFor(() => expect(getAllByText(/shifts.window/)).toHaveLength(2));
 });
 
 it("keeps the site count totalling every pending plan, even when the card shows fewer", async () => {
