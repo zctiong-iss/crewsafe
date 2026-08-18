@@ -36,7 +36,11 @@ import WeatherIcon from "@/components/weather/WeatherIcon";
 import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
 import ForecastCard from "@/components/weather/ForecastCard";
 import FreshnessBadge from "@/components/safety/FreshnessBadge";
-import FreshnessNotice from "@/components/safety/FreshnessNotice";
+import FreshnessNotice, { showsStandingBanner } from "@/components/safety/FreshnessNotice";
+import WeatherStatusButton from "@/components/weather/WeatherStatusButton";
+import WeatherStatusModal, {
+  type WeatherStatusSubject,
+} from "@/components/weather/WeatherStatusModal";
 
 import AppSwitch from "@/components/inputs/AppSwitch";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -95,6 +99,15 @@ export default function WeatherScreen() {
   } = useAppSelector((state) => state.weather);
 
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  /*
+   * What the status modal is currently explaining, or null when it is closed.
+   *
+   * One piece of state rather than a boolean plus a subject: the two can never legitimately
+   * disagree, and storing them separately invites a render where the modal is open with a
+   * stale subject behind it.
+   */
+  const [statusSubject, setStatusSubject] = useState<WeatherStatusSubject | null>(null);
 
   const load = useCallback(
     (isRefresh: boolean, siteId?: string) => {
@@ -163,6 +176,15 @@ export default function WeatherScreen() {
               requestId={requestId}
             />
             <AppButton title={t("common.retry")} onPress={() => load(false)} style={styles.retry} />
+            {/* A failed request and a site with no reading look identical on screen and are
+                not the same problem — one is fixed by walking somewhere with signal and the
+                other is not. The explanation is what tells them apart. */}
+            <AppButton
+              title={t("weather.statusExplain")}
+              variant="secondary"
+              onPress={() => setStatusSubject("LOAD_ERROR")}
+              style={styles.retry}
+            />
           </View>
         ) : null}
 
@@ -297,14 +319,30 @@ export default function WeatherScreen() {
                 </AppText>
               ) : null}
 
+              {/* The pill reports, the button explains. Two elements rather than one
+                  tappable pill, because ADR-0017 keeps pills out of the control role — see
+                  `WeatherStatusButton` for the full reasoning. */}
               <View style={styles.badgeRow}>
                 <FreshnessBadge status={conditions.qualityStatus} />
+                <WeatherStatusButton
+                  subject={conditions.qualityStatus}
+                  onPress={() => setStatusSubject(conditions.qualityStatus)}
+                />
               </View>
             </View>
 
-            <View style={styles.block}>
-              <FreshnessNotice status={conditions.qualityStatus} />
-            </View>
+            {/*
+              STALE only, now that the rest of the explanation lives behind the button above.
+              Not an inconsistency: §7.1's rule matrix requires stale data to "show warning",
+              and a warning that only appears after someone taps an icon they had no reason to
+              tap has not been shown. DELAYED is usable data worth a footnote; STALE is data
+              that must not be acted on at all, and it keeps the banner it earned.
+            */}
+            {showsStandingBanner(conditions.qualityStatus) ? (
+              <View style={styles.block}>
+                <FreshnessNotice status={conditions.qualityStatus} />
+              </View>
+            ) : null}
 
             {/* Below the hero and deliberately smaller than it. The measured reading is what
                 this screen is for; a prediction shown at equal weight beside a thermometer
@@ -369,6 +407,12 @@ export default function WeatherScreen() {
             <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
               {t("weather.noReadingBody")}
             </AppText>
+            <AppButton
+              title={t("weather.statusExplain")}
+              variant="secondary"
+              onPress={() => setStatusSubject("NO_READING")}
+              style={styles.retry}
+            />
           </View>
         ) : null}
 
@@ -412,6 +456,23 @@ export default function WeatherScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      {/* Outside the ScrollView, so it is not affected by the scroll position it was opened
+          from. `subject` is what drives it — a null closes it, which is why the two cannot
+          disagree. */}
+      <WeatherStatusModal
+        visible={statusSubject !== null}
+        subject={statusSubject ?? "LIVE"}
+        observedAt={
+          // Only when there IS a reading to have been observed. The no-reading and load-error
+          // cases have no timestamp, and inventing one from `now` would say the missing
+          // reading was taken this instant.
+          conditions && statusSubject !== "NO_READING" && statusSubject !== "LOAD_ERROR"
+            ? formatTime(conditions.observedAt, i18n.language)
+            : null
+        }
+        onDismiss={() => setStatusSubject(null)}
+      />
     </AppSafeView>
   );
 }

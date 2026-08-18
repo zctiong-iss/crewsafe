@@ -4,6 +4,8 @@
  * Everything here exists because a *native* module has no JS implementation under Jest. The
  * rule applied throughout: mock the native boundary, never the app's own logic. A mock of our
  * own code would make a test that passes while the app is broken.
+ *
+ * @author Justin Chua
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -52,3 +54,29 @@ console.warn = (...args) => {
   if (first.includes("useNativeDriver")) return;
   realWarn(...args);
 };
+
+/*
+ * expo-notifications is entirely native: channels, authorisation and the scheduler all live
+ * on the other side of the bridge. Importing it under Jest also prints a warning about Expo
+ * Go's dropped Android push support on every single test file, which is true, already
+ * documented in `notifications/notificationClient.ts`, and not something a test run needs to
+ * say 80 times.
+ *
+ * Mocked at the package boundary rather than at our own module, so `notificationClient`'s
+ * real logic — the past-deadline guard, the permission normalisation, the data-key matching —
+ * is still the code under test.
+ */
+jest.mock("expo-notifications", () => ({
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted", canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  scheduleNotificationAsync: jest.fn(() => Promise.resolve("notification-id")),
+  cancelScheduledNotificationAsync: jest.fn(() => Promise.resolve()),
+  cancelAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve()),
+  getAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve([])),
+  getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { HIGH: 4 },
+  SchedulableTriggerInputTypes: { DATE: "date", TIME_INTERVAL: "timeInterval" },
+}));
