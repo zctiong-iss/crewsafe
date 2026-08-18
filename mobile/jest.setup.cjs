@@ -56,17 +56,20 @@ console.warn = (...args) => {
 };
 
 /*
- * expo-notifications is entirely native: channels, authorisation and the scheduler all live
- * on the other side of the bridge. Importing it under Jest also prints a warning about Expo
- * Go's dropped Android push support on every single test file, which is true, already
- * documented in `notifications/notificationClient.ts`, and not something a test run needs to
- * say 80 times.
+ * expo-notifications is entirely native: channels, authorisation and the scheduler all live on
+ * the other side of the bridge.
  *
- * Mocked at the package boundary rather than at our own module, so `notificationClient`'s
- * real logic — the past-deadline guard, the permission normalisation, the data-key matching —
- * is still the code under test.
+ * Mocked per SUBMODULE rather than at the `expo-notifications` barrel, matching how
+ * `notifications/notificationClient.ts` imports them — and it has to, because that barrel is
+ * fatal on Android in Expo Go. See the long note at the top of that file. Mocking the barrel
+ * here would leave the real native modules loaded for the paths the app actually uses, and the
+ * mock would silently do nothing.
+ *
+ * Mocked at the package boundary rather than at our own module, so `notificationClient`'s real
+ * logic — the past-deadline guard, the permission normalisation, the data-key matching — is
+ * still the code under test.
  */
-jest.mock("expo-notifications", () => ({
+const notificationMocks = {
   setNotificationHandler: jest.fn(),
   setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
   getPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted", canAskAgain: true })),
@@ -77,6 +80,40 @@ jest.mock("expo-notifications", () => ({
   getAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve([])),
   getLastNotificationResponseAsync: jest.fn(() => Promise.resolve(null)),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
-  AndroidImportance: { HIGH: 4 },
-  SchedulableTriggerInputTypes: { DATE: "date", TIME_INTERVAL: "timeInterval" },
+};
+
+// Shared so a test can reach the same jest.fn the client will call, whichever submodule it
+// happens to live in.
+global.__notificationMocks = notificationMocks;
+
+jest.mock("expo-notifications/build/NotificationsHandler", () => ({
+  setNotificationHandler: (...args) => notificationMocks.setNotificationHandler(...args),
+}));
+jest.mock("expo-notifications/build/NotificationPermissions", () => ({
+  getPermissionsAsync: (...args) => notificationMocks.getPermissionsAsync(...args),
+  requestPermissionsAsync: (...args) => notificationMocks.requestPermissionsAsync(...args),
+}));
+jest.mock("expo-notifications/build/NotificationsEmitter", () => ({
+  addNotificationResponseReceivedListener: (...args) =>
+    notificationMocks.addNotificationResponseReceivedListener(...args),
+  getLastNotificationResponseAsync: (...args) =>
+    notificationMocks.getLastNotificationResponseAsync(...args),
+}));
+jest.mock("expo-notifications/build/scheduleNotificationAsync", () => ({
+  scheduleNotificationAsync: (...args) => notificationMocks.scheduleNotificationAsync(...args),
+}));
+jest.mock("expo-notifications/build/cancelScheduledNotificationAsync", () => ({
+  cancelScheduledNotificationAsync: (...args) =>
+    notificationMocks.cancelScheduledNotificationAsync(...args),
+}));
+jest.mock("expo-notifications/build/cancelAllScheduledNotificationsAsync", () => ({
+  cancelAllScheduledNotificationsAsync: (...args) =>
+    notificationMocks.cancelAllScheduledNotificationsAsync(...args),
+}));
+jest.mock("expo-notifications/build/getAllScheduledNotificationsAsync", () => ({
+  getAllScheduledNotificationsAsync: (...args) =>
+    notificationMocks.getAllScheduledNotificationsAsync(...args),
+}));
+jest.mock("expo-notifications/build/setNotificationChannelAsync", () => ({
+  setNotificationChannelAsync: (...args) => notificationMocks.setNotificationChannelAsync(...args),
 }));

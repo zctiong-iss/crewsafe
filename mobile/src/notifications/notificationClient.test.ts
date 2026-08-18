@@ -9,8 +9,6 @@
  *
  * @author Justin Chua
  */
-import * as Notifications from "expo-notifications";
-
 import {
   cancelScheduledFor,
   getPermission,
@@ -19,18 +17,28 @@ import {
   scheduleAt,
 } from "./notificationClient";
 
-const mocked = Notifications as jest.Mocked<typeof Notifications>;
+/*
+ * The same jest.fn objects `jest.setup.cjs` wired into each expo-notifications SUBMODULE.
+ *
+ * Reached through the global rather than by importing the package, because the client no
+ * longer imports the barrel either — it is fatal on Android in Expo Go, and a test that went
+ * through it would be asserting against mocks the app never calls. See the note at the top of
+ * `notificationClient.ts`.
+ */
+const mocked = (
+  globalThis as unknown as { __notificationMocks: Record<string, jest.Mock> }
+).__notificationMocks;
 
 const MINUTE = 60_000;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (mocked.getPermissionsAsync as jest.Mock).mockResolvedValue({
+  mocked.getPermissionsAsync.mockResolvedValue({
     status: "granted",
     canAskAgain: true,
   });
-  (mocked.scheduleNotificationAsync as jest.Mock).mockResolvedValue("notification-id");
-  (mocked.getAllScheduledNotificationsAsync as jest.Mock).mockResolvedValue([]);
+  mocked.scheduleNotificationAsync.mockResolvedValue("notification-id");
+  mocked.getAllScheduledNotificationsAsync.mockResolvedValue([]);
 });
 
 describe("permission", () => {
@@ -45,7 +53,7 @@ describe("permission", () => {
      * anything — so reporting it as "undetermined" would have the app queue up a prompt the
      * OS will never display, and the user would be shown a rationale dialog leading nowhere.
      */
-    (mocked.getPermissionsAsync as jest.Mock).mockResolvedValue({
+    mocked.getPermissionsAsync.mockResolvedValue({
       status: "undetermined",
       canAskAgain: false,
     });
@@ -54,7 +62,7 @@ describe("permission", () => {
   });
 
   it("reports undetermined only when the prompt can still be shown", async () => {
-    (mocked.getPermissionsAsync as jest.Mock).mockResolvedValue({
+    mocked.getPermissionsAsync.mockResolvedValue({
       status: "undetermined",
       canAskAgain: true,
     });
@@ -65,7 +73,7 @@ describe("permission", () => {
   it("degrades to denied rather than throwing when the OS call fails", async () => {
     // Nothing here is worth taking a screen down for. A caller that cannot notify still has
     // to render the rest timer.
-    (mocked.getPermissionsAsync as jest.Mock).mockRejectedValue(new Error("no native module"));
+    mocked.getPermissionsAsync.mockRejectedValue(new Error("no native module"));
 
     await expect(getPermission()).resolves.toBe("denied");
   });
@@ -76,11 +84,11 @@ describe("permission", () => {
      * does not hold — and requesting a capability the app is not entitled to makes the WHOLE
      * request fail rather than degrade, costing the ordinary permission too.
      */
-    (mocked.requestPermissionsAsync as jest.Mock).mockResolvedValue({ status: "granted" });
+    mocked.requestPermissionsAsync.mockResolvedValue({ status: "granted" });
 
     await requestPermission();
 
-    const options = (mocked.requestPermissionsAsync as jest.Mock).mock.calls[0][0];
+    const options = mocked.requestPermissionsAsync.mock.calls[0][0];
     expect(options.ios).not.toHaveProperty("allowCriticalAlerts");
   });
 });
@@ -91,7 +99,7 @@ describe("scheduling", () => {
 
     await scheduleAt({ title: "Rest complete", body: "You rested for 10 minutes.", at });
 
-    const call = (mocked.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
     expect(call.trigger.type).toBe("date");
     expect((call.trigger.date as Date).getTime()).toBe(at);
   });
@@ -111,7 +119,7 @@ describe("scheduling", () => {
   });
 
   it("schedules nothing without permission", async () => {
-    (mocked.getPermissionsAsync as jest.Mock).mockResolvedValue({
+    mocked.getPermissionsAsync.mockResolvedValue({
       status: "denied",
       canAskAgain: false,
     });
@@ -123,7 +131,7 @@ describe("scheduling", () => {
   });
 
   it("returns null rather than throwing when the OS refuses the schedule", async () => {
-    (mocked.scheduleNotificationAsync as jest.Mock).mockRejectedValue(new Error("quota"));
+    mocked.scheduleNotificationAsync.mockRejectedValue(new Error("quota"));
 
     await expect(
       scheduleAt({ title: "Rest complete", body: "…", at: Date.now() + MINUTE }),
@@ -138,19 +146,19 @@ describe("scheduling", () => {
       data: { restDispatchId: "d1" },
     });
 
-    const call = (mocked.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
     expect(call.content.data).toEqual({ restDispatchId: "d1" });
   });
 
   it("presents immediately with a null trigger", async () => {
     await expect(presentNow("New plan drafted", "…")).resolves.toBe(true);
 
-    const call = (mocked.scheduleNotificationAsync as jest.Mock).mock.calls[0][0];
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
     expect(call.trigger).toBeNull();
   });
 
   it("presents nothing without permission", async () => {
-    (mocked.getPermissionsAsync as jest.Mock).mockResolvedValue({
+    mocked.getPermissionsAsync.mockResolvedValue({
       status: "denied",
       canAskAgain: false,
     });
@@ -167,7 +175,7 @@ describe("cancelling by data key", () => {
      * rest is over" for a rest that was called off — and an over-eager one silently drops
      * another worker's still-valid rest on the same device.
      */
-    (mocked.getAllScheduledNotificationsAsync as jest.Mock).mockResolvedValue([
+    mocked.getAllScheduledNotificationsAsync.mockResolvedValue([
       { identifier: "n1", content: { data: { restDispatchId: "d1" } } },
       { identifier: "n2", content: { data: { restDispatchId: "d2" } } },
       { identifier: "n3", content: { data: { kind: "plan-drafted" } } },
@@ -176,7 +184,7 @@ describe("cancelling by data key", () => {
 
     await cancelScheduledFor("restDispatchId", "d1");
 
-    const cancelled = (mocked.cancelScheduledNotificationAsync as jest.Mock).mock.calls.map(
+    const cancelled = mocked.cancelScheduledNotificationAsync.mock.calls.map(
       (call) => call[0],
     );
     expect(cancelled).toEqual(["n1"]);
@@ -191,7 +199,7 @@ describe("cancelling by data key", () => {
   it("swallows a failure to read the scheduled list", async () => {
     // Reached from a card being dismissed. Throwing here would turn a tidy-up into a visible
     // failure on the screen that triggered it.
-    (mocked.getAllScheduledNotificationsAsync as jest.Mock).mockRejectedValue(new Error("nope"));
+    mocked.getAllScheduledNotificationsAsync.mockRejectedValue(new Error("nope"));
 
     await expect(cancelScheduledFor("restDispatchId", "d1")).resolves.toBeUndefined();
   });

@@ -29,8 +29,46 @@
  * @author Justin Chua
  */
 import { Platform } from "react-native";
-import * as Notifications from "expo-notifications";
 import Constants, { ExecutionEnvironment } from "expo-constants";
+
+/*
+ * ── DO NOT COLLAPSE THESE INTO `import * as Notifications from "expo-notifications"` ─────
+ * That barrel is FATAL on Android in Expo Go, and fatal at import time rather than at call
+ * time — the app dies on the red screen before the first render.
+ *
+ * `expo-notifications/build/index.js` re-exports `DevicePushTokenAutoRegistration.fx`, and
+ * that module calls `addPushTokenListener()` at module scope to keep a device push token in
+ * sync with a registration server. Since SDK 53 `warnOfExpoGoPushUsage()` THROWS rather than
+ * warns when it is reached on Android inside Expo Go, so merely evaluating the barrel throws.
+ * Nothing about this app asks for a push token; it is a side effect of the package's own
+ * index, and it is unreachable any other way.
+ *
+ * Importing each submodule directly skips that file entirely. Every one of these is a leaf
+ * that pulls in nothing but `expo-modules-core` and its own native module — none of them
+ * touch the push-token path — and Metro still resolves the platform variants (the channel
+ * helper has a real `.android.js` and a no-op default, which is exactly the behaviour we
+ * want on iOS).
+ *
+ * The cost is a dependency on the package's internal file layout, which is why it is written
+ * down here: if a future SDK moves these files, this is the first place to look, and the fix
+ * is to follow them rather than to go back through the index.
+ */
+import { setNotificationHandler } from "expo-notifications/build/NotificationsHandler";
+import {
+  getPermissionsAsync,
+  requestPermissionsAsync,
+} from "expo-notifications/build/NotificationPermissions";
+import {
+  addNotificationResponseReceivedListener,
+  getLastNotificationResponseAsync,
+} from "expo-notifications/build/NotificationsEmitter";
+import { scheduleNotificationAsync } from "expo-notifications/build/scheduleNotificationAsync";
+import { cancelScheduledNotificationAsync } from "expo-notifications/build/cancelScheduledNotificationAsync";
+import { cancelAllScheduledNotificationsAsync } from "expo-notifications/build/cancelAllScheduledNotificationsAsync";
+import { getAllScheduledNotificationsAsync } from "expo-notifications/build/getAllScheduledNotificationsAsync";
+import { setNotificationChannelAsync } from "expo-notifications/build/setNotificationChannelAsync";
+import { AndroidImportance } from "expo-notifications/build/NotificationChannelManager.types";
+import { SchedulableTriggerInputTypes } from "expo-notifications/build/Notifications.types";
 
 /**
  * The Android channel every CrewSafe notification is posted to.
@@ -97,7 +135,7 @@ export const isExpoGo = IS_EXPO_GO;
  * the whole app down over a notification channel.
  */
 export async function configureNotifications(): Promise<void> {
-  Notifications.setNotificationHandler({
+  setNotificationHandler({
     handleNotification: async () => ({
       /*
        * Shown even with the app in the foreground.
@@ -122,12 +160,12 @@ export async function configureNotifications(): Promise<void> {
 
   if (Platform.OS === "android") {
     try {
-      await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
+      await setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
         name: "CrewSafe alerts",
         // HIGH, not DEFAULT: DEFAULT puts the notification in the tray without a heads-up,
         // which for a rest that has just ended means the worker finds out when they next
         // unlock the phone rather than when it happens.
-        importance: Notifications.AndroidImportance.HIGH,
+        importance: AndroidImportance.HIGH,
         vibrationPattern: ANDROID_VIBRATION_PATTERN,
         enableVibrate: true,
         sound: "default",
@@ -142,7 +180,7 @@ export async function configureNotifications(): Promise<void> {
 /** What the OS currently thinks, without asking the user anything. */
 export async function getPermission(): Promise<NotificationPermission> {
   try {
-    const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+    const { status, canAskAgain } = await getPermissionsAsync();
     if (status === "granted") return "granted";
     // `undetermined` only if the system prompt has never been shown AND can still be shown.
     // On iOS a refusal makes `canAskAgain` false permanently, and reporting that as
@@ -167,7 +205,7 @@ export async function getPermission(): Promise<NotificationPermission> {
  */
 export async function requestPermission(): Promise<boolean> {
   try {
-    const { status } = await Notifications.requestPermissionsAsync({
+    const { status } = await requestPermissionsAsync({
       // iOS-only, and all three are the ordinary presentation options rather than anything
       // escalated. No `allowCriticalAlerts` — that needs an Apple entitlement this app does
       // not have, and asking for one it lacks makes the whole request fail rather than
@@ -216,7 +254,7 @@ export async function scheduleAt({ title, body, at, data }: ScheduleRequest): Pr
   if ((await getPermission()) !== "granted") return null;
 
   try {
-    return await Notifications.scheduleNotificationAsync({
+    return await scheduleNotificationAsync({
       content: {
         title,
         body,
@@ -226,7 +264,7 @@ export async function scheduleAt({ title, body, at, data }: ScheduleRequest): Pr
         ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
       trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        type: SchedulableTriggerInputTypes.DATE,
         date: new Date(at),
         ...(Platform.OS === "android" ? { channelId: ANDROID_CHANNEL_ID } : {}),
       },
@@ -251,7 +289,7 @@ export async function presentNow(
   if ((await getPermission()) !== "granted") return false;
 
   try {
-    await Notifications.scheduleNotificationAsync({
+    await scheduleNotificationAsync({
       content: {
         title,
         body,
@@ -282,7 +320,7 @@ export async function presentNow(
  */
 export async function cancelScheduled(identifier: string): Promise<void> {
   try {
-    await Notifications.cancelScheduledNotificationAsync(identifier);
+    await cancelScheduledNotificationAsync(identifier);
   } catch {
     // Already gone. Nothing to do, and nothing worth telling anyone about.
   }
@@ -304,11 +342,11 @@ export async function cancelScheduled(identifier: string): Promise<void> {
  */
 export async function cancelScheduledFor(key: string, value: string): Promise<void> {
   try {
-    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    const scheduled = await getAllScheduledNotificationsAsync();
     await Promise.all(
       scheduled
         .filter((item) => item.content.data?.[key] === value)
-        .map((item) => Notifications.cancelScheduledNotificationAsync(item.identifier)),
+        .map((item) => cancelScheduledNotificationAsync(item.identifier)),
     );
   } catch {
     // Nothing readable to cancel. The alternative — throwing — would turn a tidy-up into a
@@ -319,7 +357,7 @@ export async function cancelScheduledFor(key: string, value: string): Promise<vo
 /** Every pending notification this app has scheduled. Used on sign-out. */
 export async function cancelAllScheduled(): Promise<void> {
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    await cancelAllScheduledNotificationsAsync();
   } catch {
     // As above.
   }
@@ -345,7 +383,7 @@ export interface NotificationTap {
 export function onNotificationTapped(handler: (tap: NotificationTap) => void): () => void {
   let active = true;
 
-  void Notifications.getLastNotificationResponseAsync()
+  void getLastNotificationResponseAsync()
     .then((response) => {
       if (!active || !response) return;
       handler({ data: response.notification.request.content.data ?? {} });
@@ -354,7 +392,7 @@ export function onNotificationTapped(handler: (tap: NotificationTap) => void): (
       // No launch notification, or none readable. Nothing to route to.
     });
 
-  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+  const subscription = addNotificationResponseReceivedListener((response) => {
     handler({ data: response.notification.request.content.data ?? {} });
   });
 
