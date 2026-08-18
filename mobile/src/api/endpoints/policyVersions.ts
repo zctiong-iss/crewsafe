@@ -69,6 +69,7 @@ export interface PolicyVersionInput {
   wbgtThresholdFullLight: string;
   wbgtThresholdFullModerate: string;
   wbgtThresholdFullHeavy: string;
+  /** Retained for compatibility; ignored by WBGT policy enforcement. */
   wbgtEmergencyStop: string;
   notes?: string;
 }

@@ -9,6 +9,7 @@ import { useAuth } from "@/auth/useAuth";
 import { fakeUserManager } from "@/test/fakeUserManager";
 import { server } from "@/test/mocks/server";
 import { SiteProvider } from "@/site/SiteProvider";
+import { expectNoA11yViolations } from "@/test/a11y";
 import type { ConditionsStreamHandlers } from "@/api/conditionsStream";
 import { ConditionsPage } from "./ConditionsPage";
 import "@testing-library/jest-dom/vitest";
@@ -83,5 +84,12 @@ describe("ConditionsPage", () => {
 
     await user.selectOptions(picker, "site-2");
     expect(picker).toHaveValue("site-2");
+  });
+
+  it("has no accessibility violations", async () => {
+    const { container } = renderPage();
+
+    expect(await screen.findByRole("heading", { level: 1 })).toBeInTheDocument();
+    await expectNoA11yViolations(container);
   });
 });

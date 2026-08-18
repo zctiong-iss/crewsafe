@@ -294,8 +294,8 @@ public class RecommendationService {
      * The SCRUM-440 counterpart to {@link #fanOutDispatches}: fans out every mitigation on an
      * auto-dispatched recommendation's plan (the mandatory {@code STOP_WORK} and whatever
      * accompanies it, e.g. {@code CLOSE_MONITORING}) with no {@link Approval} and no acting
-     * supervisor -- there was no decision to fan out from, only a drafted plan a lightning
-     * strike or a WBGT-max breach already made mandatory.
+     * supervisor -- there was no decision to fan out from because a nearby lightning strike
+     * made the stop-work mandatory.
      *
      * <p>Called from {@code AgentDraftService}'s {@code afterCommit} callback, same reasoning
      * as {@link #fanOutDispatches}: a dispatch failing for one worker must never undo the

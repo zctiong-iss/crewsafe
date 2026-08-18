@@ -309,17 +309,18 @@ class AgentDraftServiceTest {
     }
 
     @Test
-    @DisplayName("A WBGT-max mandatory stop-work is also persisted AUTO_DISPATCHED, not just lightning")
-    void wbgtMaxEmergencyStopAutoDispatchesWithoutApproval() {
-        when(policyEngine.evaluateForShift(any(), anyDouble(), anyList())).thenReturn(emergencyStopDecision());
-        stubDraft(emergencyStopModelPlan(), false, MODEL_ID);
+    @DisplayName("A policy STOP_WORK decision without lightning remains pending approval")
+    void policyStopWorkWithoutLightningRemainsPendingApproval() {
+        when(policyEngine.evaluateForShift(any(), anyDouble(), anyList())).thenReturn(legacyStopWorkDecision());
+        stubDraft(legacyStopWorkModelPlan(), false, MODEL_ID);
 
         Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
         commit();
 
-        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
         assertThat(persistedCodes(saved)).contains(PolicyActionCode.STOP_WORK);
-        verify(recommendationService).autoDispatch(eq(saved), eq(ACTOR_ID), anyList());
+        verify(recommendationService, never()).autoDispatch(any(), any(), any());
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
     }
 
     @Test
@@ -761,18 +762,18 @@ class AgentDraftServiceTest {
                 List.of(WORKER_ID.toString()), "WBGT 32.5°C exceeds threshold 22.0°C");
     }
 
-    /** Shape of {@code PolicyEngineService}'s emergency-stop branch: mandatory STOP_WORK + CLOSE_MONITORING. */
-    private static PolicyDecision emergencyStopDecision() {
+    /** Synthetic legacy STOP_WORK decision used to verify heat-only results stay approval-based. */
+    private static PolicyDecision legacyStopWorkDecision() {
         return new PolicyDecision("MOM-WBGT-2026.1", WbgtBand.BAND_33_AND_ABOVE, WbgtBand.BAND_33_AND_ABOVE,
                 List.of(
-                        new PolicyDecision.PolicyAction(PolicyActionCode.STOP_WORK, "EMERGENCY_STOP_RULE",
-                                List.of(WORKER_ID.toString()), "WBGT 34.0°C exceeds emergency stop threshold 33.0°C"),
-                        new PolicyDecision.PolicyAction(PolicyActionCode.CLOSE_MONITORING, "EMERGENCY_STOP_RULE",
-                                List.of(WORKER_ID.toString()), "Worker requires close monitoring following an emergency stop")),
+                        new PolicyDecision.PolicyAction(PolicyActionCode.STOP_WORK, "LEGACY_STOP_WORK_RULE",
+                                List.of(WORKER_ID.toString()), "Legacy stop-work action requires approval"),
+                        new PolicyDecision.PolicyAction(PolicyActionCode.CLOSE_MONITORING, "LEGACY_STOP_WORK_RULE",
+                                List.of(WORKER_ID.toString()), "Worker requires close monitoring")),
                 List.of());
     }
 
-    private static List<MitigationSuggestion> emergencyStopModelPlan() {
+    private static List<MitigationSuggestion> legacyStopWorkModelPlan() {
         return List.of(
                 mitigation(PolicyActionCode.STOP_WORK, "MANDATORY", "STOP_WORK"),
                 mitigation(PolicyActionCode.CLOSE_MONITORING, "MANDATORY", "MONITORING"));

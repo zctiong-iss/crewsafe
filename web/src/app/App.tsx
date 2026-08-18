@@ -21,6 +21,7 @@ import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
 import { LightningPage } from "@/features/lightning/LightningPage";
+import { AuditPage } from "@/features/audit/AuditPage";
 import { SiteProvider } from "@/site/SiteProvider";
 
 /**
@@ -116,8 +117,7 @@ export function App() {
             {NAVIGATION.filter(
               (item) =>
                 item.to !== "/" && item.to !== "/shifts" && item.to !== "/conditions" &&
-                item.to !== "/readiness" &&
-                item.to !== "/insights" &&
+                item.to !== "/audit" && item.to !== "/insights" && item.to !== "/readiness" &&
                 item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning",
             ).map((item) => (
               <Route
@@ -170,6 +170,10 @@ export function App() {
             <Route
               path="/lightning"
               element={<RoleRoute roles={rolesForRoute("/lightning")}><LightningPage /></RoleRoute>}
+            />
+            <Route
+              path="/audit"
+              element={<RoleRoute roles={rolesForRoute("/audit")}><AuditPage /></RoleRoute>}
             />
 
             {/* Replace a placeholder only when its real guarded route lands in this same change. */}

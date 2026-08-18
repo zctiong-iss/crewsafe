@@ -81,11 +81,14 @@ PolicyDecision evaluate(
 ```
 
 **Decision Logic:**
-1. **Emergency Stop**: If WBGT ≥ emergency threshold → `STOP_WORK`
-2. **Threshold Evaluation**: If WBGT ≥ threshold for (level, intensity) → recommend rest
+1. **Heat Controls**: If WBGT ≥ threshold for (level, intensity) → recommend mandatory rest and hydration
    - Unacclimatised + moderate/heavy → `EXTENDED_REST` (30 min)
    - Others → `SHORT_REST` (10 min)
-3. **Safe Operation**: If WBGT < threshold → `CONTINUE`
+2. **Safe Operation**: If WBGT < threshold → `CONTINUE`
+
+The persisted `wbgtEmergencyStop` field is retained for compatibility but is not used by
+the policy engine to create `STOP_WORK`. Automatic stop-work dispatch is reserved for
+the active lightning path.
 
 Every returned `PolicyDecision.policyVersion()` is the `versionLabel` of the site's currently
 `ACTIVE` `PolicyVersion` (SCRUM-120) — not a hardcoded string, so a recommendation always cites
@@ -180,10 +183,8 @@ public class OperationService {
             workerAssignment.getAcclimatisationDay()
         );
 
-        if (decision.isEmergencyStop()) {
-            // Prevent shift start, escalate
-            audit.record(AuditEventType.SHIFT_BLOCKED_HEAT_SAFETY, shiftId, decision.reasoning());
-        }
+        // High WBGT is handled through the decision's mandatory rest/hydration actions.
+        // A stop-work decision requiring immediate dispatch comes from nearby lightning.
     }
 }
 ```
@@ -205,7 +206,7 @@ GET  /api/v1/sites/{siteId}/policy-versions/active       get the version current
 - ✅ Happy path: WBGT below/at/above thresholds
 - ✅ Acclimatisation effects: Day 1 vs Day 7
 - ✅ Work intensity modifiers: Light vs Heavy
-- ✅ Emergency stop: WBGT >= 30°C
+- ✅ High WBGT: mandatory rest/hydration actions remain active above site thresholds
 - ✅ Input validation: Null, out-of-range values
 - ✅ Policy not found: NoSuchElementException
 

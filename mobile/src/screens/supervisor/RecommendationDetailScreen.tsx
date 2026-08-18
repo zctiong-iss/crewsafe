@@ -331,8 +331,8 @@ export default function RecommendationDetailScreen() {
 
   const approval = recommendation.approval;
   /*
-   * SCRUM-440: a lightning-immediate or WBGT-max stop-work has no Approval at all -- it skipped
-   * that step entirely -- so `approval !== null` alone would miss it, and this screen would
+   * SCRUM-440: a lightning-immediate stop-work has no Approval at all -- it skipped that step
+   * entirely -- so `approval !== null` alone would miss it, and this screen would
    * still offer Approve/Edit/Reject on a plan that already took effect. Treated as decided for
    * the same reason SUPERSEDED and a real decision both hide the buttons: there is nothing left
    * for a supervisor to do here.

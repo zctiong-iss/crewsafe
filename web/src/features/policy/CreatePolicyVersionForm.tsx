@@ -74,7 +74,7 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
         // a reason to reuse the previous label, source or effective date.
         if (version) {
           setThresholds(thresholdsFrom(version));
-          setWbgtEmergencyStop(String(version.wbgtEmergencyStop));
+          setWbgtEmergencyStop(String(version.wbgtEmergencyStop)); // NOSONAR retained compatibility field
         }
       })
       .catch(() => active && setPrefill({ status: "unavailable" }));
@@ -231,7 +231,8 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
         </section>
 
         <section className="policy-form__section">
-          <h2 className="policy-form__section-title">Emergency stop</h2>
+          <h2 className="policy-form__section-title">Legacy WBGT threshold</h2>
+          <p>This field is retained for compatibility and is not enforced as a stop-work rule.</p>
           <label htmlFor="wbgtEmergencyStop">WBGT emergency stop (°C)</label>
           <input
             id="wbgtEmergencyStop"
