@@ -10,6 +10,7 @@
  * @author Justin Chua
  */
 import { IS_WEB } from "./constants";
+import { stripTrailingSlashes } from "@/helpers/stripTrailingSlashes";
 
 /** See `.env.example` for what each mode costs and where it works. */
 export type AuthMode = "mock" | "cognito-password" | "cognito-pkce";
@@ -33,7 +34,7 @@ function readAuthMode(): AuthMode {
  */
 function normaliseBaseUrl(value: string | undefined): string {
   if (!value) return "";
-  return value.replace(/\/+$/, "");
+  return stripTrailingSlashes(value);
 }
 
 export const config = {

@@ -28,6 +28,7 @@
  */
 import axios from "axios";
 import { config } from "@/constants/config";
+import { stripTrailingSlashes } from "@/helpers/stripTrailingSlashes";
 import { AuthError } from "./AuthError";
 import type { StoredSession } from "@/api/tokenStore";
 
@@ -145,7 +146,7 @@ function idpEndpoint(region: string): string {
   if (__DEV__ && override) {
     // Trailing slash stripped, then re-added: cognito-local answers on the root path, and
     // a doubled slash is a 404 that reads like a missing service.
-    return `${override.replace(/\/+$/, "")}/`;
+    return `${stripTrailingSlashes(override)}/`;
   }
 
   return `https://cognito-idp.${region}.amazonaws.com/`;

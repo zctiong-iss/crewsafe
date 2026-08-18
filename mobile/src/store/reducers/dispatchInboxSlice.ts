@@ -126,15 +126,11 @@ const initialState: DispatchInboxState = {
  *
  * `Math.random` would be adequate for collision avoidance at this volume, but an
  * idempotency key ends up in server logs and audit trails as a request identifier, and a
- * predictable one is a needless invitation. The fallback exists only so a platform without
- * the native module degrades rather than crashing on a safety screen.
+ * predictable one is a needless invitation. A platform without the native module rejects
+ * the acknowledgement rather than persisting a predictable request identifier.
  */
 function newIdempotencyKey(): string {
-  try {
-    return Crypto.randomUUID();
-  } catch {
-    return `fallback-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-  }
+  return Crypto.randomUUID();
 }
 
 export const loadInbox = createAsyncThunk<

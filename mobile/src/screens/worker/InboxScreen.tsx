@@ -173,14 +173,18 @@ export default function InboxScreen() {
           }}
         />
 
-        {items.map((item) => (
-          <AppText key={item.id} variant="caption" tone="secondary" style={styles.ackCount}>
-            {`${t(`actions.${item.actionCode}`, { defaultValue: item.actionCode })} — ${t(
-              "dev.serverAckCount",
-              { total: acknowledgementCount(item.id) },
-            )}`}
-          </AppText>
-        ))}
+        {items.map((item) => {
+          const actionLabel = t(`actions.${item.actionCode}`, { defaultValue: item.actionCode });
+          const acknowledgementSummary = t("dev.serverAckCount", {
+            total: acknowledgementCount(item.id),
+          });
+
+          return (
+            <AppText key={item.id} variant="caption" tone="secondary" style={styles.ackCount}>
+              {`${actionLabel} — ${acknowledgementSummary}`}
+            </AppText>
+          );
+        })}
 
         <AppButton
           title={t("dev.resetInbox")}
