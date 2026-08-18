@@ -34,7 +34,53 @@ locals {
 
 resource "aws_cloudfront_response_headers_policy" "web_security" {
   name    = "${local.name_prefix}-web-security-headers"
-  comment = "Security headers for the CrewSafe SPA; CSP starts Report-Only."
+  comment = "Enforced security headers for the CrewSafe SPA."
+
+  security_headers_config {
+    content_type_options {
+      override = true
+    }
+
+    content_security_policy {
+      content_security_policy = local.web_csp
+      override                = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 31536000
+      include_subdomains         = true
+      override                   = true
+    }
+  }
+
+  remove_headers_config {
+    items {
+      header = "Server"
+    }
+  }
+
+  custom_headers_config {
+    items {
+      header   = "Permissions-Policy"
+      value    = "geolocation=(), camera=(), microphone=()"
+      override = true
+    }
+  }
+}
+
+resource "aws_cloudfront_response_headers_policy" "api_security" {
+  name    = "${local.name_prefix}-api-security-headers"
+  comment = "Security headers for the CrewSafe API."
 
   security_headers_config {
     content_type_options {
@@ -58,17 +104,9 @@ resource "aws_cloudfront_response_headers_policy" "web_security" {
     }
   }
 
-  custom_headers_config {
+  remove_headers_config {
     items {
-      header   = "Content-Security-Policy-Report-Only"
-      value    = local.web_csp
-      override = true
-    }
-
-    items {
-      header   = "Permissions-Policy"
-      value    = "geolocation=(), camera=(), microphone=()"
-      override = true
+      header = "Server"
     }
   }
 }

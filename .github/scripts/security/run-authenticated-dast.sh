@@ -10,7 +10,11 @@ workspace="${GITHUB_WORKSPACE:-$(pwd)}"
 policy_rel='.github/security/dast/automation.yaml'
 policy_path="$workspace/$policy_rel"
 guard_path="$workspace/.github/security/dast/active-scan-method-guard.js"
-[[ -r "$policy_path" && -r "$guard_path" ]] || { echo 'DAST policy files are unavailable' >&2; exit 1; }
+sanitizer_path="$workspace/.github/scripts/security/sanitize-dast-report.sh"
+[[ -r "$policy_path" && -r "$guard_path" && -x "$sanitizer_path" ]] || {
+  echo 'DAST policy, guard, or sanitizer files are unavailable' >&2
+  exit 1
+}
 command -v envsubst >/dev/null || { echo 'envsubst is required to resolve the DAST policy' >&2; exit 1; }
 
 tmp_dir="$(mktemp -d /tmp/crewsafe-dast.XXXXXX)"
@@ -178,45 +182,37 @@ if (( endpoints_scanned == 0 )); then
   exit 1
 fi
 
-severity_count() {
-  local severity="$1"
-  jq --arg severity "$severity" '[.. | objects | select((.riskdesc? // .risk? // "") | tostring | ascii_upcase | startswith($severity))] | length' "$report"
-}
-
-high="$(severity_count HIGH)"
-medium="$(severity_count MEDIUM)"
-low="$(severity_count LOW)"
-informational="$(severity_count INFORMATIONAL)"
 duration_seconds="$(( $(date +%s) - started_at ))"
 
-# Per-alert name, risk, and affected host+path only — never evidence, otherinfo,
-# attack, or param, which can echo raw request/response fragments. Query strings
-# are stripped from every URL before it reaches the summary.
+# The raw report is deleted with the rest of $tmp_dir when this script exits.
+# The sanitizer is the only boundary allowed to create a runner artifact, and it
+# fails closed when the bounded output is invalid, incomplete, or sensitive.
+report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report-redacted.json"
+if ! DAST_ENVIRONMENT=staging "$sanitizer_path" "$report" "$report_copy"; then
+  printf 'Authenticated DAST report sanitization failed; no report artifact will be published.\n' >&2
+  exit 1
+fi
+
+summary_report="$report_copy"
+sites_scanned="$(jq -r '.coverage.sites' "$summary_report")"
+endpoints_scanned="$(jq -r '.coverage.endpoints' "$summary_report")"
+high="$(jq -r '.finding_counts.high' "$summary_report")"
+medium="$(jq -r '.finding_counts.medium' "$summary_report")"
+low="$(jq -r '.finding_counts.low' "$summary_report")"
+informational="$(jq -r '.finding_counts.informational' "$summary_report")"
+
+# The summary reads only the bounded report. Host/path metadata has already been
+# stripped of queries and raw evidence fields by sanitize-dast-report.sh.
 findings_table="$(jq -r '
-  [.site[]?.alerts[]?]
-  | sort_by(-(.riskcode | tonumber? // 0))
-  | .[]
+  .findings[]?
   | {
-      name: (.alert // .name // "Unknown" | gsub("\\|"; "\\|")),
-      risk: (.riskdesc // "Unknown" | gsub("\\|"; "\\|")),
-      count: ((.instances // []) | length),
-      paths: ([(.instances // [])[].uri? // empty]
-        | map(sub("\\?.*$"; ""))
-        | unique
-        | .[0:3]
-        | join("<br>")
-        | gsub("\\|"; "\\|"))
+      name: (.name | gsub("\\|"; "\\|")),
+      risk: (.risk | gsub("\\|"; "\\|")),
+      count: .instance_count,
+      paths: (.paths | join("<br>") | gsub("\\|"; "\\|"))
     }
   | "| \(.name) | \(.risk) | \(.count) | \(.paths) |"
-' "$report")"
-
-# The report is deleted with the rest of $tmp_dir when this script exits; copy
-# it to the job-scoped RUNNER_TEMP directory so a later workflow step can
-# upload it as a short-retention artifact. Only reached once the scan is at
-# least advisory (real coverage, past the zero-endpoint check above).
-report_copy="${RUNNER_TEMP:-$tmp_dir}/dast-report.json"
-cp "$report" "$report_copy"
-chmod 644 "$report_copy"
+' "$summary_report")"
 
 {
   printf '%s\n' '## Authenticated staging DAST (advisory)'
@@ -235,5 +231,5 @@ chmod 644 "$report_copy"
     printf '%s\n' "$findings_table"
   fi
   printf '\n%s\n' '- Result: advisory findings require validation; SCRUM-297 owns promotion blocking.'
-  printf '%s\n' '- Full report: see the `dast-report` workflow artifact on this run for evidence-level detail.'
+  printf '%s\n' '- Redacted report: see the `dast-report-redacted` workflow artifact on this run for bounded evidence-level detail.'
 } >>"$summary"
