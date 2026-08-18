@@ -7,7 +7,8 @@ usage() {
 }
 
 fail() {
-  printf 'DAST report sanitization failed: %s\n' "$1" >&2
+  local failure_reason="$1"
+  printf 'DAST report sanitization failed: %s\n' "$failure_reason" >&2
   exit 1
 }
 
