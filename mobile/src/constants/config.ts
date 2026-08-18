@@ -79,23 +79,13 @@ export function pkceClientId(): string {
 
 /** Missing configuration, named. Surfaced on the sign-in screen instead of at redirect time. */
 export function missingConfigKeys(mode: AuthMode): string[] {
-  const missing: string[] = [];
-  if (!config.apiBaseUrl) missing.push("EXPO_PUBLIC_API_BASE_URL");
-
-  if (mode === "cognito-password") {
-    if (!config.cognito.issuerUri) missing.push("EXPO_PUBLIC_COGNITO_ISSUER_URI");
-    if (!config.cognito.cliClientId) missing.push("EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID");
-  }
-
-  if (mode === "cognito-pkce") {
-    if (!config.cognito.issuerUri) missing.push("EXPO_PUBLIC_COGNITO_ISSUER_URI");
-    if (!config.cognito.hostedUiDomain) missing.push("EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN");
-    if (!pkceClientId()) {
-      missing.push(
-        IS_WEB ? "EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID" : "EXPO_PUBLIC_COGNITO_MOBILE_CLIENT_ID",
-      );
-    }
-  }
-
-  return missing;
+  const required = [
+    [!config.apiBaseUrl, "EXPO_PUBLIC_API_BASE_URL"],
+    [mode === "cognito-password" && !config.cognito.issuerUri, "EXPO_PUBLIC_COGNITO_ISSUER_URI"],
+    [mode === "cognito-password" && !config.cognito.cliClientId, "EXPO_PUBLIC_COGNITO_CLI_CLIENT_ID"],
+    [mode === "cognito-pkce" && !config.cognito.issuerUri, "EXPO_PUBLIC_COGNITO_ISSUER_URI"],
+    [mode === "cognito-pkce" && !config.cognito.hostedUiDomain, "EXPO_PUBLIC_COGNITO_HOSTED_UI_DOMAIN"],
+    [mode === "cognito-pkce" && !pkceClientId(), IS_WEB ? "EXPO_PUBLIC_COGNITO_WEB_CLIENT_ID" : "EXPO_PUBLIC_COGNITO_MOBILE_CLIENT_ID"],
+  ] as const;
+  return required.filter(([missing]) => missing).map(([, key]) => key);
 }

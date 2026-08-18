@@ -57,6 +57,22 @@ const CATEGORY_ORDER: MitigationCategory[] = [
   "MONITORING",
 ];
 
+function recommendationPresentation(
+  approval: { decision?: string | null; decidedAt: string; editedMitigations?: readonly Mitigation[] | null; reason?: string | null } | null,
+  rationale: string | null,
+  citedVersion: { id: string; versionLabel: string } | null,
+) {
+  const editedMitigations = approval?.decision === "EDITED" ? approval.editedMitigations : null;
+  const rejectionReason = approval?.decision === "REJECTED" ? approval.reason : null;
+  return {
+    approval: approval || null,
+    rationale: rationale || null,
+    citedVersion: citedVersion || null,
+    editedMitigations: editedMitigations || null,
+    rejectionReason: rejectionReason || null,
+  };
+}
+
 interface DecisionSectionProps {
   autoDispatched: boolean;
   /**
@@ -345,6 +361,18 @@ export default function RecommendationDetailScreen() {
    */
   const superseded = recommendation.status === "SUPERSEDED";
   const decided = approval !== null || autoDispatched;
+  const presentation = recommendationPresentation(
+    approval,
+    recommendation.rationale,
+    citedVersion,
+  );
+  const {
+    approval: approvalView,
+    rationale,
+    citedVersion: citedVersionView,
+    editedMitigations,
+    rejectionReason,
+  } = presentation;
 
   return (
     <AppSafeView>
@@ -365,10 +393,10 @@ export default function RecommendationDetailScreen() {
               time: formatDateTime(recommendation.createdAt, i18n.language),
             })}
           </AppText>
-          {approval ? (
+          {approvalView ? (
             <AppText variant="caption" tone="secondary">
               {t("recommendations.decidedAt", {
-                time: formatDateTime(approval.decidedAt, i18n.language),
+                time: formatDateTime(approvalView.decidedAt, i18n.language),
               })}
             </AppText>
           ) : null}
@@ -415,7 +443,7 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
-        {recommendation.rationale ? (
+        {rationale ? (
           <>
             <AppText variant="subtitle" style={styles.sectionTitle}>
               {t("recommendations.whyTitle")}
@@ -431,7 +459,7 @@ export default function RecommendationDetailScreen() {
               numberOfLines={showFullWhy ? undefined : 3}
               style={styles.block}
             >
-              {recommendation.rationale}
+              {rationale}
             </AppText>
             <TouchableOpacity
               onPress={() => setShowFullWhy((value) => !value)}
@@ -467,21 +495,21 @@ export default function RecommendationDetailScreen() {
             label from before the catalogue existed — it stays plain text rather than becoming a
             link that goes nowhere.
           */}
-          {citedVersion ? (
+          {citedVersionView ? (
             <TouchableOpacity
               accessibilityRole="link"
-              accessibilityLabel={`${t("recommendations.policyVersion")}: ${citedVersion.versionLabel}`}
+              accessibilityLabel={`${t("recommendations.policyVersion")}: ${citedVersionView.versionLabel}`}
               onPress={() =>
                 navigation
                   .getParent()
                   ?.navigate("ProfileTab", {
                     screen: "PolicyVersionDetail",
-                    params: { versionId: citedVersion.id },
+                    params: { versionId: citedVersionView.id },
                   })
               }
             >
               <AppText variant="label" style={styles.citedVersion}>
-                {citedVersion.versionLabel}
+                {citedVersionView.versionLabel}
               </AppText>
             </TouchableOpacity>
           ) : (
@@ -521,7 +549,7 @@ export default function RecommendationDetailScreen() {
         ))}
 
         {/* ── What was actually approved, when it differs ──────────────────── */}
-        {approval?.decision === "EDITED" && approval.editedMitigations ? (
+        {editedMitigations ? (
           <>
             <AppText variant="subtitle" style={[styles.sectionTitle, styles.gapTop]}>
               {t("recommendations.approvedPlanTitle")}
@@ -536,7 +564,7 @@ export default function RecommendationDetailScreen() {
               <AppText variant="caption" tone="warning" style={styles.groupTitle}>
                 {t("recommendations.changedFromDraft")}
               </AppText>
-              {approval.editedMitigations.map((mitigation, index) => (
+              {editedMitigations?.map((mitigation, index) => (
                 <MitigationRow
                   key={`edited-${index}`}
                   mitigation={mitigation}
@@ -547,9 +575,9 @@ export default function RecommendationDetailScreen() {
           </>
         ) : null}
 
-        {approval?.decision === "REJECTED" && approval.reason ? (
+        {rejectionReason ? (
           <View style={styles.block}>
-            <MessageBanner message={approval.reason} tone="danger" />
+            <MessageBanner message={rejectionReason ?? ""} tone="danger" />
           </View>
         ) : null}
 

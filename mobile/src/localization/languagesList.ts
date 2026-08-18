@@ -56,35 +56,20 @@ export function isSupportedLanguage(value: string): value is AppLanguage {
 export function resolveDeviceLanguage(locales: readonly string[]): AppLanguage {
   for (const locale of locales) {
     const tag = locale.toLowerCase();
-
-    if (tag.startsWith("en")) return "en";
-    if (tag.startsWith("hi")) return "hi";
-
-    /*
-     * `ms` covers Malaysia and Singapore. `id` (Indonesian) is deliberately NOT mapped here
-     * despite the two being close enough to be mutually intelligible in writing: they
-     * differ in exactly the register this app lives in — safety and workplace vocabulary —
-     * and quietly showing an Indonesian speaker Malay would be a guess made on their
-     * behalf about a stop-work instruction. They fall through to English, and can pick
-     * Malay themselves from the picker if they prefer it.
-     */
-    if (tag.startsWith("ms")) return "ms";
-
-    if (tag.startsWith("ta")) return "ta";
-    if (tag.startsWith("bn")) return "bn";
-    /*
-     * Both tags for Burmese. `my` is the ISO 639-1 code and what Android reports; `mya` and
-     * `bur` are the two 639-2 codes for the same language, and a device that reports either
-     * should not silently fall through to English.
-     */
-    if (tag.startsWith("my") || tag.startsWith("mya") || tag.startsWith("bur")) return "my";
-
-    if (tag.startsWith("zh")) {
-      if (tag.includes("hant") || tag.includes("tw") || tag.includes("hk") || tag.includes("mo")) {
-        continue;
-      }
-      return "zh-Hans";
-    }
+    const language = resolveLocaleTag(tag);
+    if (language) return language;
   }
   return "en";
+}
+
+function resolveLocaleTag(tag: string): AppLanguage | null {
+  const directMatch = [
+    ["en", "en"], ["hi", "hi"], ["ms", "ms"], ["ta", "ta"], ["bn", "bn"],
+    ["my", "my"], ["mya", "my"], ["bur", "my"],
+  ] as const;
+  const direct = directMatch.find(([prefix]) => tag.startsWith(prefix));
+  if (direct) return direct[1];
+  if (!tag.startsWith("zh")) return null;
+  const traditional = ["hant", "tw", "hk", "mo"].some((part) => tag.includes(part));
+  return traditional ? null : "zh-Hans";
 }
