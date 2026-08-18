@@ -31,6 +31,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class SiteAdminService {
 
+    private static final String SITE_PREFIX = "Site ";
+    private static final String SITE_NOT_FOUND_PREFIX = "No site ";
+
     private final SiteRepository sites;
     private final AuditService audit;
 
@@ -53,7 +56,7 @@ public class SiteAdminService {
         Site saved = sites.save(new Site(name, latitude, longitude));
 
         audit.record(actorId, AuditEventType.SITE_CREATED, "SITE", saved.getId(),
-                "Site " + saved.getName() + " created");
+                SITE_PREFIX + saved.getName() + " created");
 
         return saved;
     }
@@ -65,7 +68,7 @@ public class SiteAdminService {
     @Transactional
     public Site update(UUID siteId, String name, BigDecimal latitude, BigDecimal longitude, UUID actorId) {
         Site site = sites.findById(siteId)
-                .orElseThrow(() -> new ResourceNotFoundException("No site " + siteId));
+                .orElseThrow(() -> new ResourceNotFoundException(SITE_NOT_FOUND_PREFIX + siteId));
 
         sites.findByName(name).filter(other -> !other.getId().equals(siteId)).ifPresent(other -> {
             throw new ConflictException("A site named " + name + " already exists");
@@ -77,7 +80,7 @@ public class SiteAdminService {
         Site saved = sites.save(site);
 
         audit.record(actorId, AuditEventType.SITE_UPDATED, "SITE", saved.getId(),
-                "Site " + saved.getName() + " updated");
+                SITE_PREFIX + saved.getName() + " updated");
 
         return saved;
     }
@@ -86,7 +89,7 @@ public class SiteAdminService {
     @Transactional
     public Site archive(UUID siteId, UUID actorId) {
         Site site = sites.findById(siteId)
-                .orElseThrow(() -> new ResourceNotFoundException("No site " + siteId));
+                .orElseThrow(() -> new ResourceNotFoundException(SITE_NOT_FOUND_PREFIX + siteId));
 
         if (site.isArchived()) {
             return site;
@@ -96,7 +99,7 @@ public class SiteAdminService {
         Site saved = sites.save(site);
 
         audit.record(actorId, AuditEventType.SITE_ARCHIVED, "SITE", saved.getId(),
-                "Site " + saved.getName() + " archived");
+                SITE_PREFIX + saved.getName() + " archived");
 
         return saved;
     }
@@ -105,7 +108,7 @@ public class SiteAdminService {
     @Transactional
     public Site unarchive(UUID siteId, UUID actorId) {
         Site site = sites.findById(siteId)
-                .orElseThrow(() -> new ResourceNotFoundException("No site " + siteId));
+                .orElseThrow(() -> new ResourceNotFoundException(SITE_NOT_FOUND_PREFIX + siteId));
 
         if (!site.isArchived()) {
             return site;
@@ -115,7 +118,7 @@ public class SiteAdminService {
         Site saved = sites.save(site);
 
         audit.record(actorId, AuditEventType.SITE_UNARCHIVED, "SITE", saved.getId(),
-                "Site " + saved.getName() + " unarchived");
+                SITE_PREFIX + saved.getName() + " unarchived");
 
         return saved;
     }

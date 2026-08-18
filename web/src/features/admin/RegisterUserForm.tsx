@@ -1,7 +1,7 @@
 /**
  * @author Jemilin Beulah
  */
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type SubmitEvent } from "react";
 import type { Role } from "@/api/identity";
 import { ApiError, messageFor } from "@/api/errors";
 import { fetchAdminSites, registerUser, type AdminSite, type AdminUser, type UserRegisterRequest } from "@/api/admin";
@@ -43,7 +43,7 @@ function messageForRegisterUser(error: ApiError): string {
  * for it to name that the email doesn't already name, so UserAdminService.register sets
  * app_user.username = email directly and this form never collects one.
  */
-export function RegisterUserForm({ onRegistered }: { onRegistered: (user: AdminUser) => void }) {
+export function RegisterUserForm({ onRegistered }: Readonly<{ onRegistered: (user: AdminUser) => void }>) {
   const [sites, setSites] = useState<AdminSite[]>([]);
   const [mode, setMode] = useState<RegistrationMode>("email");
   const [username, setUsername] = useState("");
@@ -82,7 +82,7 @@ export function RegisterUserForm({ onRegistered }: { onRegistered: (user: AdminU
     setErrors({});
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const draft: Partial<UserRegisterRequest> = {

@@ -43,6 +43,14 @@ public class UserAdminService {
     private final AuditService audit;
     private final CognitoUserProvisioningService cognitoProvisioning;
 
+    /**
+     * The identity half of a registration request, bundled together because they are always
+     * resolved as a unit (exactly one of {@code cognitoSub}/{@code email}) — see
+     * {@link #register}'s javadoc for the per-field rules.
+     */
+    public record RegistrationIdentity(String username, String cognitoSub, String email, String password) {
+    }
+
     /** Every user, display-name sorted. */
     public List<AppUser> list() {
         return users.findAll().stream()
@@ -81,8 +89,12 @@ public class UserAdminService {
      * @throws ResourceNotFoundException if any requested site doesn't exist
      */
     @Transactional
-    public AppUser register(String username, String cognitoSub, String email, String password, String displayName,
-            Role role, Set<UUID> siteIds, UUID actorId) {
+    public AppUser register(RegistrationIdentity identity, String displayName, Role role, Set<UUID> siteIds,
+            UUID actorId) {
+        String username = identity.username();
+        String cognitoSub = identity.cognitoSub();
+        String email = identity.email();
+        String password = identity.password();
 
         if ((cognitoSub == null) == (email == null)) {
             throw new BadRequestException("Exactly one of cognitoSub or email must be provided");

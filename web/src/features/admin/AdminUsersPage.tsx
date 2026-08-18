@@ -74,7 +74,7 @@ export function AdminUsersPage() {
     <AppShell title="Admin — Users" actions={createButton}>
       <AdminTabs />
 
-      {load.status === "loading" && <p role="status">Loading users…</p>}
+      {load.status === "loading" && <output style={{ display: "block" }}>Loading users…</output>}
 
       {load.status === "error" && <EmptyState headline="Could not load users" body={load.message} />}
 
@@ -110,7 +110,7 @@ export function AdminUsersPage() {
 
                   <div className="admin-list__actions">
                     <label className="admin-list__inline-field">
-                      Role
+                      Role{" "}
                       <select
                         value={user.role}
                         disabled={isSelf}

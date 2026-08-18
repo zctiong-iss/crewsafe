@@ -85,7 +85,8 @@ class UserAdminServiceTest {
         @Test
         @DisplayName("Neither cognitoSub nor email → BadRequestException")
         void neitherSubNorEmail() {
-            assertThatThrownBy(() -> service.register("new-user", null, null, null, "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity("new-user", null, null, null), "Someone", Role.WORKER,
                     Set.of(), actorId))
                     .isInstanceOf(BadRequestException.class);
 
@@ -95,8 +96,10 @@ class UserAdminServiceTest {
         @Test
         @DisplayName("Both cognitoSub and email → BadRequestException")
         void bothSubAndEmail() {
-            assertThatThrownBy(() -> service.register("new-user", "sub-1", "someone@synthetic.crewsafe.invalid",
-                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity("new-user", "sub-1",
+                            "someone@synthetic.crewsafe.invalid", VALID_PASSWORD),
+                    "Someone", Role.WORKER, Set.of(), actorId))
                     .isInstanceOf(BadRequestException.class);
 
             verify(users, never()).save(any());
@@ -105,8 +108,9 @@ class UserAdminServiceTest {
         @Test
         @DisplayName("Email without a password → BadRequestException")
         void emailWithoutPassword() {
-            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
-                    null, "Someone", Role.WORKER, Set.of(), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity(null, null, "someone@synthetic.crewsafe.invalid", null),
+                    "Someone", Role.WORKER, Set.of(), actorId))
                     .isInstanceOf(BadRequestException.class);
 
             verify(users, never()).save(any());
@@ -116,7 +120,8 @@ class UserAdminServiceTest {
         @Test
         @DisplayName("cognitoSub without a username → BadRequestException")
         void cognitoSubWithoutUsername() {
-            assertThatThrownBy(() -> service.register(null, "sub-1", null, null, "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity(null, "sub-1", null, null), "Someone", Role.WORKER,
                     Set.of(), actorId))
                     .isInstanceOf(BadRequestException.class);
 
@@ -128,7 +133,8 @@ class UserAdminServiceTest {
         void duplicateUsername() {
             when(users.existsByUsername("taken")).thenReturn(true);
 
-            assertThatThrownBy(() -> service.register("taken", "sub-1", null, null, "Someone", Role.WORKER,
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity("taken", "sub-1", null, null), "Someone", Role.WORKER,
                     Set.of(), actorId))
                     .isInstanceOf(ConflictException.class)
                     .satisfies(e -> assertThat(((ConflictException) e).getCode())
@@ -142,8 +148,9 @@ class UserAdminServiceTest {
         void duplicateSub() {
             when(users.existsByCognitoSub("sub-1")).thenReturn(true);
 
-            assertThatThrownBy(() -> service.register("new-user", "sub-1", null, null, "Someone", Role.WORKER,
-                    Set.of(), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity("new-user", "sub-1", null, null), "Someone",
+                    Role.WORKER, Set.of(), actorId))
                     .isInstanceOf(ConflictException.class);
 
             verify(users, never()).save(any());
@@ -155,8 +162,9 @@ class UserAdminServiceTest {
             UUID siteId = UUID.randomUUID();
             when(sites.existsById(siteId)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.register("new-user", "sub-1", null, null, "Someone", Role.WORKER,
-                    Set.of(siteId), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity("new-user", "sub-1", null, null), "Someone",
+                    Role.WORKER, Set.of(siteId), actorId))
                     .isInstanceOf(ResourceNotFoundException.class);
 
             verify(users, never()).save(any());
@@ -168,8 +176,10 @@ class UserAdminServiceTest {
             UUID siteId = UUID.randomUUID();
             when(sites.existsById(siteId)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
-                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(siteId), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity(null, null, "someone@synthetic.crewsafe.invalid",
+                            VALID_PASSWORD),
+                    "Someone", Role.WORKER, Set.of(siteId), actorId))
                     .isInstanceOf(ResourceNotFoundException.class);
 
             // Every local check must run before the external, non-transactional Cognito
@@ -184,8 +194,9 @@ class UserAdminServiceTest {
             UUID siteId = UUID.randomUUID();
             when(sites.existsById(siteId)).thenReturn(true);
 
-            AppUser saved = service.register("new-user", "sub-1", null, null, "Someone", Role.SUPERVISOR,
-                    Set.of(siteId), actorId);
+            AppUser saved = service.register(
+                    new UserAdminService.RegistrationIdentity("new-user", "sub-1", null, null), "Someone",
+                    Role.SUPERVISOR, Set.of(siteId), actorId);
 
             assertThat(saved.getUsername()).isEqualTo("new-user");
             assertThat(saved.getRole()).isEqualTo(Role.SUPERVISOR);
@@ -203,8 +214,10 @@ class UserAdminServiceTest {
             when(cognitoProvisioning.createUser("new-user@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
                     .thenReturn("cognito-sub-123");
 
-            AppUser saved = service.register(null, null, "new-user@synthetic.crewsafe.invalid",
-                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(siteId), actorId);
+            AppUser saved = service.register(
+                    new UserAdminService.RegistrationIdentity(null, null, "new-user@synthetic.crewsafe.invalid",
+                            VALID_PASSWORD),
+                    "Someone", Role.WORKER, Set.of(siteId), actorId);
 
             assertThat(saved.getCognitoSub()).isEqualTo("cognito-sub-123");
             assertThat(saved.getEmail()).isEqualTo("new-user@synthetic.crewsafe.invalid");
@@ -219,8 +232,10 @@ class UserAdminServiceTest {
             when(cognitoProvisioning.createUser("someone@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
                     .thenReturn("cognito-sub-456");
 
-            AppUser saved = service.register("some-other-handle", null, "someone@synthetic.crewsafe.invalid",
-                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId);
+            AppUser saved = service.register(
+                    new UserAdminService.RegistrationIdentity("some-other-handle", null,
+                            "someone@synthetic.crewsafe.invalid", VALID_PASSWORD),
+                    "Someone", Role.WORKER, Set.of(), actorId);
 
             assertThat(saved.getUsername()).isEqualTo("someone@synthetic.crewsafe.invalid");
         }
@@ -230,8 +245,10 @@ class UserAdminServiceTest {
         void duplicateEmailAsUsername() {
             when(users.existsByUsername("someone@synthetic.crewsafe.invalid")).thenReturn(true);
 
-            assertThatThrownBy(() -> service.register(null, null, "someone@synthetic.crewsafe.invalid",
-                    VALID_PASSWORD, "Someone", Role.WORKER, Set.of(), actorId))
+            assertThatThrownBy(() -> service.register(
+                    new UserAdminService.RegistrationIdentity(null, null, "someone@synthetic.crewsafe.invalid",
+                            VALID_PASSWORD),
+                    "Someone", Role.WORKER, Set.of(), actorId))
                     .isInstanceOf(ConflictException.class)
                     .satisfies(e -> assertThat(((ConflictException) e).getCode())
                             .isEqualTo(ErrorCode.USERNAME_ALREADY_REGISTERED));

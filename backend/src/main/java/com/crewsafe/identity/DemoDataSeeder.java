@@ -198,7 +198,7 @@ public class DemoDataSeeder implements ApplicationRunner {
             // same reserved @synthetic.crewsafe.invalid namespace synthetic-test already uses,
             // so this never opens the door to a real address, just a second accepted shape.
             boolean developerUsername = "developer".equals(mapping.identityKind())
-                    && (mapping.username().matches("^[a-z0-9]+([._-][a-z0-9]+)*$")
+                    && (mapping.username().matches("^[a-z0-9]++([._-][a-z0-9]++)*+$")
                         || mapping.username().matches("^[a-z0-9][a-z0-9._+-]*@synthetic\\.crewsafe\\.invalid$"));
             boolean syntheticUsername = "synthetic-test".equals(mapping.identityKind())
                     && mapping.username().matches(

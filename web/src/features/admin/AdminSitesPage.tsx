@@ -66,7 +66,7 @@ export function AdminSitesPage() {
     <AppShell title="Admin — Sites" actions={createButton}>
       <AdminTabs />
 
-      {load.status === "loading" && <p role="status">Loading sites…</p>}
+      {load.status === "loading" && <output style={{ display: "block" }}>Loading sites…</output>}
 
       {load.status === "error" && <EmptyState headline="Could not load sites" body={load.message} />}
 

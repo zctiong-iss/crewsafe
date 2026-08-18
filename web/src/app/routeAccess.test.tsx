@@ -40,19 +40,9 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Conditions" })).toBeInTheDocument();
   });
 
-  it("redirects an administrator away from conditions", async () => {
-    renderAt("/conditions", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
-  });
-
   it.each(OPERATIONAL_ROLES)("allows %s to open shift creation", async (role) => {
     renderAt("/shifts/new", role);
     expect(await screen.findByRole("heading", { name: "Create Shift" })).toBeInTheDocument();
-  });
-
-  it("redirects an administrator away from shift creation", async () => {
-    renderAt("/shifts/new", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
   });
 
   it.each(["SUPERVISOR", "SAFETY_MANAGER"] as Role[])(
@@ -63,11 +53,6 @@ describe("direct route access", () => {
     },
   );
 
-  it("redirects an administrator away from approvals", async () => {
-    renderAt("/approvals", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
-  });
-
   it.each(OPERATIONAL_ROLES)("allows %s to open the heat policy catalogue", async (role) => {
     renderAt("/policy", role);
     expect(await screen.findByRole("heading", { name: "Heat Policy" })).toBeInTheDocument();
@@ -76,11 +61,6 @@ describe("direct route access", () => {
   it("redirects a worker away from the heat policy catalogue", async () => {
     renderAt("/policy", "WORKER");
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
-  });
-
-  it("redirects an administrator away from the heat policy catalogue", async () => {
-    renderAt("/policy", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
   });
 
   it("allows a safety manager to open policy version creation", async () => {
@@ -93,15 +73,13 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 
-  it("redirects an administrator away from policy version creation", async () => {
-    renderAt("/policy/new", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
-  });
-
-  it("sends a signed-in administrator to the admin console, not the live board", async () => {
-    renderAt("/", "ADMIN");
-    expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
-  });
+  it.each(["/", "/conditions", "/shifts/new", "/approvals", "/policy", "/policy/new"])(
+    "sends an administrator at %s to the admin console, not the live board",
+    async (path) => {
+      renderAt(path, "ADMIN");
+      expect(await screen.findByRole("heading", { name: "Admin — Sites" })).toBeInTheDocument();
+    },
+  );
 
   it.each(["WORKER", "SUPERVISOR", "SAFETY_MANAGER"] as Role[])(
     "redirects %s away from the admin console",

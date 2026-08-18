@@ -83,8 +83,10 @@ public class AdminUserController {
     public ResponseEntity<UserResponse> registerUser(@AuthenticationPrincipal CrewSafeUserPrincipal principal,
             @Valid @RequestBody UserRegisterRequest request) {
 
-        AppUser saved = userAdminService.register(request.username(), request.cognitoSub(), request.email(),
-                request.password(), request.displayName(), request.role(), request.siteIds(), principal.getId());
+        AppUser saved = userAdminService.register(
+                new UserAdminService.RegistrationIdentity(request.username(), request.cognitoSub(), request.email(),
+                        request.password()),
+                request.displayName(), request.role(), request.siteIds(), principal.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(UserResponse.from(saved, memberships.findSiteIdsByUserId(saved.getId())));
     }

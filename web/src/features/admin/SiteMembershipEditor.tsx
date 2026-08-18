@@ -9,11 +9,11 @@ export function SiteMembershipEditor({
   user,
   sites,
   onChanged,
-}: {
+}: Readonly<{
   user: AdminUser;
   sites: AdminSite[];
   onChanged: (siteIds: string[]) => void;
-}) {
+}>) {
   const [error, setError] = useState<string | null>(null);
   const [pendingSiteId, setPendingSiteId] = useState<string | null>(null);
 

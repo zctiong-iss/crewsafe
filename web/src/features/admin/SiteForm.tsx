@@ -1,7 +1,7 @@
 /**
  * @author Jemilin Beulah
  */
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { ApiError, messageFor } from "@/api/errors";
 import { createSite, updateSite, type AdminSite, type SiteWriteRequest } from "@/api/admin";
 import { validateSite, type FieldErrors } from "./validateSite";
@@ -35,7 +35,10 @@ export function SiteForm(props: SiteFormProps) {
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submit, setSubmit] = useState<Submit>({ status: "idle" });
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const savedLabel = props.mode === "edit" ? "Save Changes" : "Create Site";
+  const submitLabel = submit.status === "submitting" ? "Saving…" : savedLabel;
+
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const draft: Partial<SiteWriteRequest> = {
@@ -112,7 +115,7 @@ export function SiteForm(props: SiteFormProps) {
       <div className="site-form__actions">
         <button type="button" className="site-form__cancel" onClick={props.onCancel}>Cancel</button>
         <button type="submit" className="site-form__submit" disabled={submit.status === "submitting"}>
-          {submit.status === "submitting" ? "Saving…" : props.mode === "edit" ? "Save Changes" : "Create Site"}
+          {submitLabel}
         </button>
       </div>
     </form>

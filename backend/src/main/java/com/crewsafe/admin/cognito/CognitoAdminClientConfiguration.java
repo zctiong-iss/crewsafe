@@ -3,6 +3,7 @@ package com.crewsafe.admin.cognito;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityProviderClient;
 
@@ -28,6 +29,7 @@ public class CognitoAdminClientConfiguration {
     public CognitoIdentityProviderClient cognitoIdentityProviderClient() {
         return CognitoIdentityProviderClient.builder()
                 .region(Region.AP_SOUTHEAST_1)
+                .credentialsProvider(DefaultCredentialsProvider.create())
                 .build();
     }
 }
