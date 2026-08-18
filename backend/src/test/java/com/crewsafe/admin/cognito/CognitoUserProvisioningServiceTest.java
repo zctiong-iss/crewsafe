@@ -57,7 +57,6 @@ class CognitoUserProvisioningServiceTest {
     @BeforeEach
     void setUp() {
         properties = new CognitoAdminProperties();
-        properties.setEnabled(true);
         properties.setUserPoolId("pool-123");
 
         service = new CognitoUserProvisioningService(cognito, properties, audit);
@@ -72,9 +71,9 @@ class CognitoUserProvisioningServiceTest {
     }
 
     @Test
-    @DisplayName("Disabled → ConflictException with COGNITO_PROVISIONING_DISABLED, no AWS call")
-    void disabled() {
-        properties.setEnabled(false);
+    @DisplayName("No user pool id configured → ConflictException with COGNITO_PROVISIONING_DISABLED, no AWS call")
+    void noPoolIdConfigured() {
+        properties.setUserPoolId(null);
 
         assertThatThrownBy(() -> service.createUser("someone@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
                 .isInstanceOf(ConflictException.class)
@@ -85,9 +84,9 @@ class CognitoUserProvisioningServiceTest {
     }
 
     @Test
-    @DisplayName("No user pool id configured → ConflictException with COGNITO_PROVISIONING_DISABLED")
-    void noPoolIdConfigured() {
-        properties.setUserPoolId(null);
+    @DisplayName("Blank user pool id → ConflictException with COGNITO_PROVISIONING_DISABLED")
+    void blankPoolIdConfigured() {
+        properties.setUserPoolId("   ");
 
         assertThatThrownBy(() -> service.createUser("someone@synthetic.crewsafe.invalid", VALID_PASSWORD, actorId))
                 .isInstanceOf(ConflictException.class)

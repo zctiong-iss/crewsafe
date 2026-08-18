@@ -29,12 +29,15 @@ what this project actually is.
 its own unrelated purpose. `AdminGetUser` is not granted either — the created user's `sub`
 comes back in the `AdminCreateUser` response itself.
 
-**Decoupled from a code deploy.** `app.cognito-admin.enabled` defaults `false`, and
-`CognitoAdminProperties` is deliberately not `@Validated`/`@NotBlank` — the SSM parameter and
-IAM grant this needs are applied by a separate Terraform step, so requiring either at Spring
-Boot startup would crash the whole application during the window between a code deploy and
-that Terraform being applied. The service checks both itself and fails one request cleanly
-(409, `ErrorCode.COGNITO_PROVISIONING_DISABLED`) rather than the app failing to boot.
+**Decoupled from a code deploy.** `CognitoAdminProperties` is deliberately not
+`@Validated`/`@NotBlank` — the SSM parameter and IAM grant this needs are applied by a
+separate Terraform step, so requiring either at Spring Boot startup would crash the whole
+application during the window between a code deploy and that Terraform being applied. The
+service checks for a non-blank `userPoolId` itself and fails one request cleanly (409,
+`ErrorCode.COGNITO_PROVISIONING_DISABLED`) rather than the app failing to boot. There is no
+separate `enabled` toggle: the pool id is already blank until the Terraform runs and a real
+id once it does, so it is the one signal, applied automatically rather than a manual flag
+someone has to remember to flip.
 
 **The password is validated against the pool's own policy** (12+ chars, upper/lower/digit/
 symbol) before the AWS call, so a weak password fails with a clear 400 instead of a raw

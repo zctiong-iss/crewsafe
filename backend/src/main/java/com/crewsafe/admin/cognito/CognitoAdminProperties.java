@@ -11,8 +11,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * {@code userPoolId} and grants the IAM permission {@link CognitoUserProvisioningService}
  * needs is applied separately from a code deploy, so requiring this at startup would crash
  * the whole application during that window. {@link CognitoUserProvisioningService} checks
- * {@code enabled} and a non-blank {@code userPoolId} itself and fails one request cleanly
- * (409) rather than the app failing to boot.
+ * for a non-blank {@code userPoolId} itself and fails one request cleanly (409) rather than
+ * the app failing to boot.
+ *
+ * <p>There is deliberately no separate {@code enabled} toggle: the pool id is already the
+ * one signal that matters. It comes straight from the live Cognito pool
+ * ({@code local.cognito.user_pool_id} in {@code infra/terraform/secrets/main.tf}) — blank
+ * until that Terraform is applied, a real id once it is — so a second, manually-flipped flag
+ * would only duplicate that signal and add a step someone can forget to flip.
  *
  * @author Jemilin Beulah
  */
@@ -21,11 +27,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Setter
 public class CognitoAdminProperties {
 
-    /** Off by default — flip only once the Terraform in infra/terraform/secrets (IAM grant)
-     * and infra/terraform/compute (env var) are applied and confirmed live. */
-    private boolean enabled = false;
-
     /** The pool {@code AdminCreateUser} targets. Not set until the Terraform above publishes
-     * it — null/blank is treated the same as {@code enabled=false}. */
+     * it — null/blank means provisioning isn't available yet. */
     private String userPoolId;
 }

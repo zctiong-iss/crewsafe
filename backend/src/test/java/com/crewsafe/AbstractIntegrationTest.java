@@ -172,10 +172,10 @@ public abstract class AbstractIntegrationTest {
         registry.add("app.cognito.client-ids", () -> CLIENT_ID + "," + OTHER_POOL_CLIENT_ID);
         registry.add("app.cognito.demo-users-json", AbstractIntegrationTest::demoUsersJson);
 
-        // Enabled against the same emulator pool everything else in this class already talks
-        // to (see CognitoAdminTestConfig below, which points the CognitoIdentityProviderClient
-        // bean at it) — real AdminCreateUser calls, no real AWS involved.
-        registry.add("app.cognito-admin.enabled", () -> "true");
+        // Non-blank pool id is the only signal CognitoUserProvisioningService needs. Points
+        // at the same emulator pool everything else in this class already talks to (see
+        // CognitoAdminTestConfig below, which points the CognitoIdentityProviderClient bean
+        // at it) — real AdminCreateUser calls, no real AWS involved.
         registry.add("app.cognito-admin.user-pool-id", () -> POOL_ID);
 
         // Note: do NOT set anything here that a subclass's @TestPropertySource might need

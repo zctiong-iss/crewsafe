@@ -55,7 +55,7 @@ public class CognitoUserProvisioningService {
      *                            if Cognito already has an identity under this email
      */
     public String createUser(String email, String password, UUID actorId) {
-        if (!properties.isEnabled() || properties.getUserPoolId() == null || properties.getUserPoolId().isBlank()) {
+        if (properties.getUserPoolId() == null || properties.getUserPoolId().isBlank()) {
             throw new ConflictException(
                     "Cognito provisioning is not enabled in this environment", ErrorCode.COGNITO_PROVISIONING_DISABLED);
         }

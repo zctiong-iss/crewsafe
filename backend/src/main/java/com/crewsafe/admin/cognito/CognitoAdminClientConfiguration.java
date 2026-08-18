@@ -15,7 +15,8 @@ import software.amazon.awssdk.services.cognitoidentityprovider.CognitoIdentityPr
  *
  * <p>Building the client needs no credentials or network call — both are resolved lazily,
  * per-call, from the task role's credentials. Safe to always construct regardless of whether
- * {@link CognitoAdminProperties#isEnabled()} is true; only an actual API call can fail.
+ * {@link CognitoAdminProperties#getUserPoolId()} is configured; only an actual API call can
+ * fail.
  *
  * @author Jemilin Beulah
  */

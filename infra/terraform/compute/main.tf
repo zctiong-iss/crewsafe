@@ -151,10 +151,9 @@ locals {
     # ADR 0018 — CognitoUserProvisioningService's AdminCreateUser target. The IAM
     # grant that actually authorizes the call lives on the task role in
     # infra/terraform/secrets (ProvisionInvitedUserAccounts) — this is only the pool
-    # id value, not a credential. app.cognito-admin.enabled defaults false in the
-    # application itself (CognitoAdminProperties) regardless of this value being
-    # present; flipping it on is a deliberate follow-up once both this and that IAM
-    # grant are confirmed applied.
+    # id value, not a credential. CognitoAdminProperties has no separate enabled
+    # flag: a blank pool id (before this Terraform applies) is itself the signal
+    # that provisioning isn't available yet.
     APP_COGNITO_ADMIN_USER_POOL_ID = "${local.secrets.config_parameter_prefix}/cognito-admin/user-pool-id"
   }
 
