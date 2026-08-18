@@ -38,6 +38,14 @@ class SecurityChainTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void crossSiteRequestWithoutAuthenticationRemainsDenied() throws Exception {
+        mockMvc.perform(get("/api/v1/me").header("Origin", "https://cross-site.example.invalid"))
+                // Spring's CORS processor rejects the disallowed origin before the
+                // authentication entry point runs; the important invariant is denial.
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void healthEndpointStaysPublic() throws Exception {
         mockMvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk());

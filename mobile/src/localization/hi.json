@@ -129,7 +129,12 @@
     "display": "प्रदर्शन",
     "about": "ऐप के बारे में",
     "aboutVersion": "संस्करण {{version}}",
-    "aboutBody": "सिंगापुर में बाहर काम करने वालों के लिए गर्मी सुरक्षा।"
+    "aboutBody": "सिंगापुर में बाहर काम करने वालों के लिए गर्मी सुरक्षा।",
+    "notifications": "सूचनाएँ",
+    "notificationsLabel": "अलर्ट और अनुस्मारक",
+    "notificationsHint": "आराम पूरा होने पर, या किसी योजना पर निर्णय चाहिए हो तो कंपन।",
+    "notificationsBlockedHint": "आपके फ़ोन की सेटिंग्स में बंद है। CrewSafe इन्हें आपके लिए वापस चालू नहीं कर सकता।",
+    "notificationsOpenSettings": "फ़ोन सेटिंग्स खोलें"
   },
   "profile": {
     "title": "प्रोफ़ाइल",
@@ -163,7 +168,8 @@
     "status": {
       "PLANNED": "नियोजित",
       "ACTIVE": "चालू",
-      "CLOSED": "समाप्त"
+      "CLOSED": "समाप्त",
+      "CANCELLED": "रद्द"
     },
     "detailTitle": "शिफ़्ट",
     "assignments": "क्रू",
@@ -238,7 +244,24 @@
     "removeWorkerBody": "{{name}} को इस शिफ्ट से हटाएँ? उनका कार्य और अनुकूलन दिवस हट जाएगा।",
     "removeWorkerConfirm": "हटाएँ",
     "removeWorkerFailedTitle": "कर्मचारी नहीं हटाया गया",
-    "viewRecommendations": "इस शिफ्ट की तैयार योजनाएँ"
+    "viewRecommendations": "इस शिफ्ट की तैयार योजनाएँ",
+    "closeButton": "शिफ़्ट बंद करें",
+    "closeTitle": "इस शिफ़्ट को बंद करें?",
+    "closeBody": "यह दर्ज करता है कि शिफ़्ट चली और पूरी हुई। इसे पूर्ववत नहीं किया जा सकता।",
+    "closeConfirm": "शिफ़्ट बंद करें",
+    "closeNotYetEnded": "शिफ़्ट समाप्त होने के बाद ही बंद की जा सकती है।",
+    "closeFailedTitle": "शिफ़्ट बंद नहीं हुई",
+    "closedToast": "शिफ़्ट बंद कर दी गई",
+    "cancelButton": "शिफ़्ट रद्द करें",
+    "cancelTitle": "इस शिफ़्ट को रद्द करें?",
+    "cancelBody": "यह दर्ज करता है कि शिफ़्ट नहीं हुई। क्रू सूचीबद्ध रहेगा और कारण सुरक्षित रहेगा। इसे पूर्ववत नहीं किया जा सकता।",
+    "cancelReasonLabel": "यह शिफ़्ट क्यों रद्द की जा रही है?",
+    "cancelReasonRequired": "रद्द करने से पहले कारण बताएँ।",
+    "cancelConfirm": "शिफ़्ट रद्द करें",
+    "cancelling": "रद्द किया जा रहा है",
+    "cancelFailedTitle": "शिफ़्ट रद्द नहीं हुई",
+    "cancelledToast": "शिफ़्ट रद्द कर दी गई",
+    "ending": "चल रहा है"
   },
   "weather": {
     "title": "मौसम की स्थिति",
@@ -269,7 +292,16 @@
     "noReading": "कोई रीडिंग नहीं",
     "degrees": "{{value}}°C",
     "siteRowReading": "{{site}}, {{value}} डिग्री, {{band}}",
-    "siteRowNoReading": "{{site}}, कोई रीडिंग नहीं"
+    "siteRowNoReading": "{{site}}, कोई रीडिंग नहीं",
+    "statusButtonLabel": "इस रीडिंग के बारे में",
+    "statusButtonHint": "बताता है कि इस रीडिंग को ऐसा क्यों चिह्नित किया गया है।",
+    "statusExplain": "मुझे यह क्यों दिख रहा है?",
+    "statusObservedAt": "रीडिंग {{time}} बजे ली गई।",
+    "statusLiveBody": "यह रीडिंग मौजूदा है। आपके ध्यान की आवश्यकता नहीं है।",
+    "statusErrorTitle": "मौसम लोड नहीं हो सका",
+    "statusErrorBody": "आपका फ़ोन CrewSafe तक नहीं पहुँच सका। साइट पर अब भी मौजूदा रीडिंग हो सकती है — सिग्नल आने पर फिर कोशिश करें।",
+    "statusUnknownTitle": "अपरिचित रीडिंग स्थिति",
+    "statusUnknownBody": "यह ऐप इस रीडिंग की स्थिति नहीं पहचानता। इसे अपुष्ट मानें और अपनी साइट की प्रक्रिया का पालन करें।"
   },
   "forecast": {
     "title": "WBGT पूर्वानुमान",
@@ -646,5 +678,17 @@
     "awaitingCount_other": "{{count}} लंबित",
     "openPlan": "{{time}} को तैयार की गई योजना खोलें",
     "supervisorLabel": "साइट सुपरवाइज़र: {{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "CrewSafe को बताने दें",
+    "rationaleBody": "आपका आराम पूरा होने पर, और जब किसी योजना पर आपका निर्णय चाहिए हो, CrewSafe आपका फ़ोन कंपित कर सकता है। और कुछ नहीं। आप इसे सेटिंग्स में कभी भी बंद कर सकते हैं।",
+    "rationaleAccept": "चालू करें",
+    "rationaleDecline": "अभी नहीं",
+    "restEndTitle": "आराम पूरा हुआ",
+    "restEndBody_one": "आपने {{count}} मिनट आराम किया। आप काम पर लौट सकते हैं।",
+    "restEndBody_other": "आपने {{count}} मिनट आराम किया। आप काम पर लौट सकते हैं।",
+    "planDraftedTitle": "नई योजना तैयार हुई",
+    "planDraftedBody_one": "AI द्वारा तैयार एक नई योजना आपके निर्णय की प्रतीक्षा में है।",
+    "planDraftedBody_other": "AI द्वारा तैयार {{count}} नई योजनाएँ आपके निर्णय की प्रतीक्षा में हैं।"
   }
 }

@@ -129,7 +129,12 @@
     "display": "Display",
     "about": "About",
     "aboutVersion": "Version {{version}}",
-    "aboutBody": "Heat-stress safety for outdoor crews in Singapore."
+    "aboutBody": "Heat-stress safety for outdoor crews in Singapore.",
+    "notifications": "Notifications",
+    "notificationsLabel": "Alerts and reminders",
+    "notificationsHint": "Buzz when a rest ends, or when a plan needs your decision.",
+    "notificationsBlockedHint": "Turned off in your phone's settings. CrewSafe cannot switch these back on for you.",
+    "notificationsOpenSettings": "Open phone settings"
   },
   "profile": {
     "title": "Profile",
@@ -163,7 +168,8 @@
     "status": {
       "PLANNED": "Planned",
       "ACTIVE": "Active",
-      "CLOSED": "Closed"
+      "CLOSED": "Closed",
+      "CANCELLED": "Cancelled"
     },
     "detailTitle": "Shift",
     "assignments": "Crew",
@@ -238,7 +244,24 @@
     "removeWorkerBody": "Remove {{name}} from this shift? Their task and acclimatisation day are discarded.",
     "removeWorkerConfirm": "Remove",
     "removeWorkerFailedTitle": "Worker not removed",
-    "viewRecommendations": "Drafted plans for this shift"
+    "viewRecommendations": "Drafted plans for this shift",
+    "closeButton": "Close shift",
+    "closeTitle": "Close this shift?",
+    "closeBody": "This records that the shift ran and is finished. It cannot be undone.",
+    "closeConfirm": "Close shift",
+    "closeNotYetEnded": "A shift can be closed once it has ended.",
+    "closeFailedTitle": "Shift not closed",
+    "closedToast": "Shift closed",
+    "cancelButton": "Cancel shift",
+    "cancelTitle": "Cancel this shift?",
+    "cancelBody": "This records that the shift did not happen. The crew stay listed and the reason is kept. It cannot be undone.",
+    "cancelReasonLabel": "Why is this shift being cancelled?",
+    "cancelReasonRequired": "Give a reason before cancelling.",
+    "cancelConfirm": "Cancel shift",
+    "cancelling": "Cancelling",
+    "cancelFailedTitle": "Shift not cancelled",
+    "cancelledToast": "Shift cancelled",
+    "ending": "Working"
   },
   "weather": {
     "title": "Conditions",
@@ -269,7 +292,16 @@
     "noReading": "No reading",
     "degrees": "{{value}}°C",
     "siteRowReading": "{{site}}, {{value}} degrees, {{band}}",
-    "siteRowNoReading": "{{site}}, no reading"
+    "siteRowNoReading": "{{site}}, no reading",
+    "statusButtonLabel": "About this reading",
+    "statusButtonHint": "Explains why this reading is marked the way it is.",
+    "statusExplain": "Why am I seeing this?",
+    "statusObservedAt": "Reading taken at {{time}}.",
+    "statusLiveBody": "This reading is current. Nothing needs your attention.",
+    "statusErrorTitle": "Could not load the weather",
+    "statusErrorBody": "Your phone could not reach CrewSafe. The site may still have a current reading — try again once you have signal.",
+    "statusUnknownTitle": "Unrecognised reading state",
+    "statusUnknownBody": "This app does not recognise the state of this reading. Treat it as unconfirmed and follow your site's procedure."
   },
   "forecast": {
     "title": "WBGT forecast",
@@ -647,5 +679,17 @@
     "awaitingCount_other": "{{count}} awaiting",
     "openPlan": "Open the plan drafted {{time}}",
     "supervisorLabel": "Site supervisor: {{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "Let CrewSafe tell you",
+    "rationaleBody": "CrewSafe can buzz your phone when your rest is over, and when a plan needs your decision. Nothing else. You can turn this off at any time in Settings.",
+    "rationaleAccept": "Turn on",
+    "rationaleDecline": "Not now",
+    "restEndTitle": "Rest complete",
+    "restEndBody_one": "You rested for {{count}} minute. You can return to work.",
+    "restEndBody_other": "You rested for {{count}} minutes. You can return to work.",
+    "planDraftedTitle": "New plan drafted",
+    "planDraftedBody_one": "A new AI-drafted plan is waiting for your decision.",
+    "planDraftedBody_other": "{{count}} new AI-drafted plans are waiting for your decision."
   }
 }
