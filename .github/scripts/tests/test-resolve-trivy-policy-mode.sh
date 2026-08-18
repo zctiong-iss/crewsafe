@@ -23,13 +23,13 @@ assert_exit() {
 assert_output_contains() {
   local output_file="$1" needle="$2" label="$3"
   TESTS_RUN=$((TESTS_RUN + 1))
-  if rg -q -F -- "$needle" "$output_file"; then pass "$label"; else fail "$label"; fi
+  if grep -F -q -- "$needle" "$output_file"; then pass "$label"; else fail "$label"; fi
 }
 
 assert_output_not_contains() {
   local output_file="$1" needle="$2" label="$3"
   TESTS_RUN=$((TESTS_RUN + 1))
-  if ! rg -q -F -- "$needle" "$output_file"; then pass "$label"; else fail "$label"; fi
+  if ! grep -F -q -- "$needle" "$output_file"; then pass "$label"; else fail "$label"; fi
 }
 
 run_to_outputs() {
