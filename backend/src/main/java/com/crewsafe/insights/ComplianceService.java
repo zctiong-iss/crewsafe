@@ -118,7 +118,7 @@ public class ComplianceService {
             return null;
         }
         int rank = (int) Math.ceil(p / 100.0 * sorted.size());
-        return sorted.get(Math.min(sorted.size(), Math.max(1, rank)) - 1);
+        return sorted.get(Math.clamp(rank, 1, sorted.size()) - 1);
     }
 
     /** Folds sorted response times into the fixed latency bands. */
