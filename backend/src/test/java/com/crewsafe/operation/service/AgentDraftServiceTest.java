@@ -617,7 +617,7 @@ class AgentDraftServiceTest {
     void fallbackDraftAuditRecordsTheReason() {
         stubDraft(List.of(mitigation("TAKE_A_NAP", "MANDATORY", "REST")), false, MODEL_ID);
 
-        Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
+        service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
         commit();
 
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);

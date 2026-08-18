@@ -100,15 +100,15 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
 
         List<WbgtRecord> records = requireNonEmpty(
                 response.data() == null ? null : response.data().records(), "WBGT records");
-        if (records.stream().anyMatch(record -> record == null || record.datetime() == null
-                || record.item() == null)) {
+        if (records.stream().anyMatch(entry -> entry == null || entry.datetime() == null
+                || entry.item() == null)) {
             throw invalid("WBGT response contains a record missing datetime or item");
         }
-        WbgtRecord record = records.stream()
+        WbgtRecord latestRecord = records.stream()
                 .max(Comparator.comparing(WbgtRecord::datetime))
                 .orElseThrow();
 
-        List<WbgtReading> reported = requireNonEmpty(record.item().readings(), "WBGT readings");
+        List<WbgtReading> reported = requireNonEmpty(latestRecord.item().readings(), "WBGT readings");
         List<NeaStationReading> readings = reported.stream()
                 .map(this::mapWbgtReading)
                 .filter(Objects::nonNull)
@@ -125,7 +125,7 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
             // Count only. Station identifiers are third-party input and this reaches the log sink.
             log.info("nea_wbgt_stations_without_reading skipped={} used={}", skipped, readings.size());
         }
-        return new NeaObservation(NeaMetric.WBGT, record.datetime().toInstant(), "deg C", readings);
+        return new NeaObservation(NeaMetric.WBGT, latestRecord.datetime().toInstant(), "deg C", readings);
     }
 
     /**
@@ -219,10 +219,6 @@ public class DataGovSgNeaWeatherClient implements NeaWeatherClient {
             throw invalid(metric + " reading references unknown station " + reading.stationId());
         }
         return new NeaStationReading(station, reading.value(), null);
-    }
-
-    private <T> T execute(String operation, Supplier<T> request) {
-        return execute(operation, properties.getMaxAttempts(), request);
     }
 
     private <T> T execute(String operation, int maxAttempts, Supplier<T> request) {

@@ -61,8 +61,8 @@ public class DataGovSgNeaLightningClient implements NeaLightningClient {
         if (records == null || records.isEmpty()) {
             throw invalid("lightning response contains no records");
         }
-        if (records.stream().anyMatch(record -> record == null || record.datetime() == null
-                || record.item() == null || record.item().readings() == null)) {
+        if (records.stream().anyMatch(entry -> entry == null || entry.datetime() == null
+                || entry.item() == null || entry.item().readings() == null)) {
             throw invalid("lightning response contains a record missing datetime or readings");
         }
         LightningRecord latest = records.stream()
