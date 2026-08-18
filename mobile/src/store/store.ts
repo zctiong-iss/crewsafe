@@ -25,6 +25,7 @@ import ui from "./reducers/uiSlice";
 import profile from "./reducers/profileSlice";
 import dispatchInbox from "./reducers/dispatchInboxSlice";
 import recommendations from "./reducers/recommendationsSlice";
+import oversight from "./reducers/oversightSlice";
 import wellbeing from "./reducers/wellbeingSlice";
 import policy from "./reducers/policySlice";
 import forecast from "./reducers/forecastSlice";
@@ -38,6 +39,10 @@ const rootReducer = combineReducers({
   // Not persisted: a decision is recorded server-side, and a stale pending item rehydrated
   // from disk would invite a supervisor to decide something already decided.
   recommendations,
+  // Not persisted, for the same reason as `recommendations` and more so: this is a safety
+  // manager's view across many sites, and a stale plan rehydrated from disk would understate
+  // how much is outstanding on a site they are about to judge.
+  oversight,
   // Not persisted: a rest logged on this device is a fact the server holds, and rehydrating a
   // stale "logged at" would tell a worker they rested when the write never landed.
   wellbeing,

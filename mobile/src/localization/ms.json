@@ -264,7 +264,13 @@
       "WINDY": "Berangin",
       "RAIN": "Hujan",
       "THUNDERY_SHOWERS": "Hujan berguruh"
-    }
+    },
+    "siteConditionsTitle": "Keadaan tapak",
+    "changeSite": "Tukar tapak. Kini {{site}}",
+    "noReading": "Tiada bacaan",
+    "degrees": "{{value}}°C",
+    "siteRowReading": "{{site}}, {{value}} darjah, {{band}}",
+    "siteRowNoReading": "{{site}}, tiada bacaan"
   },
   "forecast": {
     "title": "Ramalan WBGT",
@@ -277,7 +283,6 @@
     "generatedAt": "Ramalan dibuat {{time}}",
     "unavailableTitle": "Tiada ramalan buat masa ini",
     "unavailableBody": "Tapak ini tiada bacaan yang cukup terkini untuk diramal, atau keadaan berubah terlalu cepat untuk memberi julat yang berguna. Bacaan semasa tidak terjejas.",
-    "noBandNote": "Jalur risiko tidak ditunjukkan bagi ramalan. Jalur ditentukan oleh dasar haba di pelayan, dan belum dinilai untuk nilai ramalan.",
     "cardTitle": "Ramalan",
     "cardValue_one": "{{value}}°C diramal dalam {{count}} minit",
     "cardValue_other": "{{value}}°C diramal dalam {{count}} minit",
@@ -296,7 +301,9 @@
       "PERSISTENCE": "Ini membawa bacaan terakhir ke hadapan kerana arah aliran terkini tidak dapat ditentukan. Anggap sebagai panduan kasar sahaja."
     },
     "inputAge_one": "Daripada bacaan {{count}} minit lalu",
-    "inputAge_other": "Daripada bacaan {{count}} minit lalu"
+    "inputAge_other": "Daripada bacaan {{count}} minit lalu",
+    "rangeSeparator": " – ",
+    "rangeUnit": " °C"
   },
   "inbox": {
     "emptyTitle": "Tiada apa untuk diakui",
@@ -494,7 +501,7 @@
     "statusAutoDispatched": "Henti kerja dihantar",
     "autoDispatchedNotice": "Arahan henti kerja ini telah dihantar kepada pekerja secara automatik — tiada kelulusan diperlukan.",
     "supersededNotice": "Keadaan telah berubah, jadi pelan ini telah digantikan dengan yang lebih baharu. Tiada apa-apa untuk diputuskan di sini.",
-    "noModelNotice": "Tiada model AI tersedia, jadi pelan ini dibina terus daripada polisi haba. Tindakan yang diwajibkan masih betul; cuma kurang disesuaikan dengan kru ini.",
+    "noModelNotice": "Model AI tidak tersedia. Polisi haba dan tindakan wajib masih terpakai.",
     "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
   },
   "mitigationCategory": {
@@ -627,5 +634,18 @@
     "minuteDown": "Awal lima minit",
     "hourInput": "Jam",
     "minuteInput": "Minit"
+  },
+  "oversight": {
+    "tabTitle": "Pengawasan",
+    "title": "Pengawasan",
+    "showPlans": "Pelan",
+    "hidePlans": "Sembunyikan pelan",
+    "showPlansFor": "Tunjukkan pelan untuk {{site}}",
+    "hidePlansFor": "Sembunyikan pelan untuk {{site}}",
+    "noPlans": "Tiada pelan dirangka untuk tapak ini lagi.",
+    "awaitingCount_one": "{{count}} menunggu",
+    "awaitingCount_other": "{{count}} menunggu",
+    "openPlan": "Buka pelan yang dirangka {{time}}",
+    "supervisorLabel": "Penyelia tapak: {{name}}"
   }
 }
