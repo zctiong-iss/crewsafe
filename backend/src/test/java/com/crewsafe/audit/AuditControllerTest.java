@@ -130,9 +130,7 @@ class AuditControllerTest extends AbstractIntegrationTest {
 
     @Test
     void csvExportQuotesFieldsThatContainCommas() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+        shiftWithCreatedEvent("Created shift, night crew");
 
         String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
@@ -149,10 +147,8 @@ class AuditControllerTest extends AbstractIntegrationTest {
 
     @Test
     void csvExportNeutralisesSpreadsheetFormulaInjection() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
         // A crafted detail that a spreadsheet would execute as a formula on open.
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "=1+1"));
+        shiftWithCreatedEvent("=1+1");
 
         String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
@@ -170,9 +166,7 @@ class AuditControllerTest extends AbstractIntegrationTest {
      */
     @Test
     void csvExportCarriesAVerifiableChecksumOfTheDataSection() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+        shiftWithCreatedEvent("Created shift, night crew");
 
         String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
@@ -189,9 +183,7 @@ class AuditControllerTest extends AbstractIntegrationTest {
     /** Tampering with a data row must be visible: it changes the section the checksum covers. */
     @Test
     void tamperingWithADataRowBreaksTheChecksum() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+        shiftWithCreatedEvent("Created shift, night crew");
 
         String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
@@ -210,9 +202,7 @@ class AuditControllerTest extends AbstractIntegrationTest {
      *  in a standard CSV viewer instead of the header being read as one column wide. */
     @Test
     void everyLineInTheExportHasTheSameColumnCount() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+        shiftWithCreatedEvent("Created shift, night crew");
 
         String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
@@ -228,9 +218,7 @@ class AuditControllerTest extends AbstractIntegrationTest {
     /** Pulling the whole trail is itself worth a trace: the export is targeted at the SITE. */
     @Test
     void exportingIsRecordedToTheAuditTrail() throws Exception {
-        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
-        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
-                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
+        shiftWithCreatedEvent("Created shift, night crew");
 
         exportCsv(managerToken).andExpect(status().isOk());
 
@@ -262,6 +250,14 @@ class AuditControllerTest extends AbstractIntegrationTest {
         AppUser created = users.save(new AppUser(username, subFor(username), "Audit " + role, role));
         memberships.save(new SiteMembership(created.getId(), site.getId()));
         return created;
+    }
+
+    /** A shift at this test's site with one SHIFT_CREATED row on it, actor the manager. */
+    private Shift shiftWithCreatedEvent(String detail) {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), detail));
+        return shift;
     }
 
     private ResultActions page(String token) throws Exception {
