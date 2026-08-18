@@ -20,6 +20,19 @@ interface MessageBannerProps {
   tone?: BannerTone;
   /** The X-Request-Id to quote when reporting a failure. Rendered small, below. */
   requestId?: string | null;
+  /** For tests that need the container itself rather than the text inside it. */
+  testID?: string;
+  /**
+   * Centres the icon and message as a group, instead of left-aligning them across the banner's
+   * full width.
+   *
+   * Opt-in rather than the default, because centring only flatters a short message. Most
+   * banners here carry an error and often a request id beneath it, and centred body text gives
+   * a ragged left edge that is measurably slower to scan — the wrong trade when someone is
+   * reading a failure. A two-line notice sitting alone in a card is the case where the
+   * left-aligned block looks stranded instead, which is what this is for.
+   */
+  align?: "start" | "center";
 }
 
 const ICONS: Record<BannerTone, keyof typeof Ionicons.glyphMap> = {
@@ -51,7 +64,13 @@ const MOTIONS: Record<BannerTone, IconMotion> = {
  * colour-blind user, and in direct sun where the tint washes out of a light fill. The icon
  * and the border survive both.
  */
-const MessageBanner: FC<MessageBannerProps> = ({ message, tone = "danger", requestId }) => {
+const MessageBanner: FC<MessageBannerProps> = ({
+  message,
+  tone = "danger",
+  requestId,
+  testID,
+  align = "start",
+}) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -66,12 +85,14 @@ const MessageBanner: FC<MessageBannerProps> = ({ message, tone = "danger", reque
 
   return (
     <View
+      testID={testID}
       // Announced as a unit, and as an alert when it is one, so a screen reader does not
       // read the icon and the text as two unrelated stops.
       accessibilityRole={tone === "danger" ? "alert" : "text"}
       accessibilityLabel={message}
       style={[
         styles.container,
+        align === "center" ? styles.containerCentered : null,
         {
           borderColor: color,
           borderWidth: theme.metrics.borderWidth,
@@ -90,8 +111,11 @@ const MessageBanner: FC<MessageBannerProps> = ({ message, tone = "danger", reque
 
       {/* flex:1 is what keeps a long message wrapping inside the banner instead of
           stretching it past its parent. */}
-      <View style={styles.body}>
-        <AppText variant="label" style={{ color }}>
+      <View style={align === "center" ? styles.bodyCentered : styles.body}>
+        <AppText
+          variant="label"
+          style={[{ color }, align === "center" ? styles.textCentered : null]}
+        >
           {message}
         </AppText>
         {requestId ? (
@@ -109,18 +133,35 @@ export default MessageBanner;
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    /*
+     * Centred against the whole message, not pinned to its first line.
+     *
+     * `flex-start` is right for a one-line banner and wrong for a wrapped one: the icon strands
+     * itself at the top of a four-line block with empty space beneath it, which reads as a
+     * layout fault rather than as an icon labelling a message. Centring costs nothing on a
+     * single line — there is nothing to centre against — and fixes every longer one.
+     */
+    alignItems: "center",
     padding: s(12),
     width: "100%",
   },
   icon: {
     marginEnd: s(10),
-    // Nudges the icon onto the first line's optical centre. Without it the icon sits high
-    // against a wrapped, multi-line message.
-    marginTop: vs(1),
+  },
+  containerCentered: {
+    justifyContent: "center",
   },
   body: {
     flex: 1,
+  },
+  bodyCentered: {
+    // Shrinks to the text rather than filling the row, so `justifyContent` above has something
+    // to centre. With flex:1 the column would still span the full width and the text would
+    // centre inside it, leaving the icon stranded at the far edge.
+    flexShrink: 1,
+  },
+  textCentered: {
+    textAlign: "center",
   },
   requestId: {
     marginTop: vs(4),

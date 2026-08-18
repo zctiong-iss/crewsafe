@@ -14,6 +14,7 @@ import MyShiftScreen from "@/screens/worker/MyShiftScreen";
 import InboxScreen from "@/screens/worker/InboxScreen";
 import WeatherScreen from "@/screens/weather/WeatherScreen";
 import ForecastScreen from "@/screens/weather/ForecastScreen";
+import OversightScreen from "@/screens/safety/OversightScreen";
 import ShiftListScreen from "@/screens/supervisor/ShiftListScreen";
 import ShiftDetailScreen from "@/screens/supervisor/ShiftDetailScreen";
 import CreateShiftScreen from "@/screens/supervisor/CreateShiftScreen";
@@ -33,6 +34,7 @@ import type {
   InboxStackParamList,
   MyShiftStackParamList,
   ProfileStackParamList,
+  OversightStackParamList,
   RecommendationsStackParamList,
   ShiftsStackParamList,
   WeatherStackParamList,
@@ -110,6 +112,46 @@ export function InboxStack() {
 }
 
 /* ------------------------------ Supervisor: Shifts ------------------------------ */
+
+const OversightStackNavigator = createNativeStackNavigator<OversightStackParamList>();
+
+/**
+ * The safety manager's site-and-plans view (SCRUM-TBD-90).
+ *
+ * ── WHY THE DETAIL ROUTE IS HERE AFTER ALL ──────────────────────────────────────────────
+ * This stack originally had no detail route, on the reasoning that `RecommendationDetail`
+ * exists to approve, edit or reject — all three of which the screen refuses this role — so
+ * routing a manager there would end in "you cannot do this".
+ *
+ * That reasoning conflated the screen with its buttons. `RecommendationDetailScreen` is mostly
+ * the plan itself: the mitigations, the rationale, the evidence block with its WBGT reading,
+ * band, data age and model version. A manager needs all of that to oversee a decision — §12.2
+ * exists precisely so a recommendation can be traced afterwards — and the screen already
+ * withholds the controls and says why with a read-only notice.
+ *
+ * The oversight list also could not show it: it renders a status pill and a drafted timestamp,
+ * which tells a manager a plan exists and nothing about what it says. Reusing the screen the
+ * supervisor sees is also what keeps the two views honest — a manager reviewing a decision is
+ * looking at the same page the person who made it was looking at, not a summary of it.
+ */
+export function OversightStack() {
+  const { t } = useTranslation();
+
+  return (
+    <OversightStackNavigator.Navigator screenOptions={useScreenOptions()}>
+      <OversightStackNavigator.Screen
+        name="Oversight"
+        component={OversightScreen}
+        options={{ title: t("oversight.title") }}
+      />
+      <OversightStackNavigator.Screen
+        name="RecommendationDetail"
+        component={RecommendationDetailScreen}
+        options={{ title: t("recommendations.title") }}
+      />
+    </OversightStackNavigator.Navigator>
+  );
+}
 
 const ShiftsStackNavigator = createNativeStackNavigator<ShiftsStackParamList>();
 

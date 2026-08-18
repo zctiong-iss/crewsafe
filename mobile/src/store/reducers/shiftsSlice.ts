@@ -16,6 +16,8 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import {
   createShift as createShiftRequest,
+  cancelShift as cancelShiftRequest,
+  closeShift as closeShiftRequest,
   deleteShift as deleteShiftRequest,
   fetchShifts,
   fetchSiteWorkers,
@@ -57,6 +59,14 @@ export interface ShiftsState {
   /** True while the shift's own window is being corrected (SCRUM-266). */
   savingWindow: boolean;
   /**
+   * Shift id currently being cancelled or closed, so only that screen shows a spinner
+   * (SCRUM-442).
+   *
+   * One flag for both: they are alternative ways to end the same shift and cannot be in
+   * flight together, so two flags would only create a state where both are true.
+   */
+  endingId: string | null;
+  /**
    * Assignment id currently being taken off the shift, or `"add"` while one is being put on
    * (SCRUM-266).
    *
@@ -82,6 +92,7 @@ const initialState: ShiftsState = {
   deletingId: null,
   savingAssignmentId: null,
   savingWindow: false,
+  endingId: null,
   staffingId: null,
   creating: false,
 };
@@ -224,6 +235,52 @@ export const editAssignment = createAsyncThunk<
  * The server refuses this once the shift has ended, and that 400 is surfaced rather than
  * swallowed: a supervisor who has just typed new times needs to be told they were not taken.
  */
+/**
+ * `POST …/shifts/{shiftId}/cancel` — the shift was called off (SCRUM-442).
+ *
+ * The reason is required by the server and lands in the audit trail. Guarded on `endingId`
+ * because cancel and close are both terminal: a second tap while the first is in flight would
+ * be refused for a transition the first had only just made, and the supervisor would be told
+ * the shift cannot be cancelled from CANCELLED — true, and entirely their own doing a moment
+ * earlier, which reads as a bug.
+ */
+export const cancelShift = createAsyncThunk<
+  Shift,
+  { siteId: string; shiftId: string; reason: string },
+  { rejectValue: { errorKey: string } }
+>("shifts/cancel", async ({ siteId, shiftId, reason }, { rejectWithValue }) => {
+  try {
+    return await cancelShiftRequest(siteId, shiftId, reason);
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) => !(getState() as { shifts: ShiftsState }).shifts.endingId,
+});
+
+/**
+ * `POST …/shifts/{shiftId}/close` — the shift ran and is finished (SCRUM-442).
+ *
+ * The server refuses this while `endsAt` is still in the future. The screen disables the
+ * control until then, but the server stays the authority: a device clock that disagrees must
+ * not be able to talk it into closing early.
+ */
+export const closeShift = createAsyncThunk<
+  Shift,
+  { siteId: string; shiftId: string },
+  { rejectValue: { errorKey: string } }
+>("shifts/close", async ({ siteId, shiftId }, { rejectWithValue }) => {
+  try {
+    return await closeShiftRequest(siteId, shiftId);
+  } catch (error) {
+    const errorKey = isApiError(error) ? messageKeyFor(error as ApiError) : "errors.unknown";
+    return rejectWithValue({ errorKey });
+  }
+}, {
+  condition: (_arg, { getState }) => !(getState() as { shifts: ShiftsState }).shifts.endingId,
+});
+
 export const editShiftWindow = createAsyncThunk<
   Shift,
   { siteId: string; shiftId: string; startsAt: string; endsAt: string },
@@ -379,6 +436,36 @@ const shiftsSlice = createSlice({
         state.savingWindow = true;
         state.errorKey = null;
       })
+      /*
+       * Both write the server's shift back rather than setting the status locally. The
+       * response is the source of truth for what the shift became, and a failure must leave
+       * the previous status untouched — a row that flipped to CANCELLED and back would be
+       * worse than one that never moved.
+       */
+      .addCase(cancelShift.pending, (state, action) => {
+        state.endingId = action.meta.arg.shiftId;
+      })
+      .addCase(cancelShift.fulfilled, (state, action) => {
+        state.endingId = null;
+        const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);
+        if (index !== -1) state.shifts[index] = action.payload;
+      })
+      .addCase(cancelShift.rejected, (state) => {
+        state.endingId = null;
+      })
+
+      .addCase(closeShift.pending, (state, action) => {
+        state.endingId = action.meta.arg.shiftId;
+      })
+      .addCase(closeShift.fulfilled, (state, action) => {
+        state.endingId = null;
+        const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);
+        if (index !== -1) state.shifts[index] = action.payload;
+      })
+      .addCase(closeShift.rejected, (state) => {
+        state.endingId = null;
+      })
+
       .addCase(editShiftWindow.fulfilled, (state, action) => {
         state.savingWindow = false;
         const index = state.shifts.findIndex((shift) => shift.id === action.payload.id);

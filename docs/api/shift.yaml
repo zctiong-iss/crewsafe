@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: WBGT CrewSafe SG API — Shift endpoints
-  version: "1.2"
+  version: "1.3"
   description: >
     Contract for SCRUM-159 (US-02: create a shift with workers, tasks and intensity).
     Every operation is site-scoped: the caller must be a member of {siteId}
@@ -23,6 +23,11 @@ info:
     shift didn't happen" on record for audit/history. POST .../shifts/{shiftId}/cancel
     adds that as a status transition (PLANNED or ACTIVE → CANCELLED) rather than a row
     removal; DELETE's behaviour is unchanged.
+
+    Extended for SCRUM-442: CLOSED existed in ShiftStatus from the start but nothing
+    ever set it. POST .../shifts/{shiftId}/close adds that as a status transition
+    (PLANNED or ACTIVE → CLOSED) for a shift that ran, the counterpart to cancel for one
+    that didn't — only once endsAt has passed; a shift cannot be closed early.
 
 servers:
   - url: /
@@ -177,6 +182,38 @@ paths:
       responses:
         "200":
           description: The cancelled shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Shift"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No shift with this id exists under this site.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/sites/{siteId}/shifts/{shiftId}/close:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+      - $ref: "#/components/parameters/ShiftId"
+    post:
+      operationId: closeShift
+      summary: Close a shift that has naturally ended
+      description: >
+        The counterpart to cancel for a shift that ran rather than one that was called
+        off. Only a PLANNED or ACTIVE shift can be closed, and only once endsAt is no
+        longer after the current time — a shift cannot be closed early; use cancel for
+        that. A CLOSED or CANCELLED shift returns 400. Terminal: there is no un-close.
+      responses:
+        "200":
+          description: The closed shift.
           content:
             application/json:
               schema:
@@ -378,9 +415,11 @@ components:
       enum: [PLANNED, ACTIVE, CLOSED, CANCELLED]
       description: >
         Server-controlled. A client cannot set this directly at creation — every shift
-        is created as PLANNED. The only transition a client can trigger is cancel (see
-        POST .../shifts/{shiftId}/cancel), from PLANNED or ACTIVE only; CANCELLED is
-        terminal — there is no un-cancel.
+        is created as PLANNED. A client can trigger two transitions, both from PLANNED
+        or ACTIVE only and both terminal: cancel (POST .../shifts/{shiftId}/cancel) for
+        a shift called off before or during its run, and close (POST
+        .../shifts/{shiftId}/close) for one that ran to completion — close additionally
+        requires endsAt to have passed. Neither has an undo.
 
     Intensity:
       type: string
