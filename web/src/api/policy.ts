@@ -23,6 +23,7 @@ export interface PolicyVersion {
   wbgtThresholdFullLight: number;
   wbgtThresholdFullModerate: number;
   wbgtThresholdFullHeavy: number;
+  /** @deprecated Retained for compatibility; ignored by WBGT policy enforcement. */
   wbgtEmergencyStop: number;
   notes: string | null;
   createdBy: string | null;
@@ -46,6 +47,7 @@ export interface PolicyVersionCreateRequest {
   wbgtThresholdFullLight: number;
   wbgtThresholdFullModerate: number;
   wbgtThresholdFullHeavy: number;
+  /** @deprecated Retained for compatibility; ignored by WBGT policy enforcement. */
   wbgtEmergencyStop: number;
   notes?: string;
 }

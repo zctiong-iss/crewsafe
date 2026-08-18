@@ -3,7 +3,7 @@
 
 import type {
   ActiveShiftPayload, ConditionsPayload, ConditionsSnapshot,
-  LightningRiskPayload, LightningRiskState, WeatherFreshness, WeatherSource,
+  LightningRiskPayload, LightningRiskState, WbgtBand, WeatherFreshness, WeatherSource,  // ← add WbgtBand
 } from "./conditionsStream";
 
 export class InvalidConditionsPayloadError extends Error {
@@ -20,6 +20,7 @@ const UUID_PATTERN =
 const WEATHER_SOURCES: readonly WeatherSource[] = ["NEA", "MANUAL", "CACHED"];
 const FRESHNESS_VALUES: readonly WeatherFreshness[] = ["LIVE", "DELAYED", "STALE", "SIMULATED"];
 const LIGHTNING_STATES: readonly LightningRiskState[] = ["CLEAR", "ADVISORY", "STOP_WORK"];
+const WBGT_BANDS: readonly WbgtBand[] = ["BELOW_31", "31_TO_BELOW_32", "32_TO_BELOW_33", "33_AND_ABOVE"];
 
 // Highest recorded WBGT in Singapore is 35.0°C on 23 Mar 2026, so 36.0°C is a reasonable upper bound at this time.
 const WBGT_SANITY_RANGE = {
@@ -109,6 +110,9 @@ function conditions(value: unknown): DecodedConditions {
   // Validates data types, but does not reject finite values outside sanity bounds. Only returns warnings.
   const payload: ConditionsPayload = {
     wbgt: finiteNumber(item.wbgt, "conditions.wbgt"),
+    currentBand: item.currentBand == null ? null : member(item.currentBand, WBGT_BANDS, "conditions.currentBand"),
+    forecastBand: item.forecastBand == null ? null : member(item.forecastBand, WBGT_BANDS, "conditions.forecastBand"),
+    forecastWbgt30m: item.forecastWbgt30m == null ? null : finiteNumber(item.forecastWbgt30m, "conditions.forecastWbgt30m"),
     temperature: finiteNumber(item.temperature, "conditions.temperature"),
     humidity: finiteNumber(item.humidity, "conditions.humidity"),
     windSpeed: finiteNumber(item.windSpeed, "conditions.windSpeed", 0),

@@ -1,0 +1,315 @@
+/**
+ * The boundary module's own decisions, with the operating system mocked out.
+ *
+ * expo-notifications is mocked in `jest.setup.cjs`, so what is under test here is the logic
+ * this file adds on top of it: the past-deadline guard, the permission normalisation, and the
+ * data-key matching that cancellation depends on. Each of those fails silently in production
+ * — a notification that does not arrive, or one that arrives when it should not — which is
+ * exactly the shape that needs a test rather than a manual pass.
+ *
+ * @author Justin Chua
+ */
+import {
+  cancelAllScheduled,
+  cancelScheduledFor,
+  configureNotifications,
+  getPermission,
+  onNotificationTapped,
+  presentNow,
+  requestPermission,
+  scheduleAt,
+} from "./notificationClient";
+
+/*
+ * The same jest.fn objects `jest.setup.cjs` wired into each expo-notifications SUBMODULE.
+ *
+ * Reached through the global rather than by importing the package, because the client no
+ * longer imports the barrel either — it is fatal on Android in Expo Go, and a test that went
+ * through it would be asserting against mocks the app never calls. See the note at the top of
+ * `notificationClient.ts`.
+ */
+const mocked = (
+  globalThis as unknown as { __notificationMocks: Record<string, jest.Mock> }
+).__notificationMocks;
+
+const MINUTE = 60_000;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mocked.getPermissionsAsync.mockResolvedValue({
+    status: "granted",
+    canAskAgain: true,
+  });
+  mocked.scheduleNotificationAsync.mockResolvedValue("notification-id");
+  mocked.getAllScheduledNotificationsAsync.mockResolvedValue([]);
+});
+
+describe("permission", () => {
+  it("reports granted", async () => {
+    await expect(getPermission()).resolves.toBe("granted");
+  });
+
+  it("treats a refusal that cannot be re-asked as denied, not undetermined", async () => {
+    /*
+     * The distinction the whole permission flow rests on. iOS sets `canAskAgain` false after a
+     * refusal, and calling `requestPermissionsAsync` then resolves false without showing
+     * anything — so reporting it as "undetermined" would have the app queue up a prompt the
+     * OS will never display, and the user would be shown a rationale dialog leading nowhere.
+     */
+    mocked.getPermissionsAsync.mockResolvedValue({
+      status: "undetermined",
+      canAskAgain: false,
+    });
+
+    await expect(getPermission()).resolves.toBe("denied");
+  });
+
+  it("reports undetermined only when the prompt can still be shown", async () => {
+    mocked.getPermissionsAsync.mockResolvedValue({
+      status: "undetermined",
+      canAskAgain: true,
+    });
+
+    await expect(getPermission()).resolves.toBe("undetermined");
+  });
+
+  it("degrades to denied rather than throwing when the OS call fails", async () => {
+    // Nothing here is worth taking a screen down for. A caller that cannot notify still has
+    // to render the rest timer.
+    mocked.getPermissionsAsync.mockRejectedValue(new Error("no native module"));
+
+    await expect(getPermission()).resolves.toBe("denied");
+  });
+
+  it("never asks for critical alerts", async () => {
+    /*
+     * Overriding silent mode on iOS needs Apple's Critical Alerts entitlement, which this app
+     * does not hold — and requesting a capability the app is not entitled to makes the WHOLE
+     * request fail rather than degrade, costing the ordinary permission too.
+     */
+    mocked.requestPermissionsAsync.mockResolvedValue({ status: "granted" });
+
+    await requestPermission();
+
+    const options = mocked.requestPermissionsAsync.mock.calls[0][0];
+    expect(options.ios).not.toHaveProperty("allowCriticalAlerts");
+  });
+});
+
+describe("scheduling", () => {
+  it("hands the deadline to the OS as a date trigger", async () => {
+    const at = Date.now() + 10 * MINUTE;
+
+    await scheduleAt({ title: "Rest complete", body: "You rested for 10 minutes.", at });
+
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
+    expect(call.trigger.type).toBe("date");
+    expect((call.trigger.date as Date).getTime()).toBe(at);
+  });
+
+  it("drops a deadline that has already passed instead of firing it immediately", async () => {
+    /*
+     * expo-notifications fires a past DATE trigger straight away. The one way to reach that
+     * branch is a rest whose deadline expired while the app was closed — so the default
+     * behaviour would buzz "your rest is over" long after the worker went back to work, at a
+     * moment that implies it just happened.
+     */
+    await expect(
+      scheduleAt({ title: "Rest complete", body: "…", at: Date.now() - MINUTE }),
+    ).resolves.toBeNull();
+
+    expect(mocked.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it("schedules nothing without permission", async () => {
+    mocked.getPermissionsAsync.mockResolvedValue({
+      status: "denied",
+      canAskAgain: false,
+    });
+
+    await expect(
+      scheduleAt({ title: "Rest complete", body: "…", at: Date.now() + MINUTE }),
+    ).resolves.toBeNull();
+    expect(mocked.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it("returns null rather than throwing when the OS refuses the schedule", async () => {
+    mocked.scheduleNotificationAsync.mockRejectedValue(new Error("quota"));
+
+    await expect(
+      scheduleAt({ title: "Rest complete", body: "…", at: Date.now() + MINUTE }),
+    ).resolves.toBeNull();
+  });
+
+  it("carries its data through, because cancellation matches on it", async () => {
+    await scheduleAt({
+      title: "Rest complete",
+      body: "…",
+      at: Date.now() + MINUTE,
+      data: { restDispatchId: "d1" },
+    });
+
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
+    expect(call.content.data).toEqual({ restDispatchId: "d1" });
+  });
+
+  it("presents immediately with a null trigger", async () => {
+    await expect(presentNow("New plan drafted", "…")).resolves.toBe(true);
+
+    const call = mocked.scheduleNotificationAsync.mock.calls[0][0];
+    expect(call.trigger).toBeNull();
+  });
+
+  it("presents nothing without permission", async () => {
+    mocked.getPermissionsAsync.mockResolvedValue({
+      status: "denied",
+      canAskAgain: false,
+    });
+
+    await expect(presentNow("New plan drafted", "…")).resolves.toBe(false);
+    expect(mocked.scheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelling by data key", () => {
+  it("cancels only the notifications tagged with that value", async () => {
+    /*
+     * The function the rest feature exists to get right. A missed cancellation buzzes "your
+     * rest is over" for a rest that was called off — and an over-eager one silently drops
+     * another worker's still-valid rest on the same device.
+     */
+    mocked.getAllScheduledNotificationsAsync.mockResolvedValue([
+      { identifier: "n1", content: { data: { restDispatchId: "d1" } } },
+      { identifier: "n2", content: { data: { restDispatchId: "d2" } } },
+      { identifier: "n3", content: { data: { kind: "plan-drafted" } } },
+      { identifier: "n4", content: { data: {} } },
+    ]);
+
+    await cancelScheduledFor("restDispatchId", "d1");
+
+    const cancelled = mocked.cancelScheduledNotificationAsync.mock.calls.map(
+      (call) => call[0],
+    );
+    expect(cancelled).toEqual(["n1"]);
+  });
+
+  it("does nothing, quietly, when there is nothing scheduled", async () => {
+    await cancelScheduledFor("restDispatchId", "d1");
+
+    expect(mocked.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+  });
+
+  it("swallows a failure to read the scheduled list", async () => {
+    // Reached from a card being dismissed. Throwing here would turn a tidy-up into a visible
+    // failure on the screen that triggered it.
+    mocked.getAllScheduledNotificationsAsync.mockRejectedValue(new Error("nope"));
+
+    await expect(cancelScheduledFor("restDispatchId", "d1")).resolves.toBeUndefined();
+  });
+});
+
+describe("startup configuration", () => {
+  it("registers a foreground handler that actually shows something", async () => {
+    /*
+     * Without this, iOS displays nothing at all while the app is open. The rest timer fires at
+     * a moment the worker may well be looking at the screen, so the default would make the
+     * feature look broken on one platform only.
+     */
+    await configureNotifications();
+
+    const handler = mocked.setNotificationHandler.mock.calls[0][0];
+    await expect(handler.handleNotification()).resolves.toEqual(
+      expect.objectContaining({ shouldShowBanner: true, shouldShowList: true }),
+    );
+  });
+
+  it("plays a sound, which is what produces the vibration on iOS", async () => {
+    await configureNotifications();
+
+    const handler = mocked.setNotificationHandler.mock.calls[0][0];
+    await expect(handler.handleNotification()).resolves.toEqual(
+      expect.objectContaining({ shouldPlaySound: true }),
+    );
+  });
+
+  it("does not fail startup when the channel cannot be created", async () => {
+    // A channel that could not be created costs the vibration pattern and the heads-up, not
+    // the notification — and certainly not the app launching.
+    mocked.setNotificationChannelAsync.mockRejectedValueOnce(new Error("no native module"));
+
+    await expect(configureNotifications()).resolves.toBeUndefined();
+  });
+});
+
+describe("taps", () => {
+  it("delivers the notification that launched the app from cold", async () => {
+    /*
+     * The case that is invisible in testing and is the whole point in the field. A tap that
+     * starts the app fires no listener — it happened before any JavaScript was running — and
+     * is held in `getLastNotificationResponse` instead.
+     */
+    mocked.getLastNotificationResponse.mockReturnValue({
+      notification: { request: { content: { data: { kind: "plan-drafted" } } } },
+    });
+    const handler = jest.fn();
+
+    onNotificationTapped(handler);
+
+    expect(handler).toHaveBeenCalledWith({ data: { kind: "plan-drafted" } });
+  });
+
+  it("delivers nothing when the app was not launched from a notification", async () => {
+    mocked.getLastNotificationResponse.mockReturnValue(null);
+    const handler = jest.fn();
+
+    onNotificationTapped(handler);
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("delivers a tap that arrives while the app is running", async () => {
+    const handler = jest.fn();
+    onNotificationTapped(handler);
+
+    const listener = mocked.addNotificationResponseReceivedListener.mock.calls[0][0];
+    listener({ notification: { request: { content: { data: { restDispatchId: "d1" } } } } });
+
+    expect(handler).toHaveBeenCalledWith({ data: { restDispatchId: "d1" } });
+  });
+
+  it("stops delivering once unsubscribed", async () => {
+    const remove = jest.fn();
+    mocked.addNotificationResponseReceivedListener.mockReturnValueOnce({ remove });
+
+    const unsubscribe = onNotificationTapped(jest.fn());
+    unsubscribe();
+
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it("still subscribes when the launch lookup throws", async () => {
+    // A tap that cannot be read is not worth losing every later one over.
+    mocked.getLastNotificationResponse.mockImplementationOnce(() => {
+      throw new Error("nope");
+    });
+    const handler = jest.fn();
+
+    expect(() => onNotificationTapped(handler)).not.toThrow();
+    expect(handler).not.toHaveBeenCalled();
+    expect(mocked.addNotificationResponseReceivedListener).toHaveBeenCalled();
+  });
+});
+
+describe("cancelling everything", () => {
+  it("clears every pending notification, for sign-out", async () => {
+    await cancelAllScheduled();
+
+    expect(mocked.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
+  });
+
+  it("swallows a failure, because sign-out must complete regardless", async () => {
+    mocked.cancelAllScheduledNotificationsAsync.mockRejectedValueOnce(new Error("nope"));
+
+    await expect(cancelAllScheduled()).resolves.toBeUndefined();
+  });
+});

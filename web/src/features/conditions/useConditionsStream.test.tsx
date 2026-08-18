@@ -16,6 +16,9 @@ function snapshot(wbgt: number, observedAt: string): ConditionsSnapshot {
     lightning: null,
     conditions: {
       wbgt,
+      currentBand: null,
+      forecastBand: null,
+      forecastWbgt30m: null,
       temperature: 32,
       humidity: 70,
       windSpeed: 2,

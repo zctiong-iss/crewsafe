@@ -504,8 +504,9 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   default_cache_behavior {
-    target_origin_id       = "backend"
-    viewer_protocol_policy = "redirect-to-https"
+    target_origin_id           = "backend"
+    viewer_protocol_policy     = "redirect-to-https"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.api_security.id
 
     # The full set. Omitting the state-changing methods rejects every write
     # endpoint at the edge, before the application sees it.

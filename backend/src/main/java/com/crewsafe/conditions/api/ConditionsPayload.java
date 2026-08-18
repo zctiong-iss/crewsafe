@@ -1,10 +1,11 @@
 package com.crewsafe.conditions.api;
 
-import com.crewsafe.weather.domain.WeatherQualityStatus;
-import com.crewsafe.weather.domain.WeatherSource;
-
 import java.math.BigDecimal;
 import java.time.Instant;
+
+import com.crewsafe.weather.domain.WbgtBand;
+import com.crewsafe.weather.domain.WeatherQualityStatus;
+import com.crewsafe.weather.domain.WeatherSource; 
 
 /**
  * The weather half of a {@link ConditionsSnapshot}. {@code freshness} is recomputed on
@@ -12,7 +13,9 @@ import java.time.Instant;
  *
  * @author Jemilin Beulah
  */
-public record ConditionsPayload(BigDecimal wbgt, BigDecimal temperature, BigDecimal humidity,
-                                 BigDecimal windSpeed, BigDecimal rainfall, Instant observedAt,
-                                 WeatherSource source, WeatherQualityStatus freshness) {
+
+public record ConditionsPayload(BigDecimal wbgt, WbgtBand currentBand, WbgtBand forecastBand,
+                                BigDecimal forecastWbgt30m, BigDecimal temperature, BigDecimal humidity,
+                                BigDecimal windSpeed, BigDecimal rainfall, Instant observedAt,
+                                WeatherSource source, WeatherQualityStatus freshness) {
 }

@@ -5,7 +5,7 @@
 # Tests. Starlette 1.x uses the renamed HTTPX 2 package for TestClient.
 coverage==7.15.0
 httpx2==2.10.0
-pytest==8.3.5
+pytest==8.4.2
 pytest-asyncio==0.24.0
 
 # SHAP driver importance (SCRUM-152), computed offline in crewsafe_ml/training.py

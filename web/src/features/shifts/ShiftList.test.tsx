@@ -7,6 +7,7 @@ import { http, HttpResponse } from "msw";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { fakeUserManager } from "@/test/fakeUserManager";
 import { server } from "@/test/mocks/server";
+import { expectNoA11yViolations } from "@/test/a11y";
 import { App } from "@/app/App";
 import "@testing-library/jest-dom/vitest";
 
@@ -28,6 +29,14 @@ describe("ShiftList", () => {
     renderApp();
     expect(await screen.findByText(/10 Aug/)).toBeInTheDocument();
     expect(screen.getByText("1 worker")).toBeInTheDocument();
+  });
+
+  it("has no accessibility violations", async () => {
+    const { container } = renderApp();
+
+    // Mounts the whole App at /shifts, so axe also sees the shell's nav landmarks, not just the list.
+    expect(await screen.findByText(/10 Aug/)).toBeInTheDocument();
+    await expectNoA11yViolations(container);
   });
 
   it("expands a card to show its crew", async () => {

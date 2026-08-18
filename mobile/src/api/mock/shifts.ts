@@ -162,6 +162,54 @@ export function mockListSiteWorkers(siteId: string): SiteWorker[] {
   );
 }
 
+/**
+ * Refuses exactly what the server refuses, and that is the point of it existing.
+ *
+ * A mock that always succeeded would let the screens be built against a contract the backend
+ * does not honour - the SCRUM-120 numeric-field bug got through precisely because the mock
+ * repeated the client's mistake, so every test agreed with the mock and disagreed with the
+ * server. These two mirror `ShiftService.cancelShift`/`closeShift` transition by transition.
+ */
+function mockTerminalTransition(
+  siteId: string,
+  shiftId: string,
+  next: "CANCELLED" | "CLOSED",
+): Shift {
+  assertAllowed();
+  const shift = shifts.find((s) => s.id === shiftId && s.siteId === siteId);
+  if (!shift) throw new ApiError("not-found", "No such shift under this site", 404, null);
+
+  // PLANNED or ACTIVE only. A terminal shift stays terminal - there is no un-cancel or un-close.
+  if (shift.status !== "PLANNED" && shift.status !== "ACTIVE") {
+    throw new ApiError(
+      "bad-request",
+      `Shift cannot be ${next === "CLOSED" ? "closed" : "cancelled"} from status ${shift.status}`,
+      400,
+      null,
+    );
+  }
+
+  shift.status = next;
+  return { ...shift };
+}
+
+export function mockCancelShift(siteId: string, shiftId: string, reason: string): Shift {
+  // @NotBlank server-side. Blank here too, or the sheet could be built without noticing.
+  if (!reason.trim()) {
+    throw new ApiError("bad-request", "A reason is required to cancel a shift", 400, null);
+  }
+  return mockTerminalTransition(siteId, shiftId, "CANCELLED");
+}
+
+export function mockCloseShift(siteId: string, shiftId: string): Shift {
+  const shift = shifts.find((s) => s.id === shiftId && s.siteId === siteId);
+  // The rule that makes close different from cancel: a shift cannot be closed early.
+  if (shift && new Date(shift.endsAt).getTime() > Date.now()) {
+    throw new ApiError("bad-request", "Shift has not yet ended and cannot be closed", 400, null);
+  }
+  return mockTerminalTransition(siteId, shiftId, "CLOSED");
+}
+
 export function mockDeleteShift(siteId: string, shiftId: string): void {
   assertAllowed();
   const index = shifts.findIndex((s) => s.id === shiftId && s.siteId === siteId);

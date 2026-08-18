@@ -129,7 +129,12 @@
     "display": "显示",
     "about": "关于",
     "aboutVersion": "版本 {{version}}",
-    "aboutBody": "为新加坡户外作业人员提供热应激防护。"
+    "aboutBody": "为新加坡户外作业人员提供热应激防护。",
+    "notifications": "通知",
+    "notificationsLabel": "提醒与提示",
+    "notificationsHint": "休息结束或有方案待决定时震动提醒。",
+    "notificationsBlockedHint": "已在手机系统设置中关闭。CrewSafe 无法为您重新开启。",
+    "notificationsOpenSettings": "打开手机设置"
   },
   "profile": {
     "title": "我的",
@@ -163,7 +168,8 @@
     "status": {
       "PLANNED": "已计划",
       "ACTIVE": "进行中",
-      "CLOSED": "已结束"
+      "CLOSED": "已结束",
+      "CANCELLED": "已取消"
     },
     "detailTitle": "班次",
     "assignments": "作业班组",
@@ -238,7 +244,24 @@
     "removeWorkerBody": "要将 {{name}} 移出此班次吗？其任务和适应天数将被清除。",
     "removeWorkerConfirm": "移除",
     "removeWorkerFailedTitle": "未能移除工人",
-    "viewRecommendations": "此班次的拟定方案"
+    "viewRecommendations": "此班次的拟定方案",
+    "closeButton": "结束班次",
+    "closeTitle": "结束此班次？",
+    "closeBody": "这会记录该班次已执行并已完成，且无法撤销。",
+    "closeConfirm": "结束班次",
+    "closeNotYetEnded": "班次结束后方可关闭。",
+    "closeFailedTitle": "班次未结束",
+    "closedToast": "班次已结束",
+    "cancelButton": "取消班次",
+    "cancelTitle": "取消此班次？",
+    "cancelBody": "这会记录该班次未发生。班组仍会列出，取消原因会被保留，且无法撤销。",
+    "cancelReasonLabel": "为何取消此班次？",
+    "cancelReasonRequired": "取消前请填写原因。",
+    "cancelConfirm": "取消班次",
+    "cancelling": "正在取消",
+    "cancelFailedTitle": "班次未取消",
+    "cancelledToast": "班次已取消",
+    "ending": "处理中"
   },
   "weather": {
     "title": "环境状况",
@@ -269,7 +292,16 @@
     "noReading": "无读数",
     "degrees": "{{value}}°C",
     "siteRowReading": "{{site}}，{{value}} 度，{{band}}",
-    "siteRowNoReading": "{{site}}，无读数"
+    "siteRowNoReading": "{{site}}，无读数",
+    "statusButtonLabel": "关于此读数",
+    "statusButtonHint": "说明此读数为何被这样标记。",
+    "statusExplain": "为什么会显示这个？",
+    "statusObservedAt": "读数采集时间：{{time}}。",
+    "statusLiveBody": "此读数为最新，无需处理。",
+    "statusErrorTitle": "无法加载天气",
+    "statusErrorBody": "您的手机无法连接 CrewSafe。该工地可能仍有最新读数，请在有信号后重试。",
+    "statusUnknownTitle": "无法识别的读数状态",
+    "statusUnknownBody": "本应用无法识别此读数的状态。请将其视为未经确认，并遵循您工地的程序。"
   },
   "forecast": {
     "title": "WBGT 预报",
@@ -635,6 +667,7 @@
     "minuteInput": "分钟"
   },
   "oversight": {
+    "unknownShift": "班次已不在列表中",
     "tabTitle": "监管",
     "title": "监管",
     "showPlans": "计划",
@@ -646,5 +679,17 @@
     "awaitingCount_other": "{{count}} 项待处理",
     "openPlan": "打开 {{time}} 拟定的计划",
     "supervisorLabel": "工地主管：{{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "让 CrewSafe 提醒您",
+    "rationaleBody": "休息结束时，以及有方案需要您决定时，CrewSafe 可以震动提醒您。仅此而已。您随时可以在“设置”中关闭。",
+    "rationaleAccept": "开启",
+    "rationaleDecline": "暂不",
+    "restEndTitle": "休息结束",
+    "restEndBody_one": "您已休息 {{count}} 分钟，可以返回工作。",
+    "restEndBody_other": "您已休息 {{count}} 分钟，可以返回工作。",
+    "planDraftedTitle": "已生成新方案",
+    "planDraftedBody_one": "有一份新的 AI 起草方案等待您决定。",
+    "planDraftedBody_other": "有 {{count}} 份新的 AI 起草方案等待您决定。"
   }
 }

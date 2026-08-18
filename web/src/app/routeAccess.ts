@@ -16,6 +16,12 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/shifts/new": MANAGEMENT_ROLES,
   "/shifts/:shiftId/edit": MANAGEMENT_ROLES,
   "/conditions": MANAGEMENT_ROLES,
+  // Supervisor tool: "so I can follow up before the shift begins" — SUPERVISOR + SAFETY_MANAGER + ADMIN.
+  "/readiness": MANAGEMENT_ROLES,
+  // Manager evidence dashboard (EP-07): inspector-facing compliance/response-time summaries.
+  // SAFETY_MANAGER only — an administrator's UI is scoped to the admin console alone (see the
+  // note at the top of this file).
+  "/insights": ["SAFETY_MANAGER"],
   // Same audience as /conditions, which carries the derived stop-work banner this tab's
   // history table backs — a worker already gets this state via the mobile shift screen.
   "/lightning": MANAGEMENT_ROLES,

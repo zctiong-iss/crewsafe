@@ -10,6 +10,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 WORKFLOW="$ROOT/.github/workflows/web-sync.yml"
 SYNC_SCRIPT="$ROOT/web/scripts/sync-static-site.sh"
+EDGE_CHECKER="$ROOT/web/scripts/verify-edge-contract.sh"
+WEB_SECURITY="$ROOT/infra/terraform/compute/web_security.tf"
+COMPUTE="$ROOT/infra/terraform/compute/main.tf"
 TESTS_RUN=0
 TESTS_FAILED=0
 TMP_DIRS=()
@@ -236,6 +239,7 @@ assert_rejected_sync_fixture() {
 
 check_file "web sync workflow exists" "$WORKFLOW"
 check_file "shared static sync script exists" "$SYNC_SCRIPT"
+check_file "edge security contract checker exists" "$EDGE_CHECKER"
 TESTS_RUN=$((TESTS_RUN + 1))
 if workflow_policy_guard "$WORKFLOW"; then
   pass "base workflow passes policy guard"
@@ -284,6 +288,15 @@ contains_in "sync script excludes the SPA shell" "$SYNC_SCRIPT" '--exclude "inde
 contains_in "sync script gives assets immutable caching" "$SYNC_SCRIPT" '--cache-control "public, max-age=31536000, immutable"'
 contains_in "sync script uploads the SPA shell separately" "$SYNC_SCRIPT" 'aws s3 cp dist/index.html'
 contains_in "sync script prevents SPA shell caching" "$SYNC_SCRIPT" '--cache-control "no-store"'
+
+contains_in "web policy declares enforced CSP" "$WEB_SECURITY" "content_security_policy"
+not_contains_in "web policy no longer emits CSP Report-Only" "$WEB_SECURITY" "Content-Security-Policy-Report-Only"
+contains_in "web and API policies remove Server" "$WEB_SECURITY" "remove_headers_config"
+contains_in "API response policy exists" "$WEB_SECURITY" '"api_security"'
+contains_in "backend attaches API response policy" "$COMPUTE" "aws_cloudfront_response_headers_policy.api_security.id"
+contains_in "edge checker reads enforced CSP" "$EDGE_CHECKER" "ContentSecurityPolicy.ContentSecurityPolicy"
+not_contains_in "edge checker does not accept Report-Only fallback" "$EDGE_CHECKER" 'csp_value="${enforced_csp:-$report_only_csp}"'
+contains_in "edge checker verifies Server removal" "$EDGE_CHECKER" "remove_headers"
 
 assert_order "build precedes credential assumption" "$WORKFLOW" \
   'npm run build' 'configure-aws-credentials'

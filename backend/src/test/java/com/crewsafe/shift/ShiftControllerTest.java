@@ -185,9 +185,14 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     }
 
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
+        return createShiftWithAssignments(startsAt, endsAt, List.of());
+    }
+
+    private String createShiftWithAssignments(Instant startsAt, Instant endsAt,
+            List<Map<String, Object>> assignments) throws Exception {
         return objectMapper.readTree(
                         postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                                        shiftBody(startsAt, endsAt, List.of()))
+                                        shiftBody(startsAt, endsAt, assignments))
                                 .andExpect(status().isCreated())
                                 .andReturn().getResponse().getContentAsString())
                 .get("id").asText();
@@ -807,6 +812,71 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         String shiftId = createEndedShift();
 
         closeShift(shiftId, supervisorBToken).andExpect(status().isForbidden());
+    }
+
+    // --- SCRUM-452: staffing a worker onto a shift is audited, from either path ---
+
+    /**
+     * The trail recorded assignment corrections and removals from the start but never the
+     * original assignment, so it could show a worker being taken off a shift while staying
+     * silent on who put them there. Found by generating a real audit export (US-15) and
+     * noticing the assignment was missing from it.
+     */
+    @Test
+    void addingAWorkerToAnExistingShiftIsAudited() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        String shiftId = createShift(startsAt, startsAt.plus(8, ChronoUnit.HOURS));
+        String assignmentId = addAssignment(shiftId, "HEAVY");
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_ADDED))
+                .filteredOn(e -> UUID.fromString(assignmentId).equals(e.getTargetId()))
+                .singleElement()
+                .satisfies(e -> {
+                    assertThat(e.getActorId()).isEqualTo(supervisorA.getId());
+                    assertThat(e.getDetail())
+                            .contains("Assigned worker " + workerA.getId())
+                            .contains("to shift " + shiftId)
+                            .contains("intensity HEAVY");
+                });
+    }
+
+    /** Same fact, other path: assignments given at creation must be audited identically. */
+    @Test
+    void workersStaffedAtShiftCreationAreEachAudited() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+        AppUser secondWorker = user(Role.WORKER);
+        memberships.save(new SiteMembership(secondWorker.getId(), siteA.getId()));
+
+        String shiftId = createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS), List.of(
+                assignmentBody(workerA.getId(), "Excavation", "HEAVY", 2),
+                assignmentBody(secondWorker.getId(), null, "LIGHT", null)));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_ADDED))
+                .filteredOn(e -> e.getDetail() != null && e.getDetail().contains("to shift " + shiftId))
+                .hasSize(2)
+                .satisfiesExactlyInAnyOrder(
+                        e -> assertThat(e.getDetail())
+                                .contains("intensity HEAVY")
+                                .contains("acclimatisation day 2")
+                                .contains("task Excavation"),
+                        // A null acclimatisation day means fully acclimatised, and says so
+                        // rather than leaving the clause out and reading as lost data.
+                        e -> assertThat(e.getDetail())
+                                .contains("intensity LIGHT")
+                                .contains("fully acclimatised"));
+    }
+
+    /** SHIFT_CREATED stays one-per-shift; the assignment rows are additional, not a change to it. */
+    @Test
+    void staffingAtCreationStillWritesExactlyOneShiftCreatedEvent() throws Exception {
+        Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
+
+        UUID shiftId = UUID.fromString(createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS),
+                List.of(assignmentBody(workerA.getId(), null, "MODERATE", null))));
+
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED))
+                .filteredOn(e -> shiftId.equals(e.getTargetId()))
+                .hasSize(1);
     }
 
     // --- SCRUM-159/160-fix: correct an assignment ---

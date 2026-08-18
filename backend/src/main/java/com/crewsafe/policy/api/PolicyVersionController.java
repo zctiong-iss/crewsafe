@@ -59,6 +59,14 @@ public class PolicyVersionController {
             BigDecimal wbgtEmergencyStop, String notes, UUID createdBy,
             Instant createdAt, Instant updatedAt, Instant activatedAt, Instant supersededAt) {
 
+        /** @deprecated retained for compatibility; ignored by policy enforcement. */
+        @SuppressWarnings("java:S1133") // Retained API field pending the compatibility-removal release.
+        @Deprecated(since = "2026.08", forRemoval = false)
+        @Override
+        public BigDecimal wbgtEmergencyStop() {
+            return wbgtEmergencyStop;
+        }
+
         static PolicyVersionResponse from(PolicyVersion v) {
             return new PolicyVersionResponse(
                     v.getId(), v.getSiteId(), v.getVersionLabel(), v.getSource(), v.getEffectiveDate(),
@@ -88,6 +96,14 @@ public class PolicyVersionController {
             @NotNull @DecimalMin("15") BigDecimal wbgtThresholdFullHeavy,
             @NotNull @DecimalMin("20") @DecimalMax("40") BigDecimal wbgtEmergencyStop,
             String notes) {
+
+        /** @deprecated retained for compatibility; ignored by policy enforcement. */
+        @SuppressWarnings("java:S1133") // Retained API field pending the compatibility-removal release.
+        @Deprecated(since = "2026.08", forRemoval = false)
+        @Override
+        public BigDecimal wbgtEmergencyStop() {
+            return wbgtEmergencyStop;
+        }
 
         PolicyVersion toDraft() {
             return PolicyVersion.builder()
