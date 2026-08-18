@@ -130,7 +130,12 @@
     "display": "Paparan",
     "about": "Perihal",
     "aboutVersion": "Versi {{version}}",
-    "aboutBody": "Keselamatan tekanan haba untuk kru luar di Singapura."
+    "aboutBody": "Keselamatan tekanan haba untuk kru luar di Singapura.",
+    "notifications": "Pemberitahuan",
+    "notificationsLabel": "Amaran dan peringatan",
+    "notificationsHint": "Bergetar apabila rehat tamat, atau apabila pelan perlukan keputusan anda.",
+    "notificationsBlockedHint": "Dimatikan dalam tetapan telefon anda. CrewSafe tidak boleh menghidupkannya semula untuk anda.",
+    "notificationsOpenSettings": "Buka tetapan telefon"
   },
   "profile": {
     "title": "Profil",
@@ -288,7 +293,16 @@
     "noReading": "Tiada bacaan",
     "degrees": "{{value}}°C",
     "siteRowReading": "{{site}}, {{value}} darjah, {{band}}",
-    "siteRowNoReading": "{{site}}, tiada bacaan"
+    "siteRowNoReading": "{{site}}, tiada bacaan",
+    "statusButtonLabel": "Tentang bacaan ini",
+    "statusButtonHint": "Menerangkan sebab bacaan ini ditandakan sedemikian.",
+    "statusExplain": "Mengapa saya melihat ini?",
+    "statusObservedAt": "Bacaan diambil pada {{time}}.",
+    "statusLiveBody": "Bacaan ini terkini. Tiada apa-apa yang memerlukan perhatian anda.",
+    "statusErrorTitle": "Cuaca tidak dapat dimuatkan",
+    "statusErrorBody": "Telefon anda tidak dapat menghubungi CrewSafe. Tapak mungkin masih mempunyai bacaan terkini — cuba lagi setelah anda ada isyarat.",
+    "statusUnknownTitle": "Keadaan bacaan tidak dikenali",
+    "statusUnknownBody": "Aplikasi ini tidak mengenali keadaan bacaan ini. Anggap ia belum disahkan dan ikut prosedur tapak anda."
   },
   "forecast": {
     "title": "Ramalan WBGT",
@@ -665,5 +679,17 @@
     "awaitingCount_other": "{{count}} menunggu",
     "openPlan": "Buka pelan yang dirangka {{time}}",
     "supervisorLabel": "Penyelia tapak: {{name}}"
+  },
+  "notifications": {
+    "rationaleTitle": "Biar CrewSafe beritahu anda",
+    "rationaleBody": "CrewSafe boleh menggetarkan telefon anda apabila rehat anda tamat, dan apabila sesuatu pelan memerlukan keputusan anda. Tiada yang lain. Anda boleh mematikannya bila-bila masa dalam Tetapan.",
+    "rationaleAccept": "Hidupkan",
+    "rationaleDecline": "Bukan sekarang",
+    "restEndTitle": "Rehat selesai",
+    "restEndBody_one": "Anda telah berehat selama {{count}} minit. Anda boleh kembali bekerja.",
+    "restEndBody_other": "Anda telah berehat selama {{count}} minit. Anda boleh kembali bekerja.",
+    "planDraftedTitle": "Pelan baharu dirangka",
+    "planDraftedBody_one": "Satu pelan baharu rangkaan AI menunggu keputusan anda.",
+    "planDraftedBody_other": "{{count}} pelan baharu rangkaan AI menunggu keputusan anda."
   }
 }

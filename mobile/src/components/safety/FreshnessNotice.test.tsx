@@ -4,6 +4,8 @@
  * The notice is what turns a stale/delayed/simulated badge into an instruction — see the
  * file's own header comment. Asserts the tone/key pairing for every status that shows a
  * notice, and that a fresh (LIVE) reading shows nothing at all.
+ *
+ * @author Justin Chua
  */
 import { render } from "@testing-library/react-native";
 
@@ -21,7 +23,7 @@ jest.mock("@/hooks/useReduceMotion", () => ({
   useSystemReduceMotion: () => false,
 }));
 
-import FreshnessNotice from "./FreshnessNotice";
+import FreshnessNotice, { showsStandingBanner } from "./FreshnessNotice";
 import type { WeatherQualityStatus } from "@/types/domain";
 
 describe.each<[WeatherQualityStatus, string]>([
@@ -47,4 +49,29 @@ describe("accessibility (SCRUM-352 / FR-006, User Story 3)", () => {
     // directly, rather than only on the child <Text>, is what a screen reader actually reads.
     expect(getByLabelText("freshness.staleWarning")).not.toBeNull();
   });
+});
+
+describe("which states keep a banner that is always on screen", () => {
+  /*
+   * The decision at the centre of the weather-status change, and the reason it is a named
+   * function rather than a `status === "STALE"` on the screen.
+   *
+   * DELAYED and SIMULATED moved behind a tap on the weather card, because a permanent banner
+   * on the screen a worker checks most often is read as furniture by the tenth viewing. STALE
+   * did not move with them: §7.1's rule matrix requires stale data to "show warning", and a
+   * warning only visible after tapping an icon nobody had reason to tap has not been shown.
+   *
+   * Anyone tidying this into consistency with the others is overruling that, and this test is
+   * where they find out.
+   */
+  it("keeps one for STALE, where the reading must not be acted on at all", () => {
+    expect(showsStandingBanner("STALE")).toBe(true);
+  });
+
+  it.each(["DELAYED", "SIMULATED", "LIVE"] as const)(
+    "does not keep one for %s",
+    (status) => {
+      expect(showsStandingBanner(status)).toBe(false);
+    },
+  );
 });

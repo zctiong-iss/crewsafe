@@ -4,6 +4,8 @@
  * Everything here exists because a *native* module has no JS implementation under Jest. The
  * rule applied throughout: mock the native boundary, never the app's own logic. A mock of our
  * own code would make a test that passes while the app is broken.
+ *
+ * @author Justin Chua
  */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -52,3 +54,67 @@ console.warn = (...args) => {
   if (first.includes("useNativeDriver")) return;
   realWarn(...args);
 };
+
+/*
+ * expo-notifications is entirely native: channels, authorisation and the scheduler all live on
+ * the other side of the bridge.
+ *
+ * Mocked per SUBMODULE rather than at the `expo-notifications` barrel, matching how
+ * `notifications/notificationClient.ts` imports them — and it has to, because that barrel is
+ * fatal on Android in Expo Go. See the long note at the top of that file. Mocking the barrel
+ * here would leave the real native modules loaded for the paths the app actually uses, and the
+ * mock would silently do nothing.
+ *
+ * Mocked at the package boundary rather than at our own module, so `notificationClient`'s real
+ * logic — the past-deadline guard, the permission normalisation, the data-key matching — is
+ * still the code under test.
+ */
+const notificationMocks = {
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted", canAskAgain: true })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: "granted" })),
+  scheduleNotificationAsync: jest.fn(() => Promise.resolve("notification-id")),
+  cancelScheduledNotificationAsync: jest.fn(() => Promise.resolve()),
+  cancelAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve()),
+  getAllScheduledNotificationsAsync: jest.fn(() => Promise.resolve([])),
+  // Synchronous, matching the non-deprecated API the client now uses.
+  getLastNotificationResponse: jest.fn(() => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+};
+
+// Shared so a test can reach the same jest.fn the client will call, whichever submodule it
+// happens to live in. `globalThis` rather than `global`: the latter is a Node-ism this
+// project's ESLint config does not declare, and the standard spelling works in both.
+globalThis.__notificationMocks = notificationMocks;
+
+jest.mock("expo-notifications/build/NotificationsHandler", () => ({
+  setNotificationHandler: (...args) => notificationMocks.setNotificationHandler(...args),
+}));
+jest.mock("expo-notifications/build/NotificationPermissions", () => ({
+  getPermissionsAsync: (...args) => notificationMocks.getPermissionsAsync(...args),
+  requestPermissionsAsync: (...args) => notificationMocks.requestPermissionsAsync(...args),
+}));
+jest.mock("expo-notifications/build/NotificationsEmitter", () => ({
+  addNotificationResponseReceivedListener: (...args) =>
+    notificationMocks.addNotificationResponseReceivedListener(...args),
+  getLastNotificationResponse: (...args) => notificationMocks.getLastNotificationResponse(...args),
+}));
+jest.mock("expo-notifications/build/scheduleNotificationAsync", () => ({
+  scheduleNotificationAsync: (...args) => notificationMocks.scheduleNotificationAsync(...args),
+}));
+jest.mock("expo-notifications/build/cancelScheduledNotificationAsync", () => ({
+  cancelScheduledNotificationAsync: (...args) =>
+    notificationMocks.cancelScheduledNotificationAsync(...args),
+}));
+jest.mock("expo-notifications/build/cancelAllScheduledNotificationsAsync", () => ({
+  cancelAllScheduledNotificationsAsync: (...args) =>
+    notificationMocks.cancelAllScheduledNotificationsAsync(...args),
+}));
+jest.mock("expo-notifications/build/getAllScheduledNotificationsAsync", () => ({
+  getAllScheduledNotificationsAsync: (...args) =>
+    notificationMocks.getAllScheduledNotificationsAsync(...args),
+}));
+jest.mock("expo-notifications/build/setNotificationChannelAsync", () => ({
+  setNotificationChannelAsync: (...args) => notificationMocks.setNotificationChannelAsync(...args),
+}));

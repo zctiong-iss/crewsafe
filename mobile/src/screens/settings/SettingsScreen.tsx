@@ -18,10 +18,11 @@
  *
  * @author Justin Chua
  */
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { s, vs } from "react-native-size-matters";
 
@@ -34,8 +35,12 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   setFontScale,
   setHighContrast,
+  setNotificationsMuted,
   setReduceMotion,
 } from "@/store/reducers/preferencesSlice";
+import AppButton from "@/components/buttons/AppButton";
+import { getPermission, type NotificationPermission } from "@/notifications/notificationClient";
+import { useNotificationPermission } from "@/notifications/useNotificationPermission";
 import LanguageSheet from "@/components/sheets/LanguageSheet";
 import { languagesArr } from "@/localization/languagesList";
 import { FONT_SCALE_STEPS } from "@/styles/theme";
@@ -64,6 +69,31 @@ export default function SettingsScreen() {
   const reduceMotionPreference = useReduceMotionPreference();
 
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
+
+  /*
+   * ── THE SWITCH SHOWS THE OS's ANSWER, NOT A COPY OF IT ────────────────────────────────
+   * The operating system owns whether this app may notify, and that can be revoked outside
+   * the app at any time. A switch driven purely by the stored `notificationsMuted` flag would
+   * happily read "on" for notifications the OS has been silently dropping since the user
+   * turned them off in system settings a week ago.
+   *
+   * So the permission is read from the OS, and re-read on every focus — returning from the
+   * system settings screen is precisely the case where it will have changed, and it is the
+   * one moment nothing else would prompt a refresh.
+   */
+  const notificationsMuted = useAppSelector((state) => state.preferences.notificationsMuted);
+  const { ensure: ensureNotifications, openSystemSettings } = useNotificationPermission();
+  const [permission, setPermission] = useState<NotificationPermission>("undetermined");
+
+  const refreshPermission = useCallback(() => {
+    void getPermission().then(setPermission);
+  }, []);
+  useFocusEffect(refreshPermission);
+  useEffect(refreshPermission, [refreshPermission]);
+
+  const notificationsBlocked = permission === "denied";
+  const notificationsOn = permission === "granted" && !notificationsMuted;
+
 
   // The effective value, which may be true because the *device* says so.
   const reduceMotionEffective = useReduceMotion();
@@ -180,6 +210,60 @@ export default function SettingsScreen() {
               dispatch(setReduceMotion({ userId, reduceMotion: value }));
             }}
           />
+        </View>
+
+        {/* ────────────────────── Notifications ─────────────────────── */}
+        <AppText variant="subtitle" style={styles.sectionTitle}>
+          {t("settings.notifications")}
+        </AppText>
+
+        <View style={card}>
+          <AppSwitch
+            label={t("settings.notificationsLabel")}
+            hint={
+              // Three different truths, and conflating them would leave someone toggling a
+              // switch that cannot do anything. Blocked is the one that needs a way out.
+              notificationsBlocked
+                ? t("settings.notificationsBlockedHint")
+                : t("settings.notificationsHint")
+            }
+            value={notificationsOn}
+            // Locked when the OS has refused. Leaving it operable would imply the app can
+            // overrule a system permission, which it cannot — and a switch that flips back
+            // on its own reads as a bug rather than as a permission problem.
+            disabled={notificationsBlocked}
+            onValueChange={(value) => {
+              if (!value) {
+                dispatch(setNotificationsMuted(true));
+                return;
+              }
+              /*
+               * Unmute first, then ask.
+               *
+               * `ensure` refuses outright while muted — that is what mute means — so asking
+               * before clearing the flag would show nothing and silently leave the switch off.
+               */
+              dispatch(setNotificationsMuted(false));
+              void ensureNotifications().then(refreshPermission);
+            }}
+          />
+
+          {notificationsBlocked ? (
+            <>
+              <View
+                style={[styles.divider, { backgroundColor: theme.colors.border }]}
+                accessibilityElementsHidden
+              />
+              {/* The only route back. iOS shows its permission prompt once per install, so
+                  an app that has been refused cannot ask again from in here — it can only
+                  send the user to the place where the answer can be changed. */}
+              <AppButton
+                title={t("settings.notificationsOpenSettings")}
+                variant="secondary"
+                onPress={openSystemSettings}
+              />
+            </>
+          ) : null}
         </View>
 
         {/* ────────────────────────── About ─────────────────────────── */}

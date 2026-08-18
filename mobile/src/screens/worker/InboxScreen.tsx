@@ -25,6 +25,8 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import AppSwitch from "@/components/inputs/AppSwitch";
 import DispatchCard from "@/components/inbox/DispatchCard";
+import { useNotificationPermission } from "@/notifications/useNotificationPermission";
+import { restMinutesFor } from "@/helpers/restDuration";
 import SwipeToDismiss from "@/components/inbox/SwipeToDismiss";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
@@ -55,6 +57,38 @@ export default function InboxScreen() {
   const user = useAppSelector((state) => state.auth.user);
   const { status, acknowledged, inFlight, failures, dismissedIds, errorKey, requestId, refreshing } =
     useAppSelector((state) => state.dispatchInbox);
+
+  /*
+   * Asked here, and nowhere near app startup.
+   *
+   * iOS shows its notification prompt exactly once per install and a refusal cannot be
+   * re-asked from inside the app, so the app has one attempt and this is the best moment to
+   * spend it: the worker has just agreed to a rest they will be timed on, which makes "we
+   * will tell you when it is over" a statement about the thing they are already doing rather
+   * than an abstract request from a launch screen.
+   */
+  const { ensure: ensureNotifications } = useNotificationPermission();
+
+  const acknowledgeDispatch = useCallback(
+    (dispatchId: string, actionCode: string) => {
+      /*
+       * Fired without awaiting, and the acknowledgement does not wait for it.
+       *
+       * SCRUM-186 asks for one-tap acknowledgement, and putting a permission dialog in front
+       * of the request would make the tap conditional on answering a question about
+       * notifications. The rest is the point; the notification is an addition to it.
+       *
+       * Only for cards that will actually be timed. A HYDRATE card gets a three-minute dwell
+       * before it tidies itself away, which is not a rest and produces no notification — so
+       * asking for permission on one would spend the single attempt on a promise the app was
+       * never going to keep.
+       */
+      if (restMinutesFor(actionCode) !== null) void ensureNotifications();
+
+      void dispatch(acknowledge({ dispatchId }));
+    },
+    [dispatch, ensureNotifications],
+  );
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -203,7 +237,7 @@ export default function InboxScreen() {
             acknowledgedAt={acknowledged[item.id]?.acknowledgedAt ?? null}
             inFlight={inFlight.includes(item.id)}
             failureKey={failures[item.id] ?? null}
-            onAcknowledge={() => void dispatch(acknowledge({ dispatchId: item.id }))}
+            onAcknowledge={() => acknowledgeDispatch(item.id, item.actionCode)}
             locale={i18n.language}
             dismissAt={acknowledged[item.id]?.dismissAt ?? null}
             onExpire={() => {
