@@ -67,11 +67,13 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
 
     /**
      * Powers the SCRUM-291 auto-trigger's dedup guard. {@code findFirst}, not a unique query --
-     * nothing before this ticket enforced at most one open {@code PENDING_APPROVAL} per shift,
-     * so a pre-existing shift could in principle carry more than one; ordering by
-     * {@code createdAt} descending means only the newest is ever superseded, which is the one
-     * a supervisor would actually be looking at.
+     * nothing before this ticket enforced at most one open recommendation per shift, so a
+     * pre-existing shift could in principle carry more than one; ordering by {@code createdAt}
+     * descending means only the newest is ever superseded, which is the one a supervisor would
+     * actually be looking at. Matches any status in the set passed in, so a plan already
+     * {@code APPROVED} or {@code AUTO_DISPATCHED} can be superseded too, not only one still
+     * {@code PENDING_APPROVAL}.
      */
-    Optional<Recommendation> findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-            UUID shiftId, Recommendation.RecommendationStatus status);
+    Optional<Recommendation> findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+            UUID shiftId, Collection<Recommendation.RecommendationStatus> statuses);
 }

@@ -150,6 +150,37 @@ class RecommendationAutoTriggerServiceTest {
     }
 
     @Test
+    @DisplayName("A band change alone while lightning stop-work is still in force triggers nothing")
+    void bandChangeAloneDuringStopWorkTriggersNothing() {
+        when(conditionStates.findById(site.getId())).thenReturn(Optional.of(
+                new SiteConditionState(site.getId(), WbgtBand.BAND_31_TO_BELOW_32, LightningRiskState.STOP_WORK, NOW.minusSeconds(60))));
+        stubBand(new BigDecimal("32.50"));
+        stubLightning(LightningRiskState.STOP_WORK);
+
+        int triggeredCount = service.evaluateAllSites();
+
+        assertThat(triggeredCount).isZero();
+        verify(agentDraftService, never()).generateAuto(any(), any());
+    }
+
+    @Test
+    @DisplayName("Lightning clearing out of stop-work still triggers, even with the band unchanged")
+    void lightningClearingStopWorkStillTriggers() {
+        when(conditionStates.findById(site.getId())).thenReturn(Optional.of(
+                new SiteConditionState(site.getId(), WbgtBand.BAND_31_TO_BELOW_32, LightningRiskState.STOP_WORK, NOW.minusSeconds(60))));
+        stubBand(new BigDecimal("31.50"));
+        stubLightning(LightningRiskState.CLEAR);
+
+        UUID shiftId = UUID.randomUUID();
+        when(shifts.findEligibleForAutoTrigger(any(), any(), any())).thenReturn(List.of(shiftFor(shiftId)));
+
+        int triggeredCount = service.evaluateAllSites();
+
+        assertThat(triggeredCount).isEqualTo(1);
+        verify(agentDraftService).generateAuto(site.getId(), shiftId);
+    }
+
+    @Test
     @DisplayName("A sensor-fault reading is treated as no reading, not a real band")
     void sensorFaultReadingIsTreatedAsNoBand() {
         when(conditionStates.findById(site.getId())).thenReturn(Optional.of(

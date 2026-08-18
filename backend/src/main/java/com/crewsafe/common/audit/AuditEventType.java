@@ -130,6 +130,12 @@ public final class AuditEventType {
      * instead). System-triggered -- actorId is null. */
     public static final String ACTION_AUTO_DISPATCHED = "ACTION_AUTO_DISPATCHED";
 
+    /** A not-yet-acknowledged dispatch was cancelled because the recommendation it came from
+     * was superseded by a new auto-triggered draft (SCRUM-291's supersede reaching {@code
+     * APPROVED}/{@code AUTO_DISPATCHED} plans). System-triggered -- actorId is null, the same
+     * as {@link #RECOMMENDATION_SUPERSEDED}. */
+    public static final String ACTION_REVOKED = "ACTION_REVOKED";
+
     /** A worker logged a rest or a drink of water (US-11). */
     public static final String WELLBEING_LOGGED = "WELLBEING_LOGGED";
 

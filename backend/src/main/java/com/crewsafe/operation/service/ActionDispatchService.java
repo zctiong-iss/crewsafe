@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -131,6 +132,34 @@ public class ActionDispatchService {
         log.info("action_auto_dispatched");
 
         return saved;
+    }
+
+    /**
+     * Cancels a recommendation's dispatches that a worker has not yet acted on, when that
+     * recommendation is being superseded (SCRUM-291's supersede now also reaches {@code APPROVED}
+     * and {@code AUTO_DISPATCHED} plans, not only {@code PENDING_APPROVAL}). Scoped to {@code
+     * PENDING}/{@code LATE} only -- an {@code ACKNOWLEDGED} dispatch means a worker already
+     * started acting on it, and yanking it out from under them mid-action is worse than letting
+     * it run to {@code COMPLETED}; a {@code COMPLETED} one is already historical fact either way.
+     *
+     * <p>Default propagation, unlike {@link #dispatchAction}/{@link #autoDispatchAction}: those
+     * use {@code REQUIRES_NEW} because they are called from an {@code afterCommit} callback. This
+     * is called inline from {@code RecommendationService#revokeOutstandingDispatches}, itself
+     * inline from {@code AgentDraftService#supersedeOpenRecommendation} -- it must join that
+     * still-open transaction, so the cancellation rolls back together with the status flip to
+     * {@code SUPERSEDED} if the draft that follows fails.
+     */
+    @Transactional
+    public List<ActionDispatch> cancelOutstanding(UUID recommendationId) {
+        List<ActionDispatch> cancelled = new ArrayList<>();
+        for (ActionDispatch dispatch : actionDispatchRepository.findByRecommendationId(recommendationId)) {
+            if (dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.PENDING
+                    || dispatch.getStatus() == ActionDispatch.ActionDispatchStatus.LATE) {
+                dispatch.setStatus(ActionDispatch.ActionDispatchStatus.CANCELLED);
+                cancelled.add(actionDispatchRepository.save(dispatch));
+            }
+        }
+        return cancelled;
     }
 
     @Transactional

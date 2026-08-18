@@ -90,7 +90,16 @@ public class ActionDispatch {
         PENDING,
         LATE,
         ACKNOWLEDGED,
-        COMPLETED
+        COMPLETED,
+
+        /**
+         * The recommendation this dispatch was fanned out from was superseded before a worker
+         * acknowledged it (SCRUM-291's supersede reaching {@code APPROVED}/{@code
+         * AUTO_DISPATCHED} plans). Only a still-{@code PENDING} or {@code LATE} dispatch can
+         * reach this -- one already {@code ACKNOWLEDGED} is left to run to {@code COMPLETED}
+         * instead, see {@code ActionDispatchService#cancelOutstanding}.
+         */
+        CANCELLED
     }
 
     /** WORKER for a manual complete tap, SYSTEM for the auto-complete sweep (SCRUM-324). */
