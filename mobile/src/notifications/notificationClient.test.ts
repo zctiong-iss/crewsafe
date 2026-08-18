@@ -10,8 +10,11 @@
  * @author Justin Chua
  */
 import {
+  cancelAllScheduled,
   cancelScheduledFor,
+  configureNotifications,
   getPermission,
+  onNotificationTapped,
   presentNow,
   requestPermission,
   scheduleAt,
@@ -202,5 +205,124 @@ describe("cancelling by data key", () => {
     mocked.getAllScheduledNotificationsAsync.mockRejectedValue(new Error("nope"));
 
     await expect(cancelScheduledFor("restDispatchId", "d1")).resolves.toBeUndefined();
+  });
+});
+
+describe("startup configuration", () => {
+  it("registers a foreground handler that actually shows something", async () => {
+    /*
+     * Without this, iOS displays nothing at all while the app is open. The rest timer fires at
+     * a moment the worker may well be looking at the screen, so the default would make the
+     * feature look broken on one platform only.
+     */
+    await configureNotifications();
+
+    const handler = mocked.setNotificationHandler.mock.calls[0][0];
+    await expect(handler.handleNotification()).resolves.toEqual(
+      expect.objectContaining({ shouldShowBanner: true, shouldShowList: true }),
+    );
+  });
+
+  it("plays a sound, which is what produces the vibration on iOS", async () => {
+    await configureNotifications();
+
+    const handler = mocked.setNotificationHandler.mock.calls[0][0];
+    await expect(handler.handleNotification()).resolves.toEqual(
+      expect.objectContaining({ shouldPlaySound: true }),
+    );
+  });
+
+  it("does not fail startup when the channel cannot be created", async () => {
+    // A channel that could not be created costs the vibration pattern and the heads-up, not
+    // the notification — and certainly not the app launching.
+    mocked.setNotificationChannelAsync.mockRejectedValueOnce(new Error("no native module"));
+
+    await expect(configureNotifications()).resolves.toBeUndefined();
+  });
+});
+
+describe("taps", () => {
+  it("delivers the notification that launched the app from cold", async () => {
+    /*
+     * The case that is invisible in testing and is the whole point in the field. A tap that
+     * starts the app fires no listener — it happened before any JavaScript was running — and
+     * lives in `getLastNotificationResponseAsync` instead.
+     */
+    mocked.getLastNotificationResponseAsync.mockResolvedValue({
+      notification: { request: { content: { data: { kind: "plan-drafted" } } } },
+    });
+    const handler = jest.fn();
+
+    onNotificationTapped(handler);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(handler).toHaveBeenCalledWith({ data: { kind: "plan-drafted" } });
+  });
+
+  it("delivers a tap that arrives while the app is running", async () => {
+    const handler = jest.fn();
+    onNotificationTapped(handler);
+
+    const listener = mocked.addNotificationResponseReceivedListener.mock.calls[0][0];
+    listener({ notification: { request: { content: { data: { restDispatchId: "d1" } } } } });
+
+    expect(handler).toHaveBeenCalledWith({ data: { restDispatchId: "d1" } });
+  });
+
+  it("stops delivering once unsubscribed", async () => {
+    const remove = jest.fn();
+    mocked.addNotificationResponseReceivedListener.mockReturnValueOnce({ remove });
+
+    const unsubscribe = onNotificationTapped(jest.fn());
+    unsubscribe();
+
+    expect(remove).toHaveBeenCalled();
+  });
+
+  it("does not deliver a launch notification after unsubscribing", async () => {
+    /*
+     * The launch lookup is asynchronous, so a component that mounts and unmounts quickly can
+     * have its handler resolve after it is gone — which in React means setting state on an
+     * unmounted tree, or here, navigating a screen the user has already left.
+     */
+    let resolveLaunch: (value: unknown) => void = () => {};
+    mocked.getLastNotificationResponseAsync.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLaunch = resolve;
+      }),
+    );
+    const handler = jest.fn();
+
+    const unsubscribe = onNotificationTapped(handler);
+    unsubscribe();
+    resolveLaunch({ notification: { request: { content: { data: { kind: "plan-drafted" } } } } });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("survives a launch lookup that fails", async () => {
+    mocked.getLastNotificationResponseAsync.mockRejectedValueOnce(new Error("nope"));
+    const handler = jest.fn();
+
+    expect(() => onNotificationTapped(handler)).not.toThrow();
+    await Promise.resolve();
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
+describe("cancelling everything", () => {
+  it("clears every pending notification, for sign-out", async () => {
+    await cancelAllScheduled();
+
+    expect(mocked.cancelAllScheduledNotificationsAsync).toHaveBeenCalled();
+  });
+
+  it("swallows a failure, because sign-out must complete regardless", async () => {
+    mocked.cancelAllScheduledNotificationsAsync.mockRejectedValueOnce(new Error("nope"));
+
+    await expect(cancelAllScheduled()).resolves.toBeUndefined();
   });
 });

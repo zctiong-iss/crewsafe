@@ -306,28 +306,14 @@ export async function presentNow(
 }
 
 /**
- * Withdraw a notification that has not fired yet.
+ * Cancel every pending notification tagged with a given key.
  *
  * ── THE FUNCTION THIS MODULE EXISTS TO GET RIGHT ────────────────────────────────────────
  * A scheduled notification outlives whatever scheduled it. If a rest is called off, the card
  * swiped away, or the worker signs out, the pending notification is still sitting in the OS
  * with the app's name on it — and it will buzz "your rest is over" for a rest that never
  * happened. That is worse than no notification at all, because it is a safety app telling
- * someone a falsehood about their own break.
- *
- * Deliberately forgiving about an unknown id: the id may already have fired, or been cleared
- * by the OS, and a caller cancelling defensively is doing the right thing.
- */
-export async function cancelScheduled(identifier: string): Promise<void> {
-  try {
-    await cancelScheduledNotificationAsync(identifier);
-  } catch {
-    // Already gone. Nothing to do, and nothing worth telling anyone about.
-  }
-}
-
-/**
- * Cancel every pending notification tagged with a given key.
+ * someone a falsehood about their own break, and they cannot tell it apart from a true one.
  *
  * ── WHY MATCH ON DATA RATHER THAN KEEP A TABLE OF IDENTIFIERS ───────────────────────────
  * The obvious design is to store the identifier `scheduleAt` returned and cancel by it later.

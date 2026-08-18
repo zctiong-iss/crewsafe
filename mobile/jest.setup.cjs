@@ -83,8 +83,9 @@ const notificationMocks = {
 };
 
 // Shared so a test can reach the same jest.fn the client will call, whichever submodule it
-// happens to live in.
-global.__notificationMocks = notificationMocks;
+// happens to live in. `globalThis` rather than `global`: the latter is a Node-ism this
+// project's ESLint config does not declare, and the standard spelling works in both.
+globalThis.__notificationMocks = notificationMocks;
 
 jest.mock("expo-notifications/build/NotificationsHandler", () => ({
   setNotificationHandler: (...args) => notificationMocks.setNotificationHandler(...args),
