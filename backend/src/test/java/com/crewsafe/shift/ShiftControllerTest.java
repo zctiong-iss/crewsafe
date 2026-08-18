@@ -185,9 +185,14 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     }
 
     private String createShift(Instant startsAt, Instant endsAt) throws Exception {
+        return createShiftWithAssignments(startsAt, endsAt, List.of());
+    }
+
+    private String createShiftWithAssignments(Instant startsAt, Instant endsAt,
+            List<Map<String, Object>> assignments) throws Exception {
         return objectMapper.readTree(
                         postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                                        shiftBody(startsAt, endsAt, List.of()))
+                                        shiftBody(startsAt, endsAt, assignments))
                                 .andExpect(status().isCreated())
                                 .andReturn().getResponse().getContentAsString())
                 .get("id").asText();
@@ -842,14 +847,9 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         AppUser secondWorker = user(Role.WORKER);
         memberships.save(new SiteMembership(secondWorker.getId(), siteA.getId()));
 
-        String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                        shiftBody(startsAt, startsAt.plus(8, ChronoUnit.HOURS), List.of(
-                                assignmentBody(workerA.getId(), "Excavation", "HEAVY", 2),
-                                assignmentBody(secondWorker.getId(), null, "LIGHT", null))))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-
-        String shiftId = objectMapper.readTree(response).get("id").asText();
+        String shiftId = createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS), List.of(
+                assignmentBody(workerA.getId(), "Excavation", "HEAVY", 2),
+                assignmentBody(secondWorker.getId(), null, "LIGHT", null)));
 
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_ASSIGNMENT_ADDED))
                 .filteredOn(e -> e.getDetail() != null && e.getDetail().contains("to shift " + shiftId))
@@ -871,13 +871,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
     void staffingAtCreationStillWritesExactlyOneShiftCreatedEvent() throws Exception {
         Instant startsAt = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
-        String response = postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
-                        shiftBody(startsAt, startsAt.plus(8, ChronoUnit.HOURS),
-                                List.of(assignmentBody(workerA.getId(), null, "MODERATE", null))))
-                .andExpect(status().isCreated())
-                .andReturn().getResponse().getContentAsString();
-
-        UUID shiftId = UUID.fromString(objectMapper.readTree(response).get("id").asText());
+        UUID shiftId = UUID.fromString(createShiftWithAssignments(startsAt, startsAt.plus(8, ChronoUnit.HOURS),
+                List.of(assignmentBody(workerA.getId(), null, "MODERATE", null))));
 
         assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.SHIFT_CREATED))
                 .filteredOn(e -> shiftId.equals(e.getTargetId()))
