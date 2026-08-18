@@ -9,7 +9,7 @@ const USERNAME_PATTERN = /^[a-z0-9]+([._-][a-z0-9]+)*$/;
 /** Deliberately permissive — real validation is Cognito accepting or rejecting the address
  * (Jakarta's @Email on the backend, and ultimately Cognito's own rules), not this regex.
  * Just enough to catch "forgot the @" before a submit round trip. */
-const EMAIL_SHAPE_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_SHAPE_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 /** Mirrors CognitoUserProvisioningService.PASSWORD_POLICY: 12+ chars, at least one upper,
  * one lower, one digit, one non-alphanumeric. */
 const PASSWORD_POLICY_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
