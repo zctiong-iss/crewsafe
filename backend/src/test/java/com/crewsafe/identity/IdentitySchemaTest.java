@@ -82,17 +82,21 @@ class IdentitySchemaTest extends AbstractIntegrationTest {
         AppUser user = newUser("worker-c", Role.WORKER);
         Site site = newSite("Single Membership Site");
 
-        memberships.save(new SiteMembership(user.getId(), site.getId()));
+        UUID userId = user.getId();
+        UUID siteId = site.getId();
+        memberships.save(new SiteMembership(userId, siteId));
+        SiteMembership duplicate = new SiteMembership(userId, siteId);
 
-        assertThatThrownBy(() -> memberships.saveAndFlush(new SiteMembership(user.getId(), site.getId())))
+        assertThatThrownBy(() -> memberships.saveAndFlush(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
     void membershipRequiresAnExistingUser() {
         Site site = newSite("Orphan Check Site");
+        SiteMembership orphan = new SiteMembership(UUID.randomUUID(), site.getId());
 
-        assertThatThrownBy(() -> memberships.saveAndFlush(new SiteMembership(UUID.randomUUID(), site.getId())))
+        assertThatThrownBy(() -> memberships.saveAndFlush(orphan))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

@@ -54,7 +54,7 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
     public AbstractAuthenticationToken convert(Jwt jwt) {
         AppUser user = users.findByCognitoSub(jwt.getSubject())
                 .filter(AppUser::isActive)
-                .orElseThrow(() -> unknownUser(jwt));
+                .orElseThrow(CognitoJwtAuthenticationConverter::unknownUser);
 
         auditFirstRequestWithThisToken(jwt, user);
 
@@ -112,7 +112,7 @@ public class CognitoJwtAuthenticationConverter implements Converter<Jwt, Abstrac
      * upstream, and is exactly why it would not be acceptable for the append-only audit
      * table, which is evidence and never rolls.
      */
-    private static OAuth2AuthenticationException unknownUser(Jwt jwt) {
+    private static OAuth2AuthenticationException unknownUser() {
         log.warn("token_rejected reason=unknown_or_inactive_user");
         return new OAuth2AuthenticationException(
                 new OAuth2Error(OAuth2ErrorCodes.INVALID_TOKEN, "Unknown or inactive user", null));

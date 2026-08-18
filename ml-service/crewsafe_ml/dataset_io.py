@@ -35,7 +35,7 @@ DOWNLOAD_STATE_SCHEMA_VERSION = 1
 DOWNLOAD_STATE_FILE = "download_state.json"
 SOURCE_LICENCE_NAME = "Singapore Open Data Licence"
 SOURCE_LICENCE_URL = "https://data.gov.sg/open-data-licence"
-RAW_PAGE_PATTERN = re.compile(r"^(?P<metric>[a-z_]+)-page-(?P<page>[0-9]{3})[.]json$")
+RAW_PAGE_PATTERN = re.compile(r"^(?P<metric>[a-z_]+)-page-(?P<page>\d{3})[.]json$")
 
 CSV_COLUMNS = (
     "metric",

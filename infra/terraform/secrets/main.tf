@@ -78,6 +78,7 @@ locals {
     "spring/profiles-active"      = "staging"
     "weather/ingestion-enabled"   = "true"
     "lightning/ingestion-enabled" = "true"
+    "cognito-admin/user-pool-id"  = local.cognito.user_pool_id
 
     # SCRUM-373 (FR-008) declared this slot with the placeholder value
     # "unset" — NOT an empty string, since AWS SSM PutParameter rejects ""
@@ -111,6 +112,7 @@ locals {
     "spring/profiles-active"      = "Spring profile the deployed backend runs under. Written by Terraform; read by the task execution role. Must never be local."
     "weather/ingestion-enabled"   = "Whether the backend polls the external weather service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
     "lightning/ingestion-enabled" = "Whether the backend polls the external lightning service on a schedule. Written by Terraform; read by the task execution role. The application defaults this off so a developer machine never calls a live safety-data service."
+    "cognito-admin/user-pool-id"  = "The pool CognitoUserProvisioningService.AdminCreateUser targets when an admin registers a new user by email (ADR 0018). Sourced from the cognito-shared-dev component, same as the other cognito/* entries above. Not sensitive: a pool id names a resource, it grants nothing by itself — the IAM statement below is what grants the actual capability."
     "ml/model-manifest"           = "Path to the checksum-verified WBGT model manifest ml-service reads at startup. SCRUM-373/SCRUM-114: activated for the shared staging demonstration only (MODEL_CARD.md, docs/runbooks/SCRUM-373-ml-service-deploy.md #8.0) - not a production approval. Points at the staging-demo bundle baked into the ml-service image. Never a secret; the manifest path and checksum are not sensitive."
     "ml/model-manifest-sha256"    = "Expected SHA-256 checksum of the manifest named above. ForecastModelRegistry.from_environment() requires both this and the path to be set meaningfully; a mismatch fails safely to the persistence baseline, the same as the prior 'unset' placeholder did."
   }
@@ -299,6 +301,25 @@ locals {
           "ssmmessages:OpenDataChannel",
         ]
         Resource = "*"
+      },
+      {
+        # ADR 0018 — lets an admin register a brand-new user without an out-of-band
+        # Cognito step: CognitoUserProvisioningService calls AdminCreateUser directly
+        # with the password the admin typed in (MessageAction=SUPPRESS, no email sent).
+        # AdminGetUser is deliberately not granted here — the sub comes back in the
+        # AdminCreateUser response itself, so no follow-up call is needed.
+        #
+        # Deliberately its own statement, separate from cognito/main.tf's
+        # AdministerExistingCrewSafeUsers policy on aws_iam_role.cognito_admin: that
+        # role is GitHub-OIDC-only, for the unrelated SCRUM-190 CI-driven synthetic-user
+        # pipeline, and is not assumable by this task. Narrower too — that policy also
+        # holds AdminSetUserPassword/AdminEnableUser/AdminDisableUser/
+        # AdminResetUserPassword/AdminUserGlobalSignOut/group actions this task has no
+        # use for and must not hold.
+        Sid      = "ProvisionInvitedUserAccounts"
+        Effect   = "Allow"
+        Action   = ["cognito-idp:AdminCreateUser"]
+        Resource = local.cognito.user_pool_arn
       },
       {
         # backend's BedrockProperties.modelId (BEDROCK_MODEL_ID) is sent as a

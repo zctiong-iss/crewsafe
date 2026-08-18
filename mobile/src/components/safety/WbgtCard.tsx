@@ -33,6 +33,7 @@ import { s, vs } from "react-native-size-matters";
 
 import AppText from "../texts/AppText";
 import FreshnessBadge from "./FreshnessBadge";
+import WeatherStatusRow from "@/components/weather/WeatherStatusRow";
 import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
 import type { SiteConditions } from "@/types/domain";
@@ -46,9 +47,17 @@ interface WbgtCardProps {
    * note above the label.
    */
   superseded?: boolean;
+  /**
+   * Opens the explanation for a reading that is not LIVE.
+   *
+   * Optional, and its absence is what keeps this card usable anywhere. Given, the freshness
+   * pill gains a tappable icon beside it; omitted, the pill reports on its own exactly as it
+   * always did — no caller is forced to own a modal to render a temperature.
+   */
+  onExplainStatus?: () => void;
 }
 
-const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
+const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false, onExplainStatus }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
@@ -67,7 +76,16 @@ const WbgtCard: FC<WbgtCardProps> = ({ conditions, superseded = false }) => {
         <AppText variant="subtitle" style={styles.flexTitle}>
           {t("wbgt.title")}
         </AppText>
-        <FreshnessBadge status={conditions.qualityStatus} />
+        {/*
+          The pill and, when the caller can explain it, the button — as one row, so the glyph
+          sits on the pill's centre line rather than dropping below it. `WeatherStatusRow`
+          renders nothing extra for a LIVE reading, which is why there is no status check here.
+        */}
+        {onExplainStatus ? (
+          <WeatherStatusRow status={conditions.qualityStatus} onExplain={onExplainStatus} />
+        ) : (
+          <FreshnessBadge status={conditions.qualityStatus} />
+        )}
       </View>
 
       {/*
