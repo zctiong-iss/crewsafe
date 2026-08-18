@@ -667,6 +667,7 @@
     "minuteInput": "मिनट"
   },
   "oversight": {
+    "unknownShift": "शिफ़्ट अब सूचीबद्ध नहीं है",
     "tabTitle": "निगरानी",
     "title": "निगरानी",
     "showPlans": "योजनाएँ",
