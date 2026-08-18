@@ -9,6 +9,8 @@ TESTS_RUN=0
 TESTS_FAILED=0
 readonly TEST_REVISION='revision'
 readonly BACKEND_IMAGE_REF='backend/image:sha'
+readonly REPORT_ONLY_MODE='report-only'
+readonly REPORT_ONLY_WITH_FINDINGS_DECISION="${REPORT_ONLY_MODE}-with-findings"
 
 pass() { local label="$1"; printf '  ok   %s\n' "$label"; }
 fail() { local label="$1"; printf '  FAIL %s\n' "$label"; TESTS_FAILED=$((TESTS_FAILED + 1)); }
@@ -30,7 +32,7 @@ cat >"$report" <<'JSON'
 {"ArtifactName":"crewsafe/ml-service:test","ArtifactType":"container_image","Results":[{"Vulnerabilities":[{"VulnerabilityID":"CVE-2026-10001","Severity":"HIGH","PkgName":"unsafe|package<script>","InstalledVersion":"1.0.0","FixedVersion":"1.0.1","Description":"unsafe-description-content"}]}]}
 JSON
 printf '%s\n' 'CVE-2026-10001' >"$exceptions"
-expect 0 'summarizes valid report' "$SCRIPT" "$report" "$summary" 'crewsafe/ml-service:test' 'abc123' 'report-only' 'ML-service container vulnerability scan' "$exceptions"
+expect 0 'summarizes valid report' "$SCRIPT" "$report" "$summary" 'crewsafe/ml-service:test' 'abc123' "$REPORT_ONLY_MODE" 'ML-service container vulnerability scan' "$exceptions"
 content="$(cat "$summary" 2>/dev/null || true)"
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'CVE-2026-10001'* ]]; then pass 'summary contains advisory ID'; else fail 'summary contains advisory ID'; fi
@@ -47,10 +49,10 @@ else
   fail 'summary sanitizes unsafe package metadata'
 fi
 TESTS_RUN=$((TESTS_RUN + 1))
-if [[ "$content" == *'Decision: report-only-with-findings'* ]]; then
-  pass 'summary records report-only-with-findings decision'
+if [[ "$content" == *"Decision: $REPORT_ONLY_WITH_FINDINGS_DECISION"* ]]; then
+  pass "summary records $REPORT_ONLY_WITH_FINDINGS_DECISION decision"
 else
-  fail 'summary records report-only-with-findings decision'
+  fail "summary records $REPORT_ONLY_WITH_FINDINGS_DECISION decision"
 fi
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'Active exception identifiers supplied to scan:'* && "$content" == *'CVE-2026-10001'* ]]; then
@@ -61,7 +63,7 @@ fi
 
 sed "s#crewsafe/ml-service:test#$BACKEND_IMAGE_REF#g" "$report" >"$report.next"
 mv "$report.next" "$report"
-expect 0 'accepts the backend summary title' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" 'def456' 'report-only' 'Backend image vulnerability scan' "$exceptions"
+expect 0 'accepts the backend summary title' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" 'def456' "$REPORT_ONLY_MODE" 'Backend image vulnerability scan' "$exceptions"
 content="$(cat "$summary" 2>/dev/null || true)"
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'## Backend image vulnerability scan'* ]]; then
@@ -70,7 +72,7 @@ else
   fail 'summary uses the backend title'
 fi
 
-expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" 'report-only' 'Untrusted title'
+expect 1 'rejects an unsupported summary title' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" "$REPORT_ONLY_MODE" 'Untrusted title'
 
 : >"$summary"
 expect 1 'blocks findings after policy expiry' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'blocking' 'Backend image vulnerability scan' "$exceptions"
@@ -84,20 +86,20 @@ fi
 
 sed "s#$BACKEND_IMAGE_REF#another/image:sha#g" "$report" >"$report.next"
 mv "$report.next" "$report"
-expect 1 'rejects an image mismatch' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only'
+expect 1 'rejects an image mismatch' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 sed "s#another/image:sha#$BACKEND_IMAGE_REF#g; s#container_image#filesystem#g" "$report" >"$report.next"
 mv "$report.next" "$report"
-expect 1 'rejects an artifact type mismatch' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only'
+expect 1 'rejects an artifact type mismatch' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 printf '{"ArtifactType":"container_image","Results":[]}\n' >"$report"
-expect 1 'rejects missing artifact name' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only'
+expect 1 'rejects missing artifact name' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 printf '{"ArtifactName":"%s","ArtifactType":"container_image"}\n' "$BACKEND_IMAGE_REF" >"$report"
-expect 1 'rejects missing results array' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only'
+expect 1 'rejects missing results array' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 printf '{"ArtifactName":"%s","ArtifactType":"container_image","Results":[]}\n' "$BACKEND_IMAGE_REF" >"$report"
-expect 0 'accepts clean report' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only'
+expect 0 'accepts clean report' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE"
 content="$(cat "$summary" 2>/dev/null || true)"
 TESTS_RUN=$((TESTS_RUN + 1))
 if [[ "$content" == *'HIGH/CRITICAL findings:'* && "$content" == *'Decision: clean'* ]]; then
@@ -108,15 +110,15 @@ fi
 
 printf '{"ArtifactName":"%s","ArtifactType":"container_image","Results":[]}\n' "$BACKEND_IMAGE_REF" >"$report"
 printf 'not-an-advisory\n' >"$exceptions"
-expect 1 'rejects unsafe active exception identifier' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" 'report-only' 'Backend image vulnerability scan' "$exceptions"
+expect 1 'rejects unsafe active exception identifier' "$SCRIPT" "$report" "$summary" "$BACKEND_IMAGE_REF" "$TEST_REVISION" "$REPORT_ONLY_MODE" 'Backend image vulnerability scan' "$exceptions"
 
 printf '{not-json}\n' >"$report"
-expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" 'report-only'
+expect 1 'rejects invalid JSON' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 : >"$report"
-expect 1 'rejects empty report' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" 'report-only'
+expect 1 'rejects empty report' "$SCRIPT" "$report" "$summary" 'image' "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
-expect 1 'rejects missing report' "$SCRIPT" "$WORK/missing.json" "$summary" 'image' "$TEST_REVISION" 'report-only'
+expect 1 'rejects missing report' "$SCRIPT" "$WORK/missing.json" "$summary" 'image' "$TEST_REVISION" "$REPORT_ONLY_MODE"
 
 printf '%s tests, %s failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

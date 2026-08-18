@@ -9,6 +9,7 @@ TMP_DIRS=()
 readonly DOCKER_BUILD_CMD='docker build'
 readonly DOCKER_PUSH_CMD='docker push'
 readonly TRIVY_ACTION='aquasecurity/trivy-action'
+readonly AWS_CREDENTIALS_ACTION='configure-aws-credentials'
 readonly POLICY_HELPER='.github/scripts/security/resolve-trivy-policy-mode.sh'
 readonly POLICY_EXIT_OUTPUT='exit-code: ${{ steps.trivy_policy.outputs.exit_code }}'
 
@@ -99,7 +100,7 @@ build_test_policy_guard() {
   ' "$path")"
   [[ "$block" == *'./mvnw -B verify'* ]] || return 1
   [[ "$block" == *'docker build -t "crewsafe-backend-ci:${GITHUB_SHA}" .'* ]] || return 1
-  [[ "$block" != *'configure-aws-credentials'* ]] || return 1
+  [[ "$block" != *"$AWS_CREDENTIALS_ACTION"* ]] || return 1
   [[ "$block" != *'aws ecr get-login-password'* ]] || return 1
   [[ "$block" != *"$DOCKER_PUSH_CMD"* ]] || return 1
   [[ "$block" != *'deploy-backend-staging.sh'* ]] || return 1
@@ -159,7 +160,7 @@ workflow_policy_guard() {
   # scan must never reach a credentialed step (SEC-001).
   local scan_line creds_line validate_line
   scan_line="$(rg -n -m 1 -F -- "$TRIVY_ACTION" "$path" | cut -d: -f1)"
-  creds_line="$(rg -n -m 1 -F -- 'configure-aws-credentials' "$path" | cut -d: -f1)"
+  creds_line="$(rg -n -m 1 -F -- "$AWS_CREDENTIALS_ACTION" "$path" | cut -d: -f1)"
   [[ -n "$scan_line" && -n "$creds_line" && "$scan_line" -lt "$creds_line" ]] || return 1
   # SCRUM-270 (SEC-001): the contract-validation step must also precede any
   # AWS-credentialed step -- a bad repository/role/tag must never reach a
@@ -349,7 +350,7 @@ not_contains_in "workflow has no static AWS access key" "$WORKFLOW" 'AWS_ACCESS_
 not_contains_in "workflow has no static AWS secret key" "$WORKFLOW" 'AWS_SECRET_ACCESS_KEY'
 not_contains_in "workflow has no continue-on-error" "$WORKFLOW" 'continue-on-error:'
 not_contains_in_build_test "validation job has no OIDC permission" 'id-token: write'
-not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
+not_contains_in_build_test "validation job has no AWS credential action" "$AWS_CREDENTIALS_ACTION"
 not_contains_in_build_test "validation job has no image push" "$DOCKER_PUSH_CMD"
 
 # SCRUM-455 FR-013/SEC-007: Dockerfile construction is validated on every
@@ -363,7 +364,7 @@ else
 fi
 
 assert_order "build -> policy -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
-  'Build backend image' 'Resolve backend Trivy policy' "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
+  'Build backend image' 'Resolve backend Trivy policy' "$TRIVY_ACTION" 'Summarize backend image scan' "$AWS_CREDENTIALS_ACTION" 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
 
 # --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
 contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
