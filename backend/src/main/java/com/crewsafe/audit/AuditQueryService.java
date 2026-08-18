@@ -83,20 +83,33 @@ public class AuditQueryService {
         writer.write(line.toString());
     }
 
+    /** Leading characters a spreadsheet treats as the start of a formula (CSV injection). */
+    private static final String FORMULA_TRIGGERS = "=+-@\t\r";
+
     /**
-     * RFC-4180 field encoding: a field is quoted only when it must be — it contains a comma, a
-     * double-quote, or a line break — and an embedded double-quote is doubled. A null renders as
-     * an empty field, not the text "null".
+     * RFC-4180 field encoding, plus a CSV-injection guard.
+     *
+     * <p>RFC-4180: a field is quoted only when it must be — it contains a comma, a double-quote,
+     * or a line break — and an embedded double-quote is doubled. A null renders as an empty
+     * field, not the text "null".
+     *
+     * <p>Injection guard: {@code detail} and {@code actor} carry worker- and admin-entered free
+     * text. A field beginning with {@code = + - @} (or tab/CR) is executed as a formula when the
+     * CSV is opened in Excel or Sheets, so a crafted {@code detail} could run when an inspector
+     * opens the export. Prefixing a single quote neutralises the formula while staying human-
+     * readable. Applied to every field, not just the obviously free-text ones, since the guard is
+     * cheap and a value's provenance is not always visible at this layer.
      */
     private static String csvField(String value) {
-        if (value == null) {
+        if (value == null || value.isEmpty()) {
             return "";
         }
-        boolean mustQuote = value.contains(",") || value.contains("\"")
-                || value.contains("\n") || value.contains("\r");
+        String guarded = FORMULA_TRIGGERS.indexOf(value.charAt(0)) >= 0 ? "'" + value : value;
+        boolean mustQuote = guarded.contains(",") || guarded.contains("\"")
+                || guarded.contains("\n") || guarded.contains("\r");
         if (!mustQuote) {
-            return value;
+            return guarded;
         }
-        return '"' + value.replace("\"", "\"\"") + '"';
+        return '"' + guarded.replace("\"", "\"\"") + '"';
     }
 }

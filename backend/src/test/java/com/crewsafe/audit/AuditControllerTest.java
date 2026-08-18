@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
@@ -26,9 +27,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -128,18 +131,32 @@ class AuditControllerTest extends AbstractIntegrationTest {
         auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
                 "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "Created shift, night crew"));
 
-        String csv = mockMvc.perform(get("/api/v1/sites/" + site.getId() + "/audit/export.csv")
-                        .param("from", from.toString()).param("to", to.toString())
-                        .header("Authorization", "Bearer " + managerToken))
+        String csv = exportCsv(managerToken)
                 .andExpect(status().isOk())
                 .andExpect(header().string("Content-Disposition",
                         org.hamcrest.Matchers.containsString("attachment; filename=")))
                 .andReturn().getResponse().getContentAsString();
 
         // Header present, and the comma-bearing detail is wrapped in quotes rather than split.
-        assertThat(csv).contains("occurred_at,actor,event,event_type");
-        assertThat(csv).contains("\"Created shift, night crew\"");
-        assertThat(csv).contains(manager.getDisplayName());
+        assertThat(csv)
+                .contains("occurred_at,actor,event,event_type")
+                .contains("\"Created shift, night crew\"")
+                .contains(manager.getDisplayName());
+    }
+
+    @Test
+    void csvExportNeutralisesSpreadsheetFormulaInjection() throws Exception {
+        Shift shift = shifts.save(new Shift(site.getId(), Instant.now(), Instant.now().plusSeconds(3600)));
+        // A crafted detail that a spreadsheet would execute as a formula on open.
+        auditEvents.save(new AuditEvent(manager.getId(), AuditEventType.SHIFT_CREATED,
+                "SHIFT", shift.getId(), "req-" + UUID.randomUUID(), "=1+1"));
+
+        String csv = exportCsv(managerToken)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // The leading '=' is defused with an apostrophe, so no cell evaluates the formula.
+        assertThat(csv).contains("'=1+1").doesNotContain(",=1+1");
     }
 
     @Test
@@ -172,5 +189,19 @@ class AuditControllerTest extends AbstractIntegrationTest {
         return mockMvc.perform(get("/api/v1/sites/" + site.getId() + "/audit")
                 .param("from", from.toString()).param("to", to.toString())
                 .header("Authorization", "Bearer " + token));
+    }
+
+    /**
+     * Drives the streaming CSV endpoint. A {@code StreamingResponseBody} completes on a second,
+     * asynchronous dispatch, so the body is empty until {@code asyncDispatch} runs — reading it
+     * off the first result is the trap that makes these tests pass by luck and fail in isolation.
+     */
+    private ResultActions exportCsv(String token) throws Exception {
+        MvcResult started = mockMvc.perform(get("/api/v1/sites/" + site.getId() + "/audit/export.csv")
+                        .param("from", from.toString()).param("to", to.toString())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        return mockMvc.perform(asyncDispatch(started));
     }
 }
