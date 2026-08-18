@@ -180,6 +180,36 @@ public class ShiftService {
     }
 
     /**
+     * Closes a shift once it has naturally ended (SCRUM-442): the counterpart to {@link
+     * #cancelShift} for a shift that ran rather than one that was called off. Only {@link
+     * ShiftStatus#PLANNED} or {@link ShiftStatus#ACTIVE} may transition to {@link
+     * ShiftStatus#CLOSED}, and only once {@code endsAt} is no longer after "now" — a shift
+     * cannot be closed early; {@link #cancelShift} is the tool for calling one off before it
+     * ends. There is deliberately no un-close path.
+     *
+     * <p>Empty when no shift with this id exists under this site — the caller renders 404.
+     * Throws {@link BadRequestException} when the shift's current status is not one of the
+     * two that may become {@code CLOSED}, or when it has not yet ended.
+     */
+    @Transactional
+    public Optional<Shift> closeShift(UUID siteId, UUID actorId, UUID shiftId) {
+        return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
+            if (shift.getStatus() != ShiftStatus.PLANNED && shift.getStatus() != ShiftStatus.ACTIVE) {
+                throw new BadRequestException(
+                        "Shift " + shiftId + " cannot be closed from status " + shift.getStatus());
+            }
+            if (shift.getEndsAt().isAfter(clock.instant())) {
+                throw new BadRequestException("Shift " + shiftId + " has not yet ended and cannot be closed");
+            }
+
+            shift.close();
+            String detail = "Closed shift for site " + siteId;
+            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CLOSED, AUDIT_TARGET_TYPE, shiftId, detail));
+            return shift;
+        });
+    }
+
+    /**
      * Flips every {@link ShiftStatus#PLANNED} shift whose {@code startsAt} has passed to
      * {@link ShiftStatus#ACTIVE} (SCRUM-441). Called from {@code ShiftActivationScheduler}
      * on a fixed interval, not from a client — {@link ShiftStatus#CANCELLED} shifts are
