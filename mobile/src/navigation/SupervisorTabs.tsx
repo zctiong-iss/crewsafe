@@ -24,6 +24,12 @@ import { useEffect } from "react";
 import type { SupervisorTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<SupervisorTabParamList>();
+type TabIconProps = { color: string; size: number };
+const ShiftsIcon = ({ color, size }: TabIconProps) => <Ionicons name="people" size={size} color={color} />;
+const ConcernsIcon = ({ color, size }: TabIconProps) => <Ionicons name="medkit" size={size} color={color} />;
+const RecommendationsIcon = ({ color, size }: TabIconProps) => <Ionicons name="clipboard" size={size} color={color} />;
+const WeatherIcon = ({ color, size }: TabIconProps) => <Ionicons name="partly-sunny" size={size} color={color} />;
+const ProfileIcon = ({ color, size }: TabIconProps) => <Ionicons name="person" size={size} color={color} />;
 
 /**
  * What a SUPERVISOR, SAFETY_MANAGER or ADMIN sees.
@@ -60,7 +66,7 @@ export default function SupervisorTabs() {
         component={ShiftsStack}
         options={{
           title: t("tabs.shifts"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
+          tabBarIcon: ShiftsIcon,
         }}
       />
       {/*
@@ -75,9 +81,7 @@ export default function SupervisorTabs() {
         component={ConcernsStack}
         options={{
           title: t("wellbeing.concernsTab"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="medkit" size={size} color={color} />
-          ),
+          tabBarIcon: ConcernsIcon,
           // Only when something is outstanding — a badge showing "0" reads as "you have
           // something", which is the opposite of the truth.
           tabBarBadge: openConcerns > 0 ? openConcerns : undefined,
@@ -98,9 +102,7 @@ export default function SupervisorTabs() {
         component={RecommendationsStack}
         options={{
           title: t("recommendations.tabTitle"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="clipboard" size={size} color={color} />
-          ),
+          tabBarIcon: RecommendationsIcon,
         }}
       />
       <Tab.Screen
@@ -108,9 +110,7 @@ export default function SupervisorTabs() {
         component={WeatherStack}
         options={{
           title: t("tabs.weather"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="partly-sunny" size={size} color={color} />
-          ),
+          tabBarIcon: WeatherIcon,
         }}
       />
       <Tab.Screen
@@ -118,7 +118,7 @@ export default function SupervisorTabs() {
         component={ProfileStack}
         options={{
           title: t("tabs.profile"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ProfileIcon,
         }}
       />
     </Tab.Navigator>

@@ -21,7 +21,11 @@ jest.mock("react-native-safe-area-context", () => ({
 }));
 jest.mock("@/hooks/useReduceMotion", () => ({ useReduceMotion: () => false }));
 
-import AppCalendarPicker from "./AppCalendarPicker";
+import AppCalendarPicker, { WEEKDAY_KEYS, weekdayInitials } from "./AppCalendarPicker";
+
+it("uses explicit weekday domain keys independent of rendered position", () => {
+  expect(weekdayInitials("en-SG").map(({ key }) => key)).toEqual([...WEEKDAY_KEYS]);
+});
 
 /** Wednesday 26 August 2026, 10:15 local — the date in the screenshot that prompted this. */
 const INITIAL = new Date(2026, 7, 26, 10, 15);

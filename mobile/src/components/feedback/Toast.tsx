@@ -59,12 +59,9 @@ export default function Toast() {
 
   if (!messageKey) return null;
 
-  const accent =
-    tone === "success"
-      ? theme.colors.success
-      : tone === "danger"
-        ? theme.colors.danger
-        : theme.colors.textPrimary;
+  let accent = theme.colors.textPrimary;
+  if (tone === "success") accent = theme.colors.success;
+  else if (tone === "danger") accent = theme.colors.danger;
 
   return (
     <Animated.View

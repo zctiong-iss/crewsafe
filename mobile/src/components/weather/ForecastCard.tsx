@@ -56,17 +56,17 @@ export default function ForecastCard({ siteId }: { siteId: string }) {
     REFRESH_INTERVALS.WEATHER_MS,
   );
 
-  const summary =
-    state.status === "ready" && state.forecast
-      ? t("forecast.cardValue", {
-          value: state.forecast.predictedValue.toFixed(1),
-          count: PREVIEW_HORIZON,
-        })
-      : state.status === "unavailable"
-        ? t("forecast.cardUnavailable")
-        : state.status === "error"
-          ? t("forecast.cardError")
-          : t("common.loading");
+  let summary = t("common.loading");
+  if (state.status === "ready" && state.forecast) {
+    summary = t("forecast.cardValue", {
+      value: state.forecast.predictedValue.toFixed(1),
+      count: PREVIEW_HORIZON,
+    });
+  } else if (state.status === "unavailable") {
+    summary = t("forecast.cardUnavailable");
+  } else if (state.status === "error") {
+    summary = t("forecast.cardError");
+  }
 
   /*
    * The band's colour, from the band the server evaluated (SCRUM-369). Applied to the summary

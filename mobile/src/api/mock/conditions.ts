@@ -121,8 +121,9 @@ export function mockConditions(
    * would render happily and a reviewer would rightly not believe. The thresholds mirror
    * `application.yml`: WEATHER_DELAYED_AFTER 20m, WEATHER_STALE_AFTER 45m.
    */
-  const ageMinutes =
-    qualityStatus === "STALE" ? 52 : qualityStatus === "DELAYED" ? 26 : 4;
+  let ageMinutes = 4;
+  if (qualityStatus === "STALE") ageMinutes = 52;
+  else if (qualityStatus === "DELAYED") ageMinutes = 26;
 
   const metrics = getWeatherMetrics();
 
@@ -133,13 +134,11 @@ export function mockConditions(
    * timestamp is what actually exercises it — a boolean would let the screen render a moon
    * while the underlying helper still believed it was noon. 13:00 UTC is 21:00 SGT.
    */
-  const observedAt = getNightOverride()
-    ? (() => {
-        const night = new Date();
-        night.setUTCHours(13, 0, 0, 0);
-        return night;
-      })()
-    : new Date(now - ageMinutes * 60_000);
+  let observedAt = new Date(now - ageMinutes * 60_000);
+  if (getNightOverride()) {
+    observedAt = new Date();
+    observedAt.setUTCHours(13, 0, 0, 0);
+  }
   // Sits in the 32-to-below-33 band, which is where heavy work first attracts a mandatory
   // rest — the most informative default for a screen whose job is showing that.
   const wbgt = 32.4;

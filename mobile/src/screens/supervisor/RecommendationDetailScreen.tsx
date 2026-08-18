@@ -57,6 +57,40 @@ const CATEGORY_ORDER: MitigationCategory[] = [
   "MONITORING",
 ];
 
+export function mitigationFingerprint(mitigation: Mitigation): string {
+  return JSON.stringify({
+    actionCode: mitigation.actionCode,
+    ruleReference: mitigation.ruleReference,
+    action: mitigation.action,
+    category: mitigation.category,
+    priority: mitigation.priority,
+    origin: mitigation.origin,
+    rationale: mitigation.rationale,
+    estimatedImpact: mitigation.estimatedImpact,
+    appliesTo: mitigation.appliesTo,
+    timing: mitigation.timing,
+  });
+}
+
+/**
+ * Exact duplicate records have no domain identity, so occurrence is the only available
+ * tie-breaker. Distinct records remain stable under insertion and reordering; indistinguishable
+ * duplicates cannot have independently stable identities without a server identifier.
+ */
+export function mitigationKeys(mitigations: readonly Mitigation[]): string[] {
+  const occurrences = new Map<string, number>();
+  return mitigations.map((mitigation) => {
+    const fingerprint = mitigationFingerprint(mitigation);
+    const occurrence = occurrences.get(fingerprint) ?? 0;
+    occurrences.set(fingerprint, occurrence + 1);
+    return `mitigation:${fingerprint}:occurrence:${occurrence}`;
+  });
+}
+
+function mitigationEntries(mitigations: readonly Mitigation[]): { mitigation: Mitigation; key: string }[] {
+  return mitigations.map((mitigation, index) => ({ mitigation, key: mitigationKeys(mitigations)[index] }));
+}
+
 function recommendationPresentation(
   approval: { decision?: string | null; decidedAt: string; editedMitigations?: readonly Mitigation[] | null; reason?: string | null } | null,
   rationale: string | null,
@@ -538,9 +572,9 @@ export default function RecommendationDetailScreen() {
                 {t(`mitigationCategory.${group.category}`)}
               </AppText>
             ) : null}
-            {group.items.map((mitigation, index) => (
+            {mitigationEntries(group.items).map(({ mitigation, key }) => (
               <MitigationRow
-                key={`${mitigation.actionCode ?? "none"}-${index}`}
+                key={key}
                 mitigation={mitigation}
                 workerNameFor={workerNameFor}
               />
@@ -564,13 +598,13 @@ export default function RecommendationDetailScreen() {
               <AppText variant="caption" tone="warning" style={styles.groupTitle}>
                 {t("recommendations.changedFromDraft")}
               </AppText>
-              {editedMitigations?.map((mitigation, index) => (
+              {editedMitigations ? mitigationEntries(editedMitigations).map(({ mitigation, key }) => (
                 <MitigationRow
-                  key={`edited-${index}`}
+                  key={`edited-${key}`}
                   mitigation={mitigation}
                   workerNameFor={workerNameFor}
                 />
-              ))}
+              )) : null}
             </View>
           </>
         ) : null}

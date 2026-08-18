@@ -31,6 +31,11 @@ interface CrewWellbeingRowProps {
   locale: string;
 }
 
+function formatRest(row: CrewWellbeingRowData, locale: string, t: (key: string, options?: Record<string, unknown>) => string): string {
+  const source = row.lastRestSource === "INSTRUCTED" ? t("wellbeing.instructed") : t("wellbeing.selfLogged");
+  return `${formatTime(row.lastRestAt ?? "", locale)} · ${source} · ${t("wellbeing.restCount", { count: row.restCount })}`;
+}
+
 const CrewWellbeingRow: FC<CrewWellbeingRowProps> = ({ workerName, row, locale }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -50,13 +55,7 @@ const CrewWellbeingRow: FC<CrewWellbeingRowProps> = ({ workerName, row, locale }
               {t("wellbeing.lastRest")}
             </AppText>
             <AppText variant="caption" style={styles.value}>
-              {row.lastRestAt
-                ? `${formatTime(row.lastRestAt, locale)} · ${
-                    row.lastRestSource === "INSTRUCTED"
-                      ? t("wellbeing.instructed")
-                      : t("wellbeing.selfLogged")
-                  } · ${t("wellbeing.restCount", { count: row.restCount })}`
-                : t("wellbeing.notLoggedYet")}
+              {row.lastRestAt ? formatRest(row, locale, t) : t("wellbeing.notLoggedYet")}
             </AppText>
           </View>
 

@@ -24,6 +24,15 @@ import type { WorkerTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<WorkerTabParamList>();
 
+type TabIconProps = { color: string; size: number };
+const ShiftIcon = ({ color, size }: TabIconProps) => <Ionicons name="today" size={size} color={color} />;
+const WorkerWeatherIcon = ({ color, size }: TabIconProps) => <Ionicons name="partly-sunny" size={size} color={color} />;
+const WorkerProfileIcon = ({ color, size }: TabIconProps) => <Ionicons name="person" size={size} color={color} />;
+const WorkerAlertsIcon = ({ color, size }: TabIconProps) => {
+  const allAcknowledged = useAppSelector(selectAllAcknowledged);
+  return <AlertsTabIcon color={color} size={size} allAcknowledged={allAcknowledged} />;
+};
+
 /**
  * What a WORKER sees. Their own shift, the actions dispatched to them, the weather, and
  * their settings — nothing that would 403.
@@ -79,7 +88,7 @@ export default function WorkerTabs() {
         component={MyShiftStack}
         options={{
           title: t("tabs.shift"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="today" size={size} color={color} />,
+          tabBarIcon: ShiftIcon,
         }}
       />
       <Tab.Screen
@@ -87,9 +96,7 @@ export default function WorkerTabs() {
         component={InboxStack}
         options={{
           title: t("tabs.alerts"),
-          tabBarIcon: ({ color, size }) => (
-            <AlertsTabIcon color={color} size={size} allAcknowledged={allAcknowledged} />
-          ),
+          tabBarIcon: WorkerAlertsIcon,
           // Only when something is outstanding. A badge showing "0" would be a permanent
           // marker that reads as "you have something", which is the opposite of the truth.
           tabBarBadge: outstanding > 0 ? outstanding : undefined,
@@ -113,9 +120,7 @@ export default function WorkerTabs() {
         component={WeatherStack}
         options={{
           title: t("tabs.weather"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="partly-sunny" size={size} color={color} />
-          ),
+          tabBarIcon: WorkerWeatherIcon,
         }}
       />
       <Tab.Screen
@@ -123,7 +128,7 @@ export default function WorkerTabs() {
         component={ProfileStack}
         options={{
           title: t("tabs.profile"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: WorkerProfileIcon,
         }}
       />
     </Tab.Navigator>

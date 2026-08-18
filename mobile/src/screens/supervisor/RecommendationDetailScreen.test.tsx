@@ -63,7 +63,31 @@ import recommendationsReducer, {
   decideRecommendation,
   type RecommendationsState,
 } from "@/store/reducers/recommendationsSlice";
-import RecommendationDetailScreen from "./RecommendationDetailScreen";
+import RecommendationDetailScreen, { mitigationFingerprint, mitigationKeys } from "./RecommendationDetailScreen";
+import type { Mitigation } from "@/types/domain";
+
+const mitigationFixture = (actionCode: string, ruleReference: string): Mitigation => ({
+  priority: null,
+  action: "same action",
+  rationale: null,
+  estimatedImpact: null,
+  actionCode: actionCode as Mitigation["actionCode"],
+  category: "REST",
+  origin: "ADVISORY",
+  ruleReference,
+  appliesTo: null,
+  timing: null,
+});
+
+it("derives collision-safe stable keys for distinct and duplicate mitigations", () => {
+  const first = mitigationFixture("REST-A-B", "RULE");
+  const second = mitigationFixture("REST-A", "B-RULE");
+  const keys = mitigationKeys([first, second, first]);
+
+  expect(mitigationFingerprint(first)).not.toBe(mitigationFingerprint(second));
+  expect(new Set(keys).size).toBe(3);
+  expect(mitigationKeys([second, first])[1]).toBe(keys[0]);
+});
 import type { CurrentUser, Recommendation } from "@/types/domain";
 
 const SUPERVISOR: CurrentUser = {

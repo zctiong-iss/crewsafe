@@ -37,6 +37,13 @@ import type { SafetyManagerTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<SafetyManagerTabParamList>();
 
+type TabIconProps = { color: string; size: number };
+const OversightIcon = ({ color, size }: TabIconProps) => <Ionicons name="shield-checkmark" size={size} color={color} />;
+const ConcernsIcon = ({ color, size }: TabIconProps) => <Ionicons name="medkit" size={size} color={color} />;
+const RecommendationsIcon = ({ color, size }: TabIconProps) => <Ionicons name="clipboard" size={size} color={color} />;
+const WeatherIcon = ({ color, size }: TabIconProps) => <Ionicons name="partly-sunny" size={size} color={color} />;
+const ProfileIcon = ({ color, size }: TabIconProps) => <Ionicons name="person" size={size} color={color} />;
+
 export default function SafetyManagerTabs() {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -63,9 +70,7 @@ export default function SafetyManagerTabs() {
           title: t("oversight.tabTitle"),
           // A shield rather than a clipboard or a list: this role assures rather than
           // executes, and the icon should not read as another queue of tasks.
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield-checkmark" size={size} color={color} />
-          ),
+          tabBarIcon: OversightIcon,
         }}
       />
       <Tab.Screen
@@ -73,7 +78,7 @@ export default function SafetyManagerTabs() {
         component={ConcernsStack}
         options={{
           title: t("wellbeing.concernsTab"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="medkit" size={size} color={color} />,
+          tabBarIcon: ConcernsIcon,
           tabBarBadge: openConcerns > 0 ? openConcerns : undefined,
           tabBarBadgeStyle: {
             backgroundColor: theme.colors.danger,
@@ -90,7 +95,7 @@ export default function SafetyManagerTabs() {
         component={RecommendationsStack}
         options={{
           title: t("recommendations.tabTitle"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="clipboard" size={size} color={color} />,
+          tabBarIcon: RecommendationsIcon,
         }}
       />
       <Tab.Screen
@@ -98,9 +103,7 @@ export default function SafetyManagerTabs() {
         component={WeatherStack}
         options={{
           title: t("tabs.weather"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="partly-sunny" size={size} color={color} />
-          ),
+          tabBarIcon: WeatherIcon,
         }}
       />
       <Tab.Screen
@@ -108,7 +111,7 @@ export default function SafetyManagerTabs() {
         component={ProfileStack}
         options={{
           title: t("tabs.profile"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ProfileIcon,
         }}
       />
     </Tab.Navigator>

@@ -38,6 +38,35 @@ interface WeatherBackdropProps {
   radius: number;
 }
 
+export function moteFingerprint(mote: BackdropMote): string {
+  return JSON.stringify({
+    x: mote.x,
+    y: mote.y,
+    size: mote.size,
+    aspect: mote.aspect ?? null,
+    color: mote.color,
+    opacity: mote.opacity,
+    motion: mote.motion,
+    duration: mote.duration ?? null,
+    delay: mote.delay ?? null,
+    rounding: mote.rounding ?? null,
+  });
+}
+
+export function moteKeys(motes: readonly BackdropMote[]): string[] {
+  const occurrences = new Map<string, number>();
+  return motes.map((mote) => {
+    const fingerprint = moteFingerprint(mote);
+    const occurrence = occurrences.get(fingerprint) ?? 0;
+    occurrences.set(fingerprint, occurrence + 1);
+    return `mote:${fingerprint}:occurrence:${occurrence}`;
+  });
+}
+
+function moteEntries(motes: readonly BackdropMote[]): { mote: BackdropMote; key: string }[] {
+  return motes.map((mote, index) => ({ mote, key: moteKeys(motes)[index] }));
+}
+
 /** `useNativeDriver` is unsupported on react-native-web — same reason as `AnimatedIcon`. */
 const NATIVE_DRIVER = Platform.OS !== "web";
 
@@ -104,11 +133,9 @@ const WeatherBackdrop: FC<WeatherBackdropProps> = ({ condition, night, radius })
       />
 
       {size.width > 0
-        ? spec.motes.map((mote, index) => (
+        ? moteEntries(spec.motes).map(({ mote, key }) => (
             <Mote
-              // Index is a stable identity here: the array is a compile-time constant per
-              // condition and is never reordered or filtered.
-              key={index}
+              key={key}
               mote={mote}
               cardWidth={size.width}
               cardHeight={size.height}

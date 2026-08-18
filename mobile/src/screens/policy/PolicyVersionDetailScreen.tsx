@@ -78,12 +78,12 @@ export default function PolicyVersionDetailScreen() {
           /* A 409 here is one of two different facts — already active, or superseded and
              terminal — and telling a safety manager which one decides what they do next. */
           const key = result.payload?.errorKey ?? "errors.unknown";
-          const message =
-            key === "errors.conflict"
-              ? version.status === "SUPERSEDED"
-                ? t("policy.supersededCannotActivate")
-                : t("policy.alreadyActive")
-              : t(key);
+          let message = t(key);
+          if (key === "errors.conflict") {
+            message = version.status === "SUPERSEDED"
+              ? t("policy.supersededCannotActivate")
+              : t("policy.alreadyActive");
+          }
           Alert.alert(t("policy.activateFailedTitle"), message, [{ text: t("common.close") }]);
         },
       },
