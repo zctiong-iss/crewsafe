@@ -60,6 +60,7 @@ public class PolicyVersionController {
             Instant createdAt, Instant updatedAt, Instant activatedAt, Instant supersededAt) {
 
         /** @deprecated retained for compatibility; ignored by policy enforcement. */
+        @SuppressWarnings("java:S1133") // Retained API field pending the compatibility-removal release.
         @Deprecated(since = "2026.08", forRemoval = false)
         @Override
         public BigDecimal wbgtEmergencyStop() {
@@ -97,6 +98,7 @@ public class PolicyVersionController {
             String notes) {
 
         /** @deprecated retained for compatibility; ignored by policy enforcement. */
+        @SuppressWarnings("java:S1133") // Retained API field pending the compatibility-removal release.
         @Deprecated(since = "2026.08", forRemoval = false)
         @Override
         public BigDecimal wbgtEmergencyStop() {

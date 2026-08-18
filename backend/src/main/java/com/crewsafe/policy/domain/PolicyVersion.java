@@ -135,6 +135,7 @@ public class PolicyVersion {
      * @deprecated retained for persisted policy/API compatibility; the policy engine no longer
      *             uses this field to create a WBGT {@code STOP_WORK} action.
      */
+    @SuppressWarnings("java:S1133") // Retained database column remains readable during compatibility period.
     @Deprecated(since = "2026.08", forRemoval = false)
     @NotNull
     @Min(20)

@@ -74,7 +74,7 @@ export function CreatePolicyVersionForm({ siteId, siteSwitcher }: { siteId: stri
         // a reason to reuse the previous label, source or effective date.
         if (version) {
           setThresholds(thresholdsFrom(version));
-          setWbgtEmergencyStop(String(version.wbgtEmergencyStop));
+          setWbgtEmergencyStop(String(version.wbgtEmergencyStop)); // NOSONAR retained compatibility field
         }
       })
       .catch(() => active && setPrefill({ status: "unavailable" }));

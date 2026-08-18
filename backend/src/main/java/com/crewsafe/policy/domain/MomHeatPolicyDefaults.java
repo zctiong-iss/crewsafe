@@ -67,6 +67,7 @@ public final class MomHeatPolicyDefaults {
      *
      * @deprecated WBGT no longer creates a STOP_WORK action; lightning owns automatic stop-work.
      */
+    @SuppressWarnings("java:S1133") // Legacy seed value remains for persisted policy-version compatibility.
     @Deprecated(since = "2026.08", forRemoval = false)
     public static final BigDecimal EMERGENCY_STOP = new BigDecimal("33.0");
 

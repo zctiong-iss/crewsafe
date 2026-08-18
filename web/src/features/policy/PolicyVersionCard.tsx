@@ -38,6 +38,7 @@ export function PolicyVersionCard({ version, activeVersion, canWrite, isActivati
 }) {
   const [open, setOpen] = useState(version.status === "ACTIVE");
   const [confirming, setConfirming] = useState(false);
+  const legacyWbgtThreshold = version.wbgtEmergencyStop; // NOSONAR retained compatibility field
 
   const confirm = () => {
     setConfirming(false);
@@ -92,7 +93,7 @@ export function PolicyVersionCard({ version, activeVersion, canWrite, isActivati
           </div>
 
           <p className="policy-card__stop">
-            Legacy WBGT threshold <strong>{version.wbgtEmergencyStop}°C</strong> — retained for
+            Legacy WBGT threshold <strong>{legacyWbgtThreshold}°C</strong> — retained for
             compatibility; it is not enforced as a stop-work rule.
           </p>
 
