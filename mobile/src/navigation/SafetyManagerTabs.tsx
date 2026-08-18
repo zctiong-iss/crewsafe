@@ -39,6 +39,48 @@ import type { SafetyManagerTabParamList } from "./types";
 
 const Tab = createBottomTabNavigator<SafetyManagerTabParamList>();
 
+/**
+ * What react-navigation hands a `tabBarIcon`.
+ *
+ * Declared rather than inferred because these renderers now live outside the navigator, where
+ * there is no contextual type to infer from.
+ */
+interface TabIconProps {
+  color: string;
+  size: number;
+}
+
+/*
+ * ── DEFINED HERE, NOT INSIDE THE NAVIGATOR ──────────────────────────────────────────────
+ * These were inline arrow functions in each `options` object, which is the obvious way to
+ * write them and the reason SonarCloud failed the gate (typescript:S6478 - a component
+ * defined inside another component).
+ *
+ * It is not only a lint preference. A function defined in a render body is a NEW function on
+ * every render, so React sees a different component type each time and remounts the icon
+ * rather than updating it — which for a tab bar that re-renders on every concern-count change
+ * is a remount of five icons for a number that did not involve them. Module scope gives each
+ * one a stable identity.
+ *
+ * A shield for Oversight rather than a clipboard or a list: this role assures rather than
+ * executes, and the icon should not read as another queue of tasks.
+ */
+const OversightIcon = ({ color, size }: TabIconProps) => (
+  <Ionicons name="shield-checkmark" size={size} color={color} />
+);
+const ConcernsIcon = ({ color, size }: TabIconProps) => (
+  <Ionicons name="medkit" size={size} color={color} />
+);
+const PlansIcon = ({ color, size }: TabIconProps) => (
+  <Ionicons name="clipboard" size={size} color={color} />
+);
+const WeatherIcon = ({ color, size }: TabIconProps) => (
+  <Ionicons name="partly-sunny" size={size} color={color} />
+);
+const ProfileIcon = ({ color, size }: TabIconProps) => (
+  <Ionicons name="person" size={size} color={color} />
+);
+
 export default function SafetyManagerTabs() {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -63,11 +105,7 @@ export default function SafetyManagerTabs() {
         component={OversightStack}
         options={{
           title: t("oversight.tabTitle"),
-          // A shield rather than a clipboard or a list: this role assures rather than
-          // executes, and the icon should not read as another queue of tasks.
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="shield-checkmark" size={size} color={color} />
-          ),
+          tabBarIcon: OversightIcon,
         }}
       />
       <Tab.Screen
@@ -75,7 +113,7 @@ export default function SafetyManagerTabs() {
         component={ConcernsStack}
         options={{
           title: t("wellbeing.concernsTab"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="medkit" size={size} color={color} />,
+          tabBarIcon: ConcernsIcon,
           tabBarBadge: openConcerns > 0 ? openConcerns : undefined,
           tabBarBadgeStyle: {
             backgroundColor: theme.colors.danger,
@@ -104,9 +142,7 @@ export default function SafetyManagerTabs() {
           component={RecommendationsStack}
           options={{
             title: t("recommendations.tabTitle"),
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="clipboard" size={size} color={color} />
-            ),
+            tabBarIcon: PlansIcon,
           }}
         />
       ) : null}
@@ -115,9 +151,7 @@ export default function SafetyManagerTabs() {
         component={WeatherStack}
         options={{
           title: t("tabs.weather"),
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="partly-sunny" size={size} color={color} />
-          ),
+          tabBarIcon: WeatherIcon,
         }}
       />
       <Tab.Screen
@@ -125,7 +159,7 @@ export default function SafetyManagerTabs() {
         component={ProfileStack}
         options={{
           title: t("tabs.profile"),
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+          tabBarIcon: ProfileIcon,
         }}
       />
     </Tab.Navigator>
