@@ -35,9 +35,8 @@ import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import WeatherIcon from "@/components/weather/WeatherIcon";
 import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
 import ForecastCard from "@/components/weather/ForecastCard";
-import FreshnessBadge from "@/components/safety/FreshnessBadge";
 import FreshnessNotice, { showsStandingBanner } from "@/components/safety/FreshnessNotice";
-import WeatherStatusButton from "@/components/weather/WeatherStatusButton";
+import WeatherStatusRow from "@/components/weather/WeatherStatusRow";
 import WeatherStatusModal, {
   type WeatherStatusSubject,
 } from "@/components/weather/WeatherStatusModal";
@@ -319,16 +318,10 @@ export default function WeatherScreen() {
                 </AppText>
               ) : null}
 
-              {/* The pill reports, the button explains. Two elements rather than one
-                  tappable pill, because ADR-0017 keeps pills out of the control role — see
-                  `WeatherStatusButton` for the full reasoning. */}
-              <View style={styles.badgeRow}>
-                <FreshnessBadge status={conditions.qualityStatus} />
-                <WeatherStatusButton
-                  subject={conditions.qualityStatus}
-                  onPress={() => setStatusSubject(conditions.qualityStatus)}
-                />
-              </View>
+              <WeatherStatusRow
+                status={conditions.qualityStatus}
+                onExplain={() => setStatusSubject(conditions.qualityStatus)}
+              />
             </View>
 
             {/*
@@ -530,9 +523,6 @@ const styles = StyleSheet.create({
   band: {
     marginTop: vs(6),
     textAlign: "center",
-  },
-  badgeRow: {
-    marginTop: vs(12),
   },
   metricsCard: {
     padding: s(14),
