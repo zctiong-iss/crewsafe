@@ -133,11 +133,11 @@ function HorizonCard({
   horizonMinutes,
   state,
   onRetry,
-}: {
+}: Readonly<{
   horizonMinutes: ForecastHorizonMinutes;
   state: HorizonState;
   onRetry: () => void;
-}) {
+}>) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const { forecast, loading, unavailable, failed } = horizonPresentation(state);

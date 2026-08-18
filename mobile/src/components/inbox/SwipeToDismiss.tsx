@@ -12,19 +12,17 @@
  * deadline whether or not the gesture is ever discovered, which is what keeps this honest for
  * a worker who never finds it.
  *
- * ── WHY THE LEGACY `Swipeable` ─────────────────────────────────────────────────────────
- * `react-native-gesture-handler` 2.32 is already a dependency and `GestureHandlerRootView` is
- * already mounted at the app root. `ReanimatedSwipeable` would pull in
- * `react-native-reanimated`, which is *not* installed — a native dependency on a project that
- * has never produced an EAS build. The legacy component runs on RN `Animated`, the same
- * driver `AnimatedIcon` and the rest progress bar already use.
+ * ── SUPPORTED SWIPE IMPLEMENTATION ──────────────────────────────────────────────────────
+ * `ReanimatedSwipeable` is the supported gesture-handler API. Its Expo-compatible Reanimated
+ * dependencies keep the action reveal on the UI-thread animation boundary while the store
+ * callback still runs only after the swipe has opened.
  *
  * @author Justin Chua
  */
-import { useRef } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { FC, ReactNode } from "react";
-import { Swipeable } from "react-native-gesture-handler";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, { interpolate, Extrapolation, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
@@ -47,10 +45,19 @@ interface SwipeToDismissProps {
  */
 const THRESHOLD = 96;
 
-const SwipeToDismiss: FC<SwipeToDismissProps> = ({ enabled, onDismiss, children }) => {
+const SwipeAction: FC<Readonly<{ translation: SharedValue<number>; side: "left" | "right"; backgroundColor: string; textColor: string; label: string; radius: number }>> = ({ translation, side, backgroundColor, textColor, label, radius }) => {
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translation.value, side === "left" ? [0, THRESHOLD] : [-THRESHOLD, 0], side === "left" ? [0, 1] : [1, 0], Extrapolation.CLAMP),
+  }));
+  return <Animated.View style={[styles.action, side === "left" ? styles.actionLeft : styles.actionRight, animatedStyle, { backgroundColor, borderRadius: radius }]}>
+    <Ionicons name="checkmark-done" size={s(22)} color={textColor} />
+    <AppText variant="label" style={[styles.actionLabel, { color: textColor }]}>{label}</AppText>
+  </Animated.View>;
+};
+
+const SwipeToDismiss: FC<Readonly<SwipeToDismissProps>> = ({ enabled, onDismiss, children }) => {
   const { t } = useTranslation();
   const theme = useTheme();
-  const ref = useRef<Swipeable>(null);
 
   if (!enabled) return <>{children}</>;
 
@@ -65,41 +72,14 @@ const SwipeToDismiss: FC<SwipeToDismissProps> = ({ enabled, onDismiss, children 
    * `dragX` is interpolated in both directions because the gesture is accepted either way: a
    * worker should not have to remember which.
    */
-  const renderAction = (dragX: Animated.AnimatedInterpolation<number>, side: "left" | "right") => {
-    const input = side === "left" ? [0, THRESHOLD] : [-THRESHOLD, 0];
-    const output = side === "left" ? [0, 1] : [1, 0];
-
-    const opacity = dragX.interpolate({
-      inputRange: input,
-      outputRange: output,
-      extrapolate: "clamp",
-    });
-
-    return (
-      <Animated.View
-        style={[
-          styles.action,
-          side === "left" ? styles.actionLeft : styles.actionRight,
-          { backgroundColor: theme.colors.success, opacity, borderRadius: theme.metrics.radius },
-        ]}
-      >
-        <Ionicons name="checkmark-done" size={s(22)} color={theme.colors.textInverse} />
-        <AppText variant="label" style={[styles.actionLabel, { color: theme.colors.textInverse }]}>
-          {t("inbox.swipeToClear")}
-        </AppText>
-      </Animated.View>
-    );
-  };
-
   return (
-    <Swipeable
-      ref={ref}
+    <ReanimatedSwipeable
       friction={2}
       leftThreshold={THRESHOLD}
       rightThreshold={THRESHOLD}
-      renderLeftActions={(_progress, dragX) => renderAction(dragX, "left")}
-      renderRightActions={(_progress, dragX) => renderAction(dragX, "right")}
-      onSwipeableOpen={() => {
+      renderLeftActions={(_progress, translation) => <SwipeAction translation={translation} side="left" backgroundColor={theme.colors.success} textColor={theme.colors.textInverse} label={t("inbox.swipeToClear")} radius={theme.metrics.radius} />}
+      renderRightActions={(_progress, translation) => <SwipeAction translation={translation} side="right" backgroundColor={theme.colors.success} textColor={theme.colors.textInverse} label={t("inbox.swipeToClear")} radius={theme.metrics.radius} />}
+      onSwipeableOpen={(_direction) => {
         /*
          * Dismiss on open rather than animating the card off screen first.
          *
@@ -116,7 +96,7 @@ const SwipeToDismiss: FC<SwipeToDismissProps> = ({ enabled, onDismiss, children 
       overshootRight={false}
     >
       <View>{children}</View>
-    </Swipeable>
+    </ReanimatedSwipeable>
   );
 };
 

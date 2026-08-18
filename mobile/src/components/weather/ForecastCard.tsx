@@ -40,7 +40,7 @@ import type { WeatherStackParamList } from "@/navigation/types";
 /** The card previews the nearer horizon only; the screen behind it shows both. */
 const PREVIEW_HORIZON = 30 as const;
 
-export default function ForecastCard({ siteId }: { siteId: string }) {
+export default function ForecastCard({ siteId }: Readonly<{ siteId: string }>) {
   const { t } = useTranslation();
   const theme = useTheme();
   const dispatch = useAppDispatch();

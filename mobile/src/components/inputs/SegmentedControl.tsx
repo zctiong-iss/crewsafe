@@ -44,7 +44,7 @@ function SegmentedControl<T extends string>({
   onChange,
   errorMessage,
   selectedColorFor,
-}: SegmentedControlProps<T>) {
+}: Readonly<SegmentedControlProps<T>>) {
   const theme = useTheme();
   const hasError = Boolean(errorMessage);
 

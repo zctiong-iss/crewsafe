@@ -41,6 +41,7 @@ import {
   thresholdsOf,
   type ThresholdKey,
 } from "@/components/policy/policyThresholds";
+import { emergencyStopCompatibilityValue } from "@/components/policy/policyCompatibility";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { createPolicyVersion, selectActiveVersion } from "@/store/reducers/policySlice";
@@ -78,7 +79,7 @@ export default function NewPolicyVersionScreen() {
   const [thresholds, setThresholds] = useState<Record<ThresholdKey, string>>(() =>
     active ? thresholdsOf(active) : EMPTY_THRESHOLDS,
   );
-  const [emergencyStop, setEmergencyStop] = useState(active ? String(active.wbgtEmergencyStop) : "");
+  const [emergencyStop, setEmergencyStop] = useState(active ? String(emergencyStopCompatibilityValue(active)) : "");
 
   // The label is never copied — a new version needs its own, and the server rejects a duplicate.
   const [label, setLabel] = useState("");

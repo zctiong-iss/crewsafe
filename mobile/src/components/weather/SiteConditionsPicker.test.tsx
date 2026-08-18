@@ -143,7 +143,7 @@ it("shows selection without changing what the row contains", async () => {
   const selected = screen.getByLabelText(/^weather.siteRowReading:Bishan Park/);
   const unselected = screen.getByLabelText(/^weather.siteRowReading:NUS Campus/);
 
-  expect(selected.children.length).toBe(unselected.children.length);
+  expect(selected.children).toHaveLength(unselected.children.length);
 });
 
 it("carries selection on a bar that survives high contrast", async () => {

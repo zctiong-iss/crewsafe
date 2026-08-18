@@ -459,7 +459,7 @@ it("does not poll while a decision is in flight", async () => {
   const tick = calls[calls.length - 1][0] as () => void;
   tick();
 
-  expect(mockFetchShifts.mock.calls.length).toBe(before);
+  expect(mockFetchShifts.mock.calls).toHaveLength(before);
 });
 
 /* ── Plan provenance: model or template (SCRUM-359 / SCRUM-TBD-70) ──────────────────────── */

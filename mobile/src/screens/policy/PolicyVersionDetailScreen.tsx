@@ -25,6 +25,7 @@ import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import PolicyStatusPill from "@/components/policy/PolicyStatusPill";
 import { THRESHOLD_GRID } from "@/components/policy/policyThresholds";
+import { emergencyStopCompatibilityValue } from "@/components/policy/policyCompatibility";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { activatePolicyVersion, selectActiveVersion } from "@/store/reducers/policySlice";
@@ -205,7 +206,7 @@ export default function PolicyVersionDetailScreen() {
               {t("policy.emergencyStop")}
             </AppText>
             <AppText variant="label" tone="danger">
-              {version.wbgtEmergencyStop}
+              {emergencyStopCompatibilityValue(version)}
             </AppText>
           </View>
         </View>

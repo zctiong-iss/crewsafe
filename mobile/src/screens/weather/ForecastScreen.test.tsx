@@ -142,8 +142,8 @@ it("carries the provenance of each prediction", async () => {
 
   // Model version and generation time on screen, not in a log: a forecast made forty minutes
   // ago is worth less than one made four minutes ago, and only this says which it is.
-  await waitFor(() => expect(screen.getAllByText("forecast.model").length).toBe(2));
-  expect(screen.getAllByText("forecast.generatedAt").length).toBe(2);
+  await waitFor(() => expect(screen.getAllByText("forecast.model")).toHaveLength(2));
+  expect(screen.getAllByText("forecast.generatedAt")).toHaveLength(2);
 });
 
 it("explains a declined forecast instead of raising an error", async () => {
@@ -151,8 +151,8 @@ it("explains a declined forecast instead of raising an error", async () => {
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("forecast.unavailableTitle").length).toBe(2));
-  expect(screen.getAllByText("forecast.unavailableBody").length).toBe(2);
+  await waitFor(() => expect(screen.getAllByText("forecast.unavailableTitle")).toHaveLength(2));
+  expect(screen.getAllByText("forecast.unavailableBody")).toHaveLength(2);
   // The assertion that protects the design: declining must not surface as a failure.
   expect(screen.queryByText("errors.server")).toBeNull();
   expect(screen.queryByText("common.retry")).toBeNull();
@@ -164,8 +164,8 @@ it("still raises a banner when the boundary genuinely fails", async () => {
   await renderScreen();
 
   // A 500 is an outage. Dressing it up as a quiet "not right now" would hide it indefinitely.
-  await waitFor(() => expect(screen.getAllByText("errors.server").length).toBe(2));
-  expect(screen.getAllByText("common.retry").length).toBe(2);
+  await waitFor(() => expect(screen.getAllByText("errors.server")).toHaveLength(2));
+  expect(screen.getAllByText("common.retry")).toHaveLength(2);
 });
 
 it("keeps a good 30 when 60 declines", async () => {
@@ -179,7 +179,7 @@ it("keeps a good 30 when 60 declines", async () => {
 
   await waitFor(() => expect(screen.getByText("32.8")).toBeTruthy());
   // One refusal, one prediction — the supervisor's question is still answerable.
-  expect(screen.getAllByText("forecast.unavailableTitle").length).toBe(1);
+  expect(screen.getAllByText("forecast.unavailableTitle")).toHaveLength(1);
 });
 
 it("states the band in words, not by colour alone", async () => {
@@ -192,7 +192,7 @@ it("states the band in words, not by colour alone", async () => {
    * red/green colour-vision deficiency. The words are the actual signal; the colour is a
    * shortcut to them.
    */
-  await waitFor(() => expect(screen.getAllByText("wbgt.band.32_TO_BELOW_33").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("wbgt.band.32_TO_BELOW_33")).toHaveLength(2));
 });
 
 it("renders no band when the server classified none, rather than the coolest one", async () => {
@@ -201,7 +201,7 @@ it("renders no band when the server classified none, rather than the coolest one
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("forecast.rangeLabel").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("forecast.rangeLabel")).toHaveLength(2));
   expect(screen.queryByText(/wbgt\.band\./)).toBeNull();
 });
 
@@ -219,7 +219,7 @@ it("colours each interval bound by its own band when the range crosses a boundar
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("30.6").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("30.6")).toHaveLength(2));
   const lower = screen.getAllByText("30.6")[0];
   const upper = screen.getAllByText("31.2")[0];
 
@@ -239,7 +239,7 @@ it("colours the degree symbol with the value it qualifies", async () => {
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("26.3")).toHaveLength(2));
 
   const colorOf = (node: { props: { style?: unknown } }) => {
     const style = node.props.style;
@@ -264,7 +264,7 @@ it("gives the range's shared degree symbol the hotter bound's colour", async () 
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("31.2").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("31.2")).toHaveLength(2));
 
   const colorOf = (node: { props: { style?: unknown } }) => {
     const style = node.props.style;
@@ -283,7 +283,7 @@ it("keeps the degree symbol on its quiet default when no band came down", async 
 
   await renderScreen();
 
-  await waitFor(() => expect(screen.getAllByText("26.3").length).toBe(2));
+  await waitFor(() => expect(screen.getAllByText("26.3")).toHaveLength(2));
 
   const style = screen.getAllByText("°C")[0].props.style;
   const flattened = Array.isArray(style) ? Object.assign({}, ...style.flat()) : (style ?? {});
