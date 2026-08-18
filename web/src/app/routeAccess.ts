@@ -11,6 +11,8 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/shifts/new": MANAGEMENT_ROLES,
   "/shifts/:shiftId/edit": MANAGEMENT_ROLES,
   "/conditions": MANAGEMENT_ROLES,
+  // Supervisor tool: "so I can follow up before the shift begins" — SUPERVISOR + SAFETY_MANAGER + ADMIN.
+  "/readiness": MANAGEMENT_ROLES,
   // Manager evidence dashboard (EP-07): inspector-facing compliance/response-time summaries.
   "/insights": ["SAFETY_MANAGER", "ADMIN"],
   // Same audience as /conditions, which carries the derived stop-work banner this tab's

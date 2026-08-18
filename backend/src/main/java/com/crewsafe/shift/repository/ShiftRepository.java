@@ -28,6 +28,16 @@ public interface ShiftRepository extends JpaRepository<Shift, UUID> {
     Optional<Shift> findByIdAndSiteId(UUID id, UUID siteId);
 
     /**
+     * The upcoming board for the SCRUM-437 readiness summary: a site's shifts in one of the
+     * given statuses (PLANNED/ACTIVE), soonest first. {@code startsAt} orders the board the way
+     * a supervisor reads it — next shift at the top; {@code id} is a deterministic tiebreaker
+     * for same-instant starts, the same reason {@link #findBySiteIdOrderByCreatedAtDescIdDesc}
+     * carries one. CLOSED/CANCELLED shifts are excluded by not being passed in the status set.
+     */
+    List<Shift> findBySiteIdAndStatusInOrderByStartsAtAscIdAsc(
+            UUID siteId, java.util.Collection<ShiftStatus> statuses);
+
+    /**
      * Powers the conditions screen's active-shift lookup. {@code findFirst}, not a unique
      * query, since nothing here enforces one ACTIVE shift per site.
      */
