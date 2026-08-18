@@ -87,6 +87,27 @@ not_contains_in_build_test() {
   fi
 }
 
+build_test_policy_guard() {
+  local path="$1" block maven_line docker_line
+  [[ -f "$path" ]] || return 1
+  block="$(awk '
+    /^  build-test:/ { started = 1 }
+    started && /^  publish-image:/ { exit }
+    started { print }
+  ' "$path")"
+  [[ "$block" == *'./mvnw -B verify'* ]] || return 1
+  [[ "$block" == *'docker build -t "crewsafe-backend-ci:${GITHUB_SHA}" .'* ]] || return 1
+  [[ "$block" != *'configure-aws-credentials'* ]] || return 1
+  [[ "$block" != *'aws ecr get-login-password'* ]] || return 1
+  [[ "$block" != *"$DOCKER_PUSH_CMD"* ]] || return 1
+  [[ "$block" != *'deploy-backend-staging.sh'* ]] || return 1
+
+  maven_line="$(printf '%s\n' "$block" | rg -n -m 1 -F -- './mvnw -B verify' | cut -d: -f1)"
+  docker_line="$(printf '%s\n' "$block" | rg -n -m 1 -F -- 'docker build -t "crewsafe-backend-ci:${GITHUB_SHA}" .' | cut -d: -f1)"
+  [[ -n "$maven_line" && -n "$docker_line" && "$maven_line" -lt "$docker_line" ]] || return 1
+  return 0
+}
+
 # workflow_policy_guard <path> -- structural + security assertions on the
 # publish-image job, matching test-web-image-workflow.sh's shape.
 workflow_policy_guard() {
@@ -311,8 +332,18 @@ not_contains_in_build_test "validation job has no OIDC permission" 'id-token: wr
 not_contains_in_build_test "validation job has no AWS credential action" 'configure-aws-credentials'
 not_contains_in_build_test "validation job has no image push" "$DOCKER_PUSH_CMD"
 
+# SCRUM-455 FR-013/SEC-007: Dockerfile construction is validated on every
+# backend build after Maven verification, but this job must not publish or
+# acquire cloud credentials.
+TESTS_RUN=$((TESTS_RUN + 1))
+if build_test_policy_guard "$WORKFLOW"; then
+  pass "build-test builds the local backend image after Maven verification without side effects"
+else
+  fail "build-test builds the local backend image after Maven verification without side effects"
+fi
+
 assert_order "build -> scan -> summary -> AWS credentials -> login -> push -> digest" "$WORKFLOW" \
-  "$DOCKER_BUILD_CMD" "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
+  'Build backend image' "$TRIVY_ACTION" 'Summarize backend image scan' 'configure-aws-credentials' 'aws ecr get-login-password' "$DOCKER_PUSH_CMD" 'RepoDigests'
 
 # --- SCRUM-270 US1 (T002): digest capture, job outputs, job summary -------
 contains_in "publication captures the pushed digest" "$WORKFLOW" 'RepoDigests'
@@ -335,7 +366,7 @@ contains_in "publication validates the repository pattern" "$WORKFLOW" 'crewsafe
 contains_in "publication validates the push role pattern" "$WORKFLOW" 'crewsafe-shared-dev-ecr-push'
 contains_in "publication validates the commit SHA shape" "$WORKFLOW" '^[0-9a-f]{40}$'
 assert_order "contract validation precedes build" "$WORKFLOW" \
-  'Validate backend publication contract' "$DOCKER_BUILD_CMD"
+  'Validate backend publication contract' 'Build backend image'
 
 # --- SCRUM-269 US3 (T034): ignorefile prep precedes the scan step ---------
 contains_in "ignorefile prep step references the source exceptions file" "$WORKFLOW" \

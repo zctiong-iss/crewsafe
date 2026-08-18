@@ -67,6 +67,11 @@ jobs:
           java-version: "21"
           cache: maven
       - run: ./mvnw -B verify
+      # SCRUM-455: validate that the Dockerfile builds from the Maven-tested
+      # checkout on every CI run. This runner-local tag has no registry host;
+      # publication remains exclusively in the credentialed publish-image job.
+      - name: Build backend container image
+        run: docker build -t "crewsafe-backend-ci:${GITHUB_SHA}" .
 
   publish-image:
     name: Publish image

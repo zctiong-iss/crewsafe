@@ -12,6 +12,13 @@ FROM python@sha256:a630a63cdb314e2d138a2fca3e375e319e8568346ffafac5b980f888630ac
 
 WORKDIR /app
 
+# Apply currently available Debian security fixes in the digest-pinned base
+# before installing runtime dependencies. Keep the package index in this layer
+# only so the final image does not retain stale package metadata.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy requirements and install dependencies as root (before user switch)
 COPY requirements-runtime.txt .
 RUN pip install --no-cache-dir --require-hashes --only-binary :all: -r requirements-runtime.txt && \
