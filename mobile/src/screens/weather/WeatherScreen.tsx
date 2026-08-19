@@ -36,6 +36,7 @@ import WeatherIcon from "@/components/weather/WeatherIcon";
 import WeatherBackdrop from "@/components/weather/backdrops/WeatherBackdrop";
 import ForecastCard from "@/components/weather/ForecastCard";
 import FreshnessNotice, { showsStandingBanner } from "@/components/safety/FreshnessNotice";
+import LightningBanner from "@/components/safety/LightningBanner";
 import WeatherStatusRow from "@/components/weather/WeatherStatusRow";
 import WeatherStatusModal, {
   type WeatherStatusSubject,
@@ -59,6 +60,7 @@ import { classifyCondition, isNightObservation } from "@/helpers/weather";
 import { formatTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import { useNow } from "@/hooks/useNow";
 
 const WEATHER_SCENARIOS: WeatherScenario[] = [
   "fair",
@@ -92,10 +94,20 @@ export default function WeatherScreen() {
     conditions,
     band,
     summaryBySite,
+    lightning,
     errorKey,
     requestId,
     refreshing,
   } = useAppSelector((state) => state.weather);
+
+  /*
+   * Ticks so the banner can expire itself, exactly as `MyShiftScreen` drives it.
+   *
+   * A stop-work carries a `validUntil`, and a banner that stayed up past it would be telling a
+   * supervisor that work is stopped when the server no longer says so. The screen owns the
+   * clock rather than the banner, so one timer serves it rather than one per banner.
+   */
+  const now = useNow(1000);
 
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -257,6 +269,17 @@ export default function WeatherScreen() {
           }}
         />
 
+        {/*
+          FR-12a: the lightning warning sits ABOVE the reading, on every role's weather screen.
+          Rendered outside the `conditions` guard below, deliberately — a stop-work is the most
+          severe thing this app says, and a site whose WBGT failed to load must not lose it.
+        */}
+        {lightning ? (
+          <View style={styles.block}>
+            <LightningBanner risk={lightning} locale={i18n.language} now={now} />
+          </View>
+        ) : null}
+
         {conditions && derived ? (
           <>
             <View
@@ -321,6 +344,7 @@ export default function WeatherScreen() {
               <WeatherStatusRow
                 status={conditions.qualityStatus}
                 onExplain={() => setStatusSubject(conditions.qualityStatus)}
+                style={styles.badgeRow}
               />
             </View>
 
@@ -495,6 +519,9 @@ const styles = StyleSheet.create({
     marginBottom: vs(4),
   },
   retry: {
+    marginTop: vs(12),
+  },
+  badgeRow: {
     marginTop: vs(12),
   },
   hero: {

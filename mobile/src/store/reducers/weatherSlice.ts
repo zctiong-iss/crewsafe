@@ -14,14 +14,14 @@
  * @author Justin Chua
  */
 import { createAsyncThunk, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { fetchSiteWeather } from "@/api/endpoints/safety";
+import { fetchLightningRisk, fetchSiteWeather } from "@/api/endpoints/safety";
 import { fetchAccessibleSites } from "@/api/endpoints/sites";
 import {
   fetchSiteWeatherSummary,
   type SiteWeatherSummary,
 } from "@/api/endpoints/siteWeatherSummary";
 import { isApiError, messageKeyFor, type ApiError } from "@/api/errors";
-import type { Site, SiteConditions, WbgtBand } from "@/types/domain";
+import type { LightningRisk, Site, SiteConditions, WbgtBand } from "@/types/domain";
 
 export type WeatherStatus = "idle" | "loading" | "ready" | "error";
 
@@ -39,6 +39,21 @@ export interface WeatherState {
    * site-wide obligations that apply to nobody in particular.
    */
   band: WbgtBand | null;
+  /**
+   * The selected site's lightning risk, or null when there is none to report.
+   *
+   * ── WHY THIS LIVES HERE AND NOT IN `safety` ─────────────────────────────────────────
+   * `safetySlice` already holds a lightning risk, and it is the WORKER'S — loaded for the
+   * site of the shift they are on. This screen's site is chosen from a picker and can be any
+   * of the twenty a manager oversees, so the two answer different questions and would fight
+   * over one field. A manager looking at site 7 must not be shown site 1's lightning because
+   * that is where their own shift happens to be.
+   *
+   * Fetched alongside the reading rather than separately: FR-12a puts the lightning warning
+   * ABOVE the WBGT reading, so a render that had one without the other would either show a
+   * reading with no warning above it or shift the layout a moment later.
+   */
+  lightning: LightningRisk | null;
   /**
    * One reading per site, keyed by site id — one request covering everything the user oversees.
    *
@@ -58,6 +73,7 @@ const initialState: WeatherState = {
   sites: [],
   selectedSiteId: null,
   conditions: null,
+  lightning: null,
   band: null,
   summaryBySite: {},
   errorKey: null,
@@ -70,6 +86,7 @@ interface LoadedPayload {
   selectedSiteId: string | null;
   conditions: SiteConditions | null;
   band: WbgtBand | null;
+  lightning: LightningRisk | null;
 }
 
 export const loadWeather = createAsyncThunk<
@@ -85,7 +102,7 @@ export const loadWeather = createAsyncThunk<
     const target = siteId ?? sites[0]?.id ?? null;
 
     if (!target) {
-      return { sites, selectedSiteId: null, conditions: null, band: null };
+      return { sites, selectedSiteId: null, conditions: null, band: null, lightning: null };
     }
 
     /*
@@ -96,13 +113,25 @@ export const loadWeather = createAsyncThunk<
      * The band arrives evaluated; the client does not compute it (§12.2, FR-15). `workerId`
      * is passed for the mock's benefit alone — see `fetchSiteWeather`.
      */
-    const response = await fetchSiteWeather(target, workerId);
+    /*
+     * In parallel, and the lightning half is allowed to fail on its own.
+     *
+     * `fetchLightningRisk` already swallows its own errors and resolves null, so a site with
+     * no lightning endpoint — or a transient failure on it — costs the banner and not the
+     * temperature. Awaiting them together rather than in sequence keeps the screen to one
+     * round trip's latency instead of two.
+     */
+    const [response, lightning] = await Promise.all([
+      fetchSiteWeather(target, workerId),
+      fetchLightningRisk(target),
+    ]);
 
     return {
       sites,
       selectedSiteId: target,
       conditions: response.observation,
       band: response.band,
+      lightning,
     };
   } catch (error) {
     if (isApiError(error)) {
@@ -170,6 +199,9 @@ const weatherSlice = createSlice({
         state.selectedSiteId = action.payload.selectedSiteId;
         state.conditions = action.payload.conditions;
         state.band = action.payload.band;
+        // Replaced wholesale, including with null: a cleared stop-work must clear the banner.
+        // Keeping the previous value on a null would leave a warning up after it expired.
+        state.lightning = action.payload.lightning;
         state.errorKey = null;
         state.requestId = null;
       })

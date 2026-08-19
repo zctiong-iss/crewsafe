@@ -52,6 +52,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -89,6 +90,11 @@ class AgentDraftServiceTest {
     private static final UUID ACTOR_ID = UUID.randomUUID();
     private static final UUID WORKER_ID = UUID.randomUUID();
     private static final String MODEL_ID = "global.anthropic.claude-haiku-4-5-20251001-v1:0";
+    /** Mirrors {@code AgentDraftService.SUPERSEDABLE_STATUSES}, which is private. */
+    private static final Set<Recommendation.RecommendationStatus> SUPERSEDABLE_STATUSES = Set.of(
+            Recommendation.RecommendationStatus.PENDING_APPROVAL,
+            Recommendation.RecommendationStatus.APPROVED,
+            Recommendation.RecommendationStatus.AUTO_DISPATCHED);
 
     @Mock private ShiftRepository shifts;
     @Mock private ShiftAssignmentRepository shiftAssignments;
@@ -339,8 +345,8 @@ class AgentDraftServiceTest {
     @Test
     @DisplayName("An auto-triggered stop-work (SCRUM-291) auto-dispatches with a null actor")
     void autoTriggeredLightningStopWorkUsesANullActor() {
-        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.empty());
         when(lightning.deriveForSite(SITE_ID, NOW)).thenReturn(Optional.of(new LightningRiskPayload(
                 LightningRiskState.STOP_WORK, new BigDecimal("3.10"), OBSERVED_AT, NOW,
                 WeatherQualityStatus.LIVE)));
@@ -644,8 +650,8 @@ class AgentDraftServiceTest {
     @Test
     @DisplayName("generateAuto drafts with a null actor, recording that it was system-triggered")
     void generateAutoUsesANullActor() {
-        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.empty());
         stubDraft(validModelPlan(), false, MODEL_ID);
 
         Recommendation saved = service.generateAuto(SITE_ID, SHIFT_ID).orElseThrow();
@@ -659,14 +665,9 @@ class AgentDraftServiceTest {
     @Test
     @DisplayName("An open PENDING_APPROVAL recommendation is superseded before the new one is drafted")
     void generateAutoSupersedesAnOpenRecommendation() {
-        Recommendation existing = Recommendation.builder()
-                .id(UUID.randomUUID())
-                .shiftId(SHIFT_ID)
-                .status(Recommendation.RecommendationStatus.PENDING_APPROVAL)
-                .createdAt(NOW.minusSeconds(600))
-                .build();
-        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.of(existing));
+        Recommendation existing = openRecommendation(Recommendation.RecommendationStatus.PENDING_APPROVAL);
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.of(existing));
         stubDraft(validModelPlan(), false, MODEL_ID);
 
         service.generateAuto(SITE_ID, SHIFT_ID);
@@ -676,19 +677,83 @@ class AgentDraftServiceTest {
         verify(recommendations).save(existing);
         verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
                 eq(existing.getId()), any());
+        // Nothing was ever dispatched from a plan nobody decided on -- still cancels through
+        // to check there is simply nothing outstanding, not skipped.
+        verify(recommendationService).revokeOutstandingDispatches(existing);
+    }
+
+    @Test
+    @DisplayName("An already-APPROVED recommendation is superseded and its dispatches revoked")
+    void generateAutoSupersedesAnApprovedRecommendation() {
+        Recommendation existing = openRecommendation(Recommendation.RecommendationStatus.APPROVED);
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.of(existing));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
+        verify(recommendationService).revokeOutstandingDispatches(existing);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+                eq(existing.getId()), any());
+    }
+
+    @Test
+    @DisplayName("An already-AUTO_DISPATCHED recommendation is superseded and its dispatches revoked")
+    void generateAutoSupersedesAnAutoDispatchedRecommendation() {
+        Recommendation existing = openRecommendation(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.of(existing));
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        service.generateAuto(SITE_ID, SHIFT_ID);
+        commit();
+
+        assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
+        verify(recommendationService).revokeOutstandingDispatches(existing);
+        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+                eq(existing.getId()), any());
     }
 
     @Test
     @DisplayName("With no open recommendation for the shift, nothing is superseded")
     void generateAutoSupersedesNothingWhenNoneIsOpen() {
-        when(recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-                SHIFT_ID, Recommendation.RecommendationStatus.PENDING_APPROVAL)).thenReturn(Optional.empty());
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.empty());
         stubDraft(validModelPlan(), false, MODEL_ID);
 
         service.generateAuto(SITE_ID, SHIFT_ID);
         commit();
 
         verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
+        verify(recommendationService, never()).revokeOutstandingDispatches(any());
+    }
+
+    @Test
+    @DisplayName("A REJECTED recommendation is not re-superseded, but a fresh draft still generates")
+    void generateAutoLeavesARejectedRecommendationUntouched() {
+        // The repository query itself only ever matches SUPERSEDABLE_STATUSES, so a shift whose
+        // newest recommendation is REJECTED has nothing in scope -- this documents that
+        // generateAuto still proceeds to draft regardless.
+        when(recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(
+                SHIFT_ID, SUPERSEDABLE_STATUSES)).thenReturn(Optional.empty());
+        stubDraft(validModelPlan(), false, MODEL_ID);
+
+        Recommendation saved = service.generateAuto(SITE_ID, SHIFT_ID).orElseThrow();
+        commit();
+
+        assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
+        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
+    }
+
+    private static Recommendation openRecommendation(Recommendation.RecommendationStatus status) {
+        return Recommendation.builder()
+                .id(UUID.randomUUID())
+                .shiftId(SHIFT_ID)
+                .status(status)
+                .createdAt(NOW.minusSeconds(600))
+                .build();
     }
 
     // ----------------------------------------------------------------------------------
