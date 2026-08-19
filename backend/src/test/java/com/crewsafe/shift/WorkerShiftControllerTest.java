@@ -210,7 +210,7 @@ class WorkerShiftControllerTest extends AbstractIntegrationTest {
                 WHERE table_schema = 'public' AND table_name = 'readiness_submission'
                 """, String.class);
 
-        assertThat(columnTypes).doesNotContain("character varying", "text", "character");
+        assertThat(columnTypes).isNotEmpty().doesNotContain("character varying", "text", "character");
 
         String symptomConstraint = jdbcTemplate.queryForObject("""
                 SELECT pg_get_constraintdef(schema_constraint.oid)

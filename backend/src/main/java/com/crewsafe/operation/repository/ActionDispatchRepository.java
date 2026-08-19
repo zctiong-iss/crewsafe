@@ -49,4 +49,8 @@ public interface ActionDispatchRepository extends JpaRepository<ActionDispatch, 
      */
     @Query("SELECT ad FROM ActionDispatch ad WHERE ad.recommendation.shiftId = :shiftId ORDER BY ad.dispatchedAt DESC")
     List<ActionDispatch> findByShiftId(@Param("shiftId") UUID shiftId);
+
+    /** Every dispatch fanned out from one recommendation, for cancelling them on supersede. */
+    @Query("SELECT ad FROM ActionDispatch ad WHERE ad.recommendation.id = :recommendationId")
+    List<ActionDispatch> findByRecommendationId(@Param("recommendationId") UUID recommendationId);
 }
