@@ -25,6 +25,7 @@ import AppText from "@/components/texts/AppText";
 import AppButton from "@/components/buttons/AppButton";
 import PolicyStatusPill from "@/components/policy/PolicyStatusPill";
 import { THRESHOLD_GRID } from "@/components/policy/policyThresholds";
+import { emergencyStopCompatibilityValue } from "@/components/policy/policyCompatibility";
 
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { activatePolicyVersion, selectActiveVersion } from "@/store/reducers/policySlice";
@@ -78,12 +79,12 @@ export default function PolicyVersionDetailScreen() {
           /* A 409 here is one of two different facts — already active, or superseded and
              terminal — and telling a safety manager which one decides what they do next. */
           const key = result.payload?.errorKey ?? "errors.unknown";
-          const message =
-            key === "errors.conflict"
-              ? version.status === "SUPERSEDED"
-                ? t("policy.supersededCannotActivate")
-                : t("policy.alreadyActive")
-              : t(key);
+          let message = t(key);
+          if (key === "errors.conflict") {
+            message = version.status === "SUPERSEDED"
+              ? t("policy.supersededCannotActivate")
+              : t("policy.alreadyActive");
+          }
           Alert.alert(t("policy.activateFailedTitle"), message, [{ text: t("common.close") }]);
         },
       },
@@ -205,7 +206,7 @@ export default function PolicyVersionDetailScreen() {
               {t("policy.emergencyStop")}
             </AppText>
             <AppText variant="label" tone="danger">
-              {version.wbgtEmergencyStop}
+              {emergencyStopCompatibilityValue(version)}
             </AppText>
           </View>
         </View>

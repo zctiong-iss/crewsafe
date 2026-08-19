@@ -10,6 +10,10 @@
 const mockFetchPendingDispatches = jest.fn();
 const mockAcknowledgeDispatch = jest.fn();
 const mockCompleteDispatch = jest.fn();
+const mockRandomUUID = jest.fn();
+jest.mock("expo-crypto", () => ({
+  randomUUID: () => mockRandomUUID(),
+}));
 jest.mock("@/api/endpoints/dispatch", () => ({
   fetchPendingDispatches: (...a: unknown[]) => mockFetchPendingDispatches(...a),
   acknowledgeDispatch: (...a: unknown[]) => mockAcknowledgeDispatch(...a),
@@ -310,7 +314,10 @@ describe("loadInbox (SCRUM-352 / FR-004, FR-005)", () => {
 });
 
 describe("acknowledge (SCRUM-352 / FR-004, SCRUM-186)", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockRandomUUID.mockReturnValue("secure-key");
+  });
 
   function store(preloaded: Partial<DispatchInboxState> = {}) {
     const dispatchInboxState: DispatchInboxState = {
@@ -348,6 +355,19 @@ describe("acknowledge (SCRUM-352 / FR-004, SCRUM-186)", () => {
 
     expect(mockAcknowledgeDispatch).toHaveBeenCalledWith("a", expect.any(String));
     expect(s.getState().dispatchInbox.idempotencyKeys.a).toBeTruthy();
+  });
+
+  it("rejects without persisting a predictable key when the cryptographic RNG is unavailable", async () => {
+    mockRandomUUID.mockImplementation(() => {
+      throw new Error("secure random unavailable");
+    });
+    const s = store({ pending: [A] });
+
+    await dispatchAcknowledge(s, "a");
+
+    expect(mockAcknowledgeDispatch).not.toHaveBeenCalled();
+    expect(s.getState().dispatchInbox.idempotencyKeys.a).toBeUndefined();
+    expect(s.getState().dispatchInbox.failures.a).toBe("errors.unknown");
   });
 
   it("reuses the same key on a retry rather than minting a second one", async () => {

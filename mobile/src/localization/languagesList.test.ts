@@ -33,6 +33,10 @@ describe("resolveDeviceLanguage", () => {
     ["bur", "my"],
     ["zh-Hans-SG", "zh-Hans"],
     ["zh-CN", "zh-Hans"],
+    ["zh-Hant", "en"],
+    ["zh-TW", "en"],
+    ["zh-HK", "en"],
+    ["zh-MO", "en"],
   ])("maps device locale %s to %s", (tag, expected) => {
     expect(resolveDeviceLanguage([tag])).toBe(expected);
   });

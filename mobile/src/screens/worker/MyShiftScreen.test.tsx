@@ -144,7 +144,7 @@ it("shows a loading indicator before the first load resolves", async () => {
 
 it("says lightning data is unavailable rather than showing silence, when a shift exists but the server has none", async () => {
   const store = buildStore({ status: "ready", shift: SHIFT, lightning: null });
-  const { queryByText } = await render(
+  const { queryByText, getAllByText } = await render(
     <Provider store={store}>
       <MyShiftScreen />
     </Provider>,
@@ -154,7 +154,7 @@ it("says lightning data is unavailable rather than showing silence, when a shift
 
 it("shows the no-shift degraded state when the worker has nothing scheduled", async () => {
   const store = buildStore({ status: "ready", shift: null });
-  const { queryByText } = await render(
+  const { queryByText, getAllByText } = await render(
     <Provider store={store}>
       <MyShiftScreen />
     </Provider>,
@@ -167,7 +167,7 @@ it("renders the lightning banner before the shift task, with an active stop-work
   jest.spyOn(Date, "now").mockReturnValue(now);
   const store = buildStore({ status: "ready", shift: SHIFT, lightning: stopWorkRisk(now) });
 
-  const { queryByText } = await render(
+  const { queryByText, getAllByText } = await render(
     <Provider store={store}>
       <MyShiftScreen />
     </Provider>,
@@ -175,6 +175,10 @@ it("renders the lightning banner before the shift task, with an active stop-work
 
   expect(queryByText("lightning.stopWorkTitle")).not.toBeNull();
   expect(queryByText("Concrete pour")).not.toBeNull();
+  const ordered = getAllByText(/lightning\.stopWorkTitle|Concrete pour/).map(
+    (node) => String(node.props.children),
+  );
+  expect(ordered).toEqual(["lightning.stopWorkTitle", "Concrete pour"]);
 });
 
 it("shows a freshness notice and the reading together when conditions are present", async () => {
@@ -342,7 +346,6 @@ describe.each([
     }
   });
 });
-
 /* -- Freshness: a banner for STALE only, an icon for the rest --------------------------- */
 
 const withQuality = (qualityStatus: "DELAYED" | "STALE" | "SIMULATED" | "LIVE") =>

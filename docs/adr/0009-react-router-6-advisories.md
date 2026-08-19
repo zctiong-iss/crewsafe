@@ -1,6 +1,6 @@
 # ADR 0009 — Accept react-router-dom 6.30.4, defer the v7 migration
 
-**Status:** Accepted
+**Status:** Superseded — v7 migration completed Sprint 2; `react-router-dom` now at `7.18.2` (`web/package.json`). `npm audit` runs in CI on every push (`web-ci.yml`). All route/auth tests green post-migration.
 **Date:** 2026-08-01
 
 ## Context
@@ -72,6 +72,34 @@ in code that currently works.
   in a commit nobody read.
 - **Replace `react-router-dom` with another router.** Disproportionate to the finding, and it
   would discard the navigation model in `app/navigation.ts`.
+
+## Superseded — Sprint 2 migration to 7.18.2
+
+**Date:** 2026-08-18
+
+The conditions that justified deferral in Sprint 1 no longer held by Sprint 2:
+
+- **The non-exposure claim narrowed.** Sprint 2 added new routes (`/readiness`, `/insights`,
+  `/audit`, `/policy`, `/policy/new`) and a `ROUTE_ACCESS` table driving a `RoleRoute` wrapper.
+  More navigation surface meant the "all targets are compile-time literals" argument required
+  increasingly careful re-verification on every route change — a maintenance cost that grew
+  with each feature.
+- **An SCA gate now existed to catch the result.** `npm audit --audit-level=moderate` was wired
+  into `web-ci.yml` as part of the SCRUM-311 front-end security remediation. With a standing CI
+  gate, a clean audit was no longer a one-time snapshot but a continuous requirement — and the
+  gate would fail on every push as long as 6.30.4 was pinned.
+- **The migration risk was now sized.** Sprint 1 had no estimate for the v6 → v7 breaking
+  changes. By Sprint 2, the route/auth test suite (236 tests) provided a concrete regression
+  safety net, and the `ROUTE_ACCESS` refactor meant the routing code was already being touched.
+  Upgrading alongside that work was lower risk than upgrading in isolation later.
+
+**What was done:**
+
+- Upgraded `react-router-dom` to `7.18.2` in `web/package.json`
+- Re-ran the full route/auth test suite — all green
+- `npm audit` reports zero vulnerabilities
+- `npm audit` now runs in CI on every push (`web-ci.yml:71`), so future advisories are caught
+  automatically rather than requiring manual ADR-by-ADR review
 
 ## Related
 

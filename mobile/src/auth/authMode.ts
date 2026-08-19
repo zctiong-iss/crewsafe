@@ -17,10 +17,10 @@ import { config, type AuthMode } from "@/constants/config";
 import { AuthError } from "./AuthError";
 
 /** Modes that must never run in a release bundle. */
-const DEV_ONLY_MODES: readonly AuthMode[] = ["mock", "cognito-password"];
+const DEV_ONLY_MODES = new Set<AuthMode>(["mock", "cognito-password"]);
 
 export function isDevOnlyMode(mode: AuthMode): boolean {
-  return DEV_ONLY_MODES.includes(mode);
+  return DEV_ONLY_MODES.has(mode);
 }
 
 /**

@@ -70,14 +70,18 @@ function evaluatePolicy(wbgt: number, intensity: Intensity, workerId: string): P
 
   switch (currentBand) {
     case "BELOW_31":
-      advisory.push(action("HYDRATE_REGULARLY", "HS-BASE-HYDRATE", workerId));
-      advisory.push(action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId));
+      advisory.push(
+        action("HYDRATE_REGULARLY", "HS-BASE-HYDRATE", workerId),
+        action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId),
+      );
       break;
 
     case "31_TO_BELOW_32":
       mandatory.push(action("HYDRATE_HOURLY", "HS-31-HYDRATE", workerId));
-      advisory.push(action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId));
-      advisory.push(action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId));
+      advisory.push(
+        action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId),
+        action("SHADE_RECOVERY", "HS-BASE-SHADE", workerId),
+      );
       break;
 
     case "32_TO_BELOW_33":
@@ -90,8 +94,10 @@ function evaluatePolicy(wbgt: number, intensity: Intensity, workerId: string): P
     case "33_AND_ABOVE":
       mandatory.push(action("HYDRATE_HOURLY", "HS-31-HYDRATE", workerId));
       if (heavy) mandatory.push(action("REST_15_MIN_HOURLY", "HS-33-HEAVY", workerId));
-      advisory.push(action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId));
-      advisory.push(action("CLOSE_MONITORING", "HS-33-MONITOR", workerId));
+      advisory.push(
+        action("RESCHEDULE_HEAVY_WORK", "HS-31-RESCHEDULE", workerId),
+        action("CLOSE_MONITORING", "HS-33-MONITOR", workerId),
+      );
       break;
   }
 
@@ -121,8 +127,9 @@ export function mockConditions(
    * would render happily and a reviewer would rightly not believe. The thresholds mirror
    * `application.yml`: WEATHER_DELAYED_AFTER 20m, WEATHER_STALE_AFTER 45m.
    */
-  const ageMinutes =
-    qualityStatus === "STALE" ? 52 : qualityStatus === "DELAYED" ? 26 : 4;
+  let ageMinutes = 4;
+  if (qualityStatus === "STALE") ageMinutes = 52;
+  else if (qualityStatus === "DELAYED") ageMinutes = 26;
 
   const metrics = getWeatherMetrics();
 
@@ -133,13 +140,11 @@ export function mockConditions(
    * timestamp is what actually exercises it — a boolean would let the screen render a moon
    * while the underlying helper still believed it was noon. 13:00 UTC is 21:00 SGT.
    */
-  const observedAt = getNightOverride()
-    ? (() => {
-        const night = new Date();
-        night.setUTCHours(13, 0, 0, 0);
-        return night;
-      })()
-    : new Date(now - ageMinutes * 60_000);
+  let observedAt = new Date(now - ageMinutes * 60_000);
+  if (getNightOverride()) {
+    observedAt = new Date();
+    observedAt.setUTCHours(13, 0, 0, 0);
+  }
   // Sits in the 32-to-below-33 band, which is where heavy work first attracts a mandatory
   // rest — the most informative default for a screen whose job is showing that.
   const wbgt = 32.4;

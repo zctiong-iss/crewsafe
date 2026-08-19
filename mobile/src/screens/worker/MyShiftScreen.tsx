@@ -66,7 +66,7 @@ import {
   type LightningScenario,
   type LightningSource,
 } from "@/api/mock/scenario";
-import type { WeatherQualityStatus } from "@/types/domain";
+import type { PolicyEvaluation, SiteConditions, WeatherQualityStatus } from "@/types/domain";
 import { features } from "@/constants/features";
 import { sharedPaddingHorizontal, sharedGap } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -81,6 +81,23 @@ const SCENARIOS: { key: LightningScenario; labelKey: string }[] = [
 
 /** Every FR-12 freshness state, so each banner tone is reachable in review. */
 const FRESHNESS_OPTIONS: WeatherQualityStatus[] = ["LIVE", "DELAYED", "STALE", "SIMULATED"];
+
+function myShiftPresentation(
+  status: string,
+  shift: unknown,
+  conditions: SiteConditions | null,
+  policy: PolicyEvaluation | null,
+) {
+  const heatGuidance = features.heatGuidanceCard && policy ? policy : null;
+  const conditionsPayload = conditions || null;
+  return {
+    hasError: status === "error",
+    hasReadyEmptyShift: shift === null && status === "ready",
+    heatGuidance,
+    conditions: conditionsPayload,
+    showDevPanel: __DEV__,
+  };
+}
 
 export default function MyShiftScreen() {
   const { t, i18n } = useTranslation();
@@ -162,6 +179,8 @@ export default function MyShiftScreen() {
     lightning !== null &&
     lightning.state === "STOP_WORK" &&
     !hasElapsed(lightning.validUntil, now);
+  const { hasError, hasReadyEmptyShift, heatGuidance, conditions: conditionsPayload, showDevPanel } =
+    myShiftPresentation(status, shift, conditions, policy);
 
   if (status === "loading") {
     return (
@@ -185,7 +204,7 @@ export default function MyShiftScreen() {
           />
         }
       >
-        {status === "error" ? (
+        {hasError ? (
           /* Still a wrapper: it groups the banner with its retry button so the two travel as
              one item in the gapped stack, rather than being spaced apart from each other. */
           <View>
@@ -222,7 +241,7 @@ export default function MyShiftScreen() {
             FR-12a only constrains lightning to sit above the reading, not the task. */}
         {shift ? <ShiftCard shift={shift} locale={i18n.language} /> : null}
 
-        {shift === null && status === "ready" ? (
+        {hasReadyEmptyShift ? (
           <View style={styles.empty}>
             <AppText variant="title" style={styles.emptyTitle}>
               {t("shift.noShiftTitle")}
@@ -235,8 +254,8 @@ export default function MyShiftScreen() {
 
         {/* Off by default — see `features.heatGuidanceCard` for what is lost while it is.
             Rendered from a flag rather than commented out so it stays typechecked. */}
-        {features.heatGuidanceCard && policy ? (
-          <HeatGuidance policy={policy} suspended={stopWorkActive} />
+        {heatGuidance ? (
+          <HeatGuidance policy={heatGuidance} suspended={stopWorkActive} />
         ) : null}
 
         {/*
@@ -250,15 +269,15 @@ export default function MyShiftScreen() {
           SIMULATED qualify a reading that is still usable, and a permanent banner for them on
           the screen a worker reads all shift becomes furniture by the tenth viewing.
         */}
-        {conditions && showsStandingBanner(conditions.qualityStatus) ? (
-          <FreshnessNotice status={conditions.qualityStatus} />
+        {conditionsPayload && showsStandingBanner(conditionsPayload.qualityStatus) ? (
+          <FreshnessNotice status={conditionsPayload.qualityStatus} />
         ) : null}
 
-        {conditions ? (
+        {conditionsPayload ? (
           <WbgtCard
-            conditions={conditions}
+            conditions={conditionsPayload}
             superseded={stopWorkActive}
-            onExplainStatus={() => setStatusSubject(conditions.qualityStatus)}
+            onExplainStatus={() => setStatusSubject(conditionsPayload.qualityStatus)}
           />
         ) : null}
 
@@ -280,7 +299,7 @@ export default function MyShiftScreen() {
           />
         ) : null}
 
-        {__DEV__ ? (
+        {showDevPanel ? (
           <View
             style={[
               styles.devPanel,

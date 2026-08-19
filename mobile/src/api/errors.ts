@@ -39,7 +39,7 @@ export type ApiErrorKind =
  */
 export type ApiErrorCode = "NO_ACTIVE_POLICY" | "NO_USABLE_WBGT";
 
-const KNOWN_ERROR_CODES: readonly string[] = ["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"];
+const KNOWN_ERROR_CODES = new Set(["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"]);
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
@@ -83,7 +83,7 @@ export class ApiError extends Error {
 
 /** Narrows a raw `code` off the wire to one this client has a translation for. */
 export function toApiErrorCode(value: unknown): ApiErrorCode | null {
-  return typeof value === "string" && KNOWN_ERROR_CODES.includes(value)
+  return typeof value === "string" && KNOWN_ERROR_CODES.has(value)
     ? (value as ApiErrorCode)
     : null;
 }

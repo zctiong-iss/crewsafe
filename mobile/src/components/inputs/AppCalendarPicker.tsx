@@ -123,15 +123,33 @@ function monthGrid(year: number, month: number): (Date | null)[] {
  * `getDay()` padding above; making the first day locale-dependent would need both to agree
  * and is not worth the coupling for an app used in one country.
  */
-function weekdayInitials(locale: string): string[] {
+export const WEEKDAY_KEYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+] as const;
+
+export function weekdayInitials(locale: string): { key: (typeof WEEKDAY_KEYS)[number]; initial: string }[] {
   const formatter = new Intl.DateTimeFormat(locale, { weekday: "narrow" });
-  return Array.from({ length: DAYS_IN_WEEK }, (_, index) =>
-    formatter.format(new Date(2024, 0, 7 + index)),
-  );
+  const sunday = new Date(2024, 0, 7);
+  return WEEKDAY_KEYS.map((key, index) => {
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + index);
+    return { key, initial: formatter.format(date) };
+  });
 }
 
 function monthLabel(date: Date, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(date);
+}
+
+/** Stable local-calendar identity for a non-interactive grid cell. */
+export function calendarCellKey(date: Date): string {
+  return `blank-${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
 /** The full date, spoken. Screen readers should not have to read a bare number out of a grid. */
@@ -193,6 +211,10 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
 
   const cells = useMemo(
     () => monthGrid(visibleMonth.getFullYear(), visibleMonth.getMonth()),
+    [visibleMonth],
+  );
+  const gridStart = useMemo(
+    () => new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1 - visibleMonth.getDay()),
     [visibleMonth],
   );
   const initials = useMemo(() => weekdayInitials(locale), [locale]);
@@ -353,8 +375,11 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
           </View>
 
           <View style={styles.weekdayRow}>
-            {initials.map((initial, index) => (
-              <View key={index} style={[styles.cell, { width: cellSize }]}>
+            {initials.map(({ key, initial }) => (
+              <View
+                key={key}
+                style={[styles.cell, { width: cellSize }]}
+              >
                 {/* Decorative: the grid's own buttons already speak their full date, so
                     repeating the column letter would just add noise for a screen reader. */}
                 <AppText variant="caption" tone="secondary" accessibilityElementsHidden>
@@ -373,7 +398,14 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
           >
             {cells.map((day, index) => {
               if (!day) {
-                return <View key={`blank-${index}`} style={[styles.cell, { width: cellSize }]} />;
+                const blankDate = new Date(gridStart);
+                blankDate.setDate(gridStart.getDate() + index);
+                return (
+                  <View
+                    key={calendarCellKey(blankDate)}
+                    style={[styles.cell, { width: cellSize }]}
+                  />
+                );
               }
               const selected = isSameDay(day, draft);
               const isToday = isSameDay(day, today);

@@ -12,7 +12,7 @@ import type { FC, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { s } from "react-native-size-matters";
 import { useTheme } from "@/theme/ThemeProvider";
-import { AppFonts, familyFor, lineHeightBoostFor, type AppFontWeight } from "@/styles/fonts";
+import { familyFor, lineHeightBoostFor, type AppFontWeight } from "@/styles/fonts";
 import { isSupportedLanguage } from "@/localization/languagesList";
 
 export type AppTextVariant =

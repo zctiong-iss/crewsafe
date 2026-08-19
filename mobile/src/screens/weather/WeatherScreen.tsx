@@ -54,7 +54,7 @@ import {
   setWeatherScenario,
   type WeatherScenario,
 } from "@/api/mock/scenario";
-import type { WeatherCondition } from "@/types/domain";
+import type { Site, SiteConditions, WeatherCondition } from "@/types/domain";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { classifyCondition, isNightObservation } from "@/helpers/weather";
 import { formatTime } from "@/helpers/dateTime";
@@ -80,6 +80,24 @@ const SCENARIO_CONDITION: Record<WeatherScenario, WeatherCondition> = {
   rain: "RAIN",
   storm: "THUNDERY_SHOWERS",
 };
+
+function weatherPresentation(
+  status: string,
+  sites: readonly Site[],
+  selectedSiteId: string | null,
+  conditions: SiteConditions | null,
+  derived: { condition: WeatherCondition; night: boolean } | null,
+) {
+  const reading = conditions !== null && derived !== null ? { conditions, derived } : null;
+  return {
+    hasError: status === "error",
+    hasNoSites: status === "ready" && sites.length === 0,
+    hasMultipleSites: sites.length > 1,
+    reading,
+    noReading: status === "ready" && selectedSiteId !== null && conditions === null,
+    showDevPanel: __DEV__ && isMockApi(),
+  };
+}
 
 export default function WeatherScreen() {
   const { t, i18n } = useTranslation();
@@ -147,6 +165,8 @@ export default function WeatherScreen() {
       night: isNightObservation(conditions.observedAt),
     };
   }, [conditions]);
+  const { hasError, hasNoSites, hasMultipleSites, reading, noReading, showDevPanel } =
+    weatherPresentation(status, sites, selectedSiteId, conditions, derived);
 
   if (status === "loading") {
     return (
@@ -165,6 +185,32 @@ export default function WeatherScreen() {
       ]
     : [];
 
+  /*
+   * A site with nothing ingested yet. Only reachable live — the mock always has a
+   * reading — and previously it rendered an empty screen under a site picker, which
+   * reads as a broken app rather than as "no data for this site".
+   *
+   * `selectedSiteId !== null` inside `weatherPresentation` separates this from the
+   * no-memberships case, which is also conditions-less and would otherwise stack two
+   * empty states.
+   */
+  const noReadingContent = noReading ? (
+    <View style={styles.empty}>
+      <AppText variant="title" style={styles.centre}>
+        {t("weather.noReadingTitle")}
+      </AppText>
+      <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
+        {t("weather.noReadingBody")}
+      </AppText>
+      <AppButton
+        title={t("weather.statusExplain")}
+        variant="secondary"
+        onPress={() => setStatusSubject("NO_READING")}
+        style={styles.retry}
+      />
+    </View>
+  ) : null;
+
   return (
     <AppSafeView>
       <ScrollView
@@ -179,7 +225,7 @@ export default function WeatherScreen() {
           />
         }
       >
-        {status === "error" ? (
+        {hasError ? (
           <View style={styles.block}>
             <MessageBanner
               message={t(errorKey ?? "errors.unknown")}
@@ -202,7 +248,7 @@ export default function WeatherScreen() {
         {/* An empty site list is a legitimate answer from SiteController, not a failure —
             a new starter with no memberships is correctly authenticated and correctly sees
             nothing. It gets an explanation rather than an error. */}
-        {status === "ready" && sites.length === 0 ? (
+        {hasNoSites ? (
           <View style={styles.empty}>
             <AppText variant="title" style={styles.centre}>
               {t("weather.noSitesTitle")}
@@ -220,7 +266,7 @@ export default function WeatherScreen() {
           twenty: it fills the screen and pushes the reading a supervisor came for below the
           fold, and it only ever let them pick a site and look, never see which one is hot.
         */}
-        {sites.length > 1 ? (
+        {hasMultipleSites ? (
           <View style={styles.block}>
             <AppText variant="label" style={styles.sectionLabel}>
               {t("weather.site")}
@@ -280,7 +326,7 @@ export default function WeatherScreen() {
           </View>
         ) : null}
 
-        {conditions && derived ? (
+        {reading ? (
           <>
             <View
               style={[
@@ -294,20 +340,20 @@ export default function WeatherScreen() {
                   SCRUM-196, and decoration behind a safety number there would reverse that
                   with no discussion. Draws nothing in high contrast. */}
               <WeatherBackdrop
-                condition={derived.condition}
-                night={derived.night}
+                condition={reading.derived.condition}
+                night={reading.derived.night}
                 radius={theme.metrics.radius}
               />
 
               <WeatherIcon
-                condition={derived.condition}
-                night={derived.night}
+                condition={reading.derived.condition}
+                night={reading.derived.night}
                 size={72}
                 color={theme.colors.textPrimary}
               />
 
               <AppText variant="title" style={styles.conditionLabel}>
-                {t(`weather.condition.${derived.condition}`)}
+                {t(`weather.condition.${reading.derived.condition}`)}
               </AppText>
 
               {sites.length === 1 ? (
@@ -322,7 +368,7 @@ export default function WeatherScreen() {
                     to stay legible against a moving background and competes with it for meaning.
                     Band colour lives on the forecast screen, where the surface is plain. */}
                 <AppText variant="display">
-                  {conditions.wbgt === null ? "—" : conditions.wbgt.toFixed(1)}
+                  {reading.conditions.wbgt === null ? "—" : reading.conditions.wbgt.toFixed(1)}
                 </AppText>
                 <AppText variant="subtitle" tone="secondary" style={styles.unit}>
                   °C
@@ -342,8 +388,8 @@ export default function WeatherScreen() {
               ) : null}
 
               <WeatherStatusRow
-                status={conditions.qualityStatus}
-                onExplain={() => setStatusSubject(conditions.qualityStatus)}
+                status={reading.conditions.qualityStatus}
+                onExplain={() => setStatusSubject(reading.conditions.qualityStatus)}
                 style={styles.badgeRow}
               />
             </View>
@@ -355,9 +401,9 @@ export default function WeatherScreen() {
               tap has not been shown. DELAYED is usable data worth a footnote; STALE is data
               that must not be acted on at all, and it keeps the banner it earned.
             */}
-            {showsStandingBanner(conditions.qualityStatus) ? (
+            {showsStandingBanner(reading.conditions.qualityStatus) ? (
               <View style={styles.block}>
-                <FreshnessNotice status={conditions.qualityStatus} />
+                <FreshnessNotice status={reading.conditions.qualityStatus} />
               </View>
             ) : null}
 
@@ -389,18 +435,18 @@ export default function WeatherScreen() {
               </View>
 
               <View style={styles.footerMeta}>
-                {conditions.stationId ? (
+                {reading.conditions.stationId ? (
                   <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                    {t("weather.station", { id: conditions.stationId })}
+                    {t("weather.station", { id: reading.conditions.stationId })}
                   </AppText>
                 ) : null}
                 <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("weather.observedAt", { time: formatTime(conditions.observedAt, i18n.language) })}
+                  {t("weather.observedAt", { time: formatTime(reading.conditions.observedAt, i18n.language) })}
                 </AppText>
                 <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("weather.ingestedAt", { time: formatTime(conditions.ingestedAt, i18n.language) })}
+                  {t("weather.ingestedAt", { time: formatTime(reading.conditions.ingestedAt, i18n.language) })}
                 </AppText>
-                {derived.night ? (
+                {reading.derived.night ? (
                   <AppText variant="caption" tone="secondary" style={styles.metaItem}>
                     {t("weather.night")}
                   </AppText>
@@ -408,35 +454,14 @@ export default function WeatherScreen() {
               </View>
             </View>
           </>
-        ) : status === "ready" && selectedSiteId !== null ? (
-          /*
-           * A site with nothing ingested yet. Only reachable live — the mock always has a
-           * reading — and previously it rendered an empty screen under a site picker, which
-           * reads as a broken app rather than as "no data for this site".
-           *
-           * `selectedSiteId !== null` is what separates this from the no-memberships case
-           * above, which is also conditions-less and would otherwise stack two empty states.
-           */
-          <View style={styles.empty}>
-            <AppText variant="title" style={styles.centre}>
-              {t("weather.noReadingTitle")}
-            </AppText>
-            <AppText variant="body" tone="secondary" style={[styles.centre, styles.emptyBody]}>
-              {t("weather.noReadingBody")}
-            </AppText>
-            <AppButton
-              title={t("weather.statusExplain")}
-              variant="secondary"
-              onPress={() => setStatusSubject("NO_READING")}
-              style={styles.retry}
-            />
-          </View>
-        ) : null}
+        ) : (
+          noReadingContent
+        )}
 
         {/* Without this only FAIR is reachable — the fixture returns one set of metrics, so
             five of the six animations and the whole night variant would be unreviewable.
             The switcher sets the *numbers*; the condition is still classified from them. */}
-        {__DEV__ && isMockApi() ? (
+        {showDevPanel ? (
           <View
             style={[
               styles.devPanel,

@@ -57,6 +57,56 @@ const CATEGORY_ORDER: MitigationCategory[] = [
   "MONITORING",
 ];
 
+export function mitigationFingerprint(mitigation: Mitigation): string {
+  return JSON.stringify({
+    actionCode: mitigation.actionCode,
+    ruleReference: mitigation.ruleReference,
+    action: mitigation.action,
+    category: mitigation.category,
+    priority: mitigation.priority,
+    origin: mitigation.origin,
+    rationale: mitigation.rationale,
+    estimatedImpact: mitigation.estimatedImpact,
+    appliesTo: mitigation.appliesTo,
+    timing: mitigation.timing,
+  });
+}
+
+/**
+ * Exact duplicate records have no domain identity, so occurrence is the only available
+ * tie-breaker. Distinct records remain stable under insertion and reordering; indistinguishable
+ * duplicates cannot have independently stable identities without a server identifier.
+ */
+export function mitigationKeys(mitigations: readonly Mitigation[]): string[] {
+  const occurrences = new Map<string, number>();
+  return mitigations.map((mitigation) => {
+    const fingerprint = mitigationFingerprint(mitigation);
+    const occurrence = occurrences.get(fingerprint) ?? 0;
+    occurrences.set(fingerprint, occurrence + 1);
+    return `mitigation:${fingerprint}:occurrence:${occurrence}`;
+  });
+}
+
+function mitigationEntries(mitigations: readonly Mitigation[]): { mitigation: Mitigation; key: string }[] {
+  return mitigations.map((mitigation, index) => ({ mitigation, key: mitigationKeys(mitigations)[index] }));
+}
+
+function recommendationPresentation(
+  approval: { decision?: string | null; decidedAt: string; editedMitigations?: readonly Mitigation[] | null; reason?: string | null } | null,
+  rationale: string | null,
+  citedVersion: { id: string; versionLabel: string } | null,
+) {
+  const editedMitigations = approval?.decision === "EDITED" ? approval.editedMitigations : null;
+  const rejectionReason = approval?.decision === "REJECTED" ? approval.reason : null;
+  return {
+    approval: approval || null,
+    rationale: rationale || null,
+    citedVersion: citedVersion || null,
+    editedMitigations: editedMitigations || null,
+    rejectionReason: rejectionReason || null,
+  };
+}
+
 interface DecisionSectionProps {
   autoDispatched: boolean;
   /**
@@ -345,6 +395,18 @@ export default function RecommendationDetailScreen() {
    */
   const superseded = recommendation.status === "SUPERSEDED";
   const decided = approval !== null || autoDispatched;
+  const presentation = recommendationPresentation(
+    approval,
+    recommendation.rationale,
+    citedVersion,
+  );
+  const {
+    approval: approvalView,
+    rationale,
+    citedVersion: citedVersionView,
+    editedMitigations,
+    rejectionReason,
+  } = presentation;
 
   return (
     <AppSafeView>
@@ -365,10 +427,10 @@ export default function RecommendationDetailScreen() {
               time: formatDateTime(recommendation.createdAt, i18n.language),
             })}
           </AppText>
-          {approval ? (
+          {approvalView ? (
             <AppText variant="caption" tone="secondary">
               {t("recommendations.decidedAt", {
-                time: formatDateTime(approval.decidedAt, i18n.language),
+                time: formatDateTime(approvalView.decidedAt, i18n.language),
               })}
             </AppText>
           ) : null}
@@ -415,7 +477,7 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
-        {recommendation.rationale ? (
+        {rationale ? (
           <>
             <AppText variant="subtitle" style={styles.sectionTitle}>
               {t("recommendations.whyTitle")}
@@ -431,7 +493,7 @@ export default function RecommendationDetailScreen() {
               numberOfLines={showFullWhy ? undefined : 3}
               style={styles.block}
             >
-              {recommendation.rationale}
+              {rationale}
             </AppText>
             <TouchableOpacity
               onPress={() => setShowFullWhy((value) => !value)}
@@ -467,21 +529,21 @@ export default function RecommendationDetailScreen() {
             label from before the catalogue existed — it stays plain text rather than becoming a
             link that goes nowhere.
           */}
-          {citedVersion ? (
+          {citedVersionView ? (
             <TouchableOpacity
               accessibilityRole="link"
-              accessibilityLabel={`${t("recommendations.policyVersion")}: ${citedVersion.versionLabel}`}
+              accessibilityLabel={`${t("recommendations.policyVersion")}: ${citedVersionView.versionLabel}`}
               onPress={() =>
                 navigation
                   .getParent()
                   ?.navigate("ProfileTab", {
                     screen: "PolicyVersionDetail",
-                    params: { versionId: citedVersion.id },
+                    params: { versionId: citedVersionView.id },
                   })
               }
             >
               <AppText variant="label" style={styles.citedVersion}>
-                {citedVersion.versionLabel}
+                {citedVersionView.versionLabel}
               </AppText>
             </TouchableOpacity>
           ) : (
@@ -510,9 +572,9 @@ export default function RecommendationDetailScreen() {
                 {t(`mitigationCategory.${group.category}`)}
               </AppText>
             ) : null}
-            {group.items.map((mitigation, index) => (
+            {mitigationEntries(group.items).map(({ mitigation, key }) => (
               <MitigationRow
-                key={`${mitigation.actionCode ?? "none"}-${index}`}
+                key={key}
                 mitigation={mitigation}
                 workerNameFor={workerNameFor}
               />
@@ -521,7 +583,7 @@ export default function RecommendationDetailScreen() {
         ))}
 
         {/* ── What was actually approved, when it differs ──────────────────── */}
-        {approval?.decision === "EDITED" && approval.editedMitigations ? (
+        {editedMitigations ? (
           <>
             <AppText variant="subtitle" style={[styles.sectionTitle, styles.gapTop]}>
               {t("recommendations.approvedPlanTitle")}
@@ -536,20 +598,20 @@ export default function RecommendationDetailScreen() {
               <AppText variant="caption" tone="warning" style={styles.groupTitle}>
                 {t("recommendations.changedFromDraft")}
               </AppText>
-              {approval.editedMitigations.map((mitigation, index) => (
+              {editedMitigations ? mitigationEntries(editedMitigations).map(({ mitigation, key }) => (
                 <MitigationRow
-                  key={`edited-${index}`}
+                  key={`edited-${key}`}
                   mitigation={mitigation}
                   workerNameFor={workerNameFor}
                 />
-              ))}
+              )) : null}
             </View>
           </>
         ) : null}
 
-        {approval?.decision === "REJECTED" && approval.reason ? (
+        {rejectionReason ? (
           <View style={styles.block}>
-            <MessageBanner message={approval.reason} tone="danger" />
+            <MessageBanner message={rejectionReason ?? ""} tone="danger" />
           </View>
         ) : null}
 

@@ -56,6 +56,30 @@ interface DispatchCardProps {
   hasRestTimer?: boolean;
 }
 
+function dispatchPresentation(
+  acknowledged: boolean,
+  inFlight: boolean,
+  failureKey: string | null,
+  acknowledgedAt: string | null,
+  locale: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  return {
+    iconName: acknowledged ? ("checkmark-circle" as const) : ("arrow-forward-circle" as const),
+    iconColorKey: acknowledged ? "success" : "textPrimary",
+    motion: acknowledged ? ("pop" as const) : ("none" as const),
+    statusTone: acknowledged ? ("success" as const) : ("secondary" as const),
+    statusText: acknowledged
+      ? t("inbox.acknowledged", { time: formatTime(acknowledgedAt ?? "", locale) })
+      : t("inbox.pending"),
+    acknowledgeTitle: inFlight
+      ? t("inbox.acknowledging")
+      : failureKey
+        ? t("inbox.retryButton")
+        : t("inbox.acknowledgeButton"),
+  };
+}
+
 const DispatchCard: FC<DispatchCardProps> = ({
   dispatch,
   acknowledgedAt,
@@ -109,6 +133,7 @@ const DispatchCard: FC<DispatchCardProps> = ({
     0,
     (lineHeightFor("subtitle", theme.fontScale, locale) - iconSize) / 2,
   );
+  const presentation = dispatchPresentation(acknowledged, inFlight, failureKey, acknowledgedAt, locale, t);
 
   return (
     <View
@@ -133,13 +158,13 @@ const DispatchCard: FC<DispatchCardProps> = ({
       */}
       <View style={styles.headerRow}>
         <AnimatedIcon
-          name={acknowledged ? "checkmark-circle" : "arrow-forward-circle"}
+          name={presentation.iconName}
           size={iconSize}
           color={acknowledged ? theme.colors.success : theme.colors.textPrimary}
           // Pops once when it flips to acknowledged, then stays still. A pending action does
           // not pulse: three of them pulsing at once would be a nervous screen, and the
           // urgency lives in the lightning banner, not here.
-          motion={acknowledged ? "pop" : "none"}
+          motion={presentation.motion}
           style={[styles.headerIcon, { marginTop: iconTopOffset }]}
         />
         {/* flex:1 so a long action title wraps rather than pushing the timestamp away. */}
@@ -177,12 +202,10 @@ const DispatchCard: FC<DispatchCardProps> = ({
         </AppText>
         <AppText
           variant="caption"
-          tone={acknowledged ? "success" : "secondary"}
+          tone={presentation.statusTone}
           style={styles.metaStatus}
         >
-          {acknowledged
-            ? t("inbox.acknowledged", { time: formatTime(acknowledgedAt, locale) })
-            : t("inbox.pending")}
+          {presentation.statusText}
         </AppText>
       </View>
 
@@ -209,13 +232,7 @@ const DispatchCard: FC<DispatchCardProps> = ({
 
       {!acknowledged ? (
         <AppButton
-          title={
-            inFlight
-              ? t("inbox.acknowledging")
-              : failureKey
-                ? t("inbox.retryButton")
-                : t("inbox.acknowledgeButton")
-          }
+          title={presentation.acknowledgeTitle}
           onPress={onAcknowledge}
           // AppButton treats `loading` as disabled, so this both spins and blocks the
           // press. The thunk's `condition` guard is the real defence — a tap can land

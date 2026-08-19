@@ -81,6 +81,14 @@ it("does not double the slash when the override already ends in one", async () =
   expect(calledUrl()).toBe("http://localhost:9229/");
 });
 
+it("normalizes a long trailing slash run without changing the override host", async () => {
+  mockConfig.cognito.idpEndpointOverride = `http://localhost:9229${"/".repeat(10_000)}`;
+
+  await signInWithPassword("worker1", "pw");
+
+  expect(calledUrl()).toBe("http://localhost:9229/");
+});
+
 describe("expiry", () => {
   it("uses the ExpiresIn the IdP sent", async () => {
     const before = Date.now();

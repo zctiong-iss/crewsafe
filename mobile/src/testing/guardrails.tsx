@@ -168,7 +168,7 @@ export function expectNoClipping(tree: Rendered, allowedClamps: string[] = []): 
 
     const clamp = node.props.numberOfLines;
     if (clamp !== undefined && clamp !== null) {
-      offenders.push(`numberOfLines=${String(clamp)} on "${text}"`);
+      offenders.push(`numberOfLines=${formatDiagnosticValue(clamp)} on "${text}"`);
     }
     if (typeof flat.maxWidth === "number") {
       offenders.push(`fixed maxWidth=${flat.maxWidth} around "${text}"`);
@@ -182,6 +182,16 @@ export function expectNoClipping(tree: Rendered, allowedClamps: string[] = []): 
   }
 
   expect(offenders).toEqual([]);
+}
+
+/** Formats arbitrary host props without collapsing objects to the unhelpful `[object Object]`. */
+export function formatDiagnosticValue(value: unknown): string {
+  if (value === null || typeof value !== "object") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "[unserializable object]";
+  }
 }
 
 /**

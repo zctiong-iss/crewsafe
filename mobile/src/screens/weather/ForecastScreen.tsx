@@ -56,6 +56,16 @@ import { wbgtBandColor } from "@/helpers/wbgtBandColor";
 import type { ForecastHorizonMinutes } from "@/types/domain";
 import type { WeatherStackParamList } from "@/navigation/types";
 
+function horizonPresentation(state: HorizonState) {
+  const forecast = state.status === "ready" ? state.forecast : null;
+  return {
+    forecast,
+    loading: state.status === "loading" || state.status === "idle",
+    unavailable: state.status === "unavailable",
+    failed: state.status === "error",
+  };
+}
+
 export default function ForecastScreen() {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -122,29 +132,30 @@ function HorizonCard({
   horizonMinutes,
   state,
   onRetry,
-}: {
+}: Readonly<{
   horizonMinutes: ForecastHorizonMinutes;
   state: HorizonState;
   onRetry: () => void;
-}) {
+}>) {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const { forecast, loading, unavailable, failed } = horizonPresentation(state);
 
   // Null when the server sent no band, which renders as ordinary text — never as the coolest
   // band, since an unknown reading shown in green would read as a safe one.
   const bandColor =
-    state.status === "ready" && state.forecast
-      ? wbgtBandColor(state.forecast.band, theme.colors)
+    forecast
+      ? wbgtBandColor(forecast.band, theme.colors)
       : null;
 
   // The interval's bounds carry their own bands, so a range crossing 31 or 33 shows it.
   const lowerBandColor =
-    state.status === "ready" && state.forecast
-      ? wbgtBandColor(state.forecast.confidenceIntervalLowerBand, theme.colors)
+    forecast
+      ? wbgtBandColor(forecast.confidenceIntervalLowerBand, theme.colors)
       : null;
   const upperBandColor =
-    state.status === "ready" && state.forecast
-      ? wbgtBandColor(state.forecast.confidenceIntervalUpperBand, theme.colors)
+    forecast
+      ? wbgtBandColor(forecast.confidenceIntervalUpperBand, theme.colors)
       : null;
 
   return (
@@ -157,13 +168,13 @@ function HorizonCard({
     >
       <AppText variant="label">{t("forecast.horizon", { count: horizonMinutes })}</AppText>
 
-      {state.status === "loading" || state.status === "idle" ? (
+      {loading ? (
         <View style={styles.cardBody}>
           <AppLoader message={t("common.loading")} />
         </View>
       ) : null}
 
-      {state.status === "ready" && state.forecast ? (
+      {forecast ? (
         <View style={styles.cardBody}>
           {/*
             Coloured by the band MOM's poster uses, so a supervisor who knows that wall chart
@@ -175,7 +186,7 @@ function HorizonCard({
               variant="display"
               style={bandColor ? { color: bandColor } : undefined}
             >
-              {state.forecast.predictedValue.toFixed(1)}
+              {forecast.predictedValue.toFixed(1)}
             </AppText>
             {/*
               The unit takes the band colour but keeps its smaller size. `tone` is dropped when
@@ -200,12 +211,12 @@ function HorizonCard({
             colour is only a shortcut to — and it carries the 31-to-32 versus 32-to-33
             distinction that the poster's single amber column cannot.
           */}
-          {state.forecast.band ? (
+          {forecast.band ? (
             <AppText
               variant="label"
               style={[styles.bandLabel, bandColor ? { color: bandColor } : undefined]}
             >
-              {t(`wbgt.band.${state.forecast.band}`)}
+              {t(`wbgt.band.${forecast.band}`)}
             </AppText>
           ) : null}
 
@@ -227,16 +238,16 @@ function HorizonCard({
           <AppText
             variant="subtitle"
             accessibilityLabel={t("forecast.range", {
-              lower: state.forecast.confidenceIntervalLower.toFixed(1),
-              upper: state.forecast.confidenceIntervalUpper.toFixed(1),
+              lower: forecast.confidenceIntervalLower.toFixed(1),
+              upper: forecast.confidenceIntervalUpper.toFixed(1),
             })}
           >
             <AppText variant="subtitle" style={lowerBandColor ? { color: lowerBandColor } : undefined}>
-              {state.forecast.confidenceIntervalLower.toFixed(1)}
+              {forecast.confidenceIntervalLower.toFixed(1)}
             </AppText>
             {t("forecast.rangeSeparator")}
             <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
-              {state.forecast.confidenceIntervalUpper.toFixed(1)}
+              {forecast.confidenceIntervalUpper.toFixed(1)}
             </AppText>
             {/*
               One unit for two bounds, so it follows the hotter end. On a range that crosses a
@@ -257,14 +268,14 @@ function HorizonCard({
             `degraded` is the server's own verdict; the client never infers trustworthiness
             from a timestamp, for the same reason it does not compute the band.
           */}
-          {state.forecast.degraded && state.forecast.basis && state.forecast.basis !== "MODEL" ? (
+          {forecast.degraded && forecast.basis && forecast.basis !== "MODEL" ? (
             <View style={styles.basisNote}>
               <AppText variant="caption">
-                {t(`forecast.basisNote.${state.forecast.basis}`)}
+                {t(`forecast.basisNote.${forecast.basis}`)}
               </AppText>
-              {typeof state.forecast.inputAgeMinutes === "number" ? (
+              {typeof forecast.inputAgeMinutes === "number" ? (
                 <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("forecast.inputAge", { count: state.forecast.inputAgeMinutes })}
+                  {t("forecast.inputAge", { count: forecast.inputAgeMinutes })}
                 </AppText>
               ) : null}
             </View>
@@ -272,18 +283,18 @@ function HorizonCard({
 
           <View style={styles.provenance}>
             <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-              {t("forecast.model", { version: state.forecast.modelVersion })}
+              {t("forecast.model", { version: forecast.modelVersion })}
             </AppText>
             <AppText variant="caption" tone="secondary" style={styles.metaItem}>
               {t("forecast.generatedAt", {
-                time: formatTime(state.forecast.generatedAt, i18n.language),
+                time: formatTime(forecast.generatedAt, i18n.language),
               })}
             </AppText>
           </View>
         </View>
       ) : null}
 
-      {state.status === "unavailable" ? (
+      {unavailable ? (
         <View style={styles.cardBody}>
           <AppText variant="subtitle">{t("forecast.unavailableTitle")}</AppText>
           <AppText variant="body" tone="secondary" style={styles.unavailableBody}>
@@ -292,7 +303,7 @@ function HorizonCard({
         </View>
       ) : null}
 
-      {state.status === "error" ? (
+      {failed ? (
         <View style={styles.cardBody}>
           <MessageBanner
             message={t(state.errorKey ?? "errors.unknown")}

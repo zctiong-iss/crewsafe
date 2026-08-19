@@ -21,8 +21,28 @@ jest.mock("@/hooks/useReduceMotion", () => ({
 jest.mock("@/theme/ThemeProvider", () => ({ useTheme: () => mockUseTheme() }));
 jest.mock("@react-navigation/native", () => ({ useIsFocused: () => mockUseIsFocused() }));
 
-import WeatherBackdrop from "./WeatherBackdrop";
+import WeatherBackdrop, { moteFingerprint, moteKeys } from "./WeatherBackdrop";
+import type { BackdropMote } from "./types";
 import { BACKDROPS } from "./registry";
+
+const moteFixture = (color: string, motion: BackdropMote["motion"]): BackdropMote => ({
+  x: 1,
+  y: 2,
+  size: 3,
+  color,
+  opacity: 0.4,
+  motion,
+});
+
+it("derives collision-safe stable keys for reordered and duplicate motes", () => {
+  const first = moteFixture("#a:b", "fall");
+  const second = moteFixture("#a", "fall");
+  const keys = moteKeys([first, second, first]);
+
+  expect(moteFingerprint(first)).not.toBe(moteFingerprint(second));
+  expect(new Set(keys).size).toBe(3);
+  expect(moteKeys([second, first])[1]).toBe(keys[0]);
+});
 
 /** Only the two fields this component reads. */
 function theme(highContrast: boolean) {

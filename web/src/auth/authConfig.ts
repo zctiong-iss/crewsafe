@@ -60,8 +60,9 @@ export const authConfig: UserManagerSettings = {
    *
    * In-memory only would be stronger still, but a page refresh mid-shift would force a
    * fresh login — a real cost on a console someone is using in the field. The compensating
-   * controls are the strict CSP the API already serves and 15-minute access tokens. See
-   * ADR 0005.
+   * controls are the enforcing CSP at the CloudFront SPA edge (script-src 'self', no
+   * unsafe-inline — see infra/terraform/compute/web_security.tf) and 15-minute access
+   * tokens. See ADR 0005.
    */
   userStore: new WebStorageStateStore({ store: window.sessionStorage }),
   stateStore: new WebStorageStateStore({ store: window.sessionStorage }),

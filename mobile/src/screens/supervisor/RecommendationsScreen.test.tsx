@@ -196,7 +196,7 @@ it("does not poll while a decision is in flight", async () => {
   const calls = mockAutoRefresh.mock.calls;
   (calls[calls.length - 1][0] as () => void)();
 
-  expect(mockFetchShifts.mock.calls.length).toBe(before);
+  expect(mockFetchShifts.mock.calls).toHaveLength(before);
 });
 
 it("does not poll while a pull-to-refresh is already running", async () => {
@@ -221,7 +221,7 @@ it("does not poll while a pull-to-refresh is already running", async () => {
   const calls = mockAutoRefresh.mock.calls;
   (calls[calls.length - 1][0] as () => void)();
 
-  expect(mockFetchShifts.mock.calls.length).toBe(before);
+  expect(mockFetchShifts.mock.calls).toHaveLength(before);
 });
 
 /* ── Announcing arrivals ───────────────────────────────────────────────────────────────── */

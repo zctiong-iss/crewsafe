@@ -57,13 +57,101 @@ interface LightningBannerProps {
   now: number;
 }
 
+type LightningPresentation = {
+  tone: "expired" | "danger" | "warning" | "success";
+  icon: "time-outline" | "flash" | "warning" | "checkmark-circle";
+  titleKey: string;
+  bodyKey: string;
+  motion: "urgent" | "steady" | "none";
+  iconSize: 24 | 30;
+  accessibilityRole: "alert" | "text";
+  countdownMode: "seconds" | "minutes" | null;
+  filled: boolean;
+  stopWork: boolean;
+  titleVariant: "title" | "subtitle";
+};
+
+export function resolveLightningPresentation({
+  state,
+  expired,
+  remainingSeconds,
+}: {
+  state: LightningRisk["state"];
+  expired: boolean;
+  remainingSeconds: number;
+}): LightningPresentation {
+  if (expired) {
+    return {
+      tone: "expired",
+      icon: "time-outline",
+      titleKey: "lightning.expiredTitle",
+      bodyKey: "lightning.expiredBody",
+      motion: "none",
+      iconSize: 24,
+      accessibilityRole: "text",
+      countdownMode: null,
+      filled: false,
+      stopWork: false,
+      titleVariant: "subtitle",
+    };
+  }
+
+  const live = {
+    STOP_WORK: {
+      tone: "danger",
+      icon: "flash",
+      titleKey: "lightning.stopWorkTitle",
+      bodyKey: "lightning.stopWorkBody",
+      motion: "urgent",
+      iconSize: 30,
+      accessibilityRole: "alert",
+      filled: true,
+      stopWork: true,
+      titleVariant: "title",
+    },
+    ADVISORY: {
+      tone: "warning",
+      icon: "warning",
+      titleKey: "lightning.advisoryTitle",
+      bodyKey: "lightning.advisoryBody",
+      motion: "steady",
+      iconSize: 24,
+      accessibilityRole: "text",
+      filled: true,
+      stopWork: false,
+      titleVariant: "subtitle",
+    },
+    CLEAR: {
+      tone: "success",
+      icon: "checkmark-circle",
+      titleKey: "lightning.clearTitle",
+      bodyKey: "lightning.clearBody",
+      motion: "none",
+      iconSize: 24,
+      accessibilityRole: "text",
+      filled: true,
+      stopWork: false,
+      titleVariant: "subtitle",
+    },
+  } satisfies Record<LightningRisk["state"], Omit<LightningPresentation, "countdownMode">>;
+
+  return {
+    ...live[state],
+    countdownMode: remainingSeconds < 60 ? "seconds" : "minutes",
+  };
+}
+
 const LightningBanner: FC<LightningBannerProps> = ({ risk, locale, now }) => {
   const { t } = useTranslation();
   const theme = useTheme();
 
   const expired = hasElapsed(risk.validUntil, now);
-  const active = !expired && risk.state !== "CLEAR";
-  const stopWork = active && risk.state === "STOP_WORK";
+  const remainingSeconds = secondsUntil(risk.validUntil, now);
+  const presentation = resolveLightningPresentation({
+    state: risk.state,
+    expired,
+    remainingSeconds,
+  });
 
   /*
    * Every live state is filled rather than outlined; only an expired one is not.
@@ -85,43 +173,24 @@ const LightningBanner: FC<LightningBannerProps> = ({ risk, locale, now }) => {
    * is the darkened value that clears it. Danger and success need no such split, so they
    * do not get one.
    */
-  const accent = expired
-    ? theme.colors.textSecondary
-    : risk.state === "STOP_WORK"
-      ? theme.colors.danger
-      : risk.state === "ADVISORY"
-        ? theme.colors.warning
-        : theme.colors.success;
-
-  const filled = !expired;
-
-  const fill = risk.state === "ADVISORY" ? theme.colors.warningFill : accent;
-
-  const foreground = filled ? theme.colors.textInverse : accent;
-
-  const icon = expired
-    ? "time-outline"
-    : risk.state === "STOP_WORK"
-      ? "flash"
-      : risk.state === "ADVISORY"
-        ? "warning"
-        : "checkmark-circle";
-
-  const title = expired
-    ? t("lightning.expiredTitle")
-    : risk.state === "STOP_WORK"
-      ? t("lightning.stopWorkTitle")
-      : risk.state === "ADVISORY"
-        ? t("lightning.advisoryTitle")
-        : t("lightning.clearTitle");
-
-  const body = expired
-    ? t("lightning.expiredBody", { time: formatTime(risk.validUntil, locale) })
-    : risk.state === "STOP_WORK"
-      ? t("lightning.stopWorkBody")
-      : risk.state === "ADVISORY"
-        ? t("lightning.advisoryBody")
-        : t("lightning.clearBody", { time: formatTime(risk.observedAt, locale) });
+  const accentByTone = {
+    expired: theme.colors.textSecondary,
+    danger: theme.colors.danger,
+    warning: theme.colors.warning,
+    success: theme.colors.success,
+  };
+  const accent = accentByTone[presentation.tone];
+  const fill = presentation.tone === "warning" ? theme.colors.warningFill : accent;
+  const foreground = presentation.filled ? theme.colors.textInverse : accent;
+  const title = t(presentation.titleKey);
+  let body: string;
+  if (presentation.tone === "expired") {
+    body = t(presentation.bodyKey, { time: formatTime(risk.validUntil, locale) });
+  } else if (presentation.tone === "success") {
+    body = t(presentation.bodyKey, { time: formatTime(risk.observedAt, locale) });
+  } else {
+    body = t(presentation.bodyKey);
+  }
 
   /*
    * Under a minute the countdown switches to seconds. "Refreshes in 0 min" for the last
@@ -136,27 +205,29 @@ const LightningBanner: FC<LightningBannerProps> = ({ risk, locale, now }) => {
    * and the banner re-stating itself, rather than a warning being lifted. Only a
    * supervisor lifts a stop-work; see the note at the top of this file.
    */
-  const remainingSeconds = secondsUntil(risk.validUntil, now);
-  const countdown = expired
-    ? null
-    : remainingSeconds < 60
-      ? t("lightning.refreshesInSeconds", { seconds: remainingSeconds })
-      : t("lightning.refreshesInMinutes", { minutes: minutesUntil(risk.validUntil, now) });
+  let countdown: string | null = null;
+  if (presentation.countdownMode === "seconds") {
+    countdown = t("lightning.refreshesInSeconds", { seconds: remainingSeconds });
+  } else if (presentation.countdownMode === "minutes") {
+    countdown = t("lightning.refreshesInMinutes", {
+      minutes: minutesUntil(risk.validUntil, now),
+    });
+  }
 
   return (
     <View
       // Announced as an alert only while it is one — a screen reader should not interrupt
       // for an expired notice or a clear state.
-      accessibilityRole={stopWork ? "alert" : "text"}
+      accessibilityRole={presentation.accessibilityRole}
       accessibilityLabel={`${title}. ${body}`}
       style={[
         styles.container,
         {
-          backgroundColor: filled ? fill : theme.colors.surface,
+          backgroundColor: presentation.filled ? fill : theme.colors.surface,
           // Matched to the fill, not to `accent`: on an advisory those now differ, and a
           // brighter amber ring around a darker amber block reads as an unintended halo.
-          borderColor: filled ? fill : accent,
-          borderWidth: filled ? theme.metrics.borderWidth : theme.metrics.borderWidth + 1,
+          borderColor: presentation.filled ? fill : accent,
+          borderWidth: presentation.filled ? theme.metrics.borderWidth : theme.metrics.borderWidth + 1,
           borderRadius: theme.metrics.radius,
         },
       ]}
@@ -182,16 +253,16 @@ const LightningBanner: FC<LightningBannerProps> = ({ risk, locale, now }) => {
             exemption that covers every state is not an exemption. A device-level Reduce
             Motion still stops both. */}
         <AnimatedIcon
-          name={icon}
-          size={s(stopWork ? 30 : 24)}
+          name={presentation.icon}
+          size={s(presentation.iconSize)}
           color={foreground}
-          motion={stopWork ? "urgent" : active ? "steady" : "none"}
-          essential={stopWork}
+          motion={presentation.motion}
+          essential={presentation.stopWork}
         />
         {/* flex:1 so a long translated title wraps inside the banner instead of pushing
             the icon off its edge — the Hindi stop-work title is nearly twice the English. */}
         <AppText
-          variant={stopWork ? "title" : "subtitle"}
+          variant={presentation.titleVariant}
           style={[styles.title, { color: foreground }]}
         >
           {title}

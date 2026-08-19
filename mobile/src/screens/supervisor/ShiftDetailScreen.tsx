@@ -52,6 +52,20 @@ import { useTheme } from "@/theme/ThemeProvider";
 import type { ShiftAssignment } from "@/types/domain";
 import type { ShiftsStackParamList } from "@/navigation/types";
 
+function shiftPresentation(
+  shift: { assignments: readonly unknown[] } | null | undefined,
+  editable: boolean,
+  canEndShift: boolean,
+  canEndNow: boolean,
+) {
+  return {
+    hasAssignments: (shift?.assignments.length ?? 0) > 0,
+    hasNoAssignments: shift?.assignments.length === 0,
+    canEdit: editable,
+    showEndControls: canEndShift && canEndNow,
+  };
+}
+
 export default function ShiftDetailScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -122,6 +136,12 @@ export default function ShiftDetailScreen() {
    */
   const hasEnded = shift ? new Date(shift.endsAt).getTime() <= Date.now() : false;
   const ending = shift ? endingId === shift.id : false;
+  const { hasAssignments, hasNoAssignments, canEdit, showEndControls } = shiftPresentation(
+    shift,
+    editability.editable,
+    canEndShift,
+    canEndNow,
+  );
 
   /** True while the confirmation dialog is on screen. See `onDelete`. */
   const confirmOpen = useRef(false);
@@ -333,7 +353,7 @@ export default function ShiftDetailScreen() {
             })}
           </AppText>
 
-          {editability.editable ? (
+          {canEdit ? (
             <AppButton
               title={t("shifts.editWindow")}
               variant="secondary"
@@ -355,7 +375,7 @@ export default function ShiftDetailScreen() {
           worker who has logged nothing still gets a row. That absent row is the one worth acting
           on, and driving the list off the response would hide exactly it.
         */}
-        {shift.assignments.length > 0 ? (
+        {hasAssignments ? (
           <View
             style={[
               styles.card,
@@ -379,7 +399,7 @@ export default function ShiftDetailScreen() {
           {t("shifts.assignments")}
         </AppText>
 
-        {shift.assignments.length === 0 ? (
+        {hasNoAssignments ? (
           // Not an error: the contract allows a shift to be created empty and staffed later.
           <AppText variant="body" tone="secondary">
             {t("shifts.unstaffed")}
@@ -448,7 +468,7 @@ export default function ShiftDetailScreen() {
                 </View>
               ) : null}
 
-              {editability.editable ? (
+              {canEdit ? (
                 <>
                   <AppButton
                     title={t("shifts.editAssignment")}
@@ -472,7 +492,7 @@ export default function ShiftDetailScreen() {
 
         {/* Offered even on an unstaffed shift — that is exactly the case the contract has in
             mind when it allows a shift to be created empty and staffed later. */}
-        {editability.editable ? (
+        {canEdit ? (
           <AppButton
             title={t("shifts.addWorker")}
             variant="secondary"
@@ -483,7 +503,7 @@ export default function ShiftDetailScreen() {
 
         {/* Stated rather than left to be inferred from a missing button. A supervisor who
             cannot find the edit control should be told the shift is over, not left hunting. */}
-        {!editability.editable ? (
+        {!canEdit ? (
           <AppText variant="caption" tone="secondary" style={styles.block}>
             {t("shifts.notEditable")}
           </AppText>
@@ -540,7 +560,7 @@ export default function ShiftDetailScreen() {
           Cancel above Delete, in order of how much they destroy: close records that the
           shift ran, cancel that it did not, delete erases that it ever existed.
         */}
-        {canEndShift && canEndNow ? (
+        {showEndControls ? (
           <>
             <AppButton
               title={ending ? t("shifts.ending") : t("shifts.closeButton")}

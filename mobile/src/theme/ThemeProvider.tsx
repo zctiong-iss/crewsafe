@@ -13,7 +13,7 @@ import { buildTheme, defaultTheme, type AppTheme } from "@/styles/theme";
 
 const ThemeContext = createContext<AppTheme>(defaultTheme);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
+export function ThemeProvider({ children }: Readonly<{ children: ReactNode }>) {
   const highContrast = useAppSelector((state) => state.preferences.highContrast);
   const fontScale = useAppSelector((state) => state.preferences.fontScale);
 

@@ -44,7 +44,7 @@ function SegmentedControl<T extends string>({
   onChange,
   errorMessage,
   selectedColorFor,
-}: SegmentedControlProps<T>) {
+}: Readonly<SegmentedControlProps<T>>) {
   const theme = useTheme();
   const hasError = Boolean(errorMessage);
 
@@ -66,6 +66,9 @@ function SegmentedControl<T extends string>({
           /* Falls back to `primary`, so a caller that does not care keeps the black fill the
              rest of the app uses. */
           const selectedFill = selectedColorFor?.(option.value) ?? theme.colors.primary;
+          let borderColor = theme.colors.borderStrong;
+          if (hasError) borderColor = theme.colors.danger;
+          else if (selected) borderColor = selectedFill;
           return (
             <TouchableOpacity
               key={option.value}
@@ -80,11 +83,7 @@ function SegmentedControl<T extends string>({
                   /* The unselected border stays neutral. Tinting all three would show the
                      ramp before a choice has been made, which reads as three states being
                      active at once. */
-                  borderColor: hasError
-                    ? theme.colors.danger
-                    : selected
-                      ? selectedFill
-                      : theme.colors.borderStrong,
+                  borderColor,
                   borderWidth: theme.metrics.borderWidth,
                   borderRadius: theme.metrics.radius,
                   minHeight: theme.metrics.minTouchTarget,

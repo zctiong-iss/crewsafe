@@ -81,6 +81,11 @@ interface FormValues {
   assignments: AssignmentValues[];
 }
 
+export function isEndAfterStart(startsAt: Date | null, endsAt: Date | null): boolean {
+  if (!startsAt || !endsAt) return true;
+  return endsAt.getTime() > startsAt.getTime();
+}
+
 export default function CreateShiftScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -112,13 +117,13 @@ export default function CreateShiftScreen() {
           .test(
             "after-start",
             t("shifts.validation.endNotAfterStart"),
-            function (value) {
-              const startsAt = this.parent.startsAt as Date | null;
+            (value, context) => {
+              const startsAt = context.parent.startsAt as Date | null;
               // Only compares once both exist; `required` reports the missing one.
               if (!value || !startsAt) return true;
               // Strictly after, matching `!endsAt.isAfter(startsAt)` in ShiftService —
               // equal timestamps are a 400 server-side, so they must fail here too.
-              return value.getTime() > startsAt.getTime();
+              return isEndAfterStart(startsAt, value);
             },
           ),
         assignments: yup.array().of(

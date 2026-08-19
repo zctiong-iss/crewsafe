@@ -26,6 +26,8 @@ const AppTextInput = forwardRef<TextInput, AppTextInputProps>(
   ({ label, errorMessage, hint, ...rest }, ref) => {
     const theme = useTheme();
     const hasError = Boolean(errorMessage);
+    const helperMessage = errorMessage ?? hint;
+    const helperTone: "danger" | "secondary" = hasError ? "danger" : "secondary";
 
     return (
       <View style={styles.wrapper}>
@@ -67,13 +69,9 @@ const AppTextInput = forwardRef<TextInput, AppTextInputProps>(
           {...rest}
         />
 
-        {hasError ? (
-          <AppText variant="caption" tone="danger" style={styles.helper}>
-            {errorMessage}
-          </AppText>
-        ) : hint ? (
-          <AppText variant="caption" tone="secondary" style={styles.helper}>
-            {hint}
+        {helperMessage ? (
+          <AppText variant="caption" tone={helperTone} style={styles.helper}>
+            {helperMessage}
           </AppText>
         ) : null}
       </View>

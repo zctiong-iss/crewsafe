@@ -27,7 +27,8 @@ function initialsFor(displayName: string): string {
   const words = displayName.trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "";
   if (words.length === 1) return Array.from(words[0]).slice(0, 2).join("").toUpperCase();
-  return [words[0], words[words.length - 1]]
+  const lastWord = words.at(-1);
+  return [words[0], lastWord ?? words[0]]
     .map((word) => Array.from(word)[0] ?? "")
     .join("")
     .toUpperCase();

@@ -140,7 +140,7 @@ describe("auto-trigger", () => {
     const before = mockListRecommendations(id).length;
 
     jest.advanceTimersByTime(2 * 60_000);
-    expect(mockListRecommendations(id).length).toBe(before + 1);
+    expect(mockListRecommendations(id)).toHaveLength(before + 1);
   });
 
   it("SUPERSEDES the open plan rather than stacking a second one", () => {
