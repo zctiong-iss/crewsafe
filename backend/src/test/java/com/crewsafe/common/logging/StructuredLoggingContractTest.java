@@ -24,10 +24,11 @@ class StructuredLoggingContractTest {
         String config = new String(
                 getClass().getResourceAsStream("/application.yml").readAllBytes(), StandardCharsets.UTF_8);
 
-        assertThat(config).contains("format:\n      console: ecs");
-        assertThat(config).contains("name: ${spring.application.name}");
-        assertThat(config).contains("environment: ${SPRING_PROFILES_ACTIVE:local}");
-        assertThat(config).doesNotContain("pattern:");
+        assertThat(config)
+                .contains("format:\n      console: ecs")
+                .contains("name: ${spring.application.name}")
+                .contains("environment: ${SPRING_PROFILES_ACTIVE:local}")
+                .doesNotContain("pattern:");
     }
 
     @Test
