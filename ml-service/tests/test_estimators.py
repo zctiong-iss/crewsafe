@@ -30,9 +30,11 @@ class PersistenceFloorTest(unittest.TestCase):
 
     def test_rejects_missing_current_wbgt(self) -> None:
         model = PersistenceFloorRegressor(DummyRegressor())
+        features = pd.DataFrame({"other": [1.0]})
+        target = np.array([30.0])
 
         with self.assertRaisesRegex(ValueError, "missing wbgt_t"):
-            model.fit(pd.DataFrame({"other": [1.0]}), np.array([30.0]))
+            model.fit(features, target)
 
 
 if __name__ == "__main__":

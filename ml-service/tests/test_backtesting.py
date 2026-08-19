@@ -89,6 +89,8 @@ class RollingWindowTest(unittest.TestCase):
             }
         )
 
+        evaluation_end = pd.Timestamp("2026-01-20")
+
         with self.assertRaisesRegex(ValueError, "timezone"):
             expanding_rolling_windows(
                 frame,
@@ -96,7 +98,7 @@ class RollingWindowTest(unittest.TestCase):
                 minimum_training_days=2,
                 validation_days=2,
                 test_days=2,
-                evaluation_end=pd.Timestamp("2026-01-20"),
+                evaluation_end=evaluation_end,
             )
 
 

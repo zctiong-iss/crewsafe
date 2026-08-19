@@ -400,4 +400,48 @@ class ActionDispatchServiceTest {
         ActionDispatch result = service.getDispatch(dispatchId, safetyManagerPrincipal);
         assertEquals(dispatchId, result.getId());
     }
+
+    /**
+     * SCRUM-291's supersede now reaches APPROVED/AUTO_DISPATCHED plans: only a dispatch a
+     * worker hasn't acted on yet may be cancelled -- ACKNOWLEDGED and COMPLETED are left alone.
+     */
+    @Test
+    void testCancelOutstanding_OnlyPendingAndLateAreCancelled() {
+        UUID recommendationId = UUID.randomUUID();
+        ActionDispatch pending = dispatchWithStatus(ActionDispatch.ActionDispatchStatus.PENDING);
+        ActionDispatch late = dispatchWithStatus(ActionDispatch.ActionDispatchStatus.LATE);
+        ActionDispatch acknowledged = dispatchWithStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
+        ActionDispatch completed = dispatchWithStatus(ActionDispatch.ActionDispatchStatus.COMPLETED);
+
+        when(actionDispatchRepository.findByRecommendationId(recommendationId))
+                .thenReturn(List.of(pending, late, acknowledged, completed));
+        when(actionDispatchRepository.save(any(ActionDispatch.class))).thenAnswer(i -> i.getArgument(0));
+
+        List<ActionDispatch> cancelled = service.cancelOutstanding(recommendationId);
+
+        assertEquals(2, cancelled.size());
+        assertEquals(ActionDispatch.ActionDispatchStatus.CANCELLED, pending.getStatus());
+        assertEquals(ActionDispatch.ActionDispatchStatus.CANCELLED, late.getStatus());
+        assertEquals(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED, acknowledged.getStatus());
+        assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, completed.getStatus());
+        verify(actionDispatchRepository, never()).save(acknowledged);
+        verify(actionDispatchRepository, never()).save(completed);
+    }
+
+    @Test
+    void testCancelOutstanding_NoDispatchesIsANoOp() {
+        UUID recommendationId = UUID.randomUUID();
+        when(actionDispatchRepository.findByRecommendationId(recommendationId)).thenReturn(List.of());
+
+        assertEquals(0, service.cancelOutstanding(recommendationId).size());
+        verify(actionDispatchRepository, never()).save(any());
+    }
+
+    private static ActionDispatch dispatchWithStatus(ActionDispatch.ActionDispatchStatus status) {
+        return ActionDispatch.builder()
+                .id(UUID.randomUUID())
+                .status(status)
+                .dispatchedAt(NOW)
+                .build();
+    }
 }

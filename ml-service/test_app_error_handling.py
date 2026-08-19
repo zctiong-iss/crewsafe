@@ -115,8 +115,8 @@ def test_access_check_is_200_when_bedrock_is_reachable(client, stub_bedrock):
     }
 
 
-def test_access_check_is_503_before_the_client_is_initialised(client, stub_bedrock):
-    app_module.bedrock_client = None
+def test_access_check_is_503_before_the_client_is_initialised(client, monkeypatch):
+    monkeypatch.setattr(app_module, "bedrock_client", None)
 
     response = client.get("/bedrock/access")
 

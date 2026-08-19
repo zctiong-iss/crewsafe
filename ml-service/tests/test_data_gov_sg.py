@@ -113,9 +113,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             requester=requester,
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "conflicting.*metadata"):
-            list(client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1)))
+            list(pages)
 
     def test_accepts_and_reports_an_official_location_correction_within_limit(
         self,
@@ -156,9 +157,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             requester=requester,
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "conflicting.*metadata"):
-            list(client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1)))
+            list(pages)
 
     def test_skips_official_missing_markers_but_keeps_a_count(self) -> None:
         client = HistoricalWeatherClient(
@@ -183,9 +185,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             ),
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "not numeric"):
-            list(client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1)))
+            list(pages)
 
     def test_retries_temporary_failure_without_logging_response_body(self) -> None:
         attempts = 0
@@ -218,9 +221,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             requester=lambda *_: payload,
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "unknown station"):
-            list(client.iter_day(WeatherMetric.AIR_TEMPERATURE, date(2025, 3, 1)))
+            list(pages)
 
     def test_rejects_out_of_range_humidity(self) -> None:
         payload = standard_payload(value=101)
@@ -228,9 +232,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             requester=lambda *_: payload,
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.RELATIVE_HUMIDITY, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "outside the accepted range"):
-            list(client.iter_day(WeatherMetric.RELATIVE_HUMIDITY, date(2025, 3, 1)))
+            list(pages)
 
     def test_rejects_repeated_pagination_token(self) -> None:
         client = HistoricalWeatherClient(
@@ -239,9 +244,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             ),
             minimum_request_interval_seconds=0,
         )
+        pages = client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "repeated pagination token"):
-            list(client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1)))
+            list(pages)
 
     def test_stops_when_upstream_exceeds_the_configured_page_limit(self) -> None:
         page_number = 0
@@ -260,9 +266,10 @@ class HistoricalWeatherClientTest(unittest.TestCase):
             minimum_request_interval_seconds=0,
             max_pages_per_day=3,
         )
+        pages = client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1))
 
         with self.assertRaisesRegex(UpstreamPayloadError, "exceeded 3 pages"):
-            list(client.iter_day(WeatherMetric.WBGT, date(2025, 3, 1)))
+            list(pages)
 
         self.assertEqual(3, page_number)
 
@@ -336,11 +343,12 @@ class DatasetIoTest(unittest.TestCase):
                 minimum_request_interval_seconds=0,
                 max_attempts=1,
             )
+            report_date = date(2025, 3, 1)
             with self.assertRaises(UpstreamRequestError):
                 build_historical_dataset(
                     interrupted_client,
-                    start_date=date(2025, 3, 1),
-                    end_date=date(2025, 3, 1),
+                    start_date=report_date,
+                    end_date=report_date,
                     output_directory=output_directory,
                     metrics=(WeatherMetric.WBGT,),
                 )
