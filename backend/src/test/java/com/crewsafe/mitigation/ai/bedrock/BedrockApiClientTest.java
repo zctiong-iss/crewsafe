@@ -109,8 +109,8 @@ class BedrockApiClientTest {
         );
 
         when(restTemplate.getForObject(
-                eq("http://localhost:8000/bedrock/access"),
-                eq(BedrockApiClient.BedrockAccessResponse.class)
+                "http://localhost:8000/bedrock/access",
+                BedrockApiClient.BedrockAccessResponse.class
         )).thenReturn(response);
 
         // Act
@@ -129,8 +129,8 @@ class BedrockApiClientTest {
         ResourceAccessException resourceException = new ResourceAccessException("Timeout", timeoutException);
 
         when(restTemplate.getForObject(
-                eq("http://localhost:8000/bedrock/access"),
-                eq(BedrockApiClient.BedrockAccessResponse.class)
+                "http://localhost:8000/bedrock/access",
+                BedrockApiClient.BedrockAccessResponse.class
         )).thenThrow(resourceException);
 
         // Act & Assert
@@ -145,8 +145,8 @@ class BedrockApiClientTest {
         ResourceAccessException connectionException = new ResourceAccessException("Cannot reach API");
 
         when(restTemplate.getForObject(
-                eq("http://localhost:8000/bedrock/access"),
-                eq(BedrockApiClient.BedrockAccessResponse.class)
+                "http://localhost:8000/bedrock/access",
+                BedrockApiClient.BedrockAccessResponse.class
         )).thenThrow(connectionException);
 
         // Act & Assert

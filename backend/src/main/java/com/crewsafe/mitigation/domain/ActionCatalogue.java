@@ -35,6 +35,10 @@ public final class ActionCatalogue {
     private ActionCatalogue() {
     }
 
+    private static final String STOP_WORK = "STOP_WORK";
+    private static final String HYDRATION = "HYDRATION";
+    private static final String HYDRATE = "HYDRATE";
+
     /**
      * Every code a mitigation may carry, mapped to the topic a client groups it under.
      *
@@ -44,15 +48,15 @@ public final class ActionCatalogue {
      * thing for them to have done.
      */
     private static final Map<String, String> CATEGORY_BY_CODE = Map.ofEntries(
-            Map.entry("STOP_WORK", "STOP_WORK"),
-            Map.entry("RESUME_WORK", "STOP_WORK"),
+            Map.entry(STOP_WORK, STOP_WORK),
+            Map.entry("RESUME_WORK", STOP_WORK),
             Map.entry("REST_10_MIN_HOURLY", "REST"),
             Map.entry("REST_15_MIN_HOURLY", "REST"),
             Map.entry("REST_10_MIN", "REST"),
             Map.entry("REST_15_MIN", "REST"),
-            Map.entry("HYDRATE_HOURLY", "HYDRATION"),
-            Map.entry("HYDRATE_REGULARLY", "HYDRATION"),
-            Map.entry("HYDRATE", "HYDRATION"),
+            Map.entry("HYDRATE_HOURLY", HYDRATION),
+            Map.entry("HYDRATE_REGULARLY", HYDRATION),
+            Map.entry(HYDRATE, HYDRATION),
             Map.entry("SHADE_RECOVERY", "SHADE_COOLING"),
             Map.entry("SEEK_SHADE", "SHADE_COOLING"),
             Map.entry("RESCHEDULE_HEAVY_WORK", "WORK_SCHEDULING"),
@@ -68,8 +72,8 @@ public final class ActionCatalogue {
     private static final Map<String, String> DISPATCH_CODE_BY_CODE = Map.of(
             "REST_10_MIN_HOURLY", "REST_10_MIN",
             "REST_15_MIN_HOURLY", "REST_15_MIN",
-            "HYDRATE_HOURLY", "HYDRATE",
-            "HYDRATE_REGULARLY", "HYDRATE",
+            "HYDRATE_HOURLY", HYDRATE,
+            "HYDRATE_REGULARLY", HYDRATE,
             "SHADE_RECOVERY", "SEEK_SHADE");
 
     public static boolean isKnown(String actionCode) {
