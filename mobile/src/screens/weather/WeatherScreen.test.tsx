@@ -84,6 +84,7 @@ function state(overrides: Partial<WeatherState>): WeatherState {
     sites,
     selectedSiteId: "site-1",
     conditions,
+    lightning: null,
     band: "31_TO_BELOW_32",
     summaryBySite: {},
     errorKey: null,

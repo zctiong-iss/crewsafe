@@ -326,7 +326,7 @@ export default function WeatherScreen() {
           </View>
         ) : null}
 
-        {conditions && derived ? (
+        {reading ? (
           <>
             <View
               style={[
@@ -388,8 +388,8 @@ export default function WeatherScreen() {
               ) : null}
 
               <WeatherStatusRow
-                status={conditions.qualityStatus}
-                onExplain={() => setStatusSubject(conditions.qualityStatus)}
+                status={reading.conditions.qualityStatus}
+                onExplain={() => setStatusSubject(reading.conditions.qualityStatus)}
                 style={styles.badgeRow}
               />
             </View>
