@@ -65,7 +65,7 @@ function validateThresholdGroup(
 }
 
 function validateEmergencyStop(draft: Partial<PolicyVersionCreateRequest>, errors: FieldErrors): void {
-  const stop = draft.wbgtEmergencyStop;
+  const stop = draft.wbgtEmergencyStop; // NOSONAR required compatibility read until the wire field is migrated
   if (!isNumber(stop)) {
     errors.wbgtEmergencyStop = "Enter an emergency stop threshold.";
   } else if (stop < MIN_EMERGENCY_STOP || stop > MAX_EMERGENCY_STOP) {
