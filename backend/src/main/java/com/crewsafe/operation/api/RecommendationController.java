@@ -239,8 +239,7 @@ public class RecommendationController {
                 try {
                     into.add(UUID.fromString(workerId));
                 } catch (IllegalArgumentException e) {
-                    // A plan drafted with a non-UUID in appliesTo. Skipping it loses one name;
-                    // letting it throw would lose the whole recommendation.
+                    // Omit malformed identifiers so the remaining worker names can still be returned.
                     log.warn("recommendation_worker_id_unparseable");
                 }
             }

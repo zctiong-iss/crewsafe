@@ -66,7 +66,7 @@ public class WellbeingService {
         WellbeingLog saved = logs.save(WellbeingLog.self(shiftId, workerId, logType, clock.instant()));
 
         UUID id = saved.getId();
-        afterCommit(() -> audit.record(workerId, AuditEventType.WELLBEING_LOGGED, "WELLBEING_LOG", id,
+        afterCommit(() -> audit.recordEvent(workerId, AuditEventType.WELLBEING_LOGGED, "WELLBEING_LOG", id,
                 logType.name() + " logged on shift " + shiftId));
 
         return saved;
@@ -111,7 +111,7 @@ public class WellbeingService {
                 Concern.raise(shiftId, workerId, symptoms == null ? Set.of() : symptoms, note, clock.instant()));
 
         UUID id = saved.getId();
-        afterCommit(() -> audit.record(workerId, AuditEventType.CONCERN_RAISED, "CONCERN", id,
+        afterCommit(() -> audit.recordEvent(workerId, AuditEventType.CONCERN_RAISED, "CONCERN", id,
                 "Concern raised on shift " + shiftId));
 
         return saved;
@@ -158,7 +158,7 @@ public class WellbeingService {
                     }
                     concern.acknowledge(supervisorId, clock.instant());
 
-                    afterCommit(() -> audit.record(supervisorId, AuditEventType.CONCERN_ACKNOWLEDGED,
+                    afterCommit(() -> audit.recordEvent(supervisorId, AuditEventType.CONCERN_ACKNOWLEDGED,
                             "CONCERN", concernId, "Concern acknowledged"));
                     return concern;
                 });
@@ -177,7 +177,7 @@ public class WellbeingService {
     }
 
     /**
-     * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would commit the
+     * {@link AuditService#recordEvent} runs in {@code REQUIRES_NEW}, so an inline call would commit the
      * audit row independently of this transaction — an audit trail claiming a rest that rolled
      * back. Deferred until commit, same pattern and same reason as {@code ShiftService}.
      */

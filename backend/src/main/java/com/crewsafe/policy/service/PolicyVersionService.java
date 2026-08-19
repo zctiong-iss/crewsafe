@@ -98,7 +98,7 @@ public class PolicyVersionService {
 
         PolicyVersion saved = policyVersions.save(draft);
 
-        audit.record(actorId, AuditEventType.POLICY_VERSION_CREATED, "POLICY_VERSION", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.POLICY_VERSION_CREATED, "POLICY_VERSION", saved.getId(),
                 "Policy version " + saved.getVersionLabel() + " created for site " + siteId
                         + (isFirstForSite ? " (auto-activated: site's first version)" : " as DRAFT"));
 
@@ -142,7 +142,7 @@ public class PolicyVersionService {
         target.setActivatedAt(Instant.now());
         PolicyVersion saved = policyVersions.save(target);
 
-        audit.record(actorId, AuditEventType.POLICY_VERSION_ACTIVATED, "POLICY_VERSION", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.POLICY_VERSION_ACTIVATED, "POLICY_VERSION", saved.getId(),
                 "Policy version " + saved.getVersionLabel() + " activated for site " + siteId);
 
         return saved;

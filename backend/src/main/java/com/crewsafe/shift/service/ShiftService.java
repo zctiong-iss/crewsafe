@@ -85,7 +85,7 @@ public class ShiftService {
         UUID shiftId = shift.getId();
         // Resolved now, not inside the lambda: that runs after commit, outside this transaction.
         String detail = "Created shift for site " + siteId + " (" + localRange(siteId, startsAt, endsAt) + ")";
-        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CREATED, AUDIT_TARGET_TYPE, shiftId, detail));
+        afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_CREATED, AUDIT_TARGET_TYPE, shiftId, detail));
 
         return shift;
     }
@@ -134,7 +134,7 @@ public class ShiftService {
             shift.correctTimes(startsAt, endsAt);
             String detail = "Corrected shift times for site " + siteId
                     + " to " + localRange(siteId, startsAt, endsAt);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_UPDATED, AUDIT_TARGET_TYPE, shiftId, detail));
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_UPDATED, AUDIT_TARGET_TYPE, shiftId, detail));
             return shift;
         });
     }
@@ -151,7 +151,7 @@ public class ShiftService {
         return shifts.findByIdAndSiteId(shiftId, siteId).map(shift -> {
             assignments.deleteByShiftId(shiftId);
             shifts.delete(shift);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_DELETED, AUDIT_TARGET_TYPE, shiftId,
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_DELETED, AUDIT_TARGET_TYPE, shiftId,
                     "Deleted shift for site " + siteId));
             return true;
         }).orElse(false);
@@ -179,7 +179,7 @@ public class ShiftService {
 
             shift.cancel();
             String detail = "Cancelled shift for site " + siteId + " - Reason: " + reason;
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CANCELLED, AUDIT_TARGET_TYPE, shiftId, detail));
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_CANCELLED, AUDIT_TARGET_TYPE, shiftId, detail));
             return shift;
         });
     }
@@ -209,7 +209,7 @@ public class ShiftService {
 
             shift.close();
             String detail = "Closed shift for site " + siteId;
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_CLOSED, AUDIT_TARGET_TYPE, shiftId, detail));
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_CLOSED, AUDIT_TARGET_TYPE, shiftId, detail));
             return shift;
         });
     }
@@ -236,7 +236,7 @@ public class ShiftService {
             shift.activate();
             UUID shiftId = shift.getId();
             String detail = "Shift auto-activated for site " + shift.getSiteId();
-            afterCommit(() -> audit.record(null, AuditEventType.SHIFT_ACTIVATED, AUDIT_TARGET_TYPE, shiftId, detail));
+            afterCommit(() -> audit.recordEvent(null, AuditEventType.SHIFT_ACTIVATED, AUDIT_TARGET_TYPE, shiftId, detail));
         }
 
         return due.size();
@@ -256,7 +256,7 @@ public class ShiftService {
             assertEditable(shift);
             return assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
                 assignment.correct(taskName, intensity, acclimatisationDay);
-                afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_UPDATED,
+                afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_ASSIGNMENT_UPDATED,
                         AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, "Corrected assignment on shift " + shiftId));
                 return shift;
             });
@@ -278,7 +278,7 @@ public class ShiftService {
 
         return assignments.findByIdAndShiftId(assignmentId, shiftId).map(assignment -> {
             assignments.delete(assignment);
-            afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_REMOVED,
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_ASSIGNMENT_REMOVED,
                     AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, "Removed assignment from shift " + shiftId));
             return true;
         }).orElse(false);
@@ -317,7 +317,7 @@ public class ShiftService {
     }
 
     /**
-     * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would
+     * {@link AuditService#recordEvent} runs in {@code REQUIRES_NEW}, so an inline call would
      * commit the audit row immediately, independent of the caller's own transaction — if the
      * rest of that transaction then failed to persist, the audit event would survive a
      * rollback and falsely claim work that never happened. Every audit write in this class
@@ -390,7 +390,7 @@ public class ShiftService {
         }
         String recorded = detail.append(')').toString();
 
-        afterCommit(() -> audit.record(actorId, AuditEventType.SHIFT_ASSIGNMENT_ADDED,
+        afterCommit(() -> audit.recordEvent(actorId, AuditEventType.SHIFT_ASSIGNMENT_ADDED,
                 AUDIT_ASSIGNMENT_TARGET_TYPE, assignmentId, recorded));
     }
 

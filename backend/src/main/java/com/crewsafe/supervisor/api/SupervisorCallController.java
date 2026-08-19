@@ -37,7 +37,7 @@ public class SupervisorCallController {
      *
      * Worker initiates a call to supervisor.
      *
-     * @param request contains site ID and optional notes
+     * @param request contains site ID, supervisor ID and optional notes
      * @param principal authenticated worker user
      * @return 201 Created with call session details
      */
@@ -49,18 +49,10 @@ public class SupervisorCallController {
 
         log.info("User {} initiating call for site {}", principal.getId(), request.siteId());
 
-        // Get supervisor for site
-        // If supervisorId is provided in request, use it; otherwise implement site-to-supervisor lookup
-        UUID supervisorId = request.supervisorId();
-        if (supervisorId == null) {
-            // TODO: Implement automatic supervisor lookup based on site and shift/schedule
-            throw new IllegalStateException("Supervisor ID is required - automatic lookup not yet implemented");
-        }
-
         SupervisorCallSession session = callService.initiateCallRequest(
             principal.getId(),
             request.siteId(),
-            supervisorId,
+            request.supervisorId(),
             request.notes()
         );
 

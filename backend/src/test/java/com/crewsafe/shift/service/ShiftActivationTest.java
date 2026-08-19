@@ -83,7 +83,7 @@ class ShiftActivationTest {
         service.activateDueShifts();
         TransactionSynchronizationManager.getSynchronizations().forEach(TransactionSynchronization::afterCommit);
 
-        verify(audit).record(isNull(), eq(AuditEventType.SHIFT_ACTIVATED), eq("SHIFT"),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.SHIFT_ACTIVATED), eq("SHIFT"),
                 eq(shift.getId()), any());
     }
 

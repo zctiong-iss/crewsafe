@@ -55,7 +55,7 @@ public class SiteAdminService {
 
         Site saved = sites.save(new Site(name, latitude, longitude));
 
-        audit.record(actorId, AuditEventType.SITE_CREATED, "SITE", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.SITE_CREATED, "SITE", saved.getId(),
                 SITE_PREFIX + saved.getName() + " created");
 
         return saved;
@@ -79,7 +79,7 @@ public class SiteAdminService {
         site.setLongitude(longitude);
         Site saved = sites.save(site);
 
-        audit.record(actorId, AuditEventType.SITE_UPDATED, "SITE", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.SITE_UPDATED, "SITE", saved.getId(),
                 SITE_PREFIX + saved.getName() + " updated");
 
         return saved;
@@ -98,7 +98,7 @@ public class SiteAdminService {
         site.setArchived(true);
         Site saved = sites.save(site);
 
-        audit.record(actorId, AuditEventType.SITE_ARCHIVED, "SITE", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.SITE_ARCHIVED, "SITE", saved.getId(),
                 SITE_PREFIX + saved.getName() + " archived");
 
         return saved;
@@ -117,7 +117,7 @@ public class SiteAdminService {
         site.setArchived(false);
         Site saved = sites.save(site);
 
-        audit.record(actorId, AuditEventType.SITE_UNARCHIVED, "SITE", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.SITE_UNARCHIVED, "SITE", saved.getId(),
                 SITE_PREFIX + saved.getName() + " unarchived");
 
         return saved;

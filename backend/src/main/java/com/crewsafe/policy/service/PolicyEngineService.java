@@ -242,7 +242,9 @@ public class PolicyEngineService {
     ) {
         String policyVersion = policy.getVersionLabel();
         WbgtBand currentBand = WbgtBand.classify(BigDecimal.valueOf(wbgt));
-        WbgtBand forecastBand = currentBand; // TODO: integrate SCRUM-188 forecast service; null if unavailable
+        // SCRUM-188 limitation: policy evaluation does not yet receive a forecast value, so its
+        // forecast band remains the current band until forecast integration supplies that input.
+        WbgtBand forecastBand = currentBand;
 
         List<String> workerIds = appliesTo.stream().map(UUID::toString).toList();
         List<PolicyDecision.PolicyAction> mandatoryActions = new ArrayList<>();

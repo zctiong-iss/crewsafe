@@ -181,7 +181,7 @@ public class RecommendationService {
             recommendations.save(recommendation);
 
             UUID savedId = saved.getId();
-            afterCommit(() -> audit.record(actorId, auditEventTypeFor(decision), "RECOMMENDATION", recommendationId,
+            afterCommit(() -> audit.recordEvent(actorId, auditEventTypeFor(decision), "RECOMMENDATION", recommendationId,
                     "Recommendation " + decision.name().toLowerCase() + " (approval " + savedId + ")"));
 
             if (decision != Approval.ApprovalDecision.REJECTED) {
@@ -335,7 +335,7 @@ public class RecommendationService {
     void revokeOutstandingDispatches(Recommendation recommendation) {
         for (ActionDispatch dispatch : actionDispatchService.cancelOutstanding(recommendation.getId())) {
             UUID dispatchId = dispatch.getId();
-            afterCommit(() -> audit.record(null, AuditEventType.ACTION_REVOKED, "ACTION_DISPATCH", dispatchId,
+            afterCommit(() -> audit.recordEvent(null, AuditEventType.ACTION_REVOKED, "ACTION_DISPATCH", dispatchId,
                     "Cancelled: recommendation " + recommendation.getId() + " was superseded"));
         }
     }
@@ -401,7 +401,7 @@ public class RecommendationService {
     }
 
     /**
-     * {@link AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would commit
+     * {@link AuditService#recordEvent} runs in {@code REQUIRES_NEW}, so an inline call would commit
      * the audit row immediately, independent of the caller's own transaction. Deferred until
      * commit, same pattern (and same reason) as {@code ShiftService#afterCommit}.
      */

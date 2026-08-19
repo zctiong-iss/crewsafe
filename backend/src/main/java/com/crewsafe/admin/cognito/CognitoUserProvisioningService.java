@@ -89,7 +89,7 @@ public class CognitoUserProvisioningService {
 
         // Targets the Cognito identity itself, not a local app_user row -- none exists yet
         // at this point in the call.
-        audit.record(actorId, AuditEventType.USER_INVITED, "COGNITO_IDENTITY", UUID.fromString(sub),
+        audit.recordEvent(actorId, AuditEventType.USER_INVITED, "COGNITO_IDENTITY", UUID.fromString(sub),
                 "Invited " + email);
 
         return sub;

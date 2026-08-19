@@ -200,11 +200,11 @@ public class AgentDraftService {
 
         UUID recommendationId = saved.getId();
         if (autoDispatch) {
-            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, AUDIT_TARGET_TYPE,
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.RECOMMENDATION_AUTO_DISPATCHED, AUDIT_TARGET_TYPE,
                     recommendationId, auditDetail(draft)));
             afterCommit(() -> recommendationService.autoDispatch(saved, actorId, draft.mitigations()));
         } else {
-            afterCommit(() -> audit.record(actorId, AuditEventType.RECOMMENDATION_DRAFTED, AUDIT_TARGET_TYPE,
+            afterCommit(() -> audit.recordEvent(actorId, AuditEventType.RECOMMENDATION_DRAFTED, AUDIT_TARGET_TYPE,
                     recommendationId, auditDetail(draft)));
         }
 
@@ -254,7 +254,7 @@ public class AgentDraftService {
                     recommendationService.revokeOutstandingDispatches(existing);
 
                     UUID existingId = existing.getId();
-                    afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, AUDIT_TARGET_TYPE,
+                    afterCommit(() -> audit.recordEvent(null, AuditEventType.RECOMMENDATION_SUPERSEDED, AUDIT_TARGET_TYPE,
                             existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
                 });
     }
@@ -478,9 +478,10 @@ public class AgentDraftService {
                 forecast,
                 decision == null ? null : decision.currentBand(),
                 // Classified from the forecast value actually used, not copied from the policy
-                // decision. PolicyEngineService still hardcodes forecastBand = currentBand behind
-                // a TODO for SCRUM-188, which was harmless only while the forecast was always the
-                // persistence baseline (forecast == observed, so the bands always matched anyway).
+                // decision. SCRUM-188 records the current PolicyEngineService limitation: its
+                // forecastBand remains currentBand while forecast is not an evaluation input.
+                // That was harmless while the persistence baseline equalled the observation, so
+                // the bands always matched.
                 // Now that fetchForecast() can return a real SCRUM-281 prediction, that hardcoding
                 // would misclassify the evidence the moment the two values genuinely differ;
                 // deriving it here from forecast itself keeps it correct regardless.
@@ -527,7 +528,7 @@ public class AgentDraftService {
     }
 
     /**
-     * {@code AuditService#record} runs in {@code REQUIRES_NEW}, so an inline call would commit
+     * {@code AuditService#recordEvent} runs in {@code REQUIRES_NEW}, so an inline call would commit
      * the audit row independently of this transaction — leaving a "drafted" event behind for a
      * recommendation that rolled back. Same pattern and reason as {@code RecommendationService}.
      */

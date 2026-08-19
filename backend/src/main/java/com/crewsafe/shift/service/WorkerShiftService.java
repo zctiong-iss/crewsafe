@@ -83,7 +83,7 @@ public class WorkerShiftService {
                 shiftId, workerId, fitToWork, adequateSleep, adequateHydration,
                 Set.copyOf(symptomFlags)));
 
-        afterCommit(() -> audit.record(workerId, AuditEventType.READINESS_SUBMITTED,
+        afterCommit(() -> audit.recordEvent(workerId, AuditEventType.READINESS_SUBMITTED,
                 "READINESS_SUBMISSION", submission.getId(),
                 "Submitted readiness for shift " + shiftId));
         return Optional.of(submission);

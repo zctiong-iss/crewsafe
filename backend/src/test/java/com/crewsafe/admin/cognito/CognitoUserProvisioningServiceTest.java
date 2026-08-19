@@ -132,7 +132,7 @@ class CognitoUserProvisioningServiceTest {
         assertThat(requestCaptor.getValue().temporaryPassword()).isEqualTo(VALID_PASSWORD);
         assertThat(requestCaptor.getValue().messageAction()).isEqualTo(MessageActionType.SUPPRESS);
 
-        verify(audit).record(eq(actorId), eq("USER_INVITED"), eq("COGNITO_IDENTITY"),
+        verify(audit).recordEvent(eq(actorId), eq("USER_INVITED"), eq("COGNITO_IDENTITY"),
                 eq(UUID.fromString("11111111-1111-1111-1111-111111111111")), anyString());
     }
 }

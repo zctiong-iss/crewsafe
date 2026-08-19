@@ -25,7 +25,7 @@ public class AuditService {
     private final AuditEventRepository events;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void record(UUID actorId, String eventType, String targetType, UUID targetId, String detail) {
+    public void recordEvent(UUID actorId, String eventType, String targetType, UUID targetId, String detail) {
         save(actorId, eventType, targetType, targetId, detail);
     }
 
