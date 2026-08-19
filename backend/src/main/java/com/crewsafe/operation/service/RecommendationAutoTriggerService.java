@@ -79,7 +79,16 @@ public class RecommendationAutoTriggerService {
         WbgtBand currentBand = currentBand(siteId);
         LightningRiskState currentLightningState = currentLightningState(siteId, now);
 
-        if (!recordEvaluation(siteId, currentBand, currentLightningState, now)) {
+        Transition transition = recordEvaluation(siteId, currentBand, currentLightningState, now);
+        if (!transition.any()) {
+            return 0;
+        }
+        if (!transition.lightningChanged() && currentLightningState == LightningRiskState.STOP_WORK) {
+            // Band moved while lightning stop-work is still in force. Stop-work already takes
+            // precedence over any band-driven plan, so drafting one here would just be redundant
+            // noise -- and, worse, another round of duplicate dispatches to a crew already told
+            // to stop.
+            log.info("recommendation_auto_trigger_skipped_band_change_during_stop_work site_id={}", siteId);
             return 0;
         }
 
@@ -93,20 +102,29 @@ public class RecommendationAutoTriggerService {
         return triggeredCount;
     }
 
+    /** Which of a site's tracked conditions changed since the last evaluation. */
+    private record Transition(boolean bandChanged, boolean lightningChanged) {
+        boolean any() {
+            return bandChanged || lightningChanged;
+        }
+    }
+
     /**
-     * Upserts this site's condition-state row and reports whether this evaluation is a genuine
-     * transition from the last one recorded. Null is a real, comparable value on both sides — a
-     * site's first-ever reading arriving is itself a transition, but a site with no prior row at
-     * all has nothing to transition <em>from</em>, so the very first evaluation always seeds the
-     * row without reporting a transition, deliberately: without this, every site would fire once
-     * the moment the scheduler is first enabled, which is noise, not a real change in conditions.
+     * Upserts this site's condition-state row and reports which conditions are a genuine
+     * transition from the last evaluation recorded. Null is a real, comparable value on both
+     * sides — a site's first-ever reading arriving is itself a transition, but a site with no
+     * prior row at all has nothing to transition <em>from</em>, so the very first evaluation
+     * always seeds the row without reporting a transition, deliberately: without this, every site
+     * would fire once the moment the scheduler is first enabled, which is noise, not a real
+     * change in conditions.
      */
-    private boolean recordEvaluation(UUID siteId, WbgtBand currentBand, LightningRiskState currentLightningState,
-                                      Instant now) {
+    private Transition recordEvaluation(UUID siteId, WbgtBand currentBand, LightningRiskState currentLightningState,
+                                         Instant now) {
         Optional<SiteConditionState> existing = conditionStates.findById(siteId);
-        boolean transitioned = existing.isPresent()
-                && (!Objects.equals(existing.get().getLastWbgtBand(), currentBand)
-                    || !Objects.equals(existing.get().getLastLightningState(), currentLightningState));
+        boolean bandChanged = existing.isPresent()
+                && !Objects.equals(existing.get().getLastWbgtBand(), currentBand);
+        boolean lightningChanged = existing.isPresent()
+                && !Objects.equals(existing.get().getLastLightningState(), currentLightningState);
 
         SiteConditionState state = existing.orElseGet(
                 () -> new SiteConditionState(siteId, currentBand, currentLightningState, now));
@@ -115,7 +133,7 @@ public class RecommendationAutoTriggerService {
         state.setLastEvaluatedAt(now);
         conditionStates.save(state);
 
-        return transitioned;
+        return new Transition(bandChanged, lightningChanged);
     }
 
     private boolean triggerShift(UUID siteId, UUID shiftId) {
