@@ -274,7 +274,7 @@ const AppCalendarPicker: FC<AppCalendarPickerProps> = ({
   const onTimeTextChange = (raw: string, unit: "hour" | "minute") => {
     // Digits only: the numeric keypad still offers separators on some locales, and a stray
     // "." would silently make the whole value unparseable.
-    const digits = raw.replace(/[^0-9]/g, "").slice(0, 2);
+    const digits = raw.replace(/\D/g, "").slice(0, 2);
     const limit = unit === "hour" ? MAX_HOUR : MAX_MINUTE;
 
     if (unit === "hour") setHourText(digits);

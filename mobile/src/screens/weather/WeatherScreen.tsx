@@ -99,6 +99,185 @@ function weatherPresentation(
   };
 }
 
+type WeatherReading = {
+  conditions: SiteConditions;
+  derived: { condition: WeatherCondition; night: boolean };
+};
+
+function WeatherReadingSection({
+  reading,
+  band,
+  sites,
+  selectedSiteId,
+  onExplainStatus,
+}: Readonly<{
+  reading: WeatherReading;
+  band: string | null;
+  sites: readonly Site[];
+  selectedSiteId: string | null;
+  onExplainStatus: (subject: WeatherStatusSubject) => void;
+}>) {
+  const { t, i18n } = useTranslation();
+  const theme = useTheme();
+  const metrics = [
+    { label: t("weather.airTemp"), value: reading.conditions.temperature, unit: "°C" },
+    { label: t("weather.humidity"), value: reading.conditions.humidity, unit: "%" },
+    { label: t("weather.wind"), value: reading.conditions.windSpeed, unit: " km/h" },
+    { label: t("weather.rainfall"), value: reading.conditions.rainfall, unit: " mm" },
+  ];
+
+  return (
+    <>
+      <View
+        style={[
+          styles.hero,
+          cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+          { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <WeatherBackdrop
+          condition={reading.derived.condition}
+          night={reading.derived.night}
+          radius={theme.metrics.radius}
+        />
+        <WeatherIcon
+          condition={reading.derived.condition}
+          night={reading.derived.night}
+          size={72}
+          color={theme.colors.textPrimary}
+        />
+        <AppText variant="title" style={styles.conditionLabel}>
+          {t(`weather.condition.${reading.derived.condition}`)}
+        </AppText>
+        {sites.length === 1 ? (
+          <AppText variant="caption" tone="secondary">
+            {sites[0].name}
+          </AppText>
+        ) : null}
+
+        <View style={styles.wbgtRow}>
+          <AppText variant="display">
+            {reading.conditions.wbgt === null ? "—" : reading.conditions.wbgt.toFixed(1)}
+          </AppText>
+          <AppText variant="subtitle" tone="secondary" style={styles.unit}>
+            °C
+          </AppText>
+        </View>
+        <AppText variant="caption" tone="secondary" style={styles.centre}>
+          {t("weather.feelsLike")}
+        </AppText>
+        {band ? (
+          <AppText variant="label" style={styles.band}>
+            {t(`wbgt.band.${band}`)}
+          </AppText>
+        ) : null}
+        <WeatherStatusRow
+          status={reading.conditions.qualityStatus}
+          onExplain={() => onExplainStatus(reading.conditions.qualityStatus)}
+          style={styles.badgeRow}
+        />
+      </View>
+
+      {showsStandingBanner(reading.conditions.qualityStatus) ? (
+        <View style={styles.block}>
+          <FreshnessNotice status={reading.conditions.qualityStatus} />
+        </View>
+      ) : null}
+      {selectedSiteId ? <ForecastCard siteId={selectedSiteId} /> : null}
+
+      <View
+        style={[
+          styles.metricsCard,
+          cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+          { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+        ]}
+      >
+        <View style={styles.metricsRow}>
+          {metrics.map((metric) => (
+            <View key={metric.label} style={styles.metric}>
+              <AppText variant="caption" tone="secondary">
+                {metric.label}
+              </AppText>
+              <AppText variant="subtitle">
+                {metric.value === null ? "—" : `${metric.value}${metric.unit}`}
+              </AppText>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.footerMeta}>
+          {reading.conditions.stationId ? (
+            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+              {t("weather.station", { id: reading.conditions.stationId })}
+            </AppText>
+          ) : null}
+          <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+            {t("weather.observedAt", {
+              time: formatTime(reading.conditions.observedAt, i18n.language),
+            })}
+          </AppText>
+          <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+            {t("weather.ingestedAt", {
+              time: formatTime(reading.conditions.ingestedAt, i18n.language),
+            })}
+          </AppText>
+          {reading.derived.night ? (
+            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+              {t("weather.night")}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+    </>
+  );
+}
+
+function WeatherDevPanel({
+  selectedSiteId,
+  reload,
+}: Readonly<{
+  selectedSiteId: string | null;
+  reload: (isRefresh: boolean, siteId?: string) => void;
+}>) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.devPanel,
+        { borderTopColor: theme.colors.border, borderTopWidth: theme.metrics.borderWidth },
+      ]}
+    >
+      <AppText variant="caption" tone="secondary">
+        {t("dev.weatherLabel")}
+      </AppText>
+      <AppText variant="caption" tone="secondary" style={styles.devHint}>
+        {t("dev.weatherHint")}
+      </AppText>
+      {WEATHER_SCENARIOS.map((option) => (
+        <RadioWithTitle
+          key={option}
+          title={t(`weather.condition.${SCENARIO_CONDITION[option]}`)}
+          selected={option === getWeatherScenario()}
+          onPress={() => {
+            setWeatherScenario(option);
+            reload(true, selectedSiteId ?? undefined);
+          }}
+        />
+      ))}
+      <AppSwitch
+        label={t("dev.nightLabel")}
+        value={getNightOverride()}
+        onValueChange={(value) => {
+          setNightOverride(value);
+          reload(true, selectedSiteId ?? undefined);
+        }}
+      />
+    </View>
+  );
+}
+
 export default function WeatherScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -175,15 +354,6 @@ export default function WeatherScreen() {
       </AppSafeView>
     );
   }
-
-  const metrics = conditions
-    ? [
-        { label: t("weather.airTemp"), value: conditions.temperature, unit: "°C" },
-        { label: t("weather.humidity"), value: conditions.humidity, unit: "%" },
-        { label: t("weather.wind"), value: conditions.windSpeed, unit: " km/h" },
-        { label: t("weather.rainfall"), value: conditions.rainfall, unit: " mm" },
-      ]
-    : [];
 
   /*
    * A site with nothing ingested yet. Only reachable live — the mock always has a
@@ -327,133 +497,13 @@ export default function WeatherScreen() {
         ) : null}
 
         {reading ? (
-          <>
-            <View
-              style={[
-                styles.hero,
-                cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
-                { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
-              ]}
-            >
-              {/* Absolutely positioned behind everything below it, and only on this card —
-                  the Heat conditions card on My shift was stripped to a single reading in
-                  SCRUM-196, and decoration behind a safety number there would reverse that
-                  with no discussion. Draws nothing in high contrast. */}
-              <WeatherBackdrop
-                condition={reading.derived.condition}
-                night={reading.derived.night}
-                radius={theme.metrics.radius}
-              />
-
-              <WeatherIcon
-                condition={reading.derived.condition}
-                night={reading.derived.night}
-                size={72}
-                color={theme.colors.textPrimary}
-              />
-
-              <AppText variant="title" style={styles.conditionLabel}>
-                {t(`weather.condition.${reading.derived.condition}`)}
-              </AppText>
-
-              {sites.length === 1 ? (
-                <AppText variant="caption" tone="secondary">
-                  {sites[0].name}
-                </AppText>
-              ) : null}
-
-              <View style={styles.wbgtRow}>
-                {/* Deliberately uncoloured. The hero sits on an animated weather backdrop whose
-                    tint changes with conditions and time of day, so a semantic colour here has
-                    to stay legible against a moving background and competes with it for meaning.
-                    Band colour lives on the forecast screen, where the surface is plain. */}
-                <AppText variant="display">
-                  {reading.conditions.wbgt === null ? "—" : reading.conditions.wbgt.toFixed(1)}
-                </AppText>
-                <AppText variant="subtitle" tone="secondary" style={styles.unit}>
-                  °C
-                </AppText>
-              </View>
-
-              <AppText variant="caption" tone="secondary" style={styles.centre}>
-                {t("weather.feelsLike")}
-              </AppText>
-
-              {/* Absent when the reading exists but its WBGT could not be derived. Showing
-                  the coolest band instead would turn "unknown" into "safe". */}
-              {band ? (
-                <AppText variant="label" style={styles.band}>
-                  {t(`wbgt.band.${band}`)}
-                </AppText>
-              ) : null}
-
-              <WeatherStatusRow
-                status={reading.conditions.qualityStatus}
-                onExplain={() => setStatusSubject(reading.conditions.qualityStatus)}
-                style={styles.badgeRow}
-              />
-            </View>
-
-            {/*
-              STALE only, now that the rest of the explanation lives behind the button above.
-              Not an inconsistency: §7.1's rule matrix requires stale data to "show warning",
-              and a warning that only appears after someone taps an icon they had no reason to
-              tap has not been shown. DELAYED is usable data worth a footnote; STALE is data
-              that must not be acted on at all, and it keeps the banner it earned.
-            */}
-            {showsStandingBanner(reading.conditions.qualityStatus) ? (
-              <View style={styles.block}>
-                <FreshnessNotice status={reading.conditions.qualityStatus} />
-              </View>
-            ) : null}
-
-            {/* Below the hero and deliberately smaller than it. The measured reading is what
-                this screen is for; a prediction shown at equal weight beside a thermometer
-                invites someone to act on the forecast as though it were observed. */}
-            {selectedSiteId ? <ForecastCard siteId={selectedSiteId} /> : null}
-
-            <View
-              style={[
-                styles.metricsCard,
-                cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
-                { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
-              ]}
-            >
-              {/* Wrapping row rather than a fixed grid: at 1.5x text these no longer fit
-                  two-up and must reflow instead of clipping. */}
-              <View style={styles.metricsRow}>
-                {metrics.map((metric) => (
-                  <View key={metric.label} style={styles.metric}>
-                    <AppText variant="caption" tone="secondary">
-                      {metric.label}
-                    </AppText>
-                    <AppText variant="subtitle">
-                      {metric.value === null ? "—" : `${metric.value}${metric.unit}`}
-                    </AppText>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.footerMeta}>
-                {reading.conditions.stationId ? (
-                  <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                    {t("weather.station", { id: reading.conditions.stationId })}
-                  </AppText>
-                ) : null}
-                <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("weather.observedAt", { time: formatTime(reading.conditions.observedAt, i18n.language) })}
-                </AppText>
-                <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("weather.ingestedAt", { time: formatTime(reading.conditions.ingestedAt, i18n.language) })}
-                </AppText>
-                {reading.derived.night ? (
-                  <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                    {t("weather.night")}
-                  </AppText>
-                ) : null}
-              </View>
-            </View>
-          </>
+          <WeatherReadingSection
+            reading={reading}
+            band={band}
+            sites={sites}
+            selectedSiteId={selectedSiteId}
+            onExplainStatus={setStatusSubject}
+          />
         ) : (
           noReadingContent
         )}
@@ -461,42 +511,7 @@ export default function WeatherScreen() {
         {/* Without this only FAIR is reachable — the fixture returns one set of metrics, so
             five of the six animations and the whole night variant would be unreviewable.
             The switcher sets the *numbers*; the condition is still classified from them. */}
-        {showDevPanel ? (
-          <View
-            style={[
-              styles.devPanel,
-              { borderTopColor: theme.colors.border, borderTopWidth: theme.metrics.borderWidth },
-            ]}
-          >
-            <AppText variant="caption" tone="secondary">
-              {t("dev.weatherLabel")}
-            </AppText>
-            <AppText variant="caption" tone="secondary" style={styles.devHint}>
-              {t("dev.weatherHint")}
-            </AppText>
-
-            {WEATHER_SCENARIOS.map((option) => (
-              <RadioWithTitle
-                key={option}
-                title={t(`weather.condition.${SCENARIO_CONDITION[option]}`)}
-                selected={option === getWeatherScenario()}
-                onPress={() => {
-                  setWeatherScenario(option);
-                  load(true, selectedSiteId ?? undefined);
-                }}
-              />
-            ))}
-
-            <AppSwitch
-              label={t("dev.nightLabel")}
-              value={getNightOverride()}
-              onValueChange={(value) => {
-                setNightOverride(value);
-                load(true, selectedSiteId ?? undefined);
-              }}
-            />
-          </View>
-        ) : null}
+        {showDevPanel ? <WeatherDevPanel selectedSiteId={selectedSiteId} reload={load} /> : null}
       </ScrollView>
 
       {/* Outside the ScrollView, so it is not affected by the scroll position it was opened

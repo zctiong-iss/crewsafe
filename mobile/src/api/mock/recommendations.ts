@@ -14,7 +14,7 @@
  * @author Justin Chua
  */
 import { ApiError } from "../errors";
-import { mockListShifts, mockListSiteWorkers } from "./shifts";
+import { mockListShifts } from "./shifts";
 import { DEMO_SITES } from "@/auth/demoUsers";
 import type { DecisionInput } from "../endpoints/recommendations";
 import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
