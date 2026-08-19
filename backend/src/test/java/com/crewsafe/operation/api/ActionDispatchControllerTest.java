@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.UUID;
 
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -172,7 +171,7 @@ class ActionDispatchControllerTest extends AbstractIntegrationTest {
 
     @Test
     void testGetDispatchesForApproval_Success() throws Exception {
-        when(actionDispatchService.getDispatchesForApproval(eq(approvalId)))
+        when(actionDispatchService.getDispatchesForApproval(approvalId))
                 .thenReturn(List.of(dispatch));
 
         mockMvc.perform(get("/api/action-dispatch/approval/" + approvalId)
