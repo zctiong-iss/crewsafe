@@ -38,7 +38,10 @@ import AppLoader from "@/components/feedback/AppLoader";
 import MessageBanner from "@/components/feedback/MessageBanner";
 import RadioWithTitle from "@/components/inputs/RadioWithTitle";
 import LightningBanner from "@/components/safety/LightningBanner";
-import FreshnessNotice from "@/components/safety/FreshnessNotice";
+import FreshnessNotice, { showsStandingBanner } from "@/components/safety/FreshnessNotice";
+import WeatherStatusModal, {
+  type WeatherStatusSubject,
+} from "@/components/weather/WeatherStatusModal";
 import WbgtCard from "@/components/safety/WbgtCard";
 import WellbeingLogCard from "@/components/wellbeing/WellbeingLogCard";
 import RaiseConcernSheet from "@/components/wellbeing/RaiseConcernSheet";
@@ -52,7 +55,7 @@ import { isMockApi } from "@/auth/authMode";
 import { loadWorkerSafety } from "@/store/reducers/safetySlice";
 import { useNow } from "@/hooks/useNow";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
-import { hasElapsed } from "@/helpers/dateTime";
+import { formatTime, hasElapsed } from "@/helpers/dateTime";
 import {
   getFreshnessScenario,
   getLightningScenario,
@@ -124,6 +127,14 @@ export default function MyShiftScreen() {
    * screen whose entire job is telling someone when to stop working.
    */
   const now = useNow(1000);
+
+  /*
+   * What the status modal is explaining, or null when it is closed.
+   *
+   * One field rather than a boolean plus a subject: the two can never legitimately disagree,
+   * and storing them apart invites a render where the modal is open over a stale subject.
+   */
+  const [statusSubject, setStatusSubject] = useState<WeatherStatusSubject | null>(null);
 
   const load = useCallback(
     (isRefresh: boolean) => {
@@ -247,13 +258,27 @@ export default function MyShiftScreen() {
           <HeatGuidance policy={heatGuidance} suspended={stopWorkActive} />
         ) : null}
 
-        {/* Heat conditions last, and the freshness notice stays immediately above it: a
-            worker should know whether to trust the number before they read it, so the two
-            move together or not at all. */}
-        {conditionsPayload ? <FreshnessNotice status={conditionsPayload.qualityStatus} /> : null}
+        {/*
+          Heat conditions last, and STALE's warning stays immediately above it: a worker should
+          know whether to trust the number before they read it, so the two move together.
+
+          STALE ONLY, now that the rest of the explanation lives behind the icon in the card's
+          own header. Not an inconsistency with the weather screen — it is the same rule, and
+          the reason is §7.1: stale data must SHOW a warning, and a warning visible only after
+          someone taps an icon they had no reason to tap has not been shown. DELAYED and
+          SIMULATED qualify a reading that is still usable, and a permanent banner for them on
+          the screen a worker reads all shift becomes furniture by the tenth viewing.
+        */}
+        {conditionsPayload && showsStandingBanner(conditionsPayload.qualityStatus) ? (
+          <FreshnessNotice status={conditionsPayload.qualityStatus} />
+        ) : null}
 
         {conditionsPayload ? (
-          <WbgtCard conditions={conditionsPayload} superseded={stopWorkActive} />
+          <WbgtCard
+            conditions={conditionsPayload}
+            superseded={stopWorkActive}
+            onExplainStatus={() => setStatusSubject(conditionsPayload.qualityStatus)}
+          />
         ) : null}
 
         {/*
@@ -353,6 +378,19 @@ export default function MyShiftScreen() {
               t(result.payload?.errorKey ?? "errors.unknown"), [{ text: t("common.close") }]);
           })();
         }}
+      />
+
+      {/*
+        Outside the ScrollView, so it is unaffected by the scroll position it was opened from.
+        `subject` drives it — a null closes it, which is why the two cannot disagree.
+      */}
+      <WeatherStatusModal
+        visible={statusSubject !== null}
+        subject={statusSubject ?? "LIVE"}
+        observedAt={
+          conditions ? formatTime(conditions.observedAt, i18n.language) : null
+        }
+        onDismiss={() => setStatusSubject(null)}
       />
     </AppSafeView>
   );

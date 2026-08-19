@@ -47,7 +47,7 @@ class LogSafetyContractTest {
     );
 
     @Test
-    void dynamicLogArgumentsDoNotContainCredentialsTokensPiiOrRawExceptionText() throws IOException {
+    void dynamicLogArgumentsDoNotContainCredentialsTokensPiiOrRawExceptionText() {
         try (Stream<Path> paths = LOGGING_SOURCES.stream().map(Path::of)) {
             paths.forEach(path -> {
                 String source = read(path);

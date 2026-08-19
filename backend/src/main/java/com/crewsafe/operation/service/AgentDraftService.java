@@ -228,16 +228,35 @@ public class AgentDraftService {
         return doGenerate(siteId, shiftId, null);
     }
 
-    private void supersedeOpenRecommendation(UUID shiftId) {
-        recommendations.findFirstByShiftIdAndStatusOrderByCreatedAtDesc(
-                shiftId, Recommendation.RecommendationStatus.PENDING_APPROVAL).ifPresent(existing -> {
-            existing.setStatus(Recommendation.RecommendationStatus.SUPERSEDED);
-            recommendations.save(existing);
+    /**
+     * A shift's most recent still-live recommendation is eligible to be superseded: one nobody
+     * has decided on yet, one a supervisor already approved, or one a lightning stop-work already
+     * auto-dispatched -- conditions changing again makes all three stale the same way. {@code
+     * REJECTED} is deliberately excluded: a supervisor already looked at that plan and said no,
+     * which is a decision, not something superseding should silently overwrite, and there is
+     * nothing live on it to revoke.
+     */
+    private static final Set<Recommendation.RecommendationStatus> SUPERSEDABLE_STATUSES = EnumSet.of(
+            Recommendation.RecommendationStatus.PENDING_APPROVAL,
+            Recommendation.RecommendationStatus.APPROVED,
+            Recommendation.RecommendationStatus.AUTO_DISPATCHED);
 
-            UUID existingId = existing.getId();
-            afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, AUDIT_TARGET_TYPE,
-                    existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
-        });
+    private void supersedeOpenRecommendation(UUID shiftId) {
+        recommendations.findFirstByShiftIdAndStatusInOrderByCreatedAtDesc(shiftId, SUPERSEDABLE_STATUSES)
+                .ifPresent(existing -> {
+                    existing.setStatus(Recommendation.RecommendationStatus.SUPERSEDED);
+                    recommendations.save(existing);
+                    // Whatever was already dispatched off an APPROVED or AUTO_DISPATCHED plan
+                    // must not keep standing once it no longer reflects current conditions -- a
+                    // worker must never hold instructions from two live plans for one shift at
+                    // once. No-op for a PENDING_APPROVAL prior plan: nothing was ever dispatched
+                    // from a plan nobody decided on.
+                    recommendationService.revokeOutstandingDispatches(existing);
+
+                    UUID existingId = existing.getId();
+                    afterCommit(() -> audit.record(null, AuditEventType.RECOMMENDATION_SUPERSEDED, AUDIT_TARGET_TYPE,
+                            existingId, "Superseded by a new auto-triggered draft for shift " + shiftId));
+                });
     }
 
     /**

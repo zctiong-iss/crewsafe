@@ -252,18 +252,14 @@ public class SiteForecastService {
         // weather.
         Map<Instant, WeatherObservation> bySlot = new LinkedHashMap<>();
         for (WeatherObservation row : usable) {
-            if (!stationId.equals(row.getStationId())) {
-                continue;
-            }
             Instant slot = snap(row.getObservedAt());
-            if (slot.isAfter(newestSlot) || slot.isBefore(oldestAllowed)) {
-                continue;
+            boolean inWindowForThisStation = stationId.equals(row.getStationId())
+                    && !slot.isAfter(newestSlot) && !slot.isBefore(oldestAllowed)
+                    && Duration.between(row.getObservedAt(), slot).abs().compareTo(SNAP_TOLERANCE) <= 0;
+            if (inWindowForThisStation) {
+                // Newest first, so the first row to claim a slot is the freshest for it.
+                bySlot.putIfAbsent(slot, row);
             }
-            if (Duration.between(row.getObservedAt(), slot).abs().compareTo(SNAP_TOLERANCE) > 0) {
-                continue;
-            }
-            // Newest first, so the first row to claim a slot is the freshest for it.
-            bySlot.putIfAbsent(slot, row);
         }
 
         if (!bySlot.containsKey(newestSlot) || bySlot.size() < 2) {

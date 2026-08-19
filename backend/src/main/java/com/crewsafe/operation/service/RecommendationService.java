@@ -9,6 +9,7 @@ import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.mitigation.domain.ActionCatalogue;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
+import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.domain.RecommendationEvidence;
@@ -319,6 +320,23 @@ public class RecommendationService {
                 actionDispatchService.autoDispatchAction(recommendation, actorId, workerId, dispatchCode,
                         mitigation.action());
             }
+        }
+    }
+
+    /**
+     * Cancels every not-yet-acknowledged dispatch fanned out from a recommendation that is about
+     * to be superseded, so a worker never ends up holding instructions from two live plans for
+     * the same shift at once. Called from {@code AgentDraftService#supersedeOpenRecommendation}
+     * inline, in the same transaction as the status flip to {@code SUPERSEDED} -- unlike {@link
+     * #autoDispatch}, this is not called from an {@code afterCommit} callback, so it must join
+     * the caller's transaction rather than open its own: if the draft that follows fails, the
+     * supersede (status flip and revocation together) must roll back with it.
+     */
+    void revokeOutstandingDispatches(Recommendation recommendation) {
+        for (ActionDispatch dispatch : actionDispatchService.cancelOutstanding(recommendation.getId())) {
+            UUID dispatchId = dispatch.getId();
+            afterCommit(() -> audit.record(null, AuditEventType.ACTION_REVOKED, "ACTION_DISPATCH", dispatchId,
+                    "Cancelled: recommendation " + recommendation.getId() + " was superseded"));
         }
     }
 

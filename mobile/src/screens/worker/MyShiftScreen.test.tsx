@@ -7,6 +7,8 @@
  * degraded "no shift" state, the lightning-data-unavailable notice, a populated shift with
  * an active stop-work, and the error/retry path — using the real `safetySlice` reducer with
  * only the network boundary mocked.
+ *
+ * @author Justin Chua
  */
 jest.mock("@/theme/ThemeProvider", () => ({
   useTheme: () => jest.requireActual("@/styles/theme").defaultTheme,
@@ -51,7 +53,7 @@ jest.mock("@/api/endpoints/safety", () => ({
 
 import { configureStore } from "@reduxjs/toolkit";
 import { Provider } from "react-redux";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
 import { sharedGap } from "@/styles/sharedStyles";
@@ -343,4 +345,61 @@ describe.each([
       expect(surface.marginBottom).toBeUndefined();
     }
   });
+});
+/* -- Freshness: a banner for STALE only, an icon for the rest --------------------------- */
+
+const withQuality = (qualityStatus: "DELAYED" | "STALE" | "SIMULATED" | "LIVE") =>
+  buildStore({
+    status: "ready",
+    shift: SHIFT,
+    conditions: { ...CONDITIONS, qualityStatus },
+  });
+
+async function renderShift(store: ReturnType<typeof buildStore>) {
+  return render(
+    <Provider store={store}>
+      <MyShiftScreen />
+    </Provider>,
+  );
+}
+
+it("collapses the DELAYED explanation into the card's icon", async () => {
+  /*
+   * DELAYED qualifies a reading that is still usable. A permanent banner for it on the screen
+   * a worker reads all shift becomes furniture by the tenth viewing, so it moves behind the
+   * icon beside the pill.
+   */
+  const { queryByText, getByLabelText } = await renderShift(withQuality("DELAYED"));
+
+  expect(queryByText("freshness.delayedWarning")).toBeNull();
+  expect(getByLabelText("weather.statusButtonLabel")).toBeTruthy();
+});
+
+it("KEEPS the standing banner for STALE, and adds the icon", async () => {
+  /*
+   * The line that must not move. §7.1 requires stale data to SHOW a warning, and a warning
+   * visible only after someone taps an icon they had no reason to tap has not been shown. The
+   * icon is an addition here, never a replacement.
+   */
+  const { queryByText, getByLabelText } = await renderShift(withQuality("STALE"));
+
+  expect(queryByText("freshness.staleWarning")).not.toBeNull();
+  expect(getByLabelText("weather.statusButtonLabel")).toBeTruthy();
+});
+
+it("leaves a LIVE reading with neither banner nor icon", async () => {
+  const { queryByText, queryByLabelText } = await renderShift(withQuality("LIVE"));
+
+  expect(queryByText(/freshness\..*Warning|freshness\..*Notice/)).toBeNull();
+  expect(queryByLabelText("weather.statusButtonLabel")).toBeNull();
+});
+
+it("opens the explanation when the icon is tapped", async () => {
+  const { getByLabelText, queryByText } = await renderShift(withQuality("DELAYED"));
+
+  expect(queryByText("freshness.delayedWarning")).toBeNull();
+  await fireEvent.press(getByLabelText("weather.statusButtonLabel"));
+
+  // The modal carries the same copy the banner used to, rather than a second translation.
+  expect(queryByText("freshness.delayedWarning")).not.toBeNull();
 });

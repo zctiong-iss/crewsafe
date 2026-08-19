@@ -18,7 +18,7 @@
  *
  * @author Justin Chua
  */
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 
 jest.mock("@/theme/ThemeProvider", () => ({ useTheme: () => mockTheme() }));
 // `i18n.language` is read by `AppText`, which picks a font family and a line-height boost
@@ -136,5 +136,63 @@ describe("accessibility (SCRUM-352 / FR-006, User Story 3)", () => {
     const { getByLabelText } = await render(<WbgtCard conditions={conditions({ wbgt: 31.4 })} />);
     const label = getByLabelText(/31\.4.*wbgt\.reading/);
     expect(label).not.toBeNull();
+  });
+});
+
+/* -- The freshness explain button, for My shift ----------------------------------------- */
+
+describe("explaining a reading that is not live", () => {
+  it.each(["DELAYED", "STALE", "SIMULATED"] as const)(
+    "offers a tappable icon beside the %s pill",
+    async (qualityStatus) => {
+      /*
+       * Beside, not beneath. The pill and the icon are one row inside the card header so the
+       * glyph sits on the pill's centre line — a button dropping onto its own line below is
+       * exactly the layout bug this pairing was extracted to prevent.
+       */
+      const { getByLabelText } = await render(
+        <WbgtCard conditions={conditions({ qualityStatus })} onExplainStatus={jest.fn()} />,
+      );
+
+      expect(getByLabelText("weather.statusButtonLabel")).toBeTruthy();
+    },
+  );
+
+  it("offers nothing extra on a LIVE reading", async () => {
+    // Silence is the correct output for a healthy reading. An icon opening "everything is
+    // fine" teaches a worker not to press it, and then they do not press it on the day it
+    // matters.
+    const { queryByLabelText } = await render(
+      <WbgtCard conditions={conditions({ qualityStatus: "LIVE" })} onExplainStatus={jest.fn()} />,
+    );
+
+    expect(queryByLabelText("weather.statusButtonLabel")).toBeNull();
+  });
+
+  it("calls back when the icon is pressed", async () => {
+    const onExplainStatus = jest.fn();
+    const { getByLabelText } = await render(
+      <WbgtCard
+        conditions={conditions({ qualityStatus: "DELAYED" })}
+        onExplainStatus={onExplainStatus}
+      />,
+    );
+
+    await fireEvent.press(getByLabelText("weather.statusButtonLabel"));
+
+    expect(onExplainStatus).toHaveBeenCalled();
+  });
+
+  it("still renders the pill alone for a caller that cannot explain it", async () => {
+    /*
+     * The prop is optional deliberately: a card with no modal behind it must still render a
+     * temperature. Without that, adding the button would have forced every caller to own one.
+     */
+    const { getByText, queryByLabelText } = await render(
+      <WbgtCard conditions={conditions({ qualityStatus: "DELAYED" })} />,
+    );
+
+    expect(getByText("freshness.DELAYED")).toBeTruthy();
+    expect(queryByLabelText("weather.statusButtonLabel")).toBeNull();
   });
 });

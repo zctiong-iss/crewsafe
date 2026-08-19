@@ -85,7 +85,7 @@ def write_data_quality_reports(
 
     selected_metrics = tuple(metrics)
     metric_names = [metric.slug for metric in selected_metrics]
-    row_count_by_metric = {name: 0 for name in metric_names}
+    row_count_by_metric = dict.fromkeys(metric_names, 0)
     station_summaries: dict[tuple[str, str], _StationSummary] = {}
     times_by_station: dict[tuple[str, str], list[datetime]] = defaultdict(list)
 
@@ -204,7 +204,7 @@ def _station_counts(
     summaries: dict[tuple[str, str], _StationSummary],
 ) -> dict[str, int]:
     return {
-        metric: sum(1 for station_metric, _ in summaries if station_metric == metric)
+        metric: sum(1 for station_metric, _ in summaries.keys() if station_metric == metric)
         for metric in metric_names
     }
 

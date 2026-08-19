@@ -63,7 +63,10 @@ import static org.mockito.Mockito.when;
  * the SCRUM-291 auto-trigger drafts a recommendation with no supervisor involved, a second
  * drift before anyone decides supersedes it (dedup), a supervisor approves the surviving one
  * and real dispatches go out, and finally conditions cross the retained WBGT emergency-stop
- * threshold. High WBGT remains pending approval and does not create an immediate dispatch.
+ * threshold. High WBGT remains pending approval and does not create an immediate dispatch --
+ * but it does reach the already-APPROVED plan: conditions changing again makes an approved plan
+ * just as stale as a pending one, so it is superseded too and its outstanding dispatches are
+ * revoked, not left standing alongside the fresh draft.
  *
  * <p>Only {@link AgentDraftClient} is mocked (no Bedrock access in this environment) --
  * every mitigation still comes from this codebase's real deterministic-fallback path, not a
@@ -102,7 +105,7 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("PLANNED shift -> ACTIVE -> band change drafts -> a second change supersedes -> "
-            + "approval dispatches -> high WBGT remains pending approval")
+            + "approval dispatches -> high WBGT supersedes the approved plan and revokes its dispatches")
     void theWholeChainWorksTogether() {
         when(agentDraftClient.draft(any())).thenThrow(new RuntimeException("no ml-service in this test"));
 
@@ -113,9 +116,9 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
         Recommendation firstDraft = draftOnBandChange(fixture);
         Recommendation survivingDraft = secondChangeSupersedes(fixture, firstDraft);
         Recommendation approved = supervisorApprovalDispatches(fixture, survivingDraft);
-        Recommendation highWbgtPending = highWbgtRemainsPendingApproval(fixture, approved);
+        Recommendation highWbgtPending = highWbgtSupersedesTheApprovedPlan(fixture, approved);
 
-        approvedDispatchesRemainVisible(fixture, approved, highWbgtPending);
+        cancelledDispatchesRemainVisible(fixture, approved, highWbgtPending);
     }
 
     /** Setup: a site, an emergency-stop policy, a shift starting 5 minutes ago, one worker. */
@@ -212,11 +215,14 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
     }
 
     /**
-     * Step 6: high WBGT follows the ordinary approval path. The retained legacy emergency-stop
-     * threshold is deliberately ignored by policy enforcement, so no approval or dispatch is
-     * created until a supervisor decides.
+     * Step 6: high WBGT drafts an ordinary PENDING_APPROVAL plan -- the retained legacy
+     * emergency-stop threshold is deliberately ignored by policy enforcement, so no immediate
+     * dispatch is created. But it also reaches the already-APPROVED plan: conditions changing
+     * again makes an approved plan just as stale as a pending one, so supersede now reaches it
+     * too, and its outstanding (still-PENDING) dispatches are revoked rather than left standing
+     * alongside the fresh draft.
      */
-    private Recommendation highWbgtRemainsPendingApproval(Fixture fixture, Recommendation approved) {
+    private Recommendation highWbgtSupersedesTheApprovedPlan(Fixture fixture, Recommendation approved) {
         Instant t4 = fixture.now().plusSeconds(40);
         // BAND_33_AND_ABOVE, above the retained legacy threshold.
         weatherObservations.save(observation(fixture.site().getId(), new BigDecimal("34.00"), t4));
@@ -230,10 +236,17 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
                 .findFirst().orElseThrow(() -> new AssertionError("Expected a pending high-WBGT recommendation"));
 
         assertThat(recommendations.findById(approved.getId()).orElseThrow().getStatus())
-                .isEqualTo(Recommendation.RecommendationStatus.APPROVED);
+                .isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.RECOMMENDATION_SUPERSEDED))
+                .anyMatch(e -> approved.getId().equals(e.getTargetId()));
         assertThat(approvals.findByRecommendationId(pending.getId())).isEmpty();
-        assertThat(actionDispatches.findByShiftId(fixture.shift().getId()))
-                .allMatch(d -> d.getRecommendation().getId().equals(approved.getId()));
+
+        List<ActionDispatch> approvedPlanDispatches = actionDispatches.findByShiftId(fixture.shift().getId());
+        assertThat(approvedPlanDispatches).isNotEmpty();
+        assertThat(approvedPlanDispatches).allMatch(d -> d.getRecommendation().getId().equals(approved.getId()));
+        assertThat(approvedPlanDispatches)
+                .allMatch(d -> d.getStatus() == ActionDispatch.ActionDispatchStatus.CANCELLED);
+        assertThat(auditEvents.findByEventTypeOrderByOccurredAtDesc(AuditEventType.ACTION_REVOKED)).isNotEmpty();
 
         return pending;
     }
@@ -241,12 +254,12 @@ class FullAgentWorkflowIntegrationTest extends AbstractIntegrationTest {
     /**
      * Step 7: everything is visible through the real shift-scoped query, not just the
      * freshly-created rows -- proving the recommendation_id fix still works for the
-     * approved dispatch path while a high-WBGT recommendation remains pending.
+     * now-cancelled dispatch path while a high-WBGT recommendation remains pending.
      * Also checked through the actual SCRUM-317 dashboard read path (findFirstBySiteIdAndStatus
      * -> ACTIVE shift -> findByShiftId).
      */
-    private void approvedDispatchesRemainVisible(Fixture fixture, Recommendation approved,
-                                                  Recommendation highWbgtPending) {
+    private void cancelledDispatchesRemainVisible(Fixture fixture, Recommendation approved,
+                                                   Recommendation highWbgtPending) {
         List<ActionDispatch> allDispatchesForShift = actionDispatches.findByShiftId(fixture.shift().getId());
         assertThat(allDispatchesForShift.stream().map(ActionDispatch::getRecommendation).map(Recommendation::getId))
                 .containsOnly(approved.getId());
