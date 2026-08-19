@@ -1196,6 +1196,31 @@ run "mapping_publication_role_boundary" {
   }
 }
 
+# backend_deploy's redeploy path (backend-ci.yml's `redeploy` input) re-scans an
+# already-published image with Trivy before redeploying it, which requires a
+# docker login to ECR first. GetAuthorizationToken has no resource-level
+# permissions in ECR's API - Resource = "*" is the only valid grant shape.
+run "backend_deploy_role_ecr_auth" {
+  command = apply
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.backend_deploy.policy).Statement :
+      contains(stmt.Action, "ecr:GetAuthorizationToken") && stmt.Resource == "*"
+    ])
+    error_message = "The backend deploy role must be able to obtain an ECR authorization token to log in for its pre-redeploy vulnerability scan."
+  }
+
+  assert {
+    condition = anytrue([
+      for stmt in jsondecode(aws_iam_role_policy.backend_deploy.policy).Statement :
+      toset(stmt.Action) == toset(["ecr:DescribeImages"]) &&
+      try(stmt.Resource, "") == local.ecr.repository_arn
+    ])
+    error_message = "The backend deploy role must still read image metadata only from the backend ECR repository."
+  }
+}
+
 # SCRUM-373 follow-up: ml-service's own out-of-band redeploy role, mirroring
 # backend_deploy's shape (same trust condition, same shared aws_ecs_service.backend
 # target — a second ECS service does not exist to scope this any narrower) but

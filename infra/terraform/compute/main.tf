@@ -1027,6 +1027,11 @@ resource "aws_iam_role_policy" "backend_deploy" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["ecr:DescribeImages"], Resource = "${local.ecr.repository_arn}" },
+      # ECR does not support resource-level permissions for GetAuthorizationToken - the
+      # API only ever accepts Resource = "*". Needed for the backend-ci.yml `redeploy`
+      # path's pre-deploy Trivy re-scan of an already-published image, which docker-logs
+      # in to ECR before pulling by digest.
+      { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = ["ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"], Resource = "*" },
       { Effect = "Allow", Action = ["ecs:DescribeServices", "ecs:UpdateService"], Resource = aws_ecs_service.backend.id },
       { Effect = "Allow", Action = ["iam:PassRole"], Resource = [local.secrets.task_execution_role_arn, local.secrets.task_role_arn], Condition = { StringEquals = { "iam:PassedToService" = "ecs-tasks.amazonaws.com" } } }
