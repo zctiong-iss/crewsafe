@@ -1,5 +1,6 @@
 package com.crewsafe.mitigation.ai.bedrock;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
@@ -99,7 +100,7 @@ public class BedrockMitigationService {
             """.formatted(context);
     }
 
-    private String buildRequestBody(String prompt) throws Exception {
+    private String buildRequestBody(String prompt) throws JsonProcessingException {
         return OBJECT_MAPPER.writeValueAsString(new BedrockRequestBody(
                 properties.getModelId(),
                 properties.getMaxTokens(),
@@ -157,8 +158,6 @@ public class BedrockMitigationService {
 
         @com.fasterxml.jackson.annotation.JsonProperty("max_tokens")
         public int maxTokens() { return maxTokens; }
-
-        public double temperature() { return temperature; }
 
         @com.fasterxml.jackson.annotation.JsonProperty("messages")
         public List<Message> messages() {

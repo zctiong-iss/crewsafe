@@ -141,8 +141,9 @@ class AgentDraftContractLiveTest {
         // Regression guard for the trap in WbgtBand: the Java constant is BAND_32_TO_BELOW_33
         // but the wire name is 32_TO_BELOW_33, and ml-service's Literal type rejects the other.
         String json = new ObjectMapper().writeValueAsString(request());
-        assertThat(json).contains("\"currentBand\":\"32_TO_BELOW_33\"");
-        assertThat(json).doesNotContain("BAND_");
+        assertThat(json)
+                .contains("\"currentBand\":\"32_TO_BELOW_33\"")
+                .doesNotContain("BAND_");
 
         assertThat(client().draft(request()).mitigations()).isNotEmpty();
     }
