@@ -18,6 +18,19 @@ public interface WeatherObservationRepository extends JpaRepository<WeatherObser
 
     Optional<WeatherObservation> findFirstBySiteIdOrderByObservedAtDesc(UUID siteId);
 
+    /**
+     * The highest WBGT observed at a site within {@code [from, to)} — the peak-heat figure the
+     * SCRUM-139 close-out summary classifies into a band. Half-open to match every other window in
+     * the codebase. Returns {@code null} when the window holds no observation (a real "no reading",
+     * not a low reading), which the summary renders as an absent band rather than the coolest one.
+     */
+    @Query("""
+            SELECT MAX(w.wbgt) FROM WeatherObservation w
+            WHERE w.siteId = :siteId AND w.observedAt >= :from AND w.observedAt < :to
+            """)
+    BigDecimal findMaxWbgt(@Param("siteId") UUID siteId,
+            @Param("from") Instant from, @Param("to") Instant to);
+
     /** Recent rows used to build the private ML service's ordered forecast context. */
     List<WeatherObservation> findTop9BySiteIdOrderByObservedAtDesc(UUID siteId);
 

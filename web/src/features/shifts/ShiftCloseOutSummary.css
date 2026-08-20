@@ -1,0 +1,92 @@
+/** @author Tang Chee Seng (with assistance from Claude) */
+
+.closeout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.closeout__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+}
+
+.closeout__site {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.closeout__status,
+.closeout__closed,
+.closeout__crew {
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.closeout__block {
+  padding: var(--space-4);
+}
+
+.closeout__block-title {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  margin: 0 0 var(--space-3);
+}
+
+.closeout__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.closeout__stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+
+.closeout__stat dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.closeout__stat dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* An exception count is the one figure a supervisor should not skim past. */
+.closeout__stat--exceptions dd {
+  color: var(--ink);
+}
+
+.closeout__none {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  font-style: italic;
+}
+
+.closeout__reconcile {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-align: right;
+}
+
+.closeout__band--low { background: var(--band-low, #e6f4ea); }
+.closeout__band--moderate { background: var(--band-moderate, #fff4e0); }
+.closeout__band--high { background: var(--band-high, #fde8e0); }
+.closeout__band--extreme { background: var(--band-extreme, #fbe0e6); }

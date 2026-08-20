@@ -111,6 +111,69 @@ public class AuditQueryService {
                 "Exported " + rowCount + " audit events for site " + siteId + " (" + from + " to " + to + ")");
     }
 
+    /**
+     * The SCRUM-139 close-out export: the same CSV as {@link #writeCsv}, scoped to one shift's
+     * effective audit rows instead of a site's time window. Reuses this class's RFC-4180 writer,
+     * CSV-injection guard and SHA-256 trailer verbatim — a shift's record and a site's record are
+     * the same evidentiary artifact, only the row set differs — so an inspector verifies both with
+     * the one printed {@code grep -v '^#' | shasum -a 256} command.
+     *
+     * <p>Self-audits as an {@code AUDIT_EXPORTED} targeting the {@code SHIFT}: pulling a shift's
+     * evidence is itself an event about that shift, and it resolves back to the site trail the same
+     * way every other shift-scoped event does.
+     */
+    public void writeShiftCsv(OutputStream out, UUID siteId, UUID shiftId, UUID actorId, String shiftLocalRange)
+            throws IOException {
+        MessageDigest digest = sha256();
+        Writer dataWriter = new OutputStreamWriter(new DigestOutputStream(out, digest), StandardCharsets.UTF_8);
+
+        writeRecord(dataWriter, CSV_HEADER);
+        int rowCount = 0;
+        for (AuditRowView row : repository.findShiftSlice(shiftId)) {
+            AuditEntryResponse entry = AuditEntryResponse.from(row);
+            writeRecord(dataWriter,
+                    entry.occurredAt().toString(),
+                    entry.actorName(),
+                    entry.eventLabel(),
+                    entry.eventType(),
+                    entry.targetType(),
+                    entry.targetId().toString(),
+                    entry.correlationId(),
+                    entry.detail());
+            rowCount++;
+        }
+        dataWriter.flush();
+        String sha256 = HexFormat.of().formatHex(digest.digest());
+
+        Writer trailerWriter = new OutputStreamWriter(out, StandardCharsets.UTF_8);
+        writeShiftTrailer(trailerWriter, siteId, shiftId, shiftLocalRange, rowCount, sha256);
+        trailerWriter.flush();
+
+        audit.recordEvent(actorId, AuditEventType.AUDIT_EXPORTED, "SHIFT", shiftId,
+                "Exported " + rowCount + " audit events for shift " + shiftId);
+    }
+
+    /** As {@link #writeTrailer}, but naming the shift and its local range instead of a time range. */
+    private void writeShiftTrailer(Writer writer, UUID siteId, UUID shiftId, String shiftLocalRange,
+            int rowCount, String sha256) throws IOException {
+        String siteName = sites.findById(siteId).map(Site::getName).orElse("(unknown site)");
+
+        writeRecord(writer, trailerRow("# CrewSafe SG - shift close-out export", ""));
+        writeRecord(writer, trailerRow("# shift_id", shiftId.toString()));
+        writeRecord(writer, trailerRow("# site_id", siteId.toString()));
+        writeRecord(writer, trailerRow("# site_name", siteName));
+        writeRecord(writer, trailerRow("# shift_local_range", shiftLocalRange));
+        writeRecord(writer, trailerRow("# generated_at", clock.instant().toString()));
+        writeRecord(writer, trailerRow("# row_count", String.valueOf(rowCount)));
+        writeRecord(writer, trailerRow("# sha256", sha256));
+        writeRecord(writer, trailerRow("# verify_with", "grep -v '^#' <this file> | shasum -a 256"));
+    }
+
+    /** A suggested download filename for a shift's close-out export. */
+    public String shiftFilenameFor(UUID shiftId) {
+        return "crewsafe-shift-" + shiftId + "-closeout.csv";
+    }
+
     private static MessageDigest sha256() {
         try {
             return MessageDigest.getInstance("SHA-256");
