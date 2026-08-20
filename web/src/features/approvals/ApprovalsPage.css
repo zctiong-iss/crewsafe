@@ -4,6 +4,27 @@
   gap: var(--space-4);
 }
 
+/* One consistent margin (--space-4) throughout: between the card and its controls, between the
+   buttons, and between one view and the next in the list. The controls sit below the card and
+   outside its border, aligned to the card's left edge (both are full-width column items). */
+.approvals__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.approvals__controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  align-items: flex-start;   /* keep the button row at the card's left edge */
+}
+
+/* The global .card supplies only the surface; padding lives here so the header block sits an
+   equal distance from the card's top edge and from the conditions band below it. */
+.approvals__card {
+  padding: var(--space-4);
+}
+
 .approvals__card-head {
   display: flex;
   justify-content: space-between;
@@ -18,7 +39,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-4);
-  margin: var(--space-3) 0;
+  /* Top margin matches the card's top padding so the header block is framed evenly above and
+     below; the smaller bottom margin keeps the band tied to the rationale that follows it. */
+  margin: var(--space-4) 0 var(--space-3);
   padding: var(--space-3);
   background: var(--surface-sunken);
   border-radius: var(--radius);
@@ -27,13 +50,99 @@
 .approvals__evidence-item dt { font-size: var(--text-xs); color: var(--ink-muted); text-transform: uppercase; letter-spacing: var(--tracking-eyebrow); }
 .approvals__evidence-item dd { margin: 0; font-weight: var(--weight-medium); }
 
-.approvals__rationale { color: var(--ink-secondary); }
-.approvals__mitigations { list-style: none; padding: 0; display: grid; gap: var(--space-2); }
-.approvals__mitigation { font-size: var(--text-sm); }
-.approvals__rule { color: var(--ink-muted); font-family: var(--font-code); font-size: var(--text-xs); }
+/* Reasoning panel: uniform padding inside, uniform margin all round, on the recessed surface —
+   so the narrative reads as one self-contained, evenly-framed block within the card. */
+.approvals__rationale {
+  margin: var(--space-4);
+  padding: var(--space-4);
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+.approvals__rationale-text { margin: 0; color: var(--ink-secondary); }
 
-.approvals__actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
-.approvals__panel { margin-top: var(--space-3); display: grid; gap: var(--space-3); }
+/* Two aligned columns: every origin pill lines up in the left column (sized to the widest,
+   MANDATORY), every action pill in the right — so all rows read as a clean grid. The <li>s stay
+   real list items (a11y) and adopt the parent's two column tracks via subgrid, which is what
+   keeps the columns aligned across every row. Row/column gaps give equal margin around each pill. */
+.approvals__mitigations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  row-gap: var(--space-2);
+}
+.approvals__mitigation {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;    /* origin pill top-aligns with the action's first line */
+  column-gap: var(--space-3);
+}
+
+/* Equal, comfortable padding on both pills in a row (overrides the base .pill's tight padding). */
+.approvals__mitigation .pill {
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Origin pills — outlined attribute role (pill.css), toned per severity. Border follows the
+   text colour via currentColor, so setting `color` alone tints the whole pill. */
+.approvals__origin--mandatory { color: var(--band-high); }      /* danger red */
+.approvals__origin--advisory  { color: var(--signal-caution); } /* caution amber (AA as text) */
+
+/* Action chip — neutral entity fill, but it holds a full sentence, so it must wrap and read
+   left-to-right rather than stay on the base .pill's single nowrap line. */
+.approvals__mitigation .approvals__action {
+  white-space: normal;
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  line-height: 1.5;
+}
+
+/* Buttons in a left-aligned row, spaced by the same --space-4 as everything else. */
+.approvals__actions { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+
+/* Review-card action buttons — one shape, three roles, per the card/pill design language.
+   NEUTRAL (Edit Plan, Back) is the quiet default outline; PRIMARY (Approve, Save) fills with
+   --action to commit; DANGER (Reject, Confirm Rejection) is press-to-fill — outlined at rest,
+   flooding with the hazard red on hover so committing a destructive decision is deliberate and
+   visible. Modifiers carry the element in their selector so they outrank the base rule; the
+   danger recipe mirrors .shift-form__danger and reuses --band-high (no --danger token while
+   tokens.css is under CVD review). */
+.approvals__actions button {
+  font: inherit;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.approvals__actions button:hover:not(:disabled) { background: var(--surface-sunken); }
+.approvals__actions button:disabled { opacity: 0.6; cursor: default; }
+.approvals__actions button:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
+.approvals__actions button.approvals__btn--primary {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
+}
+.approvals__actions button.approvals__btn--primary:hover:not(:disabled) { background: var(--action-hover); }
+
+.approvals__actions button.approvals__btn--danger {
+  background: var(--surface);
+  border-color: var(--band-high);
+  color: var(--band-high);
+}
+.approvals__actions button.approvals__btn--danger:hover:not(:disabled) {
+  background: var(--band-high);
+  color: var(--action-ink);
+}
+/* Reject / Edit form. Spacing above it now comes from .approvals__controls' gap; keep only the
+   internal spacing between the form's own rows. Full width so its textarea/editor fill the column. */
+.approvals__panel { display: grid; gap: var(--space-3); align-self: stretch; }
 .approvals__label { display: grid; gap: var(--space-1); font-size: var(--text-sm); }
 .approvals__error { color: var(--band-high); }
 .approvals__busy { color: var(--ink-muted); font-size: var(--text-sm); }
