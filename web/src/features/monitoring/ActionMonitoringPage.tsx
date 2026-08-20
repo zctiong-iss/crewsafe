@@ -1,0 +1,31 @@
+/** @author Tang Chee Seng (with assistance from Claude) */
+import { AppShell } from "@/components/AppShell";
+import { EmptyState } from "@/components/EmptyState";
+import { SitePicker } from "@/components/SitePicker";
+import { useSelectedSite } from "@/site/useSelectedSite";
+import { type subscribeToActionStatus } from "@/api/actionStatusStream";
+import { ActionMonitoringPanel } from "./ActionMonitoringPanel";
+
+/**
+ * @param subscribe Overrides the live SSE transport. Only ever passed in tests — production
+ * always takes {@link ActionMonitoringPanel}'s own default.
+ */
+export function ActionMonitoringPage({
+  subscribe,
+}: { subscribe?: typeof subscribeToActionStatus } = {}) {
+  const { siteId } = useSelectedSite();
+
+  if (!siteId)
+    return (
+      <AppShell title="Action Monitoring">
+        <EmptyState
+          headline="No site assigned"
+          body="You have not been assigned to a site yet. Ask your site administrator."
+        />
+      </AppShell>
+    );
+
+  return (
+    <ActionMonitoringPanel siteId={siteId} subscribe={subscribe} siteSwitcher={<SitePicker />} />
+  );
+}
