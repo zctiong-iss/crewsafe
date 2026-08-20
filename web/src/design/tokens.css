@@ -70,6 +70,16 @@
   --status-none: #64748b;
   --status-none-wash: #f0ece6;
 
+  /* ---- Condition-value signals (ported from mobile) -------------------- */
+  /* One-for-one with the mobile palette (mobile/src/styles/colors.ts) so a WBGT band,
+     freshness state or lightning state reads the SAME colour on web and mobile. These are
+     TEXT colours on a light surface — each is the mobile "standard" hex, already contrast-
+     checked as text (AA on white). Always paired with a text label, never colour alone. */
+  --signal-ok: #1b5e20;         /* green  — BELOW_31 · LIVE · CLEAR */
+  --signal-caution: #b26a00;    /* amber  — 31–33 bands · DELAYED · ADVISORY */
+  --signal-alert: #c71a34;      /* red    — 33_AND_ABOVE · STALE · STOP_WORK */
+  --signal-simulated: #5a4b8c;  /* violet — SIMULATED data (not a fault) */
+
   /* ---- Single Solid High-Vis Alert Banners ------------------------------ */
   --alert-banner-bg: #f59e0b;  /* Solid High-Vis Amber */
   --alert-banner-ink: #000000; /* Pure Black text (14:1 contrast ratio) */
