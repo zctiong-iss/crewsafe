@@ -1,20 +1,31 @@
 /** @author Tang Chee Seng (with assistance from Claude & Gemini) */
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
+import type { HistoryState } from "./useConditionsStream";
 export interface TrendPoint {
   observedAt: string;
   wbgt: number | null;
 }
 
-export function ConditionsTrendChart({ points }: Readonly<{ points: TrendPoint[] }>) {
+export function ConditionsTrendChart({
+  points,
+  historyState,
+}: Readonly<{
+  points: TrendPoint[];
+  historyState: HistoryState;
+}>) {
   if (points.length < 2) {
+    let message: string;
+    if (historyState === "loading") {
+      message = "Loading the last 4 hours of WBGT readings...";
+    } else if (points.length === 0) {
+      message = "No WBGT readings in the last 4 hours.";
+    } else {
+      message = "One WBGT reading is available; another is needed to plot a trend line.";
+    }
+
     return (
       <div className="conditions-chart__empty">
-        <p>Collecting live readings...</p>
-        <span className="conditions-chart__empty-sub">
-          {points.length === 1
-            ? "Initial reading received. Awaiting next NEA update interval to plot trend line."
-            : "Awaiting live SSE stream data."}
-        </span>
+        <p>{message}</p>
       </div>
     );
   }

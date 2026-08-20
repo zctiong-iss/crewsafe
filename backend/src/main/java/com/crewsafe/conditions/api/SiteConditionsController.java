@@ -1,5 +1,6 @@
 package com.crewsafe.conditions.api;
 
+import com.crewsafe.conditions.service.ConditionsHistoryService;
 import com.crewsafe.conditions.service.SiteConditionsStreamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -25,6 +26,13 @@ import java.util.UUID;
 public class SiteConditionsController {
 
     private final SiteConditionsStreamService streamService;
+    private final ConditionsHistoryService historyService;
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ConditionsHistoryResponse history(@PathVariable UUID siteId) {
+        return historyService.getHistory(siteId);
+    }
 
     @GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
