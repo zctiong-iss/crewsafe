@@ -222,10 +222,11 @@ it("lists shifts from every site the user belongs to", async () => {
 
   describe("Draft Plan", () => {
     const GENERATE_URL = "*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate";
+    const draftPlanButton = { name: "Draft Plan" };
 
     it("offers a supervisor a Draft Plan button", async () => {
       renderApp();
-      expect(await screen.findByRole("button", { name: "Draft Plan" })).toBeInTheDocument();
+      expect(await screen.findByRole("button", draftPlanButton)).toBeInTheDocument();
     });
 
     it("drafts a plan and links to Approvals on success", async () => {
@@ -240,12 +241,12 @@ it("lists shifts from every site the user belongs to", async () => {
       );
       const user = userEvent.setup();
       renderApp();
-      await user.click(await screen.findByRole("button", { name: "Draft Plan" }));
+      await user.click(await screen.findByRole("button", draftPlanButton));
 
       expect(await screen.findByText(/Plan drafted/)).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "review it in Approvals" })).toHaveAttribute("href", "/approvals");
       // The button returns to its resting state rather than staying stuck on "Drafting…".
-      expect(screen.getByRole("button", { name: "Draft Plan" })).not.toBeDisabled();
+      expect(screen.getByRole("button", draftPlanButton)).not.toBeDisabled();
     });
 
     it("shows an error message when drafting a plan fails", async () => {
@@ -259,7 +260,7 @@ it("lists shifts from every site the user belongs to", async () => {
       );
       const user = userEvent.setup();
       renderApp();
-      await user.click(await screen.findByRole("button", { name: "Draft Plan" }));
+      await user.click(await screen.findByRole("button", draftPlanButton));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "Something went wrong on our end. Try again in a moment.",
@@ -272,7 +273,7 @@ it("lists shifts from every site the user belongs to", async () => {
       );
       const user = userEvent.setup();
       renderApp();
-      await user.click(await screen.findByRole("button", { name: "Draft Plan" }));
+      await user.click(await screen.findByRole("button", draftPlanButton));
 
       expect(await screen.findByRole("button", { name: "Drafting…" })).toBeDisabled();
     });

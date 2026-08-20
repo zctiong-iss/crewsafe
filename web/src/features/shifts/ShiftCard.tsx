@@ -26,6 +26,8 @@ type DraftPlan =
   | { status: "generated"; recommendationId: string }
   | { status: "error"; message: string };
 
+const GENERATING = "generating" as const;
+
 export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: Readonly<{
   shift: Shift;
   workerNames: Map<string, string>;
@@ -47,7 +49,7 @@ export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewSc
 
   const [draftPlan, setDraftPlan] = useState<DraftPlan>({ status: "idle" });
   const onDraftPlan = () => {
-    setDraftPlan({ status: "generating" });
+    setDraftPlan({ status: GENERATING });
     generateRecommendation(shift.siteId, shift.id)
       .then((recommendation) => setDraftPlan({ status: "generated", recommendationId: recommendation.id }))
       .catch((error: unknown) => {
@@ -103,10 +105,10 @@ useEffect(() => {
               <button
                 type="button"
                 className="shift-card__draft-plan"
-                disabled={draftPlan.status === "generating"}
+                disabled={draftPlan.status === GENERATING}
                 onClick={onDraftPlan}
               >
-                {draftPlan.status === "generating" ? "Drafting…" : "Draft Plan"}
+                {draftPlan.status === GENERATING ? "Drafting…" : "Draft Plan"}
               </button>
             )}
         </div>
