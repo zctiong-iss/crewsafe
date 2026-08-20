@@ -31,6 +31,20 @@ public interface WeatherObservationRepository extends JpaRepository<WeatherObser
     BigDecimal findMaxWbgt(@Param("siteId") UUID siteId,
             @Param("from") Instant from, @Param("to") Instant to);
 
+    /** Non-null WBGT readings for a site in chronological order within {@code [from, to)}. */
+    @Query("""
+            SELECT w FROM WeatherObservation w
+            WHERE w.siteId = :siteId
+              AND w.observedAt >= :from
+              AND w.observedAt < :to
+              AND w.wbgt IS NOT NULL
+            ORDER BY w.observedAt ASC
+            """)
+    List<WeatherObservation> findWbgtHistory(
+            @Param("siteId") UUID siteId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
     /** Recent rows used to build the private ML service's ordered forecast context. */
     List<WeatherObservation> findTop9BySiteIdOrderByObservedAtDesc(UUID siteId);
 

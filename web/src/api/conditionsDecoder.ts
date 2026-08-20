@@ -34,6 +34,10 @@ const HUMIDITY_SANITY_RANGE = {
   maximum: 100,
 } as const;
 
+export function isWbgtWithinSanityRange(value: number): boolean {
+  return value >= WBGT_SANITY_RANGE.minimum && value <= WBGT_SANITY_RANGE.maximum;
+}
+
 export type ConditionsRangeMetric = "wbgt" | "humidity";
 
 export interface ConditionsRangeWarning {
@@ -88,7 +92,7 @@ export function findConditionsRangeWarnings(
 ): ConditionsRangeWarning[] {
   const warnings: ConditionsRangeWarning[] = [];
 
-  if (value.wbgt < WBGT_SANITY_RANGE.minimum || value.wbgt > WBGT_SANITY_RANGE.maximum) {
+  if (!isWbgtWithinSanityRange(value.wbgt)) {
     warnings.push({ metric: "wbgt", value: value.wbgt, ...WBGT_SANITY_RANGE });
   }
   if (value.humidity < HUMIDITY_SANITY_RANGE.minimum || value.humidity > HUMIDITY_SANITY_RANGE.maximum) {

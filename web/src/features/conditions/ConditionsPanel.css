@@ -166,6 +166,14 @@
   color: var(--ink);
   margin: 0;
 }
+.conditions-panel__history-notice {
+  background-color: var(--surface-sunken);
+  border-left: 3px solid var(--band-moderate);
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
 .conditions-chart__empty {
   padding: var(--space-6) var(--space-4);
   background-color: var(--surface-sunken);
