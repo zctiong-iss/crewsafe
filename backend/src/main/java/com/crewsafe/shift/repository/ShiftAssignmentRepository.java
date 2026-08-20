@@ -40,10 +40,12 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
      * lookup in {@code AppUserRepository.findBySiteIdAndRoleAndStatus}, rather than an
      * explicit join. {@code [startsAt, endsAt)} half-open, matching the boundary
      * {@code ShiftService} already uses for {@code endsAt > startsAt}: a shift ending
-     * exactly when another starts does not count as an overlap.
+     * exactly when another starts does not count as an overlap. Cancelled shifts retain their
+     * assignments for history but no longer consume worker availability.
      */
     @Query("select sa from ShiftAssignment sa where sa.workerId = :workerId and sa.shiftId in "
-            + "(select s.id from Shift s where s.startsAt < :endsAt and s.endsAt > :startsAt)")
+            + "(select s.id from Shift s where s.startsAt < :endsAt and s.endsAt > :startsAt "
+            + "and s.status <> com.crewsafe.shift.domain.ShiftStatus.CANCELLED)")
     List<ShiftAssignment> findOverlapping(@Param("workerId") UUID workerId, @Param("startsAt") Instant startsAt,
                                            @Param("endsAt") Instant endsAt);
 }
