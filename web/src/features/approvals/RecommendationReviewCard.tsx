@@ -7,6 +7,7 @@ import {
   type RecommendationDecisionRequest,
 } from "@/api/approvals";
 import { ApiError, messageFor } from "@/api/errors";
+import { draftedAgo, draftedAbsolute } from "./formatDraftedAt";
 import { EvidenceSummary } from "./EvidenceSummary";
 import { MitigationEditor } from "./MitigationEditor";
 import { AutoDispatchBanner } from "./AutoDispatchBanner";
@@ -85,6 +86,16 @@ export function RecommendationReviewCard({
           <div>
             <h3 className="approvals__card-title">{shiftLabel}</h3>
             <p className="approvals__card-site">{siteName}</p>
+            {/* When the agent drafted this plan. Relative age reads at a glance on the card face; the
+                clear DD MMM YYYY date + time is one hover away, and machine-readable via <time dateTime>
+                for assistive tech. */}
+            <time
+              className="approvals__card-drafted"
+              dateTime={recommendation.createdAt}
+              title={draftedAbsolute(recommendation.createdAt)}
+            >
+              Drafted {draftedAgo(recommendation.createdAt)}
+            </time>
           </div>
           <div className="approvals__card-pills">
             {autoDispatched && (

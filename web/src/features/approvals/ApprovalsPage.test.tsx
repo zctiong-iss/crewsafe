@@ -1,5 +1,5 @@
 /** @author Tang Chee Seng (with assistance from Claude and Codex) */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -92,6 +92,17 @@ function onePendingRecommendation({
 }
 
 describe("ApprovalsPage", () => {
+  // Freeze "now" to 04:00 SGT-equivalent on 10 Aug — mid-way through the fixture shift (00:00–08:00Z),
+  // so it counts as live and the queue behaves as these tests expect regardless of the wall clock.
+  // Spying Date.now (not fake timers) leaves setTimeout, msw and user-event untouched.
+  let nowSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    nowSpy = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-08-10T04:00:00Z").getTime());
+  });
+  afterEach(() => {
+    nowSpy.mockRestore();
+  });
+
   it("lists a pending recommendation with its shift, evidence and mitigation", async () => {
     onePendingRecommendation();
     renderApprovals();
@@ -476,5 +487,78 @@ describe("ApprovalsPage", () => {
     expect(screen.getByText("You're all caught up!")).toBeInTheDocument();
     // It is a note, not a decision card — no buttons.
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  });
+
+  it("stamps each card with when the plan was drafted", async () => {
+    onePendingRecommendation();
+    renderApprovals();
+
+    // 'now' is frozen at 04:00Z 10 Aug; the plan was drafted at 00:05Z the same day → ~3h earlier.
+    const drafted = await screen.findByText("Drafted 3 hours ago");
+    // Precise, clear DD MMM YYYY date + time and a machine-readable stamp ride the <time> element.
+    expect(drafted.tagName).toBe("TIME");
+    expect(drafted).toHaveAttribute("dateTime", "2026-08-10T00:05:00Z");
+    expect(drafted).toHaveAttribute("title", "10 Aug 2026, 08:05");
+  });
+
+  it("moves a plan whose shift has ended into a collapsed Past shifts section", async () => {
+    server.use(
+      // A shift that ended before the frozen 'now' (04:00Z 10 Aug) — so its plan is past, not live.
+      http.get(`${BASE}/api/v1/sites/:siteId/shifts`, ({ params }) =>
+        params.siteId === "site-1"
+          ? HttpResponse.json([
+              {
+                id: "shift-past",
+                siteId: "site-1",
+                startsAt: "2026-08-09T12:00:00Z",
+                endsAt: "2026-08-09T20:00:00Z",
+                status: "PLANNED",
+                assignments: [],
+              },
+            ])
+          : HttpResponse.json([]),
+      ),
+      http.get(
+        `${BASE}/api/v1/sites/:siteId/shifts/:shiftId/recommendations`,
+        ({ params }) =>
+          params.siteId === "site-1"
+            ? HttpResponse.json([
+                {
+                  id: "rec-past",
+                  shiftId: "shift-past",
+                  policyVersion: "v1",
+                  status: "PENDING_APPROVAL",
+                  rationale: "Drafted for a shift that has since ended.",
+                  createdAt: "2026-08-09T11:55:00Z",
+                  mitigations: [],
+                  approval: null,
+                  evidence: null,
+                  modelVersion: null,
+                },
+              ])
+            : HttpResponse.json([]),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderApprovals();
+
+    // The live queue is empty, so the supervisor is caught up on current work…
+    expect(await screen.findByText("You're all caught up!")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Plans Awaiting Review" })).not.toBeInTheDocument();
+
+    // …but the past plan is gathered under a count-labelled disclosure, collapsed by default.
+    const summary = screen.getByText("Past shifts (1)");
+    const disclosure = summary.closest("details") as HTMLDetailsElement;
+    expect(disclosure.open).toBe(false);
+
+    // The plan lives inside that disclosure as a full, still-actionable card.
+    const region = screen.getByRole("region", { name: "Past shifts" });
+    expect(region).toHaveTextContent("Drafted for a shift that has since ended.");
+    expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
+
+    // And it opens on demand.
+    await user.click(summary);
+    expect(disclosure.open).toBe(true);
   });
 });
