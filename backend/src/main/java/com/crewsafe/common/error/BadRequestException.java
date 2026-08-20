@@ -11,7 +11,22 @@ package com.crewsafe.common.error;
  */
 public class BadRequestException extends RuntimeException {
 
+    private final ErrorCode code;
+
     public BadRequestException(String message) {
+        this(message, null);
+    }
+
+    /**
+     * @param code names a fixed, client-actionable validation failure without exposing the
+     *             untrusted exception message.
+     */
+    public BadRequestException(String message, ErrorCode code) {
         super(message);
+        this.code = code;
+    }
+
+    public ErrorCode getCode() {
+        return code;
     }
 }

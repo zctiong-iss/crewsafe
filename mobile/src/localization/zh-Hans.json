@@ -25,7 +25,9 @@
     "unknown": "出现问题，请重试。",
     "codes": {
       "NO_ACTIVE_POLICY": "本工地尚未启用高温政策，因此无法拟定计划。请联系安全主管启用一个政策版本。",
-      "NO_USABLE_WBGT": "本工地暂无可用的 WBGT 读数，因此无法拟定计划。待读数送达后再试。"
+      "NO_USABLE_WBGT": "本工地暂无可用的 WBGT 读数，因此无法拟定计划。待读数送达后再试。",
+      "WORKER_HAS_OVERLAPPING_SHIFT": "该工作人员已被分配到另一个时间重叠的班次。",
+      "SHIFT_NOT_EDITABLE": "该班次已结束，无法再编辑。"
     }
   },
   "auth": {

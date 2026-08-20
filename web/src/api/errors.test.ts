@@ -60,4 +60,16 @@ describe("messageFor", () => {
     const message = messageFor(new ApiError("server", "Stack trace leaked here", 500, null));
     expect(message).not.toContain("Stack trace leaked here");
   });
+
+  it.each([
+    ["WORKER_HAS_OVERLAPPING_SHIFT", "This worker is already assigned to another overlapping shift."],
+    ["SHIFT_NOT_EDITABLE", "This shift has ended and can no longer be edited."],
+  ])("uses the approved message for %s", (code, expected) => {
+    expect(messageFor(new ApiError("bad-request", "raw", 400, null, code))).toBe(expected);
+  });
+
+  it("falls back to the status-derived message for an unknown code", () => {
+    expect(messageFor(new ApiError("bad-request", "raw", 400, null, "FUTURE_CODE")))
+      .toBe("That request was not valid.");
+  });
 });

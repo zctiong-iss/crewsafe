@@ -43,7 +43,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleBadRequest(BadRequestException e) {
         log.debug("bad_request_handled");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS));
+                .body(ErrorResponse.of(BAD_REQUEST, INVALID_REQUEST_PARAMETERS, e.getCode()));
     }
 
     /**
