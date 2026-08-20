@@ -104,6 +104,13 @@ app:
       # How long an idle SSE connection is held open before the client must reconnect.
       emitter-timeout: ${CONDITIONS_STREAM_EMITTER_TIMEOUT:5m}
 
+  wellbeing:
+    stream:
+      # Complete open-concern snapshot for a subscribed Action Monitoring dashboard.
+      push-interval: ${WELLBEING_STREAM_PUSH_INTERVAL:10s}
+      # Authenticated clients reconnect when this bounded connection expires.
+      emitter-timeout: ${WELLBEING_STREAM_EMITTER_TIMEOUT:5m}
+
   action-dispatch:
     # SCRUM-317 late-derivation and auto-complete rules. The 15m auto-complete default is a
     # placeholder -- see the contract's "open question" note, no one has signed off on it yet.

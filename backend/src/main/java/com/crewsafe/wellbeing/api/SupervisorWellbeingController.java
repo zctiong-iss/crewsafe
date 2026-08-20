@@ -4,8 +4,10 @@ import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.wellbeing.api.WorkerWellbeingController.ConcernResponse;
 import com.crewsafe.wellbeing.api.WorkerWellbeingController.WellbeingLogResponse;
 import com.crewsafe.wellbeing.domain.WellbeingLog;
+import com.crewsafe.wellbeing.service.ConcernStreamService;
 import com.crewsafe.wellbeing.service.WellbeingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.Instant;
 import java.util.Comparator;
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 public class SupervisorWellbeingController {
 
     private final WellbeingService wellbeing;
+    private final ConcernStreamService concernStream;
 
     /**
      * One row per worker: when they last rested and last drank, and whether either was instructed.
@@ -80,6 +84,12 @@ public class SupervisorWellbeingController {
         return ResponseEntity.ok(wellbeing.concernsForSite(siteId).stream()
                 .map(ConcernResponse::from)
                 .toList());
+    }
+
+    @GetMapping(path = "/concerns/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public SseEmitter concernStream(@PathVariable UUID siteId) {
+        return concernStream.subscribe(siteId);
     }
 
     @PostMapping("/concerns/{concernId}/acknowledge")

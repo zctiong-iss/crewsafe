@@ -138,6 +138,18 @@ public class WellbeingService {
         return concerns.findByShiftIdInOrderByRaisedAtDescIdDesc(shiftIds);
     }
 
+    /** Complete actionable snapshot for the web alert stream, newest first. */
+    public List<Concern> openConcernsForSite(UUID siteId) {
+        List<UUID> shiftIds = shifts.findBySiteIdOrderByCreatedAtDescIdDesc(siteId).stream()
+                .map(Shift::getId)
+                .toList();
+        if (shiftIds.isEmpty()) {
+            return List.of();
+        }
+        return concerns.findByShiftIdInAndStatusOrderByRaisedAtDescIdDesc(
+                shiftIds, Concern.ConcernStatus.OPEN);
+    }
+
     /**
      * Records that a supervisor has seen a concern.
      *

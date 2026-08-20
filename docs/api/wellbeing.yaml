@@ -188,6 +188,30 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/sites/{siteId}/concerns/stream:
+    parameters:
+      - $ref: "#/components/parameters/SiteId"
+    get:
+      operationId: streamOpenConcernsForSite
+      summary: Live snapshots of open concerns for the selected site
+      description: >
+        Server-sent events named `concerns`. Each event contains the complete newest-first
+        array of OPEN concerns. An empty array clears the dashboard alert. SUPERVISOR,
+        SAFETY_MANAGER, or ADMIN with site access may subscribe; the stream is read-only.
+      responses:
+        "200":
+          description: A stream of complete open-concern snapshots.
+          content:
+            text/event-stream:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Concern"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/sites/{siteId}/concerns/{concernId}/acknowledge:
     parameters:
       - $ref: "#/components/parameters/SiteId"

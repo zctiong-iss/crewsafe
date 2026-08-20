@@ -9,12 +9,15 @@ import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftAssignment;
+import com.crewsafe.shift.domain.SymptomFlag;
 import com.crewsafe.shift.repository.ShiftAssignmentRepository;
 import com.crewsafe.shift.repository.ShiftRepository;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
+import com.crewsafe.wellbeing.domain.Concern;
 import com.crewsafe.wellbeing.repository.ConcernRepository;
 import com.crewsafe.wellbeing.repository.WellbeingLogRepository;
+import com.crewsafe.wellbeing.service.WellbeingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,6 +63,7 @@ class WellbeingControllerTest extends AbstractIntegrationTest {
     @Autowired private ShiftAssignmentRepository assignments;
     @Autowired private WellbeingLogRepository logs;
     @Autowired private ConcernRepository concerns;
+    @Autowired private WellbeingService wellbeing;
 
     private Site site;
     private Shift shift;
@@ -225,6 +230,23 @@ class WellbeingControllerTest extends AbstractIntegrationTest {
         assertThat(concerns.findById(concernId)).get()
                 .extracting(c -> c.getStatus().name())
                 .isEqualTo("OPEN");
+    }
+
+    @Test
+    void openConcernSnapshotIsNewestFirstAndExcludesAcknowledgedConcerns() {
+        Instant base = Instant.parse("2026-08-20T08:00:00Z");
+        Concern older = concerns.save(Concern.raise(shift.getId(), worker.getId(),
+                Set.of(SymptomFlag.HEADACHE), null, base));
+        Concern acknowledged = Concern.raise(shift.getId(), worker.getId(),
+                Set.of(SymptomFlag.NAUSEA), null, base.plusSeconds(30));
+        acknowledged.acknowledge(supervisor.getId(), base.plusSeconds(40));
+        concerns.save(acknowledged);
+        Concern newer = concerns.save(Concern.raise(shift.getId(), worker.getId(),
+                Set.of(SymptomFlag.DIZZINESS), null, base.plusSeconds(60)));
+
+        assertThat(wellbeing.openConcernsForSite(site.getId()))
+                .extracting(Concern::getId)
+                .containsExactly(newer.getId(), older.getId());
     }
 
     /* ------------------------------ supervisor view ------------------------------ */

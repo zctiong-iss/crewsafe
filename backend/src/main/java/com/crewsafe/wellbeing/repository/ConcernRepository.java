@@ -17,6 +17,9 @@ public interface ConcernRepository extends JpaRepository<Concern, UUID> {
 
     List<Concern> findByShiftIdInOrderByRaisedAtDescIdDesc(List<UUID> shiftIds);
 
+    List<Concern> findByShiftIdInAndStatusOrderByRaisedAtDescIdDesc(
+            List<UUID> shiftIds, Concern.ConcernStatus status);
+
     /** Scoped to the shift so a concern id from another shift reads as 404, not as someone else's. */
     Optional<Concern> findByIdAndShiftId(UUID id, UUID shiftId);
 
