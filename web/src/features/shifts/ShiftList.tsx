@@ -126,7 +126,7 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
 
       {load.status === "loaded" && load.shifts.length > 0 && (
         <>
-          <div className="shift-filter" role="group" aria-label="Filter shifts">
+          <fieldset className="shift-filter" aria-label="Filter shifts">
             {FILTERS.map((option) => (
               <button
                 key={option.value}
@@ -138,7 +138,7 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
                 {option.label}
               </button>
             ))}
-          </div>
+          </fieldset>
           {filteredShifts.length === 0 ? (
             <EmptyState
               headline={`No ${FILTERS.find((option) => option.value === filter)?.label.toLowerCase()} shifts`}

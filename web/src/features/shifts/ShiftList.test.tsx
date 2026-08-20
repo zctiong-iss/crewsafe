@@ -90,6 +90,13 @@ describe("ShiftList", () => {
     expect(visibleStartDates()).toEqual(["6 Aug 2020", "5 Aug 2020"]);
   });
 
+  it("groups the filter tabs in a native fieldset", async () => {
+    renderApp();
+
+    const filterGroup = await screen.findByRole("group", { name: "Filter shifts" });
+    expect(filterGroup.tagName).toBe("FIELDSET");
+  });
+
   it("does not offer Draft Plan for an ended shift", async () => {
     server.use(
       http.get("*/api/v1/sites/:siteId/shifts", () =>

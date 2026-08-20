@@ -6,13 +6,15 @@ const MAX_WORKER_CHIPS = 4;
 function timingPhrase(timing: MitigationSuggestion["timing"]): string | null {
   if (!timing) return null;
 
+  let recurrence: string | null = null;
+  if (timing.everyMinutes != null) {
+    recurrence =
+      timing.everyMinutes === 60 ? "every hour" : `every ${timing.everyMinutes} min`;
+  }
+
   const parts = [
     timing.durationMinutes == null ? null : `for ${timing.durationMinutes} min`,
-    timing.everyMinutes == null
-      ? null
-      : timing.everyMinutes === 60
-        ? "every hour"
-        : `every ${timing.everyMinutes} min`,
+    recurrence,
     timing.startByUtc == null
       ? null
       : `start by ${new Date(timing.startByUtc).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`,
