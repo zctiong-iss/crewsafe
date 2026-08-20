@@ -251,6 +251,6 @@ describe("ConditionsPanel — four-hour history", () => {
     const notice = await screen.findByText(
       "Historical readings unavailable — showing live updates only.",
     );
-    expect(notice).toHaveAttribute("role", "status");
+    expect(notice.tagName).toBe("OUTPUT");
   });
 });

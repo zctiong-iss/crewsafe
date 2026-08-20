@@ -153,9 +153,9 @@ export function ConditionsPanel({
                 WBGT Heat Stress Trend — Last 4 hours
               </h2>
               {historyState === "unavailable" && (
-                <p className="conditions-panel__history-notice" role="status">
+                <output className="conditions-panel__history-notice">
                   Historical readings unavailable — showing live updates only.
-                </p>
+                </output>
               )}
               <ConditionsTrendChart points={trend} historyState={historyState} />
             </div>
