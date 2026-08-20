@@ -93,3 +93,14 @@ export function decideRecommendation(
     body: JSON.stringify(body),
   });
 }
+
+/**
+ * `POST …/shifts/{shiftId}/recommendations/generate` — ask the agent to draft a plan for this
+ * shift. Mirrors the mobile app's `generateRecommendation` (SCRUM-118/289). Returns the created
+ * recommendation, `PENDING_APPROVAL`, exactly as the list endpoint would.
+ */
+export function generateRecommendation(siteId: string, shiftId: string): Promise<Recommendation> {
+  return apiFetch<Recommendation>(`${recommendationsBase(siteId, shiftId)}/generate`, {
+    method: "POST",
+  });
+}

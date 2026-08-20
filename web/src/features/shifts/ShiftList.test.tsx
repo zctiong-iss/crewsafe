@@ -219,4 +219,63 @@ it("lists shifts from every site the user belongs to", async () => {
     await user.click(screen.getByRole("button", { name: "Hide crew" }));
     expect(card).not.toHaveClass("shift-card--open");
   });
+
+  describe("Draft Plan", () => {
+    const GENERATE_URL = "*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate";
+    const draftPlanButton = { name: "Draft Plan" };
+
+    it("offers a supervisor a Draft Plan button", async () => {
+      renderApp();
+      expect(await screen.findByRole("button", draftPlanButton)).toBeInTheDocument();
+    });
+
+    it("drafts a plan and links to Approvals on success", async () => {
+      server.use(
+        http.post(GENERATE_URL, () =>
+          HttpResponse.json({
+            id: "rec-1", shiftId: "shift-1", policyVersion: null, status: "PENDING_APPROVAL",
+            rationale: null, createdAt: "2026-08-16T00:00:00Z", mitigations: [], approval: null,
+            evidence: null, modelVersion: null,
+          }),
+        ),
+      );
+      const user = userEvent.setup();
+      renderApp();
+      await user.click(await screen.findByRole("button", draftPlanButton));
+
+      expect(await screen.findByText(/Plan drafted/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "review it in Approvals" })).toHaveAttribute("href", "/approvals");
+      // The button returns to its resting state rather than staying stuck on "Drafting…".
+      expect(screen.getByRole("button", draftPlanButton)).not.toBeDisabled();
+    });
+
+    it("shows an error message when drafting a plan fails", async () => {
+      server.use(
+        http.post(GENERATE_URL, () =>
+          HttpResponse.json(
+            { error: "Server Error", message: "boom", requestId: "test-request-id" },
+            { status: 500 },
+          ),
+        ),
+      );
+      const user = userEvent.setup();
+      renderApp();
+      await user.click(await screen.findByRole("button", draftPlanButton));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Something went wrong on our end. Try again in a moment.",
+      );
+    });
+
+    it("disables the button while a plan is being drafted", async () => {
+      server.use(
+        http.post(GENERATE_URL, () => new Promise(() => {})),
+      );
+      const user = userEvent.setup();
+      renderApp();
+      await user.click(await screen.findByRole("button", draftPlanButton));
+
+      expect(await screen.findByRole("button", { name: "Drafting…" })).toBeDisabled();
+    });
+  });
 });

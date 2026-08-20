@@ -173,6 +173,15 @@ describe("ShiftList as a worker", () => {
     expect(await screen.findByText("2 workers")).toBeInTheDocument();
   });
 
+  it("offers a worker no way to draft a plan", async () => {
+    signInAsWorkerOne();
+    renderApp();
+    await screen.findByText(/10 Aug/);
+
+    // Drafting a plan is a supervisor decision (canManage-gated), same as Edit.
+    expect(screen.queryByRole("button", { name: "Draft Plan" })).toBeNull();
+  });
+
   it("tells a worker with nothing assigned that they are not on any shift", async () => {
     signInAsWorkerOne();
     server.use(
