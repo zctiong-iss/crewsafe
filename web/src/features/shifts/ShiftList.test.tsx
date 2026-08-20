@@ -221,6 +221,8 @@ it("lists shifts from every site the user belongs to", async () => {
   });
 
   describe("Draft Plan", () => {
+    const GENERATE_URL = "*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate";
+
     it("offers a supervisor a Draft Plan button", async () => {
       renderApp();
       expect(await screen.findByRole("button", { name: "Draft Plan" })).toBeInTheDocument();
@@ -228,7 +230,7 @@ it("lists shifts from every site the user belongs to", async () => {
 
     it("drafts a plan and links to Approvals on success", async () => {
       server.use(
-        http.post("*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate", () =>
+        http.post(GENERATE_URL, () =>
           HttpResponse.json({
             id: "rec-1", shiftId: "shift-1", policyVersion: null, status: "PENDING_APPROVAL",
             rationale: null, createdAt: "2026-08-16T00:00:00Z", mitigations: [], approval: null,
@@ -248,7 +250,7 @@ it("lists shifts from every site the user belongs to", async () => {
 
     it("shows an error message when drafting a plan fails", async () => {
       server.use(
-        http.post("*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate", () =>
+        http.post(GENERATE_URL, () =>
           HttpResponse.json(
             { error: "Server Error", message: "boom", requestId: "test-request-id" },
             { status: 500 },
@@ -266,7 +268,7 @@ it("lists shifts from every site the user belongs to", async () => {
 
     it("disables the button while a plan is being drafted", async () => {
       server.use(
-        http.post("*/api/v1/sites/:siteId/shifts/:shiftId/recommendations/generate", () => new Promise(() => {})),
+        http.post(GENERATE_URL, () => new Promise(() => {})),
       );
       const user = userEvent.setup();
       renderApp();
