@@ -9,6 +9,7 @@ import { fetchSiteShifts, type Shift } from "@/api/shifts";
 import { fetchShiftRecommendations, type Recommendation } from "@/api/approvals";
 import { formatShiftRange } from "@/features/shifts/formatShiftRange";
 import { RecommendationReviewCard } from "./RecommendationReviewCard";
+import { SupersededList, type SupersededItem } from "./SupersededList";
 import "./ApprovalsPage.css";
 
 interface PendingItem {
@@ -18,12 +19,21 @@ interface PendingItem {
   shift: Shift;
 }
 
+interface ReviewData {
+  queue: PendingItem[];
+  superseded: SupersededItem[];
+}
+
 type Load =
   | { status: "loading" }
-  | { status: "loaded"; items: PendingItem[] }
+  | { status: "loaded"; queue: PendingItem[]; superseded: SupersededItem[] }
   | { status: "error"; message: string; requestId: string | null };
 
-async function loadPendingReviews(): Promise<PendingItem[]> {
+// Queue sort weight: an auto-dispatched stop-work floats above plans still awaiting a decision.
+const queueRank = (status: Recommendation["status"]): number =>
+  status === "AUTO_DISPATCHED" ? 0 : 1;
+
+async function loadReviewData(): Promise<ReviewData> {
   const sites = await fetchAccessibleSites();
   const perSite = await Promise.all(
     sites.map(async (site) => {
@@ -31,15 +41,48 @@ async function loadPendingReviews(): Promise<PendingItem[]> {
       const perShift = await Promise.all(
         shifts.map(async (shift) => {
           const recs = await fetchShiftRecommendations(site.id, shift.id);
-          return recs
-            .filter((recommendation) => recommendation.status === "PENDING_APPROVAL")
-            .map((recommendation) => ({ recommendation, siteId: site.id, siteName: site.name, shift }));
+          return recs.map((recommendation) => ({
+            recommendation,
+            siteId: site.id,
+            siteName: site.name,
+            shift,
+          }));
         }),
       );
       return perShift.flat();
     }),
   );
-  return perSite.flat();
+  const all = perSite.flat();
+
+  // The queue holds only what a supervisor must see now: a plan awaiting a decision, and an
+  // auto-dispatched stop-work (no decision left to make, but the most urgent item on the screen).
+  // APPROVED / REJECTED / DRAFT are dropped — nothing to act on.
+  const queue = all
+    .filter(
+      (item) =>
+        item.recommendation.status === "PENDING_APPROVAL" ||
+        item.recommendation.status === "AUTO_DISPATCHED",
+    )
+    .sort((a, b) => {
+      const byStatus =
+        queueRank(a.recommendation.status) - queueRank(b.recommendation.status);
+      // Within a status, oldest-drafted first so the queue reads in the order plans arrived.
+      return byStatus !== 0
+        ? byStatus
+        : a.recommendation.createdAt.localeCompare(b.recommendation.createdAt);
+    });
+
+  // A superseded plan has nothing to decide, so it leaves the queue — but it recedes into a muted
+  // note rather than vanishing, so a supervisor sees that conditions changed and replaced it.
+  const superseded: SupersededItem[] = all
+    .filter((item) => item.recommendation.status === "SUPERSEDED")
+    .map((item) => ({
+      id: item.recommendation.id,
+      shiftLabel: formatShiftRange(item.shift.startsAt, item.shift.endsAt),
+      siteName: item.siteName,
+    }));
+
+  return { queue, superseded };
 }
 
 export function ApprovalsPage() {
@@ -54,8 +97,8 @@ export function ApprovalsPage() {
 
   useEffect(() => {
     let active = true;
-    loadPendingReviews()
-      .then((items) => active && setLoad({ status: "loaded", items }))
+    loadReviewData()
+      .then((data) => active && setLoad({ status: "loaded", ...data }))
       .catch((error: unknown) => {
         if (!active) return;
         const apiError = error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
@@ -68,7 +111,10 @@ export function ApprovalsPage() {
   function removeItem(recommendationId: string) {
     setLoad((current) =>
       current.status === "loaded"
-        ? { status: "loaded", items: current.items.filter((item) => item.recommendation.id !== recommendationId) }
+        ? {
+            ...current,
+            queue: current.queue.filter((item) => item.recommendation.id !== recommendationId),
+          }
         : current,
     );
   }
@@ -79,16 +125,16 @@ export function ApprovalsPage() {
 
       {load.status === "error" && <EmptyState headline="Could Not Load Plans" body={load.message} />}
 
-      {load.status === "loaded" && load.items.length === 0 && (
+      {load.status === "loaded" && load.queue.length === 0 && (
         <EmptyState
           headline="You're all caught up!"
           body="No plans are waiting for your decision right now. When the agent drafts one for a shift, it appears here."
         />
       )}
 
-      {load.status === "loaded" && load.items.length > 0 && (
+      {load.status === "loaded" && load.queue.length > 0 && (
         <section className="approvals__list" aria-label="Plans Awaiting Review">
-          {load.items.map((item) => (
+          {load.queue.map((item) => (
             <RecommendationReviewCard
               key={item.recommendation.id}
               recommendation={item.recommendation}
@@ -101,6 +147,8 @@ export function ApprovalsPage() {
           ))}
         </section>
       )}
+
+      {load.status === "loaded" && <SupersededList items={load.superseded} />}
     </AppShell>
   );
 }

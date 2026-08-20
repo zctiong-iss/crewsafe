@@ -42,7 +42,20 @@ export interface RecommendationEvidence {
 }
 
 export type ApprovalDecision = "APPROVED" | "REJECTED" | "EDITED";
-export type RecommendationStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+
+// Full parity with the backend Recommendation.RecommendationStatus enum and recommendation.yaml.
+// SUPERSEDED = a newer auto-triggered draft replaced this one before a supervisor decided; the
+// decision endpoint 409s. AUTO_DISPATCHED = a lightning-immediate stop-work skipped approval and was
+// already sent to workers; the spec requires clients render it distinctly, with no approve/reject
+// affordance. Narrowing this union to the two decidable states (as it once was) silently dropped both
+// from the web queue — see ApprovalsPage.
+export type RecommendationStatus =
+  | "DRAFT"
+  | "PENDING_APPROVAL"
+  | "APPROVED"
+  | "REJECTED"
+  | "SUPERSEDED"
+  | "AUTO_DISPATCHED";
 
 export interface ApprovalResponse {
   id: string;

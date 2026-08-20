@@ -269,7 +269,7 @@ describe("ApprovalsPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders only recommendations that are pending approval", async () => {
+  it("queues pending and auto-dispatched plans but drops approved and draft ones", async () => {
     onePendingRecommendation();
     server.use(
       http.get(
@@ -289,6 +289,18 @@ describe("ApprovalsPage", () => {
               modelVersion: null,
             },
             {
+              id: "rec-auto",
+              shiftId: "shift-1",
+              policyVersion: "v1",
+              status: "AUTO_DISPATCHED",
+              rationale: "Lightning within 8 km — stop-work sent to workers.",
+              createdAt: "2026-08-10T00:06:00Z",
+              mitigations: [],
+              approval: null,
+              evidence: null,
+              modelVersion: null,
+            },
+            {
               id: "rec-approved",
               shiftId: "shift-1",
               policyVersion: "v1",
@@ -300,16 +312,108 @@ describe("ApprovalsPage", () => {
               evidence: null,
               modelVersion: null,
             },
+            {
+              id: "rec-draft",
+              shiftId: "shift-1",
+              policyVersion: "v1",
+              status: "DRAFT",
+              rationale: "This recommendation is only a draft.",
+              createdAt: "2026-08-10T00:05:00Z",
+              mitigations: [],
+              approval: null,
+              evidence: null,
+              modelVersion: null,
+            },
           ]),
       ),
     );
 
     renderApprovals();
+    // Pending and auto-dispatched both reach the queue.
     expect(
       await screen.findByText("This recommendation is still awaiting review."),
     ).toBeInTheDocument();
     expect(
+      screen.getByText("Lightning within 8 km — stop-work sent to workers."),
+    ).toBeInTheDocument();
+    // Approved and draft are dropped — nothing to act on.
+    expect(
       screen.queryByText("This recommendation was already approved."),
     ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("This recommendation is only a draft."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows an auto-dispatched stop-work with a danger banner and no decision buttons", async () => {
+    onePendingRecommendation();
+    server.use(
+      http.get(
+        `${BASE}/api/v1/sites/:siteId/shifts/:shiftId/recommendations`,
+        () =>
+          HttpResponse.json([
+            {
+              id: "rec-auto",
+              shiftId: "shift-1",
+              policyVersion: "v1",
+              status: "AUTO_DISPATCHED",
+              rationale: "Lightning within 8 km — stop-work sent to workers.",
+              createdAt: "2026-08-10T00:06:00Z",
+              mitigations: [],
+              approval: null,
+              evidence: null,
+              modelVersion: "bedrock-claude-x",
+            },
+          ]),
+      ),
+    );
+
+    renderApprovals();
+
+    // The card carries the verbatim mobile copy, announced as an alert, and the status pill.
+    const banner = await screen.findByRole("alert");
+    expect(banner).toHaveTextContent(
+      "This stop-work order was sent to workers automatically — no approval was required.",
+    );
+    expect(screen.getByText("Stop-work dispatched")).toBeInTheDocument();
+    // A dispatched stop-work has nothing to decide — none of the controls are offered, even to a
+    // supervisor who could otherwise decide.
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Plan" })).not.toBeInTheDocument();
+  });
+
+  it("lists a superseded plan in a muted note, not as a decision card", async () => {
+    onePendingRecommendation();
+    server.use(
+      http.get(
+        `${BASE}/api/v1/sites/:siteId/shifts/:shiftId/recommendations`,
+        () =>
+          HttpResponse.json([
+            {
+              id: "rec-superseded",
+              shiftId: "shift-1",
+              policyVersion: "v1",
+              status: "SUPERSEDED",
+              rationale: "A newer draft replaced this one.",
+              createdAt: "2026-08-10T00:05:00Z",
+              mitigations: [],
+              approval: null,
+              evidence: null,
+              modelVersion: null,
+            },
+          ]),
+      ),
+    );
+
+    renderApprovals();
+
+    // The queue is empty (nothing to decide), but the superseded plan is surfaced in its own note so
+    // it doesn't just vanish.
+    const note = await screen.findByRole("region", { name: "Recently superseded" });
+    expect(note).toHaveTextContent("replaced by a newer plan");
+    expect(screen.getByText("You're all caught up!")).toBeInTheDocument();
+    // It is a note, not a decision card — no buttons.
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 });
