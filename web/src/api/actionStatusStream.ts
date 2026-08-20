@@ -86,6 +86,45 @@ export function subscribeToActionStatus(
     return fetch(input, { ...init, headers });
   };
 
+  // Fold one `action-status` frame into the current tick's buffer. A frame that fails to
+  // decode poisons the whole tick — it is dropped, not committed, at the next boundary.
+  function ingestDispatch(data: string): void {
+    try {
+      const dispatch = decodeActionDispatch(data);
+      if (!tickPoisoned) buffer.push(dispatch);
+    } catch (error) {
+      if (error instanceof InvalidActionStatusPayloadError) {
+        handlers.onStatus("degraded");
+        tickPoisoned = true; // committed only once a clean tick follows
+        return;
+      }
+      throw error;
+    }
+  }
+
+  // Close out a tick on its `alert-count` boundary: commit the buffered set only if both it
+  // and the counts are clean, otherwise drop it and degrade. Either way the buffer resets for
+  // the next tick — `alert-count` is the only signal that one tick ends and the next begins.
+  function commitTick(data: string): void {
+    let counts: AlertCounts | null = null;
+    try {
+      counts = decodeAlertCount(data);
+    } catch (error) {
+      if (!(error instanceof InvalidActionStatusPayloadError)) throw error;
+      // counts stays null → treated exactly like a poisoned tick below
+    }
+
+    if (counts !== null && !tickPoisoned) {
+      handlers.onStatus("live");
+      handlers.onTick(buffer, counts);
+    } else {
+      handlers.onStatus("degraded");
+    }
+
+    buffer = [];
+    tickPoisoned = false;
+  }
+
   handlers.onStatus("connecting");
 
   void fetchEventSource(`${apiBaseUrl}/api/v1/sites/${siteId}/actions/stream`, {
@@ -106,45 +145,8 @@ export function subscribeToActionStatus(
     },
     onmessage(ev) {
       if (ev.data === "") return;
-
-      if (ev.event === "action-status") {
-        try {
-          const dispatch = decodeActionDispatch(ev.data);
-          if (!tickPoisoned) buffer.push(dispatch);
-        } catch (error) {
-          if (error instanceof InvalidActionStatusPayloadError) {
-            handlers.onStatus("degraded");
-            tickPoisoned = true; // committed only once a clean tick follows
-            return;
-          }
-          throw error;
-        }
-        return;
-      }
-
-      if (ev.event === "alert-count") {
-        // The tick boundary. Whatever happens, the buffer resets here for the next tick —
-        // `alert-count` is the only signal that one tick has ended and the next begins.
-        let counts: AlertCounts | null = null;
-        try {
-          counts = decodeAlertCount(ev.data);
-        } catch (error) {
-          if (!(error instanceof InvalidActionStatusPayloadError)) throw error;
-          // counts stays null → treated exactly like a poisoned tick below
-        }
-
-        if (counts !== null && !tickPoisoned) {
-          handlers.onStatus("live");
-          handlers.onTick(buffer, counts);
-        } else {
-          handlers.onStatus("degraded");
-        }
-
-        buffer = [];
-        tickPoisoned = false;
-        return;
-      }
-
+      if (ev.event === "action-status") ingestDispatch(ev.data);
+      else if (ev.event === "alert-count") commitTick(ev.data);
       // Any other event type is not part of the contract — ignore it.
     },
     onclose() {
