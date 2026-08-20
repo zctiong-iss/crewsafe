@@ -75,10 +75,10 @@ public class DeterministicPlanBuilder {
             Map.entry(PolicyActionCode.CLOSE_MONITORING, "Catches early heat illness before it becomes an emergency"));
 
     private static final Map<WbgtBand, String> BAND_TEXT = Map.of(
-            WbgtBand.BELOW_31, "below 31°C",
-            WbgtBand.BAND_31_TO_BELOW_32, "between 31°C and 32°C",
-            WbgtBand.BAND_32_TO_BELOW_33, "between 32°C and 33°C",
-            WbgtBand.BAND_33_AND_ABOVE, "at or above 33°C");
+            WbgtBand.BELOW_31, "low heat risk",
+            WbgtBand.BAND_31_TO_BELOW_32, "medium heat risk",
+            WbgtBand.BAND_32_TO_BELOW_33, "high heat risk",
+            WbgtBand.BAND_33_AND_ABOVE, "very high heat risk");
 
     /** One mitigation per policy action, mandatory first so the plan reads in priority order. */
     public List<MitigationSuggestion> fromPolicy(PolicyDecision decision) {

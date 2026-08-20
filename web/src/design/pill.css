@@ -20,6 +20,7 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   white-space: nowrap;
+  text-align: center;
 }
 
 /* STATE — filled wash. Feature-specific tones (e.g. .pill--planned) define their own colour;
