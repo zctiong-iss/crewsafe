@@ -1,0 +1,89 @@
+.site-plan-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.site-plan-card__header {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* A human site name, resolved by the page — styled as the card's title, not as the monospace
+   id it replaced. */
+.site-plan-card__site-name {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+}
+
+.site-plan-card__body {
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-sunken);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.site-plan-card__figures {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-5);
+}
+
+.site-plan-card__primary {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Primary/actionable figure — reads largest, same weight class as the WBGT reading on the
+   live board, because both are "the one number to scan for" on their respective screens. */
+.site-plan-card__primary-value {
+  font-size: var(--text-reading);
+  line-height: 1;
+  font-weight: var(--weight-semibold);
+  color: var(--status-waiting);
+}
+
+.site-plan-card__primary-label {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+
+.site-plan-card__secondary {
+  display: flex;
+  flex-direction: column;
+}
+
+.site-plan-card__secondary-value {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+
+.site-plan-card__secondary-label {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+
+.site-plan-card__supervisors {
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-3);
+}
+
+.site-plan-card__supervisor-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-plan-card__no-supervisor {
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
