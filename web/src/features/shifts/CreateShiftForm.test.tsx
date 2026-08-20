@@ -27,6 +27,7 @@ const setDateTime = async (user: ReturnType<typeof userEvent.setup>, label: stri
 };
 
 const WORKER_ONE = "00000000-0000-4000-8000-000000000001";
+const WORKER_TWO = "00000000-0000-4000-8000-000000000002";
 
 async function addOneAssignment(user: ReturnType<typeof userEvent.setup>) {
   await setDateTime(user, "Starts at", "10 Aug 2026, 08:00");
@@ -199,6 +200,23 @@ describe("CreateShiftForm", () => {
     expect(remainingTaskInputs).toHaveLength(2);
     expect(remainingTaskInputs[0]).toHaveValue("First row task");
     expect(remainingTaskInputs[1]).toHaveValue("Third row task");
+  });
+
+  it("already-selected workers are excluded from other rows' dropdowns", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await screen.findByLabelText("Starts at");
+
+    await user.click(screen.getByRole("button", { name: "Add worker" }));
+    await user.selectOptions(screen.getByLabelText("Worker"), WORKER_ONE);
+
+    await user.click(screen.getByRole("button", { name: "Add worker" }));
+    const secondDropdown = screen.getAllByLabelText("Worker")[1]!;
+    const options = Array.from(secondDropdown.querySelectorAll("option"))
+      .map((o) => o.value)
+      .filter(Boolean);
+    expect(options).toContain(WORKER_TWO);
+    expect(options).not.toContain(WORKER_ONE);
   });
 
   it("AC-6 — an empty shift submits, with the inline note", async () => {
