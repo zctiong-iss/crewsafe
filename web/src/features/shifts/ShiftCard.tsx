@@ -115,9 +115,9 @@ useEffect(() => {
       </header>
 
       {draftPlan.status === "generated" && (
-        <p className="shift-card__draft-plan-note" role="status">
+        <output className="shift-card__draft-plan-note">
           Plan drafted — <Link to="/approvals">review it in Approvals</Link>.
-        </p>
+        </output>
       )}
       {draftPlan.status === "error" && (
         <p className="shift-card__draft-plan-note shift-card__draft-plan-note--error" role="alert">
