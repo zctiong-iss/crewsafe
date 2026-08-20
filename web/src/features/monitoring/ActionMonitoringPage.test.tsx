@@ -11,6 +11,7 @@ import { server } from "@/test/mocks/server";
 import { SiteProvider } from "@/site/SiteProvider";
 import { expectNoA11yViolations } from "@/test/a11y";
 import type { ActionDispatch, ActionStatusStreamHandlers } from "@/api/actionStatusStream";
+import type { Concern, ConcernStreamHandlers } from "@/api/concernStream";
 import { ActionMonitoringPage } from "./ActionMonitoringPage";
 import "@testing-library/jest-dom/vitest";
 
@@ -34,6 +35,17 @@ const oneDispatch: ActionDispatch = {
   completedBy: null,
 };
 
+const oneConcern: Concern = {
+  id: "550e8400-e29b-41d4-a716-446655440011",
+  shiftId: "550e8400-e29b-41d4-a716-446655440012",
+  workerId: "550e8400-e29b-41d4-a716-446655440013",
+  symptoms: ["DIZZINESS"],
+  note: "Feeling faint",
+  status: "OPEN",
+  raisedAt: "2026-08-20T08:00:00Z",
+  acknowledgedAt: null,
+};
+
 // Injected transport: emits one committed live tick, exactly as the real stream would after
 // its first alert-count. No network, no timers.
 const liveSubscribe = (_siteId: string, handlers: ActionStatusStreamHandlers) => {
@@ -49,13 +61,22 @@ const liveSubscribe = (_siteId: string, handlers: ActionStatusStreamHandlers) =>
   return () => {};
 };
 
+const liveConcernSubscribe = (_siteId: string, handlers: ConcernStreamHandlers) => {
+  handlers.onStatus("live");
+  handlers.onSnapshot([oneConcern]);
+  return () => {};
+};
+
 const renderPage = () =>
   render(
     <MemoryRouter>
       <AuthProvider userManager={fakeUserManager({})}>
         <WhenSignedIn>
           <SiteProvider>
-            <ActionMonitoringPage subscribe={liveSubscribe} />
+            <ActionMonitoringPage
+              subscribe={liveSubscribe}
+              subscribeConcerns={liveConcernSubscribe}
+            />
           </SiteProvider>
         </WhenSignedIn>
       </AuthProvider>
@@ -95,6 +116,9 @@ describe("ActionMonitoringPage", () => {
     // The committed tick's one PENDING dispatch surfaces in its bucket.
     expect(await screen.findByRole("heading", { name: /Pending/i })).toBeInTheDocument();
     expect(screen.getByText("HYDRATE")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Urgent worker concerns/i })).toBeInTheDocument();
+    expect(screen.getByText(/Feeling faint/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /acknowledge/i })).not.toBeInTheDocument();
   });
 
   it("shows no site switcher for a single-site user", async () => {

@@ -101,8 +101,44 @@ audit trail alongside `CONCERN_RAISED` and two `WELLBEING_LOGGED`.
   a site-level roll-up is a later ticket if anyone asks for it.
 - No duration on a rest. Deliberate — see the design note — and addable without invalidating
   anything already recorded.
-- No notification when a concern is raised. The badge is only visible to a supervisor with the app
-  open; push is out of scope here.
+- No device push notification when a concern is raised. Mobile shows its badge while the app is
+  open; the web extension below updates only while Action Monitoring is open.
+
+## Web parity extension (2026-08-20)
+
+Merged `main` had no supervisor-facing web surface for worker-raised concerns. The conditions
+stream carries weather and active-shift state only; the Action Monitoring stream carries action
+dispatches only. The Audit Trail records concern events, but supervisors cannot access that
+manager-only historical view and it does not mark an open concern as urgent.
+
+The minimal web extension is therefore a read-only urgent-concern section above the existing
+Action Monitoring dispatch buckets:
+
+- `GET /api/v1/sites/{siteId}/concerns/stream` emits a complete, newest-first JSON array of the
+  site's `OPEN` concerns as an SSE event named `concerns`. An empty array clears the alert.
+- The stream sends immediately and every ten seconds, uses the shared dashboard scheduler, and
+  closes after five minutes so the authenticated client can reconnect.
+- `SUPERVISOR`, `SAFETY_MANAGER`, and `ADMIN` may subscribe only for an accessible site. Workers
+  and cross-site callers are forbidden.
+- The web view replaces its concern state on every valid snapshot, retains the last valid snapshot
+  while a transient connection is visibly degraded, and closes permanently on 401/403.
+- An open concern shows an urgent count, worker identifier, readable symptoms, raised time, and
+  the optional note labelled as the worker's own untranslated words. The zero-open state is
+  explicit and accessible.
+- Web remains read-only. Acknowledgement stays in the existing mobile/backend flow; adding a web
+  write would exceed the promised dashboard visibility and widen role-dependent authorization.
+- Concern-stream failure never blocks or hides the independent action-dispatch board.
+
+### Acceptance criteria
+
+1. A supervisor viewing `/monitoring` sees a newly raised concern for the selected site without a
+   page refresh within one stream interval.
+2. A safety manager sees the same read-only alert. The page contains no acknowledge control.
+3. A concern acknowledged through the existing flow disappears on the next complete snapshot.
+4. Workers and callers without site access cannot subscribe to the concern stream.
+5. Malformed snapshots are rejected at the web runtime boundary; the last trustworthy snapshot
+   remains visible with a degraded warning.
+6. The urgent, empty, connecting, and degraded states pass the existing `vitest-axe` check.
 
 ## Merge note
 

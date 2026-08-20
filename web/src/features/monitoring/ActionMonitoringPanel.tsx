@@ -6,12 +6,15 @@ import {
   type ActionDispatch,
   type subscribeToActionStatus,
 } from "@/api/actionStatusStream";
+import { type subscribeToConcerns } from "@/api/concernStream";
 import { useActionStatusStream, type ConnectionState } from "./useActionStatusStream";
+import { useConcernStream } from "./useConcernStream";
+import { UrgentConcernSection } from "./UrgentConcernSection";
 import { bucketDispatches } from "./actionMonitoringLogic";
 import "./ActionMonitoringPanel.css";
 
 const SHELL_TITLE = "Action Monitoring";
-const SHELL_SUBTITLE = "Live dispatch acknowledgement & completion status";
+const SHELL_SUBTITLE = "Live worker concerns, dispatch acknowledgement & completion status";
 
 // Connection badge copy + a non-colour glyph, so the state reads without relying on hue.
 const CONNECTION_BADGE: Record<ConnectionState, { label: string; glyph: string }> = {
@@ -62,13 +65,16 @@ function DispatchItem({ dispatch }: Readonly<{ dispatch: ActionDispatch }>) {
 export function ActionMonitoringPanel({
   siteId,
   subscribe,
+  subscribeConcerns,
   siteSwitcher,
 }: Readonly<{
   siteId: string;
   subscribe?: typeof subscribeToActionStatus;
+  subscribeConcerns?: typeof subscribeToConcerns;
   siteSwitcher?: ReactNode;
 }>) {
   const { dispatches, counts, connectionState } = useActionStatusStream(siteId, subscribe);
+  const concernStream = useConcernStream(siteId, subscribeConcerns);
 
   if (connectionState === "connecting" && counts === null)
     return (
@@ -102,6 +108,7 @@ export function ActionMonitoringPanel({
   return (
     <AppShell title={SHELL_TITLE} subtitle={SHELL_SUBTITLE} siteSwitcher={siteSwitcher}>
       <section className="monitoring-panel" aria-label="Action dispatch monitoring">
+        <UrgentConcernSection {...concernStream} />
         <div className="monitoring-panel__header">
           <output
             className={`monitoring-panel__badge monitoring-panel__badge--${connectionState}`}

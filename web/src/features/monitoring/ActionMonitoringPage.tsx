@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SitePicker } from "@/components/SitePicker";
 import { useSelectedSite } from "@/site/useSelectedSite";
 import { type subscribeToActionStatus } from "@/api/actionStatusStream";
+import { type subscribeToConcerns } from "@/api/concernStream";
 import { ActionMonitoringPanel } from "./ActionMonitoringPanel";
 
 /**
@@ -12,7 +13,11 @@ import { ActionMonitoringPanel } from "./ActionMonitoringPanel";
  */
 export function ActionMonitoringPage({
   subscribe,
-}: { subscribe?: typeof subscribeToActionStatus } = {}) {
+  subscribeConcerns,
+}: {
+  subscribe?: typeof subscribeToActionStatus;
+  subscribeConcerns?: typeof subscribeToConcerns;
+} = {}) {
   const { siteId } = useSelectedSite();
 
   if (!siteId)
@@ -26,6 +31,11 @@ export function ActionMonitoringPage({
     );
 
   return (
-    <ActionMonitoringPanel siteId={siteId} subscribe={subscribe} siteSwitcher={<SitePicker />} />
+    <ActionMonitoringPanel
+      siteId={siteId}
+      subscribe={subscribe}
+      subscribeConcerns={subscribeConcerns}
+      siteSwitcher={<SitePicker />}
+    />
   );
 }

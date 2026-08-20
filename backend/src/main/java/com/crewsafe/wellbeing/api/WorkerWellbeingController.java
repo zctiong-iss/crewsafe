@@ -62,7 +62,7 @@ public class WorkerWellbeingController {
     public record ConcernResponse(UUID id, UUID shiftId, UUID workerId, List<String> symptoms,
                                    String note, String status, Instant raisedAt,
                                    Instant acknowledgedAt) {
-        static ConcernResponse from(Concern concern) {
+        public static ConcernResponse from(Concern concern) {
             return new ConcernResponse(concern.getId(), concern.getShiftId(), concern.getWorkerId(),
                     concern.getSymptoms().stream().map(Enum::name).sorted().toList(),
                     concern.getNote(), concern.getStatus().name(), concern.getRaisedAt(),

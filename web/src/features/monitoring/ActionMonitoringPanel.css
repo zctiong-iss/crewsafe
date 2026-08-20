@@ -18,6 +18,77 @@
   color: var(--ink-secondary);
 }
 
+/* ---- Worker concerns ---------------------------------------------------- */
+.monitoring-concerns {
+  background-color: var(--band-high-wash);
+  border: 2px solid var(--band-high);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.monitoring-concerns__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.monitoring-concerns__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--text-lg);
+}
+.monitoring-concerns__title > span:first-child { color: var(--band-high); }
+.monitoring-concerns__tally {
+  margin-left: var(--space-1);
+  min-width: 1.5rem;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background-color: var(--band-high);
+  color: var(--surface);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+.monitoring-concerns__status {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+.monitoring-concerns__status--live { color: var(--status-ok); }
+.monitoring-concerns__status--degraded,
+.monitoring-concerns__status--connecting { color: var(--status-waiting); }
+.monitoring-concerns__status--closed { color: var(--status-none); }
+.monitoring-concerns__degraded,
+.monitoring-concerns__empty { margin: 0; font-size: var(--text-sm); color: var(--ink-secondary); }
+.monitoring-concerns__degraded { font-weight: var(--weight-medium); }
+.monitoring-concerns__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.monitoring-concern {
+  border: 1px solid var(--band-high);
+  border-radius: var(--radius-sm);
+  background-color: var(--surface);
+  padding: var(--space-3);
+}
+.monitoring-concern__head { display: flex; justify-content: space-between; gap: var(--space-2); }
+.monitoring-concern__head span,
+.monitoring-concern__symptoms,
+.monitoring-concern__note { margin: var(--space-1) 0 0; font-size: var(--text-sm); }
+.monitoring-concern__head span { color: var(--ink-muted); font-size: var(--text-xs); }
+.monitoring-concern__symptoms { color: var(--ink); font-weight: var(--weight-semibold); }
+.monitoring-concern__note { color: var(--ink-secondary); font-style: italic; }
+
 .monitoring-panel__header {
   display: flex;
   align-items: center;
