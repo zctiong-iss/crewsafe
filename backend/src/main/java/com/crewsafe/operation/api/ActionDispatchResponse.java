@@ -13,6 +13,7 @@ import java.util.UUID;
  * Response DTO for action dispatch endpoints.
  *
  * @author Surya Kumaraguru
+ * @author Justin Chua
  */
 @Data
 @NoArgsConstructor
@@ -26,6 +27,13 @@ public class ActionDispatchResponse {
     private UUID workerId;
     private String actionCode;
     private String instruction;
+    /**
+     * Translatable key for {@link #instruction}; null means render the text verbatim.
+     *
+     * <p>Null for pre-V25 rows and for any code with no canned sentence. Clients must treat it
+     * as optional -- a worker seeing English is recoverable, a worker seeing a raw key is not.
+     */
+    private String instructionCode;
     private Instant startTime;
     private Instant endTime;
     private String status;
@@ -43,6 +51,7 @@ public class ActionDispatchResponse {
                 .workerId(dispatch.getWorker().getId())
                 .actionCode(dispatch.getActionCode())
                 .instruction(dispatch.getInstruction())
+                .instructionCode(dispatch.getInstructionCode())
                 .startTime(dispatch.getStartTime())
                 .endTime(dispatch.getEndTime())
                 .status(dispatch.getStatus().name())

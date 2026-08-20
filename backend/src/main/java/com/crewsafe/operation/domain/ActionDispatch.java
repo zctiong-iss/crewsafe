@@ -17,6 +17,7 @@ import java.util.UUID;
  *
  * @author Surya Kumaraguru
  * @author Jemilin Beulah
+ * @author Justin Chua
  */
 @Entity
 @Table(name = "action_dispatch")
@@ -58,6 +59,17 @@ public class ActionDispatch {
 
     @Column(name = "instruction")
     private String instruction;
+
+    /**
+     * The key a client translates to render {@link #instruction} in the worker's own language.
+     *
+     * <p>Null for every row written before V25, and for any mitigation whose code has no canned
+     * sentence behind it. Null is not a failure -- it means "render the text verbatim", which is
+     * how dispatches behaved before this column existed. See
+     * {@code mitigation.domain.InstructionCatalogue}.
+     */
+    @Column(name = "instruction_code", length = 100)
+    private String instructionCode;
 
     @Column(name = "start_time")
     private Instant startTime;

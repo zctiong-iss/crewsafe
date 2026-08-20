@@ -108,6 +108,7 @@ class BedrockClient:
         temperature: float = 0.7,
         response_model: Optional[Type[BaseModel]] = None,
         extra_instructions: str = "",
+        prompt_override: Optional[str] = None,
     ) -> tuple[BaseModel, float, int, int]:
         """
         Invoke Bedrock with structured output constraint.
@@ -127,7 +128,11 @@ class BedrockClient:
             self.client = AnthropicBedrock(aws_region=self.region, max_retries=8)
 
         model = response_model or MitigationBatch
-        prompt = self._build_prompt(context)
+        # `prompt_override` replaces the heat-advisor framing entirely rather than appending
+        # to it. Translation is the caller that needs this: instructing a model to act as a
+        # safety advisor and then asking it only to restate someone else's sentence invites it
+        # to improve the advice it was given, which is the one thing a translator must not do.
+        prompt = prompt_override if prompt_override is not None else self._build_prompt(context)
         if extra_instructions:
             prompt = f"{prompt}\n\n{extra_instructions}"
         schema = self._get_schema(model)

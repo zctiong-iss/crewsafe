@@ -76,6 +76,7 @@ function dispatchItem(overrides: Partial<ActionDispatch> = {}): ActionDispatch {
     workerId: "w1",
     actionCode: "HYDRATE",
     instruction: "Drink 500ml of water",
+    instructionCode: null,
     startTime: null,
     endTime: null,
     status: "PENDING",

@@ -36,6 +36,18 @@ jest.mock("@react-navigation/native", () => ({
 jest.mock("@/api/endpoints/recommendations", () => ({
   decideRecommendation: jest.fn(),
   fetchRecommendations: jest.fn().mockResolvedValue([]),
+  /*
+   * Resolves as a DEGRADED read, deliberately. These cases are about the structured summary
+   * being translated offline, and that must hold when the translation service gives nothing
+   * back — so the fixture models the unhappy path and the assertions still stand.
+   * `useTranslatedRationale` has its own suite for the translated case.
+   */
+  fetchRationale: jest.fn().mockResolvedValue({
+    recommendationId: "rec-1",
+    text: "",
+    locale: "en",
+    translated: false,
+  }),
 }));
 jest.mock("@/api/endpoints/shifts", () => ({ fetchShifts: jest.fn().mockResolvedValue([]) }));
 jest.mock("@/store/reducers/policySlice", () => ({

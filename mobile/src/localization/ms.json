@@ -544,7 +544,8 @@
     "rationaleCountsOnly_one": "{{count}} kawalan diwajibkan untuk syif ini, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
     "rationaleCountsOnly_other": "{{count}} kawalan diwajibkan untuk syif ini, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
     "rationaleFromPolicyEngine": "Pelan ini datang daripada peraturan polisi haba, bukan model AI. Kawalan dan rujukan peraturannya tidak terjejas.",
-    "modelWordingLabel": "Perkataan asal model AI (Bahasa Inggeris)"
+    "modelWordingLabel": "Perkataan asal model AI (Bahasa Inggeris)",
+    "modelWordingTranslatedLabel": "Perkataan asal model AI (diterjemahkan)"
   },
   "mitigationCategory": {
     "STOP_WORK": "Henti kerja",

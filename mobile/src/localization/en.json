@@ -544,7 +544,8 @@
     "rationaleCountsOnly_one": "{{count}} control is required for this shift, and {{advisory}} further precautions are suggested.",
     "rationaleCountsOnly_other": "{{count}} controls are required for this shift, and {{advisory}} further precautions are suggested.",
     "rationaleFromPolicyEngine": "This plan came from the heat policy rules, not the AI model. The controls and their rule references are unaffected.",
-    "modelWordingLabel": "The AI model's own wording (English)"
+    "modelWordingLabel": "The AI model's own wording (English)",
+    "modelWordingTranslatedLabel": "The AI model's own wording, translated"
   },
   "mitigationCategory": {
     "STOP_WORK": "Stop work",

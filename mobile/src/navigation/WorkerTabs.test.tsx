@@ -47,6 +47,7 @@ function dispatchWith(id: string): ActionDispatch {
     workerId: "w1",
     actionCode: "HYDRATE",
     instruction: null,
+    instructionCode: null,
     startTime: null,
     endTime: null,
     status: "PENDING",

@@ -8,6 +8,7 @@ import com.crewsafe.identity.domain.AppUser;
 import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.security.CrewSafeUserPrincipal;
 import com.crewsafe.mitigation.domain.ActionCatalogue;
+import com.crewsafe.mitigation.domain.InstructionCatalogue;
 import com.crewsafe.mitigation.domain.MitigationSuggestion;
 import com.crewsafe.operation.domain.ActionDispatch;
 import com.crewsafe.operation.domain.Approval;
@@ -42,6 +43,7 @@ import java.util.UUID;
  * {@code ActionDispatchService} only consumes approvals that already exist.
  *
  * @author Abu Bakar
+ * @author Justin Chua
  */
 @Service
 @RequiredArgsConstructor
@@ -283,10 +285,18 @@ public class RecommendationService {
         for (MitigationSuggestion mitigation : mitigations) {
             String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
                     .orElse(AI_MITIGATION_ACTION_CODE);
+            /*
+             * The mitigation's OWN code, not the dispatch code above. The dispatch code is
+             * collapsed for grouping -- both hydration forms arrive as HYDRATE -- and cannot
+             * choose between two sentences that say different things. See InstructionCatalogue.
+             */
+            String instructionCode = InstructionCatalogue
+                    .instructionCodeFor(mitigation.actionCode(), mitigation.ruleReference())
+                    .orElse(null);
 
             for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
                 actionDispatchService.dispatchAction(approval.getId(), workerId, dispatchCode,
-                        mitigation.action(), actingPrincipal);
+                        mitigation.action(), instructionCode, actingPrincipal);
             }
         }
     }
@@ -315,10 +325,19 @@ public class RecommendationService {
         for (MitigationSuggestion mitigation : mitigations) {
             String dispatchCode = ActionCatalogue.toDispatchCode(mitigation.actionCode())
                     .orElse(AI_MITIGATION_ACTION_CODE);
+            /*
+             * This is the path a lightning stop-work takes, and the one where the distinction
+             * matters most: the mitigation carries STOP_WORK like a heat stop-work does, and
+             * only its rule reference says the crew must shelter in a building rather than in
+             * shade. InstructionCatalogue recovers that; the dispatch code cannot.
+             */
+            String instructionCode = InstructionCatalogue
+                    .instructionCodeFor(mitigation.actionCode(), mitigation.ruleReference())
+                    .orElse(null);
 
             for (UUID workerId : targetsFor(mitigation, shiftWorkerIds)) {
                 actionDispatchService.autoDispatchAction(recommendation, actorId, workerId, dispatchCode,
-                        mitigation.action());
+                        mitigation.action(), instructionCode);
             }
         }
     }

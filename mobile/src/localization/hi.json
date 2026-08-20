@@ -543,7 +543,8 @@
     "rationaleCountsOnly_one": "इस शिफ़्ट के लिए {{count}} नियंत्रण अनिवार्य है, और {{advisory}} अन्य सावधानियाँ सुझाई गई हैं।",
     "rationaleCountsOnly_other": "इस शिफ़्ट के लिए {{count}} नियंत्रण अनिवार्य हैं, और {{advisory}} अन्य सावधानियाँ सुझाई गई हैं।",
     "rationaleFromPolicyEngine": "यह योजना ताप नीति नियमों से बनी है, AI मॉडल से नहीं। नियंत्रण और उनके नियम संदर्भ अप्रभावित हैं।",
-    "modelWordingLabel": "AI मॉडल के अपने शब्द (अंग्रेज़ी)"
+    "modelWordingLabel": "AI मॉडल के अपने शब्द (अंग्रेज़ी)",
+    "modelWordingTranslatedLabel": "AI मॉडल के अपने शब्द (अनूदित)"
   },
   "mitigationCategory": {
     "STOP_WORK": "काम रोकें",

@@ -48,6 +48,51 @@ export function fetchRecommendations(siteId: string, shiftId: string): Promise<R
   });
 }
 
+/** The shape `RecommendationController.RationaleResponse` returns. */
+export interface TranslatedRationale {
+  recommendationId: string;
+  text: string;
+  locale: string;
+  /** False means `text` is the stored English, not a translation. */
+  translated: boolean;
+}
+
+/**
+ * `GET …/recommendations/{recommendationId}/rationale?locale=xx`.
+ *
+ * A separate call rather than a field on the recommendation, deliberately. The list endpoint
+ * returns every plan for a shift, so widening the response would fire a translation for plans
+ * nobody opened — spending model calls on prose that is never read, on the path a supervisor
+ * uses during a heat event.
+ *
+ * Only the model's own paragraph needs this. The summary above it is rebuilt from structured
+ * evidence and is already translated offline, which is why this request never blocks a render.
+ *
+ * In mock mode there is no model and nothing to translate: the mock rationale is already
+ * resolved through i18n, so this reports it as untranslated English rather than pretending.
+ */
+export function fetchRationale(
+  siteId: string,
+  shiftId: string,
+  recommendationId: string,
+  locale: string,
+): Promise<TranslatedRationale> {
+  if (isMockApi()) {
+    return delay(() => ({
+      recommendationId,
+      text: "",
+      locale,
+      translated: false,
+    }));
+  }
+  return request<TranslatedRationale>({
+    url:
+      `/api/v1/sites/${siteId}/shifts/${shiftId}/recommendations/${recommendationId}` +
+      `/rationale?locale=${encodeURIComponent(locale)}`,
+    method: "GET",
+  });
+}
+
 export interface DecisionInput {
   decision: ApprovalDecision;
   /** Required by the server when the decision is REJECTED. */

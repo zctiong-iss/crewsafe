@@ -63,8 +63,23 @@ public class ActionDispatchService {
      * exactly this reason. Harmless for this method's other caller (the controller, which has
      * no ambient transaction to begin with).
      */
+    /**
+     * The manual-dispatch form, used by the controller. Records no instruction code, so the
+     * worker's device renders the supplied text verbatim.
+     *
+     * <p>That is the safe default here rather than an omission: a supervisor dispatching by hand
+     * types their own instruction, and resolving a canned sentence from the action code would
+     * replace what they deliberately wrote with a generic one.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
+                                         @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
+        return dispatchAction(approvalId, workerId, actionCode, instruction, null, principal);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
+                                         String instructionCode,
                                          @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
         Approval approval = approvalRepository.findById(approvalId)
                 .orElseThrow(() -> new IllegalArgumentException("Approval not found: " + approvalId));
@@ -83,6 +98,7 @@ public class ActionDispatchService {
                 .worker(worker)
                 .actionCode(actionCode)
                 .instruction(instruction)
+                .instructionCode(instructionCode)
                 .status(ActionDispatch.ActionDispatchStatus.PENDING)
                 .dispatchedAt(Instant.now())
                 .build();
@@ -113,6 +129,12 @@ public class ActionDispatchService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActionDispatch autoDispatchAction(Recommendation recommendation, UUID actorId, UUID workerId,
                                               String actionCode, String instruction) {
+        return autoDispatchAction(recommendation, actorId, workerId, actionCode, instruction, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public ActionDispatch autoDispatchAction(Recommendation recommendation, UUID actorId, UUID workerId,
+                                              String actionCode, String instruction, String instructionCode) {
         AppUser worker = appUserRepository.findById(workerId)
                 .orElseThrow(() -> new IllegalArgumentException("Worker not found: " + workerId));
 
@@ -123,6 +145,7 @@ public class ActionDispatchService {
                 .worker(worker)
                 .actionCode(actionCode)
                 .instruction(instruction)
+                .instructionCode(instructionCode)
                 .status(ActionDispatch.ActionDispatchStatus.PENDING)
                 .dispatchedAt(Instant.now())
                 .build();
