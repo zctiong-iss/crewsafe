@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Shift, Intensity } from "@/api/shifts";
 import { formatShiftRange } from "./formatShiftRange";
 import { Link } from "react-router-dom";
+import { generateRecommendation } from "@/api/approvals";
+import { ApiError, messageFor } from "@/api/errors";
 
 
 const STATUS_LABEL: Record<Shift["status"], string> = {
@@ -17,6 +19,12 @@ function IntensityPill({ intensity }: Readonly<{ intensity: Intensity }>) {
   const label = intensity.charAt(0) + intensity.slice(1).toLowerCase();
   return <span className={`pill pill--intensity pill--intensity-${intensity.toLowerCase()}`}>{label}</span>;
 }
+
+type DraftPlan =
+  | { status: "idle" }
+  | { status: "generating" }
+  | { status: "generated"; recommendationId: string }
+  | { status: "error"; message: string };
 
 export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: Readonly<{
   shift: Shift;
@@ -37,6 +45,16 @@ export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewSc
   const editable =
     (shift.status === "PLANNED" || shift.status === "ACTIVE") && new Date(shift.endsAt) > new Date();
 
+  const [draftPlan, setDraftPlan] = useState<DraftPlan>({ status: "idle" });
+  const onDraftPlan = () => {
+    setDraftPlan({ status: "generating" });
+    generateRecommendation(shift.siteId, shift.id)
+      .then((recommendation) => setDraftPlan({ status: "generated", recommendationId: recommendation.id }))
+      .catch((error: unknown) => {
+        const apiError = error instanceof ApiError ? error : new ApiError("server", "Unknown", null, null);
+        setDraftPlan({ status: "error", message: messageFor(apiError) });
+      });
+  };
 
   const crew = useMemo(
     () => (crewScope === "self"
@@ -81,8 +99,29 @@ useEffect(() => {
                 Close-out summary
               </Link>
             )}
+            {canManage && (
+              <button
+                type="button"
+                className="shift-card__draft-plan"
+                disabled={draftPlan.status === "generating"}
+                onClick={onDraftPlan}
+              >
+                {draftPlan.status === "generating" ? "Drafting…" : "Draft Plan"}
+              </button>
+            )}
         </div>
       </header>
+
+      {draftPlan.status === "generated" && (
+        <p className="shift-card__draft-plan-note" role="status">
+          Plan drafted — <Link to="/approvals">review it in Approvals</Link>.
+        </p>
+      )}
+      {draftPlan.status === "error" && (
+        <p className="shift-card__draft-plan-note shift-card__draft-plan-note--error" role="alert">
+          {draftPlan.message}
+        </p>
+      )}
 
       {count > 0 && (
         <button
