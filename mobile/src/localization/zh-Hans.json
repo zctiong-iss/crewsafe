@@ -533,7 +533,15 @@
     "autoDispatchedNotice": "此停工指令已自动发送给工人 — 无需批准。",
     "supersededNotice": "现场条件已变化，此计划已被新计划取代。无需在此做出决定。",
     "noModelNotice": "AI 模型不可用。高温政策与必需措施仍然适用。",
-    "requiredCannotRemove": "高温规则要求此项，无法删除。"
+    "requiredCannotRemove": "高温规则要求此项，无法删除。",
+    "rationaleReading_one": "湿球黑球温度为 {{wbgt}}°C，{{band}}，依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleReading_other": "湿球黑球温度为 {{wbgt}}°C，{{band}}，依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleNoReading_one": "暂无湿球黑球温度读数，仅依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleNoReading_other": "暂无湿球黑球温度读数，仅依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleCountsOnly_one": "本班次需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleCountsOnly_other": "本班次需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleFromPolicyEngine": "此方案由高温政策规则生成，未使用 AI 模型。措施及其规则依据不受影响。",
+    "modelWordingLabel": "AI 模型的原始表述（英文）"
   },
   "mitigationCategory": {
     "STOP_WORK": "停止作业",

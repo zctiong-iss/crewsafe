@@ -445,6 +445,45 @@ export type RecommendationStatus =
  */
 export const DETERMINISTIC_FALLBACK_MODEL = "deterministic-fallback";
 
+/**
+ * What the plan was drafted against, as structured data rather than prose (SCRUM-118).
+ *
+ * ── WHY THE CLIENT NEEDS THIS AND NOT JUST `rationale` ──────────────────────────────────
+ * `RecommendationResponse` has carried this since SCRUM-118 and mobile never declared it, so
+ * every field below arrived in the payload and was dropped. That was survivable while the
+ * server's English `rationale` string was the only thing rendered — and it is exactly why the
+ * rationale could not be translated: i18next cannot do anything with a finished sentence.
+ *
+ * These are the inputs that sentence was assembled from, which is what makes a translated
+ * summary possible. Same reasoning as `Mitigation.actionCode`, which is why mitigation text
+ * already renders in seven languages while the paragraph above it did not.
+ *
+ * ── EVERY FIELD IS NULLABLE, MATCHING THE SERVER ────────────────────────────────────────
+ * A site with no observation legitimately has no `observedWbgt`, and §7.1's degrade-not-fail
+ * rule makes a missing forecast an ordinary outcome rather than a failure. A non-null type
+ * here would be a lie that renders "undefined°C" on the first site without a reading.
+ */
+export interface RecommendationEvidence {
+  /** WBGT at draft time, °C. Null when no observation existed for the site. */
+  observedWbgt: number | null;
+  /**
+   * 30-minute WBGT forecast at draft time, °C.
+   *
+   * Equal to `observedWbgt` when the persistence baseline was used — a new site, a stale or
+   * simulated last reading, or an unreachable ml-service. So equality is not by itself
+   * evidence of anything; compare `forecastBand` against `currentBand` to tell them apart.
+   */
+  forecastWbgt30m: number | null;
+  /** Band for `observedWbgt`, classified server-side (§12.2, FR-15). Never derived here. */
+  currentBand: WbgtBand | null;
+  /** Band for `forecastWbgt30m`. Null when no forecast was available (§7.1). */
+  forecastBand: WbgtBand | null;
+  /** Which NEA station the reading came from. */
+  stationId: string | null;
+  /** Lightning state at draft time — the reason an AUTO_DISPATCHED plan skipped approval. */
+  lightningState: LightningRiskState | null;
+}
+
 export interface Recommendation {
   id: string;
   shiftId: string;
@@ -470,6 +509,14 @@ export interface Recommendation {
    * the same claim as "a template wrote this".
    */
   modelVersion: string | null;
+  /**
+   * The structured inputs behind `rationale`.
+   *
+   * Optional because a backend predating SCRUM-118 omits it, and because the client must
+   * render something sensible either way — see `planRationale.ts`, which degrades to a
+   * shorter sentence rather than to placeholder text.
+   */
+  evidence?: RecommendationEvidence | null;
   /**
    * Everyone this plan's mitigations name, resolved server-side.
    *
