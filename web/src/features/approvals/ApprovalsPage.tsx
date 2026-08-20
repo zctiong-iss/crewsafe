@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
+import { useCurrentUser } from "@/auth/useAuth";
 import { ApiError, messageFor } from "@/api/errors";
 import { fetchAccessibleSites } from "@/api/identity";
 import { fetchSiteShifts, type Shift } from "@/api/shifts";
@@ -43,6 +44,13 @@ async function loadPendingReviews(): Promise<PendingItem[]> {
 
 export function ApprovalsPage() {
   const [load, setLoad] = useState<Load>({ status: "loading" });
+
+  // Who may act on a plan, computed once for the whole queue. Same predicate as the mobile
+  // detail screen (RecommendationDetailScreen: SUPERVISOR || ADMIN) so the two clients agree on
+  // one rule — a safety manager reads the queue read-only. ADMIN never reaches this route on the
+  // web (see routeAccess), but the predicate is kept identical to mobile's on purpose.
+  const { role } = useCurrentUser();
+  const canDecide = role === "SUPERVISOR" || role === "ADMIN";
 
   useEffect(() => {
     let active = true;
@@ -87,6 +95,7 @@ export function ApprovalsPage() {
               siteId={item.siteId}
               siteName={item.siteName}
               shiftLabel={formatShiftRange(item.shift.startsAt, item.shift.endsAt)}
+              canDecide={canDecide}
               onDecided={(updated) => removeItem(updated.id)}
             />
           ))}

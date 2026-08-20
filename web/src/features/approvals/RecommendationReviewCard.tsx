@@ -17,12 +17,17 @@ export function RecommendationReviewCard({
   siteId,
   siteName,
   shiftLabel,
+  canDecide,
   onDecided,
 }: Readonly<{
   recommendation: Recommendation;
   siteId: string;
   siteName: string;
   shiftLabel: string;
+  // Whether the signed-in role may act on this plan. A safety manager reads the queue but
+  // cannot decide on it — same rule as the mobile detail screen, where the real gate is the
+  // backend refusing the write and this is the matching UI so no button offers a 403.
+  canDecide: boolean;
   onDecided: (updated: Recommendation) => void;
 }>) {
   const [panel, setPanel] = useState<Panel>("none");
@@ -91,7 +96,13 @@ export function RecommendationReviewCard({
       </article>
 
       {/* Decision controls: below the card, outside its border, aligned to its left edge. The
-          Reject / Edit forms open here too, so a control and the form it opens stay together. */}
+          Reject / Edit forms open here too, so a control and the form it opens stay together.
+
+          A safety manager sees the plan but not the controls — a plain read-only notice in their
+          place, said once rather than shown as three buttons that would each answer 403. */}
+      {!canDecide ? (
+        <p className="approvals__readonly">You can read this plan but not decide on it.</p>
+      ) : (
       <div className="approvals__controls">
         {error && <p className="approvals__error" role="alert">{error}</p>}
 
@@ -149,6 +160,7 @@ export function RecommendationReviewCard({
 
         {busy && <output className="approvals__busy">Saving decision…</output>}
       </div>
+      )}
     </div>
   );
 }
