@@ -106,8 +106,8 @@ export const handlers = [
       {
         id: "shift-1",
         siteId: params.siteId,
-        startsAt: "2026-08-10T00:00:00Z",   // 08:00 SGT 10 Aug → renders "10 Aug"
-        endsAt: "2026-08-10T08:00:00Z",
+        startsAt: "2030-08-10T00:00:00Z",   // 08:00 SGT 10 Aug → renders "10 Aug"
+        endsAt: "2030-08-10T08:00:00Z",
         status: "PLANNED",
         assignments: [
           {

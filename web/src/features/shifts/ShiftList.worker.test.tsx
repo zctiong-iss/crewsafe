@@ -67,8 +67,8 @@ function twoShiftsOneOfThemMine() {
         {
           id: "shift-mine",
           siteId: "site-1",
-          startsAt: "2026-08-10T00:00:00Z",
-          endsAt: "2026-08-10T08:00:00Z",
+          startsAt: "2030-08-10T00:00:00Z",
+          endsAt: "2030-08-10T08:00:00Z",
           status: "PLANNED",
           assignments: [
             { id: "a-mine", workerId: WORKER_ONE, intensity: "MODERATE", taskName: "Grass Cutting", acclimatisationDay: 2 },
@@ -78,8 +78,8 @@ function twoShiftsOneOfThemMine() {
         {
           id: "shift-theirs",
           siteId: "site-1",
-          startsAt: "2026-08-11T00:00:00Z",
-          endsAt: "2026-08-11T08:00:00Z",
+          startsAt: "2030-08-11T00:00:00Z",
+          endsAt: "2030-08-11T08:00:00Z",
           status: "PLANNED",
           assignments: [
             { id: "a-theirs", workerId: WORKER_TWO, intensity: "LIGHT", taskName: "Signage", acclimatisationDay: 3 },
@@ -190,8 +190,8 @@ describe("ShiftList as a worker", () => {
           {
             id: "shift-theirs",
             siteId: "site-1",
-            startsAt: "2026-08-11T00:00:00Z",
-            endsAt: "2026-08-11T08:00:00Z",
+            startsAt: "2030-08-11T00:00:00Z",
+            endsAt: "2030-08-11T08:00:00Z",
             status: "PLANNED",
             assignments: [
               { id: "a-theirs", workerId: WORKER_TWO, intensity: "LIGHT", taskName: "Signage", acclimatisationDay: 3 },

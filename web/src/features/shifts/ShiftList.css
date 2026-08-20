@@ -18,6 +18,30 @@
 }
 .shift-list__create:hover { background: var(--action-hover); }
 
+.shift-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.shift-filter__tab {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+.shift-filter__tab--active {
+  background: var(--action);
+  border-color: var(--action);
+  color: var(--action-ink);
+}
+.shift-filter__tab:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+
 .shift-card {
   padding: var(--space-4);
   display: flex;
@@ -30,6 +54,7 @@
 .shift-card.shift-card--active  { border-left: 8px solid var(--status-ok); background: var(--status-ok-wash); }
 .shift-card.shift-card--closed  { border-left: 8px solid var(--status-none); }
 .shift-card.shift-card--cancelled { border-left: 8px solid var(--status-none); }
+.shift-card.shift-card--ended { border-left: 8px solid var(--status-none); }
 
 .shift-card__summary {
   display: flex;
@@ -143,6 +168,7 @@
 .pill--active  { background: var(--status-ok-wash);      color: var(--status-ok); }
 .pill--closed  { background: var(--status-none-wash);    color: var(--status-none); }
 .pill--cancelled { background: var(--status-none-wash); color: var(--status-none); text-decoration: line-through; }
+.pill--ended { background: var(--status-none-wash); color: var(--status-none); }
 
 /* Assigned to Current Worker: Cobalt wash */
 .pill--assigned {

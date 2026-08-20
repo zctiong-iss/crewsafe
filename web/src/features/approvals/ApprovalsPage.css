@@ -59,45 +59,85 @@
   border-radius: var(--radius);
 }
 .approvals__rationale-text { margin: 0; color: var(--ink-secondary); }
+.approvals__rationale-text--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.approvals__disclosure,
+.mitigation-row__disclosure {
+  margin-top: var(--space-2);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font: inherit;
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.approvals__disclosure:focus-visible,
+.mitigation-row__disclosure:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
 
 /* Two aligned columns: every origin pill lines up in the left column (sized to the widest,
    MANDATORY), every action pill in the right — so all rows read as a clean grid. The <li>s stay
    real list items (a11y) and adopt the parent's two column tracks via subgrid, which is what
    keeps the columns aligned across every row. Row/column gaps give equal margin around each pill. */
 .approvals__mitigations {
-  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+.approvals__mitigation-groups { display: grid; gap: var(--space-4); }
+.approvals__mitigation-group { display: grid; gap: var(--space-2); }
+.approvals__mitigation-category {
   margin: 0;
-  padding: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+.mitigation-row {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+.mitigation-row__summary { display: grid; gap: var(--space-2); }
+.mitigation-row__title-row { display: flex; flex-wrap: wrap; align-items: start; gap: var(--space-2); }
+.mitigation-row__action { flex: 1 1 16rem; margin: 0; color: var(--ink); font-weight: var(--weight-medium); }
+.mitigation-row__timing { margin: 0; color: var(--ink-secondary); font-size: var(--text-sm); }
+.mitigation-row__chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.mitigation-row__detail {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  row-gap: var(--space-2);
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-sm);
 }
-.approvals__mitigation {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: subgrid;
-  align-items: start;    /* origin pill top-aligns with the action's first line */
-  column-gap: var(--space-3);
+.mitigation-row__detail dt { color: var(--ink-muted); font-weight: var(--weight-semibold); }
+.mitigation-row__detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-secondary);
+}
+@media (max-width: 767px) {
+  .mitigation-row__detail { grid-template-columns: 1fr; gap: var(--space-1); }
+  .mitigation-row__detail dd { margin-bottom: var(--space-2); }
 }
 
-/* Equal, comfortable padding on both pills in a row (overrides the base .pill's tight padding). */
-.approvals__mitigation .pill {
-  padding: var(--space-2) var(--space-3);
+/* Legacy editor controls remain a separate, editable plan surface. */
+.mitigation-editor__table {
+  width: 100%;
+  border-collapse: collapse;
 }
-
-/* Origin pills — outlined attribute role (pill.css), toned per severity. Border follows the
-   text colour via currentColor, so setting `color` alone tints the whole pill. */
-.approvals__origin--mandatory { color: var(--band-high); }      /* danger red */
-.approvals__origin--advisory  { color: var(--signal-caution); } /* caution amber (AA as text) */
-
-/* Action chip — neutral entity fill, but it holds a full sentence, so it must wrap and read
-   left-to-right rather than stay on the base .pill's single nowrap line. */
-.approvals__mitigation .approvals__action {
-  white-space: normal;
+.mitigation-editor__table th {
   text-align: left;
   font-size: var(--text-sm);
-  font-weight: var(--weight-regular);
-  line-height: 1.5;
+  color: var(--ink-muted);
 }
 
 /* Buttons in a left-aligned row, spaced by the same --space-4 as everything else. */
@@ -151,8 +191,6 @@
    sized like the busy line — it is a quiet statement of fact, not an action or an error. */
 .approvals__readonly { color: var(--ink-muted); font-size: var(--text-sm); margin: 0; }
 
-.mitigation-editor__table { width: 100%; border-collapse: collapse; }
-.mitigation-editor__table th { text-align: left; font-size: var(--text-xs); color: var(--ink-muted); }
 .mitigation-editor__table input { width: 100%; }
 .mitigation-editor__add { margin-top: var(--space-2); }
 

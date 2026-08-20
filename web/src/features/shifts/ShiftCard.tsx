@@ -5,13 +5,14 @@ import { formatShiftRange } from "./formatShiftRange";
 import { Link } from "react-router-dom";
 import { generateRecommendation } from "@/api/approvals";
 import { ApiError, messageFor } from "@/api/errors";
+import { displayStatus, type DisplayStatus } from "./shiftDisplayStatus";
 
 
-const STATUS_LABEL: Record<Shift["status"], string> = {
-  PLANNED: "Planned", ACTIVE: "Active", CLOSED: "Closed", CANCELLED: "Cancelled",
+const STATUS_LABEL: Record<DisplayStatus, string> = {
+  PLANNED: "Planned", ACTIVE: "Active", ENDED: "Ended", CLOSED: "Closed", CANCELLED: "Cancelled",
 };
 
-function StatusPill({ status }: Readonly<{ status: Shift["status"] }>) {
+function StatusPill({ status }: Readonly<{ status: DisplayStatus }>) {
   return <span className={`pill pill--status pill--${status.toLowerCase()}`}>{STATUS_LABEL[status]}</span>;
 }
 
@@ -28,7 +29,7 @@ type DraftPlan =
 
 const GENERATING = "generating" as const;
 
-export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false }: Readonly<{
+export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewScope = "all", canManage = false, now = new Date() }: Readonly<{
   shift: Shift;
   workerNames: Map<string, string>;
   siteNames: Map<string, string>;
@@ -36,16 +37,18 @@ export function ShiftCard({ shift, workerNames, siteNames, currentUserId, crewSc
   crewScope?: "all" | "self";
   /** Show the Edit entry point. Management-only; the route is MANAGEMENT_ROLES-guarded. */
   canManage?: boolean;
+  now?: Date;
 }>) {
 
   const isAssigned = Boolean(currentUserId && shift.assignments.some((a) => a.workerId === currentUserId));
   const [open, setOpen] = useState(isAssigned);
   const count = shift.assignments.length;   // the headcount stays whole even when the table does not
   const siteName = siteNames.get(shift.siteId);
+  const status = displayStatus(shift, now);
   // Matches the backend's assertEditable (SCRUM-266): a CLOSED/CANCELLED shift, OR one whose end time
   // has already passed, cannot be edited — so don't offer Edit for it (every mutation would 400).
   const editable =
-    (shift.status === "PLANNED" || shift.status === "ACTIVE") && new Date(shift.endsAt) > new Date();
+    (shift.status === "PLANNED" || shift.status === "ACTIVE") && new Date(shift.endsAt) > now;
 
   const [draftPlan, setDraftPlan] = useState<DraftPlan>({ status: "idle" });
   const onDraftPlan = () => {
@@ -78,7 +81,7 @@ useEffect(() => {
 }, [shift.id, crew, workerNames]);
 
   return (
-   <article className={`shift-card shift-card--${shift.status.toLowerCase()}${open ? " shift-card--open" : ""} card`}>
+   <article className={`shift-card shift-card--${status.toLowerCase()}${open ? " shift-card--open" : ""} card`}>
       <div className="shift-card__summary">
       <header className="shift-card__header">
         <div>
@@ -88,7 +91,7 @@ useEffect(() => {
         </div>
             <div className="shift-card__pills">
             {isAssigned && <span className="pill pill--assigned">Your Shift</span>}
-            <StatusPill status={shift.status} />
+            <StatusPill status={status} />
             {canManage && editable && (
               <Link className="shift-card__edit" to={`/shifts/${shift.id}/edit`} state={{ shift }}>
                 Edit
@@ -101,7 +104,7 @@ useEffect(() => {
                 Close-out summary
               </Link>
             )}
-            {canManage && (
+            {canManage && editable && (
               <button
                 type="button"
                 className="shift-card__draft-plan"

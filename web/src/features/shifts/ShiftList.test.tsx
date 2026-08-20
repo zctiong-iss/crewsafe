@@ -1,6 +1,6 @@
 /** @author Tang Chee Seng (with assistance from Claude & ChatGPT) */
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { http, HttpResponse } from "msw";
@@ -29,6 +29,83 @@ describe("ShiftList", () => {
     renderApp();
     expect(await screen.findByText(/10 Aug/)).toBeInTheDocument();
     expect(screen.getByText("1 worker")).toBeInTheDocument();
+  });
+
+  it("filters displayed statuses and orders shifts within each status", async () => {
+    server.use(
+      http.get("*/api/v1/sites/:siteId/shifts", () =>
+        HttpResponse.json([
+          { id: "planned-late", siteId: "site-1", startsAt: "2030-08-22T00:00:00Z", endsAt: "2030-08-22T08:00:00Z", status: "PLANNED", assignments: [] },
+          { id: "cancelled-old", siteId: "site-1", startsAt: "2020-08-05T00:00:00Z", endsAt: "2020-08-05T08:00:00Z", status: "CANCELLED", assignments: [] },
+          { id: "ended-old", siteId: "site-1", startsAt: "2020-08-01T00:00:00Z", endsAt: "2020-08-01T08:00:00Z", status: "PLANNED", assignments: [] },
+          { id: "closed-recent", siteId: "site-1", startsAt: "2020-08-04T00:00:00Z", endsAt: "2020-08-04T08:00:00Z", status: "CLOSED", assignments: [] },
+          { id: "active", siteId: "site-1", startsAt: "2020-08-20T00:00:00Z", endsAt: "2030-08-20T08:00:00Z", status: "PLANNED", assignments: [] },
+          { id: "planned-early", siteId: "site-1", startsAt: "2030-08-21T00:00:00Z", endsAt: "2030-08-21T08:00:00Z", status: "PLANNED", assignments: [] },
+          { id: "cancelled-recent", siteId: "site-1", startsAt: "2020-08-06T00:00:00Z", endsAt: "2020-08-06T08:00:00Z", status: "CANCELLED", assignments: [] },
+          { id: "ended-recent", siteId: "site-1", startsAt: "2020-08-02T00:00:00Z", endsAt: "2020-08-02T08:00:00Z", status: "PLANNED", assignments: [] },
+          { id: "closed-old", siteId: "site-1", startsAt: "2020-08-03T00:00:00Z", endsAt: "2020-08-03T08:00:00Z", status: "CLOSED", assignments: [] },
+        ]),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderApp();
+
+    const visibleStartDates = () => Array.from(
+      screen.getByRole("region", { name: "Shifts" }).querySelectorAll(".shift-card__range"),
+    ).map((range) => range.textContent?.match(/\d{1,2} Aug 20\d{2}/)?.[0]);
+
+    const currentList = await screen.findByRole("region", { name: "Shifts" });
+    expect(within(currentList).getByText("Active")).toBeInTheDocument();
+    expect(within(currentList).getAllByText("Planned")).toHaveLength(2);
+    expect(within(currentList).queryByText("Ended")).not.toBeInTheDocument();
+    expect(within(currentList).queryByText("Closed")).not.toBeInTheDocument();
+    expect(visibleStartDates()).toEqual(["20 Aug 2020", "21 Aug 2030", "22 Aug 2030"]);
+
+    await user.click(screen.getByRole("button", { name: "All" }));
+
+    const allShifts = screen.getByRole("region", { name: "Shifts" });
+    expect(within(allShifts).getAllByText("Ended")).toHaveLength(2);
+    expect(within(allShifts).getAllByText("Closed")).toHaveLength(2);
+    expect(visibleStartDates()).toEqual([
+      "20 Aug 2020", "21 Aug 2030", "22 Aug 2030",
+      "6 Aug 2020", "5 Aug 2020",
+      "4 Aug 2020", "3 Aug 2020",
+      "2 Aug 2020", "1 Aug 2020",
+    ]);
+
+    await user.click(screen.getByRole("button", { name: "Live" }));
+    expect(visibleStartDates()).toEqual(["20 Aug 2020"]);
+
+    await user.click(screen.getByRole("button", { name: "Planned" }));
+    expect(visibleStartDates()).toEqual(["21 Aug 2030", "22 Aug 2030"]);
+
+    await user.click(screen.getByRole("button", { name: "Ended" }));
+    expect(visibleStartDates()).toEqual(["2 Aug 2020", "1 Aug 2020"]);
+
+    await user.click(screen.getByRole("button", { name: "Closed" }));
+    expect(visibleStartDates()).toEqual(["4 Aug 2020", "3 Aug 2020"]);
+
+    await user.click(screen.getByRole("button", { name: "Cancelled" }));
+    expect(visibleStartDates()).toEqual(["6 Aug 2020", "5 Aug 2020"]);
+  });
+
+  it("does not offer Draft Plan for an ended shift", async () => {
+    server.use(
+      http.get("*/api/v1/sites/:siteId/shifts", () =>
+        HttpResponse.json([
+          { id: "ended", siteId: "site-1", startsAt: "2020-08-19T08:00:00Z", endsAt: "2020-08-19T16:00:00Z", status: "PLANNED", assignments: [] },
+        ]),
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(await screen.findByRole("button", { name: "All" }));
+
+    const endedCard = screen.getByText(/19 Aug 2020/).closest("article");
+    expect(endedCard).not.toBeNull();
+    expect(within(endedCard!).queryByRole("button", { name: "Draft Plan" })).not.toBeInTheDocument();
   });
 
   it("has no accessibility violations", async () => {
@@ -65,7 +142,7 @@ it("lists shifts from every site the user belongs to", async () => {
     http.get("*/api/v1/sites/:siteId/shifts", ({ params }) =>
       HttpResponse.json([
         { id: `shift-${params.siteId}`, siteId: params.siteId,
-          startsAt: "2026-08-10T00:00:00Z", endsAt: "2026-08-10T08:00:00Z",
+          startsAt: "2030-08-10T00:00:00Z", endsAt: "2030-08-10T08:00:00Z",
           status: "PLANNED", assignments: [] },
       ]),
     ),
@@ -99,8 +176,8 @@ it("lists shifts from every site the user belongs to", async () => {
           {
             id: "shift-sample-missing-worker",
             siteId: "site-1",
-            startsAt: "2026-08-10T00:00:00Z",
-            endsAt: "2026-08-10T08:00:00Z",
+            startsAt: "2030-08-10T00:00:00Z",
+            endsAt: "2030-08-10T08:00:00Z",
             status: "PLANNED",
             assignments: [
               { id: "a-sample-missing-worker", workerId: SAMPLE_MISSING_WORKER_ID, intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
@@ -132,8 +209,8 @@ it("lists shifts from every site the user belongs to", async () => {
           {
             id: "shift-production-sample-missing-worker",
             siteId: "site-1",
-            startsAt: "2026-08-10T00:00:00Z",
-            endsAt: "2026-08-10T08:00:00Z",
+            startsAt: "2030-08-10T00:00:00Z",
+            endsAt: "2030-08-10T08:00:00Z",
             status: "PLANNED",
             assignments: [
               { id: "a-production-sample-missing-worker", workerId: SAMPLE_MISSING_WORKER_ID, intensity: "HEAVY", taskName: "Formwork", acclimatisationDay: 1 },
@@ -160,8 +237,8 @@ it("lists shifts from every site the user belongs to", async () => {
           {
             id: "shift-crew",
             siteId: "site-1",
-            startsAt: "2026-08-10T00:00:00Z",
-            endsAt: "2026-08-10T08:00:00Z",
+            startsAt: "2030-08-10T00:00:00Z",
+            endsAt: "2030-08-10T08:00:00Z",
             status: "PLANNED",
             assignments: [
               { id: "a-1", workerId: "00000000-0000-4000-8000-000000000001", intensity: "MODERATE", taskName: "Grass Cutting", acclimatisationDay: 2 },
@@ -171,8 +248,8 @@ it("lists shifts from every site the user belongs to", async () => {
           {
             id: "shift-other",
             siteId: "site-1",
-            startsAt: "2026-08-11T00:00:00Z",
-            endsAt: "2026-08-11T08:00:00Z",
+            startsAt: "2030-08-11T00:00:00Z",
+            endsAt: "2030-08-11T08:00:00Z",
             status: "PLANNED",
             assignments: [
               { id: "a-3", workerId: "00000000-0000-4000-8000-000000000002", intensity: "LIGHT", taskName: "Signage", acclimatisationDay: 3 },

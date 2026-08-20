@@ -9,6 +9,7 @@ import { fetchSiteWorkers, type SiteWorker } from "@/api/workers";
 import { fetchAccessibleSites } from "@/api/identity";
 import { useCurrentUser } from "@/auth/useAuth";
 import { ShiftCard } from "./ShiftCard";
+import { displayStatus, type DisplayStatus } from "./shiftDisplayStatus";
 import "./ShiftList.css";
 
   type Load =
@@ -16,10 +17,51 @@ import "./ShiftList.css";
   | { status: "loaded"; shifts: Shift[]; workerNames: Map<string, string>; siteNames: Map<string, string> }
   | { status: "error"; message: string; requestId: string | null };
 
+type ShiftFilter = "CURRENT" | "ALL" | DisplayStatus;
+
+const FILTERS: ReadonlyArray<Readonly<{ value: ShiftFilter; label: string }>> = [
+  { value: "CURRENT", label: "Current" },
+  { value: "ALL", label: "All" },
+  { value: "ACTIVE", label: "Live" },
+  { value: "PLANNED", label: "Planned" },
+  { value: "ENDED", label: "Ended" },
+  { value: "CLOSED", label: "Closed" },
+  { value: "CANCELLED", label: "Cancelled" },
+];
+
+function matchesFilter(shift: Shift, filter: ShiftFilter, now: Date): boolean {
+  const status = displayStatus(shift, now);
+  if (filter === "ALL") return true;
+  if (filter === "CURRENT") return status === "PLANNED" || status === "ACTIVE";
+  return status === filter;
+}
+
+function sortShifts(shifts: Shift[], now: Date): Shift[] {
+  const sortRank: Record<DisplayStatus, number> = {
+    ACTIVE: 0,
+    PLANNED: 1,
+    ENDED: 2,
+    CLOSED: 2,
+    CANCELLED: 2,
+  };
+
+  return [...shifts].sort((left, right) => {
+    const leftStatus = displayStatus(left, now);
+    const rightStatus = displayStatus(right, now);
+    const byStatus = sortRank[leftStatus] - sortRank[rightStatus];
+    if (byStatus !== 0) return byStatus;
+
+    if (leftStatus === "PLANNED") return left.startsAt.localeCompare(right.startsAt);
+    if (leftStatus === "ACTIVE") return left.startsAt.localeCompare(right.startsAt);
+    return right.endsAt.localeCompare(left.endsAt);
+  });
+}
+
 // ShiftList.tsx — signature + effect (render body unchanged)
 export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
   const user = useCurrentUser();
   const [load, setLoad] = useState<Load>({ status: "loading" });
+  const [filter, setFilter] = useState<ShiftFilter>("CURRENT");
   const isWorker = user.role === "WORKER";
 
   useEffect(() => {
@@ -35,7 +77,7 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
     ])
       .then(([shiftsBySite, workersBySite, sites]) => {
         if (!active) return;
-        const all = shiftsBySite.flat().sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+        const all = shiftsBySite.flat();
         // A worker's board answers "where am I meant to be", not "who is on site today".
         const shifts = isWorker
           ? all.filter((s) => s.assignments.some((a) => a.workerId === user.id))
@@ -59,6 +101,10 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
   const createButton = !isWorker ? (
     <Link className="shift-list__create" to="/shifts/new">Create New Shift</Link>
   ) : null;
+  const now = new Date();
+  const filteredShifts = load.status === "loaded"
+    ? sortShifts(load.shifts.filter((shift) => matchesFilter(shift, filter, now)), now)
+    : [];
 
   return (
     <AppShell title={isWorker ? "My Shifts & Tasks" : "Shifts & Tasks"} actions={createButton}>
@@ -79,8 +125,28 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
       )}
 
       {load.status === "loaded" && load.shifts.length > 0 && (
-        <section className="shift-list" aria-label="Shifts">
-          {load.shifts.map((shift) => (
+        <>
+          <div className="shift-filter" role="group" aria-label="Filter shifts">
+            {FILTERS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`shift-filter__tab${filter === option.value ? " shift-filter__tab--active" : ""}`}
+                aria-pressed={filter === option.value}
+                onClick={() => setFilter(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {filteredShifts.length === 0 ? (
+            <EmptyState
+              headline={`No ${FILTERS.find((option) => option.value === filter)?.label.toLowerCase()} shifts`}
+              body="Try another filter to view other shifts."
+            />
+          ) : (
+          <section className="shift-list" aria-label="Shifts">
+          {filteredShifts.map((shift) => (
              <ShiftCard
                 key={shift.id}
                 shift={shift}
@@ -89,9 +155,12 @@ export function ShiftList({ siteIds }: Readonly<{ siteIds: string[] }>) {
                 currentUserId={user.id}
                 crewScope={isWorker ? "self" : "all"}
                 canManage={!isWorker}
+                now={now}
               />
           ))}
-        </section>
+          </section>
+          )}
+        </>
       )}
     </AppShell>
   );

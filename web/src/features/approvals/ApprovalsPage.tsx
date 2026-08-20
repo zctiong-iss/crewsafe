@@ -6,6 +6,7 @@ import { useCurrentUser } from "@/auth/useAuth";
 import { ApiError, messageFor } from "@/api/errors";
 import { fetchAccessibleSites } from "@/api/identity";
 import { fetchSiteShifts, type Shift } from "@/api/shifts";
+import { fetchSiteWorkers } from "@/api/workers";
 import { fetchShiftRecommendations, type Recommendation } from "@/api/approvals";
 import { formatShiftRange } from "@/features/shifts/formatShiftRange";
 import { RecommendationReviewCard } from "./RecommendationReviewCard";
@@ -17,6 +18,7 @@ interface PendingItem {
   siteId: string;
   siteName: string;
   shift: Shift;
+  workerNames: Map<string, string>;
 }
 
 interface ReviewData {
@@ -37,7 +39,8 @@ async function loadReviewData(): Promise<ReviewData> {
   const sites = await fetchAccessibleSites();
   const perSite = await Promise.all(
     sites.map(async (site) => {
-      const shifts = await fetchSiteShifts(site.id);
+      const [shifts, workers] = await Promise.all([fetchSiteShifts(site.id), fetchSiteWorkers(site.id)]);
+      const workerNames = new Map(workers.map((worker) => [worker.id, worker.displayName]));
       const perShift = await Promise.all(
         shifts.map(async (shift) => {
           const recs = await fetchShiftRecommendations(site.id, shift.id);
@@ -46,6 +49,7 @@ async function loadReviewData(): Promise<ReviewData> {
             siteId: site.id,
             siteName: site.name,
             shift,
+            workerNames,
           }));
         }),
       );
@@ -141,6 +145,7 @@ export function ApprovalsPage() {
               siteId={item.siteId}
               siteName={item.siteName}
               shiftLabel={formatShiftRange(item.shift.startsAt, item.shift.endsAt)}
+              workerNames={item.workerNames}
               canDecide={canDecide}
               onDecided={(updated) => removeItem(updated.id)}
             />
