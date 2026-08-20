@@ -10,10 +10,11 @@ import { fetchSiteWorkers } from "@/api/workers";
 import { fetchShiftRecommendations, type Recommendation } from "@/api/approvals";
 import { formatShiftRange } from "@/features/shifts/formatShiftRange";
 import { RecommendationReviewCard } from "./RecommendationReviewCard";
+import { PastShiftsList } from "./PastShiftsList";
 import { SupersededList, type SupersededItem } from "./SupersededList";
 import "./ApprovalsPage.css";
 
-interface PendingItem {
+export interface PendingItem {
   recommendation: Recommendation;
   siteId: string;
   siteName: string;
@@ -23,17 +24,23 @@ interface PendingItem {
 
 interface ReviewData {
   queue: PendingItem[];
+  pastShifts: PendingItem[];
   superseded: SupersededItem[];
 }
 
 type Load =
   | { status: "loading" }
-  | { status: "loaded"; queue: PendingItem[]; superseded: SupersededItem[] }
+  | { status: "loaded"; queue: PendingItem[]; pastShifts: PendingItem[]; superseded: SupersededItem[] }
   | { status: "error"; message: string; requestId: string | null };
 
 // Queue sort weight: an auto-dispatched stop-work floats above plans still awaiting a decision.
 const queueRank = (status: Recommendation["status"]): number =>
   status === "AUTO_DISPATCHED" ? 0 : 1;
+
+// A plan is "past" once the shift it covers has already ended — the decision is now backlog, not
+// current work. Kept as a client-side read of endsAt (already on every item) so no API change is needed.
+const hasShiftEnded = (shift: Shift, now: number = Date.now()): boolean =>
+  new Date(shift.endsAt).getTime() < now;
 
 async function loadReviewData(): Promise<ReviewData> {
   const sites = await fetchAccessibleSites();
@@ -61,7 +68,7 @@ async function loadReviewData(): Promise<ReviewData> {
   // The queue holds only what a supervisor must see now: a plan awaiting a decision, and an
   // auto-dispatched stop-work (no decision left to make, but the most urgent item on the screen).
   // APPROVED / REJECTED / DRAFT are dropped — nothing to act on.
-  const queue = all
+  const actionable = all
     .filter(
       (item) =>
         item.recommendation.status === "PENDING_APPROVAL" ||
@@ -70,11 +77,18 @@ async function loadReviewData(): Promise<ReviewData> {
     .sort((a, b) => {
       const byStatus =
         queueRank(a.recommendation.status) - queueRank(b.recommendation.status);
-      // Within a status, oldest-drafted first so the queue reads in the order plans arrived.
+      // Within a status, newest-drafted first: the freshest plan — drafted against the most recent
+      // conditions — sits on top, the way an inbox reads. (b before a = descending.)
       return byStatus !== 0
         ? byStatus
-        : a.recommendation.createdAt.localeCompare(b.recommendation.createdAt);
+        : b.recommendation.createdAt.localeCompare(a.recommendation.createdAt);
     });
+
+  // Split off plans whose shift has already ended: still actionable, but no longer current work, so
+  // they leave the top of the queue for a collapsed "Past shifts" section. Sort order is preserved
+  // within each half.
+  const queue = actionable.filter((item) => !hasShiftEnded(item.shift));
+  const pastShifts = actionable.filter((item) => hasShiftEnded(item.shift));
 
   // A superseded plan has nothing to decide, so it leaves the queue — but it recedes into a muted
   // note rather than vanishing, so a supervisor sees that conditions changed and replaced it.
@@ -86,7 +100,7 @@ async function loadReviewData(): Promise<ReviewData> {
       siteName: item.siteName,
     }));
 
-  return { queue, superseded };
+  return { queue, pastShifts, superseded };
 }
 
 export function ApprovalsPage() {
@@ -111,13 +125,15 @@ export function ApprovalsPage() {
     return () => { active = false; };
   }, []);
 
-  // Drop a decided recommendation locally
+  // Drop a decided recommendation locally — from whichever list it lived in (a past-shift plan can
+  // still be actioned inside its section, so clear it there too).
   function removeItem(recommendationId: string) {
     setLoad((current) =>
       current.status === "loaded"
         ? {
             ...current,
             queue: current.queue.filter((item) => item.recommendation.id !== recommendationId),
+            pastShifts: current.pastShifts.filter((item) => item.recommendation.id !== recommendationId),
           }
         : current,
     );
@@ -151,6 +167,14 @@ export function ApprovalsPage() {
             />
           ))}
         </section>
+      )}
+
+      {load.status === "loaded" && (
+        <PastShiftsList
+          items={load.pastShifts}
+          canDecide={canDecide}
+          onDecided={(updated) => removeItem(updated.id)}
+        />
       )}
 
       {load.status === "loaded" && <SupersededList items={load.superseded} />}

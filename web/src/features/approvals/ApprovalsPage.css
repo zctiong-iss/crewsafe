@@ -35,6 +35,15 @@
 .approvals__card-title { font-size: var(--text-lg); margin: 0; }
 .approvals__card-site { color: var(--ink-muted); font-size: var(--text-sm); margin: 0; }
 
+/* When the agent drafted this plan. A quiet provenance line under the site — muted and small so it
+   informs without competing with the shift-window title above it. Its own block below the site. */
+.approvals__card-drafted {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
 .approvals__evidence {
   display: flex;
   flex-wrap: wrap;
@@ -271,3 +280,24 @@
   gap: var(--space-1);
 }
 .approvals__superseded-item { margin: 0; }
+
+/* ---- Past shifts (ended, still actionable) ----------------------------- */
+/* Plans whose shift is over: collapsed by default so they clear the top of the queue, but holding the
+   full review cards so a supervisor can expand and clear the backlog. The summary reads as the same
+   muted eyebrow as "Recently superseded"; the open body reuses .approvals__list spacing. */
+.approvals__past { margin-top: var(--space-6); }
+.approvals__past-summary {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.approvals__past-summary:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.approvals__past-note {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
