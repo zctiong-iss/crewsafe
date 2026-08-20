@@ -192,9 +192,11 @@ export function CreateShiftForm({ sites }: Readonly<{ sites: Site[] }>) {
               <select id={`worker-${i}`} required value={row.workerId}
                 onChange={(e) => updateRow(i, { workerId: e.target.value })}>
                 <option value="">Select a worker</option>
-                {workersLoad.workers.map((w) => (
-                  <option key={w.id} value={w.id}>{w.displayName}</option>
-                ))}
+                {workersLoad.workers
+                  .filter((w) => w.id === row.workerId || !rows.some((r, j) => j !== i && r.workerId === w.id))
+                  .map((w) => (
+                    <option key={w.id} value={w.id}>{w.displayName}</option>
+                  ))}
               </select>
 
               <WorkIntensitySegmented
@@ -213,6 +215,11 @@ export function CreateShiftForm({ sites }: Readonly<{ sites: Site[] }>) {
               {errors[`assignments.${i}.acclimatisationDay`] && (
                 <p className="shift-form__error" role="alert">
                   {errors[`assignments.${i}.acclimatisationDay`]}
+                </p>
+              )}
+              {errors[`assignments.${i}.duplicate`] && (
+                <p className="shift-form__error" role="alert">
+                  {errors[`assignments.${i}.duplicate`]}
                 </p>
               )}
 
