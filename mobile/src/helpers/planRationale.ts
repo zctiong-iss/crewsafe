@@ -31,7 +31,12 @@
  *
  * @author Justin Chua
  */
-import type { Mitigation, Recommendation, RecommendationEvidence } from "@/types/domain";
+import type {
+  Mitigation,
+  PlanWorker,
+  Recommendation,
+  RecommendationEvidence,
+} from "@/types/domain";
 import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 
 /**
@@ -173,4 +178,24 @@ export function showsModelProse(
 ): boolean {
   if (!recommendation.rationale?.trim()) return false;
   return recommendation.modelVersion !== DETERMINISTIC_FALLBACK_MODEL;
+}
+
+/**
+ * Replaces worker ids in model-authored prose with names from the recommendation snapshot.
+ *
+ * The stored rationale remains untouched as evidence of what the model returned. Replacement is
+ * presentation-only and deliberately limited to ids the server resolved for this recommendation:
+ * an unrelated UUID may identify a shift, policy, or recommendation and must remain unchanged.
+ */
+export function humaniseWorkerReferences(
+  rationale: string,
+  workers: readonly PlanWorker[] | null | undefined,
+): string {
+  if (!workers?.length) return rationale;
+
+  return workers.reduce((text, worker) => {
+    const displayName = worker.displayName.trim();
+    if (!worker.id || !displayName) return text;
+    return text.split(worker.id).join(displayName);
+  }, rationale);
 }

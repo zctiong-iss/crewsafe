@@ -37,9 +37,18 @@ export type ApiErrorKind =
  * `ErrorCode.java`. Only codes this client actually branches on are listed; an unrecognised
  * one is not an error, it simply falls back to the status-derived message.
  */
-export type ApiErrorCode = "NO_ACTIVE_POLICY" | "NO_USABLE_WBGT";
+export type ApiErrorCode =
+  | "NO_ACTIVE_POLICY"
+  | "NO_USABLE_WBGT"
+  | "WORKER_HAS_OVERLAPPING_SHIFT"
+  | "SHIFT_NOT_EDITABLE";
 
-const KNOWN_ERROR_CODES = new Set(["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"]);
+const KNOWN_ERROR_CODES = new Set([
+  "NO_ACTIVE_POLICY",
+  "NO_USABLE_WBGT",
+  "WORKER_HAS_OVERLAPPING_SHIFT",
+  "SHIFT_NOT_EDITABLE",
+]);
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;

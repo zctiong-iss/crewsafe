@@ -757,6 +757,16 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.assignments.length()").value(1));
     }
 
+    @Test
+    void addingAWorkerToAnEndedShiftNamesItAsNotEditable() throws Exception {
+        String shiftId = createEndedShift();
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + shiftId + "/assignments",
+                        supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("SHIFT_NOT_EDITABLE"));
+    }
+
     /** Close is only valid once endsAt has passed — a shift cannot be closed early. */
     @Test
     void closingAShiftBeforeItHasEndedIsBadRequest() throws Exception {
@@ -1014,7 +1024,8 @@ class ShiftControllerTest extends AbstractIntegrationTest {
         postJson("/api/v1/sites/" + siteA.getId() + "/shifts/" + overlappingShiftId + "/assignments",
                         supervisorAToken, assignmentBody(workerA.getId(), null, "LIGHT", null))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Bad Request"));
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.code").value("WORKER_HAS_OVERLAPPING_SHIFT"));
     }
 
     @Test

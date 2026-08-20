@@ -3,6 +3,7 @@ package com.crewsafe.shift.service;
 import com.crewsafe.common.audit.AuditEventType;
 import com.crewsafe.common.audit.AuditService;
 import com.crewsafe.common.error.BadRequestException;
+import com.crewsafe.common.error.ErrorCode;
 import com.crewsafe.shift.domain.Intensity;
 import com.crewsafe.shift.domain.Shift;
 import com.crewsafe.shift.domain.ShiftAssignment;
@@ -111,10 +112,11 @@ public class ShiftService {
         Instant now = clock.instant();
 
         if (shift.getStatus() == ShiftStatus.CLOSED) {
-            throw new BadRequestException("A closed shift cannot be edited.");
+            throw new BadRequestException("A closed shift cannot be edited.", ErrorCode.SHIFT_NOT_EDITABLE);
         }
         if (!shift.getEndsAt().isAfter(now)) {
-            throw new BadRequestException("A shift that has already ended cannot be edited.");
+            throw new BadRequestException("A shift that has already ended cannot be edited.",
+                    ErrorCode.SHIFT_NOT_EDITABLE);
         }
     }
 
@@ -404,7 +406,8 @@ public class ShiftService {
      */
     private void guardAgainstDoubleBooking(UUID workerId, Instant startsAt, Instant endsAt) {
         if (!assignments.findOverlapping(workerId, startsAt, endsAt).isEmpty()) {
-            throw new BadRequestException("Worker " + workerId + " already has an overlapping shift assignment");
+            throw new BadRequestException("Worker " + workerId + " already has an overlapping shift assignment",
+                    ErrorCode.WORKER_HAS_OVERLAPPING_SHIFT);
         }
     }
 

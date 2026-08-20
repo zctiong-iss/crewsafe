@@ -26,7 +26,9 @@
     "unknown": "Ada masalah berlaku. Cuba lagi.",
     "codes": {
       "NO_ACTIVE_POLICY": "Tapak ini tiada polisi haba yang aktif, jadi pelan tidak boleh dirangka. Minta Pengurus Keselamatan mengaktifkan satu versi polisi.",
-      "NO_USABLE_WBGT": "Belum ada bacaan WBGT yang boleh digunakan untuk tapak ini, jadi pelan tidak boleh dirangka. Cuba lagi apabila bacaan tiba."
+      "NO_USABLE_WBGT": "Belum ada bacaan WBGT yang boleh digunakan untuk tapak ini, jadi pelan tidak boleh dirangka. Cuba lagi apabila bacaan tiba.",
+      "WORKER_HAS_OVERLAPPING_SHIFT": "Pekerja ini sudah ditugaskan ke syif lain yang bertindih.",
+      "SHIFT_NOT_EDITABLE": "Syif ini telah tamat dan tidak lagi boleh diedit."
     }
   },
   "auth": {

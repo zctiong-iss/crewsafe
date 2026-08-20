@@ -48,7 +48,12 @@ describe("messageKeyFor", () => {
 });
 
 describe("toApiErrorCode", () => {
-  it.each(["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"] as const)("accepts %s", (code) => {
+  it.each([
+    "NO_ACTIVE_POLICY",
+    "NO_USABLE_WBGT",
+    "WORKER_HAS_OVERLAPPING_SHIFT",
+    "SHIFT_NOT_EDITABLE",
+  ] as const)("accepts %s", (code) => {
     expect(toApiErrorCode(code)).toBe(code);
   });
 

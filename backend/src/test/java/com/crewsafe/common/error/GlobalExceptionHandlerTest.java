@@ -110,6 +110,20 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
+        assertNull(response.getBody().code());
+    }
+
+    @Test
+    void testHandleBadRequestCarriesASafeCodeButNotTheMessage() {
+        BadRequestException ex = new BadRequestException(
+                "Worker 2f4d is assigned to another shift", ErrorCode.WORKER_HAS_OVERLAPPING_SHIFT);
+
+        ResponseEntity<ErrorResponse> response = handler.handleBadRequest(ex);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(ErrorCode.WORKER_HAS_OVERLAPPING_SHIFT, response.getBody().code());
+        assertEquals("Invalid request parameters", response.getBody().message());
     }
 
     /** SCRUM-263: a controller throws this instead of building a bare notFound(). */

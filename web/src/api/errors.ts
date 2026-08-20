@@ -55,6 +55,15 @@ export class ApiError extends Error {
 
 /** What a user should be told. Never the raw server message, which is deliberately vague. */
 export function messageFor(error: ApiError): string {
+  switch (error.code) {
+    case "WORKER_HAS_OVERLAPPING_SHIFT":
+      return "This worker is already assigned to another overlapping shift.";
+    case "SHIFT_NOT_EDITABLE":
+      return "This shift has ended and can no longer be edited.";
+    default:
+      break;
+  }
+
   switch (error.kind) {
     case "unauthenticated":
       return "Your session has ended. Sign in to continue.";

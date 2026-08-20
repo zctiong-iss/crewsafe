@@ -65,5 +65,11 @@ public enum ErrorCode {
      * {@link #EMAIL_ALREADY_REGISTERED_IN_COGNITO}: this is a same-app collision the admin
      * can fix by picking a different username, not a Cognito-side conflict.
      */
-    USERNAME_ALREADY_REGISTERED;
+    USERNAME_ALREADY_REGISTERED,
+
+    /** A worker cannot be assigned to shifts with overlapping time ranges. */
+    WORKER_HAS_OVERLAPPING_SHIFT,
+
+    /** A closed or already-ended shift is historical and cannot be changed. */
+    SHIFT_NOT_EDITABLE;
 }

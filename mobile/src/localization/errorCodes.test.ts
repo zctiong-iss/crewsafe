@@ -22,7 +22,12 @@ import zhHans from "./zh-Hans.json";
  * from the type, because a type cannot be enumerated at runtime — and `KNOWN_ERROR_CODES` is
  * asserted against this same list in `api/errors.test.ts`, so the three stay in step.
  */
-const ERROR_CODES = ["NO_ACTIVE_POLICY", "NO_USABLE_WBGT"] as const;
+const ERROR_CODES = [
+  "NO_ACTIVE_POLICY",
+  "NO_USABLE_WBGT",
+  "WORKER_HAS_OVERLAPPING_SHIFT",
+  "SHIFT_NOT_EDITABLE",
+] as const;
 
 const LOCALES: Record<string, { errors: { codes?: Record<string, string> } }> = {
   en,

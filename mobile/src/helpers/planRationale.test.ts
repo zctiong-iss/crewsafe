@@ -8,7 +8,11 @@
  *
  * @author Justin Chua
  */
-import { buildRationaleSummary, showsModelProse } from "./planRationale";
+import {
+  buildRationaleSummary,
+  humaniseWorkerReferences,
+  showsModelProse,
+} from "./planRationale";
 import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
 import type { Mitigation, MitigationOrigin, RecommendationEvidence } from "@/types/domain";
 
@@ -219,5 +223,25 @@ describe("whether the server's own prose is worth showing", () => {
     expect(showsModelProse({ modelVersion: "anthropic.claude-3-5-sonnet", rationale: "   " })).toBe(
       false,
     );
+  });
+});
+
+describe("worker references in model prose", () => {
+  it("replaces only known worker UUIDs with their display names", () => {
+    const knownWorkerId = "8f4f8762-4d8e-4624-8be6-0fb66ffa7b54";
+    const unrelatedId = "f57b15b1-ff9f-4e2c-b72b-5fd88c3379ca";
+
+    expect(
+      humaniseWorkerReferences(
+        `Worker ${knownWorkerId} needs lighter duties; retain reference ${unrelatedId}.`,
+        [{ id: knownWorkerId, displayName: "Aisha Rahman" }],
+      ),
+    ).toBe(`Worker Aisha Rahman needs lighter duties; retain reference ${unrelatedId}.`);
+  });
+
+  it("leaves prose unchanged when the recommendation has no worker snapshot", () => {
+    const rationale = "Worker 8f4f8762-4d8e-4624-8be6-0fb66ffa7b54 needs lighter duties.";
+
+    expect(humaniseWorkerReferences(rationale, null)).toBe(rationale);
   });
 });

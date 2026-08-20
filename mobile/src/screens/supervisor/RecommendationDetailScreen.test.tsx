@@ -289,6 +289,25 @@ it("clamps the drafting rationale to three lines until it is expanded", async ()
   ).toBe(3);
 });
 
+it("renders a worker name instead of its UUID in model-authored rationale", async () => {
+  const workerId = "8f4f8762-4d8e-4624-8be6-0fb66ffa7b54";
+  const store = buildStore(SUPERVISOR, [
+    recommendation({
+      rationale: `Worker ${workerId} needs lighter duties.`,
+      workers: [{ id: workerId, displayName: "Aisha Rahman" }],
+    }),
+  ]);
+
+  const { queryByText } = await render(
+    <Provider store={store}>
+      <RecommendationDetailScreen />
+    </Provider>,
+  );
+
+  expect(queryByText("Worker Aisha Rahman needs lighter duties.")).not.toBeNull();
+  expect(queryByText(`Worker ${workerId} needs lighter duties.`)).toBeNull();
+});
+
 it("unclamps the rationale on Read more and re-clamps on Read less", async () => {
   const store = buildStore(SUPERVISOR, [
     recommendation({ rationale: "A long agent narrative that runs well past three lines." }),

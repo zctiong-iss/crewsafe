@@ -25,7 +25,9 @@
     "unknown": "Something went wrong. Try again.",
     "codes": {
       "NO_ACTIVE_POLICY": "This site has no active heat policy, so a plan cannot be drafted. Ask a Safety Manager to activate a policy version.",
-      "NO_USABLE_WBGT": "There is no usable WBGT reading for this site yet, so a plan cannot be drafted. Try again once a reading arrives."
+      "NO_USABLE_WBGT": "There is no usable WBGT reading for this site yet, so a plan cannot be drafted. Try again once a reading arrives.",
+      "WORKER_HAS_OVERLAPPING_SHIFT": "This worker is already assigned to another overlapping shift.",
+      "SHIFT_NOT_EDITABLE": "This shift has ended and can no longer be edited."
     }
   },
   "auth": {
