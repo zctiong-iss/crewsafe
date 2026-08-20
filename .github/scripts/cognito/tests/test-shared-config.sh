@@ -2,11 +2,26 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 resolver="$ROOT/.github/scripts/cognito/resolve-shared-config.sh"
+known_site_codes_file="$ROOT/backend/src/main/resources/cognito/known-site-codes.json"
 
 jq empty "$ROOT/.github/cognito/shared-config.schema.json"
-jq -e '
-  ."$defs".application_user.properties.site_codes.items.enum == ["bishan", "campus"]
-' "$ROOT/.github/cognito/shared-config.schema.json" >/dev/null
+
+# SCRUM-490 (FR-008, T020/T021): these two JSON Schema docs are not runtime-enforced — nothing
+# validates a manifest against them — so nothing but this assertion stops their `site_codes`
+# enum from silently drifting from the canonical allowlist both resolvers actually read.
+known_sites_json="$(jq -ce . "$known_site_codes_file")"
+jq -e --argjson known_sites "$known_sites_json" '
+  ."$defs".application_user.properties.site_codes.items.enum == $known_sites
+' "$ROOT/.github/cognito/shared-config.schema.json" >/dev/null || {
+  echo "shared-config.schema.json site_codes enum has drifted from known-site-codes.json" >&2
+  exit 1
+}
+jq -e --argjson known_sites "$known_sites_json" '
+  ."$defs".syntheticUser.properties.site_codes.items.enum == $known_sites
+' "$ROOT/.github/cognito/synthetic-users.schema.json" >/dev/null || {
+  echo "synthetic-users.schema.json site_codes enum has drifted from known-site-codes.json" >&2
+  exit 1
+}
 [[ -x "$resolver" ]]
 grep -Eq 'CREWSAFE_SHARED_COGNITO_JSON' "$ROOT/run.sh"
 grep -Eq 'gh variable get' "$ROOT/run.sh"
@@ -60,3 +75,22 @@ for invalid in \
     exit 1
   fi
 done
+
+# SCRUM-490 (T012): a site code outside bishan/campus is accepted once it is declared in the
+# canonical allowlist, proving this resolver reads that file rather than a literal — and is
+# still rejected against the production allowlist, so the positive-allowlist behavior holds.
+riverside="$(jq '.accounts.alice.application_users[0].site_codes = ["riverside"]' <<<"$valid")"
+known_sites_with_riverside="$(mktemp)"
+trap 'rm -f "$known_sites_with_riverside"' EXIT
+printf '["bishan", "campus", "riverside"]' > "$known_sites_with_riverside"
+
+CREWSAFE_SHARED_COGNITO_JSON="$riverside" \
+KNOWN_SITE_CODES_FILE="$known_sites_with_riverside" \
+  "$resolver" alice >/dev/null || {
+  echo "a site code newly declared in known-site-codes.json was rejected" >&2
+  exit 1
+}
+if CREWSAFE_SHARED_COGNITO_JSON="$riverside" "$resolver" alice >/dev/null 2>&1; then
+  echo "an undeclared site code was accepted against the production allowlist" >&2
+  exit 1
+fi

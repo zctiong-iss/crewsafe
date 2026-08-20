@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
@@ -232,6 +233,47 @@ class DemoDataSeederReconciliationTest {
                 .isEqualTo(bishan.getId());
     }
 
+    // ----------------------------------------------------------------------------------
+    // SCRUM-490 — FR-003: the reconciler never touches a membership to a site outside its own
+    // managed scope (bishan/campus), in either direction.
+    // ----------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("A membership to a site the reconciler does not manage survives repeated runs")
+    void membershipToAnUnmanagedSiteSurvivesRepeatedReconciliation() {
+        AppUser existing = store(new AppUser(
+                "worker.bishan@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Synthetic Bishan Worker", Role.WORKER));
+        UUID outOfScopeSiteId = UUID.randomUUID();
+        storedMemberships.add(new SiteMembership(existing.getId(), outOfScopeSiteId));
+        properties.setDemoUsersJson(firstMapping());
+
+        seeder.run(null);
+        seeder.run(null);
+
+        assertThat(storedMemberships)
+                .extracting(SiteMembership::getSiteId)
+                .containsExactlyInAnyOrder(bishan.getId(), outOfScopeSiteId);
+    }
+
+    @Test
+    @DisplayName("Reconciling adds a newly desired managed site while an unmanaged one is left alone")
+    void reconciliationAddsADesiredManagedSiteAndPreservesAnUnmanagedMembershipSimultaneously() {
+        AppUser existing = store(new AppUser(
+                "supervisor.both@synthetic.crewsafe.invalid",
+                FIRST_SUB, "Old Display", Role.SUPERVISOR));
+        storedMemberships.add(new SiteMembership(existing.getId(), bishan.getId()));
+        UUID outOfScopeSiteId = UUID.randomUUID();
+        storedMemberships.add(new SiteMembership(existing.getId(), outOfScopeSiteId));
+        properties.setDemoUsersJson(bothManagedSitesMapping());
+
+        seeder.run(null);
+
+        assertThat(storedMemberships)
+                .extracting(SiteMembership::getSiteId)
+                .containsExactlyInAnyOrder(bishan.getId(), campus.getId(), outOfScopeSiteId);
+    }
+
     @Test
     void removingAMappingPreservesItsLocalApplicationUser() {
         AppUser existing = store(new AppUser(
@@ -300,6 +342,20 @@ class DemoDataSeederReconciliationTest {
                   }
                 ]
                 """.formatted(FIRST_SUB, SECOND_SUB);
+    }
+
+    private static String bothManagedSitesMapping() {
+        return """
+                [{
+                  "username":"supervisor.both@synthetic.crewsafe.invalid",
+                  "cognitoSub":"%s",
+                  "displayName":"Synthetic Both-Site Supervisor",
+                  "role":"SUPERVISOR",
+                  "siteCodes":["bishan","campus"],
+                  "identityKind":"synthetic-test",
+                  "desiredStatus":"enabled"
+                }]
+                """.formatted(FIRST_SUB);
     }
 
     private static String developerMapping() {
