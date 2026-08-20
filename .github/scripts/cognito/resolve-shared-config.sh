@@ -3,6 +3,8 @@ set -euo pipefail
 
 account_alias="${1:-}"
 config="${CREWSAFE_SHARED_COGNITO_JSON:-}"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+known_site_codes_file="${KNOWN_SITE_CODES_FILE:-$root/backend/src/main/resources/cognito/known-site-codes.json}"
 
 [[ "$account_alias" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
   echo "A valid account alias is required." >&2
@@ -12,8 +14,16 @@ config="${CREWSAFE_SHARED_COGNITO_JSON:-}"
   echo "Shared Cognito configuration is unavailable." >&2
   exit 1
 }
+# SCRUM-490: the single canonical allowlist (FR-001/FR-006) shared with DemoDataSeeder — see
+# specs/057-synthetic-site-allowlist/research.md for why it lives under backend/ rather than
+# .github/ (the backend Docker build context cannot reach anything outside backend/).
+known_sites="$(jq -ce 'select(type == "array" and length > 0 and all(.[]; type == "string"))' \
+    "$known_site_codes_file")" || {
+  echo "Known site codes file is missing, unreadable, or malformed." >&2
+  exit 1
+}
 
-jq -cer --arg alias "$account_alias" '
+jq -cer --arg alias "$account_alias" --argjson known_sites "$known_sites" '
   select(type == "object" and .schema_version == 1)
   | select((keys | sort) == ["accounts", "schema_version"])
   | .accounts[$alias]
@@ -57,7 +67,7 @@ jq -cer --arg alias "$account_alias" '
       and (.identity_kind | IN("developer", "synthetic-test"))
       and (.site_codes | type == "array"
         and length == (unique | length)
-        and all(.[]; IN("bishan", "campus")))
+        and all(.[]; IN($known_sites[])))
     ))
 ' <<<"$config" || {
   echo "Shared Cognito configuration is missing, stale, or unsafe." >&2

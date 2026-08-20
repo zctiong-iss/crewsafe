@@ -57,3 +57,19 @@ accounts:
       group: synthetic-test-users
       desired_status: enabled
       cognito_sub: 091ab5fc-70b1-707b-5923-13d863b7ef21
+    - key: demo-supervisor-2
+      username: synthetic-supervisor-2@synthetic.crewsafe.invalid
+      display_name: Synthetic Supervisor Daniel Ong
+      role: SUPERVISOR
+      site_codes: [bishan]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 39dac5bc-7061-70c4-95b7-22e98e41e453
+    - key: demo-supervisor-3
+      username: synthetic-supervisor-3@synthetic.crewsafe.invalid
+      display_name: Synthetic Supervisor Nur Aisyah
+      role: SUPERVISOR
+      site_codes: [campus]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub: 695a056c-a011-706f-6c5d-7ffc0c774248

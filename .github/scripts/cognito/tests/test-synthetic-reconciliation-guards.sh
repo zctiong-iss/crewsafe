@@ -90,4 +90,58 @@ if env "${base_env[@]}" "$resolver" alice rotate-synthetic "" "" actor \
   fail "mismatched typed confirmation was accepted"
 fi
 
+# SCRUM-490 (T011): a site code outside bishan/campus is accepted once it is declared in the
+# canonical allowlist — proves the guard reads that file rather than a literal.
+known_sites_with_riverside="$(mktemp)"
+trap 'rm -f "$known_sites_with_riverside"' EXIT
+printf '["bishan", "campus", "riverside"]' > "$known_sites_with_riverside"
+
+riverside_manifest="$(mktemp)"
+cat > "$riverside_manifest" <<'YAML'
+schema_version: 1
+accounts:
+  alice:
+    - key: demo-riverside
+      username: synthetic-riverside@synthetic.crewsafe.invalid
+      display_name: Synthetic Riverside Worker
+      role: WORKER
+      site_codes: [riverside]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - key: demo-riverside-supervisor
+      username: synthetic-riverside-supervisor@synthetic.crewsafe.invalid
+      display_name: Synthetic Riverside Supervisor
+      role: SUPERVISOR
+      site_codes: [riverside]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+    - key: demo-riverside-safety-manager
+      username: synthetic-riverside-safety-manager@synthetic.crewsafe.invalid
+      display_name: Synthetic Riverside Safety Manager
+      role: SAFETY_MANAGER
+      site_codes: [riverside]
+      group: synthetic-test-users
+      desired_status: enabled
+      cognito_sub:
+YAML
+
+CREWSAFE_AWS_ACCOUNTS_JSON="$registry" \
+CREWSAFE_SHARED_COGNITO_JSON="$shared_base" \
+SYNTHETIC_USERS_FILE="$riverside_manifest" \
+KNOWN_SITE_CODES_FILE="$known_sites_with_riverside" \
+  "$SYNTHETIC_RESOLVER" alice demo-riverside >/dev/null || \
+  fail "a site code newly declared in known-site-codes.json was rejected"
+
+# The same manifest is rejected without the allowlist entry — the positive allowlist behavior
+# is preserved, only its source changed.
+if CREWSAFE_AWS_ACCOUNTS_JSON="$registry" \
+  CREWSAFE_SHARED_COGNITO_JSON="$shared_base" \
+  SYNTHETIC_USERS_FILE="$riverside_manifest" \
+  "$SYNTHETIC_RESOLVER" alice demo-riverside >/dev/null 2>&1; then
+  fail "an undeclared site code was accepted against the production allowlist"
+fi
+rm -f "$riverside_manifest"
+
 printf 'Synthetic reconciliation guards: PASS\n'
