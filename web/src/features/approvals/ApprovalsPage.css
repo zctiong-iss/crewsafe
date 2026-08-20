@@ -147,6 +147,10 @@
 .approvals__error { color: var(--band-high); }
 .approvals__busy { color: var(--ink-muted); font-size: var(--text-sm); }
 
+/* Read-only notice shown to a safety manager in place of the decision controls. Muted and
+   sized like the busy line — it is a quiet statement of fact, not an action or an error. */
+.approvals__readonly { color: var(--ink-muted); font-size: var(--text-sm); margin: 0; }
+
 .mitigation-editor__table { width: 100%; border-collapse: collapse; }
 .mitigation-editor__table th { text-align: left; font-size: var(--text-xs); color: var(--ink-muted); }
 .mitigation-editor__table input { width: 100%; }

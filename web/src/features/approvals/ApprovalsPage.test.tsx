@@ -166,6 +166,35 @@ describe("ApprovalsPage", () => {
     });
   });
 
+  it("shows a safety manager a read-only notice, not the decision buttons", async () => {
+    onePendingRecommendation();
+    // The queue is the same; only the role changes. A safety manager reads plans but cannot
+    // decide on them — parity with the mobile detail screen, where the backend is the real gate.
+    server.use(
+      http.get(`${BASE}/api/v1/me`, () =>
+        HttpResponse.json({
+          id: "u-2",
+          username: "manager",
+          displayName: "Safety Manager",
+          role: "SAFETY_MANAGER",
+          siteIds: ["site-1"],
+        }),
+      ),
+    );
+
+    renderApprovals();
+
+    // The plan itself still renders — read access is unchanged.
+    expect(await screen.findByText(/Rotate crew every 45 minutes/)).toBeInTheDocument();
+    expect(
+      screen.getByText("You can read this plan but not decide on it."),
+    ).toBeInTheDocument();
+    // None of the three decision controls are offered.
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Edit Plan" })).not.toBeInTheDocument();
+  });
+
   it("shows the empty state when nothing is pending", async () => {
     server.use(
       http.get(
