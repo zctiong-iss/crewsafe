@@ -648,6 +648,24 @@ class ShiftControllerTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.assignments.length()").value(1));
     }
 
+    @Test
+    void cancellingAShiftFreesItsWorkerForASameTimeReplacement() throws Exception {
+        Instant startsAt = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS);
+        Instant endsAt = startsAt.plus(11, ChronoUnit.HOURS);
+        String cancelledShiftId = createShiftWithAssignments(startsAt, endsAt,
+                List.of(assignmentBody(workerA.getId(), "Initial assignment", "LIGHT", null)));
+
+        cancelShift(cancelledShiftId, supervisorAToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        postJson("/api/v1/sites/" + siteA.getId() + "/shifts", supervisorAToken,
+                        shiftBody(startsAt, endsAt,
+                                List.of(assignmentBody(workerA.getId(), "Replacement assignment", "LIGHT", null))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.assignments[0].workerId").value(workerA.getId().toString()));
+    }
+
     /** CANCELLED is terminal (SCRUM-255): there is no un-cancel, so a second cancel is rejected. */
     @Test
     void cancellingAnAlreadyCancelledShiftIsBadRequest() throws Exception {
