@@ -414,7 +414,7 @@ export default function ShiftDetailScreen() {
   const canEndShift = user?.role === "SUPERVISOR" || user?.role === "ADMIN";
 
   const ending = shift ? endingId === shift.id : false;
-  const { hasAssignments, canEdit, showEndControls } = shiftPresentation(
+  const { canEdit, showEndControls } = shiftPresentation(
     shift,
     editable,
     canEndShift,
