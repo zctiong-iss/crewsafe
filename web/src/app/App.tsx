@@ -18,6 +18,7 @@ import { ActionMonitoringPage } from "@/features/monitoring/ActionMonitoringPage
 import { ReadinessPage } from "@/features/readiness/ReadinessPage";
 import { InsightsPage } from "@/features/insights/InsightsPage";
 import { EditShiftPage } from "@/features/shifts/EditShiftPage";
+import { ShiftCloseOutSummary } from "@/features/shifts/ShiftCloseOutSummary";
 import { ApprovalsPage } from "@/features/approvals/ApprovalsPage";
 import { PolicyPage } from "@/features/policy/PolicyPage";
 import { CreatePolicyVersionPage } from "@/features/policy/CreatePolicyVersionPage";
@@ -157,6 +158,10 @@ export function App() {
             <Route
               path="/shifts/:shiftId/edit"
               element={<RoleRoute roles={rolesForRoute("/shifts/:shiftId/edit")}><EditShiftPage /></RoleRoute>}
+            />
+            <Route
+              path="/shifts/:shiftId/summary"
+              element={<RoleRoute roles={rolesForRoute("/shifts/:shiftId/summary")}><ShiftCloseOutSummary /></RoleRoute>}
             />
             <Route
               path="/conditions"

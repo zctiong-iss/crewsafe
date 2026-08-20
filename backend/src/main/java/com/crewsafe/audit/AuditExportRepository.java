@@ -40,9 +40,14 @@ import java.util.UUID;
  */
 public interface AuditExportRepository extends JpaRepository<AuditEvent, UUID> {
 
-    /** The shared FROM + effective-site resolution + time-window filter, reused verbatim by the
-     *  page query, its count, and the export query so all three scope identically. */
-    String SITE_SCOPED_FROM = """
+    /**
+     * The FROM + all joins that resolve an <em>effective shift</em> (and, through it, an effective
+     * site) for every audit row, whatever its target type. Extracted so the site-scoped timeline
+     * and the SCRUM-139 shift-scoped close-out summary read a row's shift the same way — a second
+     * copy of this {@code COALESCE} join is exactly the thing that drifts. Adding a WHERE turns it
+     * into a site scope or a shift scope; the joins themselves are identical either way.
+     */
+    String EFFECTIVE_SHIFT_JOINS = """
             FROM audit_event ae
             LEFT JOIN app_user actor ON actor.id = ae.actor_id
             LEFT JOIN action_dispatch ad ON ae.target_type = 'ACTION_DISPATCH' AND ad.id = ae.target_id
@@ -56,12 +61,26 @@ public interface AuditExportRepository extends JpaRepository<AuditEvent, UUID> {
             LEFT JOIN shift sh ON sh.id = COALESCE(
                 CASE WHEN ae.target_type = 'SHIFT' THEN ae.target_id END,
                 rec.shift_id, rs.shift_id, wl.shift_id, c.shift_id)
+            """;
+
+    /** The shared FROM + effective-site resolution + time-window filter, reused verbatim by the
+     *  page query, its count, and the export query so all three scope identically. */
+    String SITE_SCOPED_FROM = EFFECTIVE_SHIFT_JOINS + """
             WHERE ae.occurred_at >= :from AND ae.occurred_at < :to
               AND :siteId = COALESCE(
                     sh.site_id,
                     pv.site_id,
                     CASE WHEN ae.target_type = 'SITE' THEN ae.target_id END)
             """;
+
+    /**
+     * The same joins, scoped to a single shift (SCRUM-139). A row belongs to a shift when the
+     * effective-shift resolution above lands on that {@code sh.id} — which naturally excludes the
+     * {@code SITE}- and {@code POLICY_VERSION}-scoped rows that resolve to no shift, so a shift's
+     * record carries only the events about that shift. Not time-windowed, unlike the site scope:
+     * the close-out record is every event ever recorded about the shift, not a chosen window.
+     */
+    String SHIFT_SCOPED_FROM = EFFECTIVE_SHIFT_JOINS + " WHERE sh.id = :shiftId ";
 
     String SELECT_COLUMNS = """
             SELECT ae.occurred_at   AS occurredAt,
@@ -89,4 +108,23 @@ public interface AuditExportRepository extends JpaRepository<AuditEvent, UUID> {
             nativeQuery = true)
     List<AuditRowView> findSiteSlice(@Param("siteId") UUID siteId,
             @Param("from") Instant from, @Param("to") Instant to);
+
+    /**
+     * Per-event-type counts for one shift (SCRUM-139). The close-out summary derives its totals
+     * from this, so a number on screen is a {@code COUNT(*)} of the very rows the audit trail
+     * holds for the shift — the summary reconciles with the trail by construction, not by a
+     * separate tally kept in step by hand.
+     */
+    @Query(value = "SELECT ae.event_type AS eventType, COUNT(*) AS total "
+            + SHIFT_SCOPED_FROM + " GROUP BY ae.event_type",
+            nativeQuery = true)
+    List<AuditEventTypeCount> countByEventTypeForShift(@Param("shiftId") UUID shiftId);
+
+    /** The shift's whole effective-event slice, newest first — the rows the shift-scoped CSV
+     *  export writes. Same row shape as {@link #findSiteSlice}, so a shift export reads identically
+     *  to a site export, only narrower. */
+    @Query(value = SELECT_COLUMNS + SHIFT_SCOPED_FROM
+            + " ORDER BY ae.occurred_at DESC, ae.id DESC",
+            nativeQuery = true)
+    List<AuditRowView> findShiftSlice(@Param("shiftId") UUID shiftId);
 }

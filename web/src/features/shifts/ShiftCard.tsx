@@ -74,6 +74,13 @@ useEffect(() => {
                 Edit
               </Link>
             )}
+            {/* Close-out summary (US-44): the defensible end-of-shift record, offered once a shift
+                has been formally closed. Same management audience as Edit; the route is guarded. */}
+            {canManage && shift.status === "CLOSED" && (
+              <Link className="shift-card__summary-link" to={`/shifts/${shift.id}/summary`} state={{ shift }}>
+                Close-out summary
+              </Link>
+            )}
         </div>
       </header>
 
