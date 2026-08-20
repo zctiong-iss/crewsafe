@@ -112,7 +112,7 @@ describe("ActionMonitoringPage", () => {
 
   it("renders the live dispatch board once a tick commits", async () => {
     renderPage();
-    expect(await screen.findByRole("heading", { level: 1, name: "Action Monitoring" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Team Monitor" })).toBeInTheDocument();
     // The committed tick's one PENDING dispatch surfaces in its bucket.
     expect(await screen.findByRole("heading", { name: /Pending/i })).toBeInTheDocument();
     expect(screen.getByText("HYDRATE")).toBeInTheDocument();
@@ -123,8 +123,8 @@ describe("ActionMonitoringPage", () => {
 
   it("shows no site switcher for a single-site user", async () => {
     renderPage();
-    // "Action Monitoring" is both the page title and a nav label, so anchor on the heading.
-    await screen.findByRole("heading", { level: 1, name: "Action Monitoring" });
+    // "Team Monitor" is both the page title and a nav label, so anchor on the heading.
+    await screen.findByRole("heading", { level: 1, name: "Team Monitor" });
     expect(screen.queryByRole("combobox", { name: "Site" })).not.toBeInTheDocument();
   });
 

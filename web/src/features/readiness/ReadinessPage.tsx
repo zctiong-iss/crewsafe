@@ -54,7 +54,7 @@ export function ReadinessPage() {
   }, [siteId]);
 
   return (
-    <AppShell title="Readiness" subtitle="Who is shift-ready before the shift begins">
+    <AppShell title="Team Readiness" subtitle="Who is shift-ready before the shift begins">
       {sites.length > 1 && (
         <label className="readiness__site-picker">
           <span>Site</span>
@@ -69,12 +69,12 @@ export function ReadinessPage() {
       )}
 
       {load.status === "loading" && siteId !== null && (
-        <output className="readiness__loading">Loading readiness</output>
+        <output className="readiness__loading">Loading team readiness</output>
       )}
 
       {load.status === "error" && (
         <EmptyState
-          headline="Could not load readiness"
+          headline="Could not load team readiness"
           body={
             <>
               {load.message}
@@ -92,7 +92,7 @@ export function ReadinessPage() {
       {load.status === "loaded" && load.summary.shifts.length === 0 && (
         <EmptyState
           headline="No upcoming shifts"
-          body="There are no planned or active shifts to check readiness for at this site."
+          body="There are no planned or active shifts to check team readiness for at this site."
         />
       )}
 

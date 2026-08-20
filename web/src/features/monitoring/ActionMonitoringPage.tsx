@@ -22,7 +22,7 @@ export function ActionMonitoringPage({
 
   if (!siteId)
     return (
-      <AppShell title="Action Monitoring">
+      <AppShell title="Team Monitor">
         <EmptyState
           headline="No site assigned"
           body="You have not been assigned to a site yet. Ask your site administrator."

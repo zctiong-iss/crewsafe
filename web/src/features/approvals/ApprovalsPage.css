@@ -62,8 +62,8 @@
 /* Reasoning panel: uniform padding inside, uniform margin all round, on the recessed surface —
    so the narrative reads as one self-contained, evenly-framed block within the card. */
 .approvals__rationale {
-  margin: var(--space-4);
-  padding: var(--space-4);
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
   background: var(--surface-sunken);
   border-radius: var(--radius);
 }
@@ -141,11 +141,12 @@
 /* Legacy editor controls remain a separate, editable plan surface. */
 .mitigation-editor__table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: var(--space-1) 0;
 }
 .mitigation-editor__table th {
   text-align: left;
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink-muted);
 }
 
@@ -202,6 +203,10 @@
 
 .mitigation-editor__table input { width: 100%; }
 .mitigation-editor__add { margin-top: var(--space-2); }
+.mitigation-editor__table th:first-child,
+.mitigation-editor__table td:first-child {
+  width: 5rem;
+}
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
