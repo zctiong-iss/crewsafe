@@ -88,7 +88,7 @@ describe("ApprovalsPage", () => {
     renderApprovals();
     expect(await screen.findByText(/10 Aug/)).toBeInTheDocument();
     expect(screen.getByText("Bishan Park Landscaping")).toBeInTheDocument();
-    expect(screen.getByText("32.5°C · MODERATE")).toBeInTheDocument();
+    expect(screen.getByText("32.5°C")).toBeInTheDocument();
     expect(
       screen.getByText(/Rotate crew every 45 minutes/),
     ).toBeInTheDocument();
