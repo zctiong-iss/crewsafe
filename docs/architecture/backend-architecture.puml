@@ -1,0 +1,105 @@
+@startuml backend-architecture
+
+' Internal layering of the com.crewsafe Spring Boot backend: request path from
+' client through the identity boundary, controllers, the deterministic safety
+' policy, and persistence — plus the agent layer's draft-only relationship to
+' the service layer. AWS deployment topology is covered in
+' terraform-architecture.puml; this diagram is the software layering view.
+
+title CrewSafe SG — Backend Architecture
+
+top to bottom direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 17
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 155
+skinparam maxMessageSize 130
+skinparam nodesep 45
+skinparam ranksep 75
+skinparam ArrowColor #455A64
+
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontColor #1B5E20
+  FontSize 17
+}
+skinparam cloud {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #0D47A1
+  FontSize 17
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #EF6C00
+  FontColor #E65100
+  FontSize 17
+}
+skinparam artifact {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+  FontSize 17
+}
+
+actor "Client applications\nWeb SPA · Mobile · CLI" as client
+
+cloud "Spring Security resource server\nCognito JWT validation · JWKS\nsite-scoped authz (deny-by-default)" as security
+
+package "com.crewsafe backend" as backend {
+  rectangle "REST controllers — /api/v1\nOpenAPI 3 · request validation" as controllers
+  rectangle "Service layer\ndeterministic safety policy — WBGT matrix" as service
+  database "Repository (Spring Data JPA)\nPostgreSQL · Flyway-owned schema" as repository
+}
+
+rectangle "ml-service (FastAPI)\nLangChain / LangGraph" as agent
+cloud "Bedrock\nClaude models" as bedrock
+
+artifact "Audit events\nevery write logged" as audit
+artifact "Site + object scoping\nenforced server-side" as scoping
+
+client --> security : Bearer JWT
+security --> controllers : authorized request
+controllers --> service
+service --> repository : Spring Data JPA
+service ..> agent : mitigation-plan request
+agent --> bedrock
+agent ..> service : draft proposal only\n(never auto-enacted)
+service ..> audit
+controllers ..> scoping
+
+note right of security
+  Constitution principle: deterministic
+  safety policy wins. Never bypassed by
+  the agent — proposal only, no auto-enact.
+end note
+
+note right of agent
+  Draft-only. A supervisor must approve
+  before a mitigation plan is enacted.
+  Predicted values are visually and
+  structurally distinct from observed
+  or approved state.
+end note
+
+note bottom of repository
+  spring.jpa.hibernate.ddl-auto: validate
+  Flyway owns the schema.
+end note
+
+legend right
+  |= Color |= Meaning |
+  |<#E3F2FD>| Edge / identity boundary |
+  |<#E8F5E9>| Domain compute (backend + agent) |
+  |<#FFF3E0>| Persistence |
+  |<#F3E5F5>| Cross-cutting controls |
+  --> | Request or synchronous call |
+  ..> | Draft, audit, or dependency relationship |
+endlegend
+
+@enduml
