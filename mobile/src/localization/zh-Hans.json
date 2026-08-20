@@ -533,7 +533,15 @@
     "autoDispatchedNotice": "此停工指令已自动发送给工人 — 无需批准。",
     "supersededNotice": "现场条件已变化，此计划已被新计划取代。无需在此做出决定。",
     "noModelNotice": "AI 模型不可用。高温政策与必需措施仍然适用。",
-    "requiredCannotRemove": "高温规则要求此项，无法删除。"
+    "requiredCannotRemove": "高温规则要求此项，无法删除。",
+    "rationaleReading_one": "湿球黑球温度为 {{wbgt}}°C，{{band}}，依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleReading_other": "湿球黑球温度为 {{wbgt}}°C，{{band}}，依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleNoReading_one": "暂无湿球黑球温度读数，仅依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleNoReading_other": "暂无湿球黑球温度读数，仅依据高温政策 {{policyVersion}} 评估。需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleCountsOnly_one": "本班次需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleCountsOnly_other": "本班次需采取 {{count}} 项必需措施，另建议 {{advisory}} 项预防措施。",
+    "rationaleFromPolicyEngine": "此方案由高温政策规则生成，未使用 AI 模型。措施及其规则依据不受影响。",
+    "modelWordingLabel": "AI 模型的原始表述（英文）"
   },
   "mitigationCategory": {
     "STOP_WORK": "停止作业",
@@ -691,5 +699,18 @@
     "planDraftedTitle": "已生成新方案",
     "planDraftedBody_one": "有一份新的 AI 起草方案等待您决定。",
     "planDraftedBody_other": "有 {{count}} 份新的 AI 起草方案等待您决定。"
+  },
+  "actionInstructions": {
+    "STOP_WORK": "立即停止作业，带领班组前往阴凉处",
+    "STOP_WORK_LIGHTNING": "立即停止作业，带领班组进入坚固建筑物或全封闭车辆内",
+    "RESUME_WORK": "可按常规防护措施恢复作业",
+    "REST_10_MIN_HOURLY": "每小时在阴凉处休息 10 分钟",
+    "REST_15_MIN_HOURLY": "每小时在阴凉处休息 15 分钟",
+    "HYDRATE_HOURLY": "每小时喝水一次，每次约一杯",
+    "HYDRATE_REGULARLY": "整个班次期间定时喝水",
+    "SHADE_RECOVERY": "为班组保留可供休息的阴凉处",
+    "RESCHEDULE_HEAVY_WORK": "尽可能将重体力工作安排在较凉快的时段",
+    "ROTATE_TO_LIGHT_DUTY": "安排受影响的工人轮换至轻体力工作",
+    "CLOSE_MONITORING": "密切留意受影响工人是否出现中暑症状"
   }
 }

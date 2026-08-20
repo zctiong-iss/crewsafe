@@ -534,7 +534,15 @@
     "autoDispatchedNotice": "Arahan henti kerja ini telah dihantar kepada pekerja secara automatik — tiada kelulusan diperlukan.",
     "supersededNotice": "Keadaan telah berubah, jadi pelan ini telah digantikan dengan yang lebih baharu. Tiada apa-apa untuk diputuskan di sini.",
     "noModelNotice": "Model AI tidak tersedia. Polisi haba dan tindakan wajib masih terpakai.",
-    "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang."
+    "requiredCannotRemove": "Diwajibkan oleh polisi haba — ini tidak boleh dibuang.",
+    "rationaleReading_one": "WBGT ialah {{wbgt}}°C, {{band}}, dinilai mengikut polisi haba {{policyVersion}}. {{count}} kawalan diwajibkan, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleReading_other": "WBGT ialah {{wbgt}}°C, {{band}}, dinilai mengikut polisi haba {{policyVersion}}. {{count}} kawalan diwajibkan, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleNoReading_one": "Tiada bacaan WBGT tersedia, jadi ini dinilai mengikut polisi haba {{policyVersion}} sahaja. {{count}} kawalan diwajibkan, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleNoReading_other": "Tiada bacaan WBGT tersedia, jadi ini dinilai mengikut polisi haba {{policyVersion}} sahaja. {{count}} kawalan diwajibkan, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleCountsOnly_one": "{{count}} kawalan diwajibkan untuk syif ini, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleCountsOnly_other": "{{count}} kawalan diwajibkan untuk syif ini, dan {{advisory}} langkah berjaga-jaga lain dicadangkan.",
+    "rationaleFromPolicyEngine": "Pelan ini datang daripada peraturan polisi haba, bukan model AI. Kawalan dan rujukan peraturannya tidak terjejas.",
+    "modelWordingLabel": "Perkataan asal model AI (Bahasa Inggeris)"
   },
   "mitigationCategory": {
     "STOP_WORK": "Henti kerja",
@@ -692,5 +700,18 @@
     "planDraftedTitle": "Pelan baharu dirangka",
     "planDraftedBody_one": "Satu pelan baharu rangkaan AI menunggu keputusan anda.",
     "planDraftedBody_other": "{{count}} pelan baharu rangkaan AI menunggu keputusan anda."
+  },
+  "actionInstructions": {
+    "STOP_WORK": "Hentikan kerja serta-merta dan bawa kru ke kawasan teduh yang sejuk",
+    "STOP_WORK_LIGHTNING": "Hentikan kerja dan bawa kru ke bangunan kukuh atau kenderaan tertutup sepenuhnya",
+    "RESUME_WORK": "Kerja boleh disambung dengan langkah berjaga-jaga biasa",
+    "REST_10_MIN_HOURLY": "Rehat 10 minit di tempat teduh setiap jam",
+    "REST_15_MIN_HOURLY": "Rehat 15 minit di tempat teduh setiap jam",
+    "HYDRATE_HOURLY": "Minum air setiap jam, lebih kurang satu cawan setiap rehat",
+    "HYDRATE_REGULARLY": "Minum air kerap sepanjang syif",
+    "SHADE_RECOVERY": "Sediakan ruang teduh untuk kru berehat",
+    "RESCHEDULE_HEAVY_WORK": "Pindahkan kerja berat ke waktu yang lebih sejuk jika boleh",
+    "ROTATE_TO_LIGHT_DUTY": "Tukarkan pekerja terlibat kepada tugas yang lebih ringan",
+    "CLOSE_MONITORING": "Pantau pekerja terlibat dengan rapi untuk tanda penyakit haba"
   }
 }

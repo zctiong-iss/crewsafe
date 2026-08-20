@@ -126,6 +126,22 @@ function seed(): Recommendation[] {
       approval: null,
       // A model wrote this one, so the screen shows no provenance notice.
       modelVersion: "anthropic.claude-3-5-sonnet",
+      /*
+       * Structured evidence, not just prose.
+       *
+       * The rationale a supervisor reads is BUILT from these fields so it can be
+       * translated (see `helpers/planRationale.ts`). A mock carrying only the English
+       * string would leave the demo path as the one place the untranslated bug
+       * survived — and the demo is where it is most visible.
+       */
+      evidence: {
+        observedWbgt: 32.4,
+        forecastWbgt30m: 33.1,
+        currentBand: "32_TO_BELOW_33",
+        forecastBand: "33_AND_ABOVE",
+        stationId: "S128",
+        lightningState: "CLEAR",
+      },
     });
   }
 
@@ -166,6 +182,22 @@ function seed(): Recommendation[] {
        * the version most likely to reach a supervisor on a bad day.
        */
       modelVersion: DETERMINISTIC_FALLBACK_MODEL,
+      /*
+       * Structured evidence, not just prose.
+       *
+       * The rationale a supervisor reads is BUILT from these fields so it can be
+       * translated (see `helpers/planRationale.ts`). A mock carrying only the English
+       * string would leave the demo path as the one place the untranslated bug
+       * survived — and the demo is where it is most visible.
+       */
+      evidence: {
+        observedWbgt: 31.2,
+        forecastWbgt30m: 31.4,
+        currentBand: "31_TO_BELOW_32",
+        forecastBand: "31_TO_BELOW_32",
+        stationId: "S128",
+        lightningState: "CLEAR",
+      },
     });
   }
 
@@ -249,6 +281,22 @@ function runMockAutoTrigger(shiftId: string): void {
     createdAt: new Date().toISOString(),
     approval: null,
     modelVersion: DETERMINISTIC_FALLBACK_MODEL,
+    /*
+     * Structured evidence, not just prose.
+     *
+     * The rationale a supervisor reads is BUILT from these fields so it can be
+     * translated (see `helpers/planRationale.ts`). A mock carrying only the English
+     * string would leave the demo path as the one place the untranslated bug
+     * survived — and the demo is where it is most visible.
+     */
+    evidence: {
+      observedWbgt: 25.3,
+      forecastWbgt30m: 25.4,
+      currentBand: "BELOW_31",
+      forecastBand: "BELOW_31",
+      stationId: "S128",
+      lightningState: "CLEAR",
+    },
     mitigations: open.mitigations.map((m) => ({ ...m })),
   });
 }
@@ -329,6 +377,22 @@ export function mockGenerateRecommendation(shiftId: string): Recommendation {
     // Mock mode never reaches ml-service, let alone Bedrock. Claiming a model id here would
     // make the one screen that reports provenance lie in the mode used for demos.
     modelVersion: DETERMINISTIC_FALLBACK_MODEL,
+    /*
+     * Structured evidence, not just prose.
+     *
+     * The rationale a supervisor reads is BUILT from these fields so it can be
+     * translated (see `helpers/planRationale.ts`). A mock carrying only the English
+     * string would leave the demo path as the one place the untranslated bug
+     * survived — and the demo is where it is most visible.
+     */
+    evidence: {
+      observedWbgt: 29.8,
+      forecastWbgt30m: 30.1,
+      currentBand: "BELOW_31",
+      forecastBand: "BELOW_31",
+      stationId: "S128",
+      lightningState: "STOP_WORK",
+    },
     mitigations: [
       mitigation(
         "REST_10_MIN_HOURLY",
