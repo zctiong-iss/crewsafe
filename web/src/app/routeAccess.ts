@@ -16,6 +16,11 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/shifts/new": MANAGEMENT_ROLES,
   "/shifts/:shiftId/edit": MANAGEMENT_ROLES,
   "/conditions": MANAGEMENT_ROLES,
+  // Live action-dispatch board (US-12): the web side of the mobile ack loop. Same audience as
+  // /conditions — SUPERVISOR + SAFETY_MANAGER. The backend also grants ADMIN, but an
+  // administrator's UI is scoped to the admin console alone (see the note at the top of this
+  // file); the server stays the real gate, so this is defense-in-depth, not the control.
+  "/monitoring": MANAGEMENT_ROLES,
   // Supervisor tool: "so I can follow up before the shift begins" — SUPERVISOR + SAFETY_MANAGER + ADMIN.
   "/readiness": MANAGEMENT_ROLES,
   // Manager evidence dashboard (EP-07): inspector-facing compliance/response-time summaries.

@@ -1,0 +1,223 @@
+/**
+ * ActionMonitoringPanel.css
+ * Live action-dispatch board: alert counts, status buckets, connection state.
+ * Colour never carries meaning alone — every badge and bucket pairs hue with a label + glyph
+ * (WCAG 1.4.1), and all colours are existing tokens (the CVD/contrast audit owns tokens.css).
+ */
+
+.monitoring-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: var(--content-max);
+}
+
+.monitoring-panel__loading {
+  display: block;
+  font-size: var(--text-base);
+  color: var(--ink-secondary);
+}
+
+.monitoring-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.monitoring-panel__timestamp {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: var(--weight-medium);
+}
+
+/* ---- Connection badge (dual-encoded: hue + glyph + label) ---------------- */
+.monitoring-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+.monitoring-panel__badge--live {
+  background-color: var(--status-ok-wash);
+  color: var(--status-ok);
+  border: 1.5px solid var(--status-ok);
+}
+.monitoring-panel__badge--connecting {
+  background-color: var(--band-low-wash);
+  color: var(--band-low);
+  border: 1.5px solid var(--band-low);
+}
+.monitoring-panel__badge--degraded {
+  background-color: var(--status-waiting-wash);
+  color: var(--status-waiting);
+  border: 1.5px solid var(--status-waiting);
+}
+.monitoring-panel__badge--closed {
+  background-color: var(--status-none-wash);
+  color: var(--status-none);
+  border: 1.5px solid var(--status-none);
+}
+
+/* ---- Degraded feed alert ------------------------------------------------- */
+.monitoring-panel__degraded {
+  background-color: var(--band-moderate-wash);
+  color: var(--ink);
+  border: 1px solid var(--band-moderate);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+
+/* ---- Alert-count summary cards ------------------------------------------- */
+.monitoring-panel__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-4);
+  margin: 0;
+}
+.monitoring-panel__count {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.monitoring-panel__count dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow);
+}
+.monitoring-panel__count dd {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+}
+.monitoring-panel__count--pending {
+  border-left-color: var(--status-waiting);
+}
+.monitoring-panel__count--pending dt {
+  color: var(--status-waiting);
+}
+.monitoring-panel__count--late {
+  border-left-color: var(--band-high);
+}
+.monitoring-panel__count--late dt {
+  color: var(--band-high);
+}
+.monitoring-panel__count--acknowledged {
+  border-left-color: var(--band-low);
+}
+.monitoring-panel__count--acknowledged dt {
+  color: var(--band-low);
+}
+.monitoring-panel__count--completed {
+  border-left-color: var(--status-ok);
+}
+.monitoring-panel__count--completed dt {
+  color: var(--status-ok);
+}
+
+/* ---- Status buckets ------------------------------------------------------ */
+.monitoring-panel__buckets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.monitoring-bucket {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.monitoring-bucket__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+  margin: 0;
+}
+.monitoring-bucket__tally {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+  background-color: var(--surface-sunken);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+  min-width: 1.5rem;
+  text-align: center;
+}
+.monitoring-bucket--pending .monitoring-bucket__title { color: var(--status-waiting); }
+.monitoring-bucket--late .monitoring-bucket__title { color: var(--band-high); }
+.monitoring-bucket--acknowledged .monitoring-bucket__title { color: var(--band-low); }
+.monitoring-bucket--completed .monitoring-bucket__title { color: var(--status-ok); }
+
+.monitoring-bucket__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* ---- One dispatch -------------------------------------------------------- */
+.monitoring-dispatch {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  background-color: var(--surface-sunken);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.monitoring-dispatch__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.monitoring-dispatch__code {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+}
+.monitoring-dispatch__worker {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--ink-muted);
+}
+.monitoring-dispatch__instruction {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink-secondary);
+}
+.monitoring-dispatch__meta {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  font-weight: var(--weight-medium);
+}

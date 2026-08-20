@@ -40,6 +40,16 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Conditions" })).toBeInTheDocument();
   });
 
+  it.each(OPERATIONAL_ROLES)("allows %s to open action monitoring", async (role) => {
+    renderAt("/monitoring", role);
+    expect(await screen.findByRole("heading", { name: "Action Monitoring" })).toBeInTheDocument();
+  });
+
+  it("redirects a worker away from action monitoring", async () => {
+    renderAt("/monitoring", "WORKER");
+    expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
+  });
+
   it.each(OPERATIONAL_ROLES)("allows %s to open shift creation", async (role) => {
     renderAt("/shifts/new", role);
     expect(await screen.findByRole("heading", { name: "Create Shift" })).toBeInTheDocument();
@@ -73,7 +83,7 @@ describe("direct route access", () => {
     expect(await screen.findByRole("heading", { name: "Live Board" })).toBeInTheDocument();
   });
 
-  it.each(["/", "/conditions", "/shifts/new", "/approvals", "/policy", "/policy/new"])(
+  it.each(["/", "/conditions", "/monitoring", "/shifts/new", "/approvals", "/policy", "/policy/new"])(
     "sends an administrator at %s to the admin console, not the live board",
     async (path) => {
       renderAt(path, "ADMIN");
