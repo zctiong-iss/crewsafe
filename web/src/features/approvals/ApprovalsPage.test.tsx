@@ -489,6 +489,51 @@ describe("ApprovalsPage", () => {
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
 
+  it("orders live pending plans newest-drafted first", async () => {
+    onePendingRecommendation();
+    server.use(
+      http.get(
+        `${BASE}/api/v1/sites/:siteId/shifts/:shiftId/recommendations`,
+        ({ params }) =>
+          params.siteId === "site-1"
+            ? HttpResponse.json([
+                {
+                  id: "rec-older",
+                  shiftId: "shift-1",
+                  policyVersion: "v1",
+                  status: "PENDING_APPROVAL",
+                  rationale: "Older draft, waiting longer.",
+                  createdAt: "2026-08-10T00:01:00Z",
+                  mitigations: [],
+                  approval: null,
+                  evidence: null,
+                  modelVersion: null,
+                },
+                {
+                  id: "rec-newer",
+                  shiftId: "shift-1",
+                  policyVersion: "v1",
+                  status: "PENDING_APPROVAL",
+                  rationale: "Newer draft, against fresher conditions.",
+                  createdAt: "2026-08-10T00:03:00Z",
+                  mitigations: [],
+                  approval: null,
+                  evidence: null,
+                  modelVersion: null,
+                },
+              ])
+            : HttpResponse.json([]),
+      ),
+    );
+
+    renderApprovals();
+
+    // Both are live (shift ends 08:00Z, now is 04:00Z). The newer draft sits above the older one.
+    const cards = await screen.findAllByRole("article");
+    expect(cards[0]).toHaveTextContent("Newer draft, against fresher conditions.");
+    expect(cards[1]).toHaveTextContent("Older draft, waiting longer.");
+  });
+
   it("stamps each card with when the plan was drafted", async () => {
     onePendingRecommendation();
     renderApprovals();

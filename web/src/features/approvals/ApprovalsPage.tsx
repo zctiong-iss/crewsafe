@@ -77,10 +77,11 @@ async function loadReviewData(): Promise<ReviewData> {
     .sort((a, b) => {
       const byStatus =
         queueRank(a.recommendation.status) - queueRank(b.recommendation.status);
-      // Within a status, oldest-drafted first so the queue reads in the order plans arrived.
+      // Within a status, newest-drafted first: the freshest plan — drafted against the most recent
+      // conditions — sits on top, the way an inbox reads. (b before a = descending.)
       return byStatus !== 0
         ? byStatus
-        : a.recommendation.createdAt.localeCompare(b.recommendation.createdAt);
+        : b.recommendation.createdAt.localeCompare(a.recommendation.createdAt);
     });
 
   // Split off plans whose shift has already ended: still actionable, but no longer current work, so
