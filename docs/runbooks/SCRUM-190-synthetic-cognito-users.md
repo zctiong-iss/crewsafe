@@ -61,7 +61,15 @@ only to retrieve a generated login credential.
 2. Use a registered account alias and a unique lowercase `key`.
 3. Keep `username` under `@synthetic.crewsafe.invalid`.
 4. Use only `WORKER`, `SUPERVISOR`, or `SAFETY_MANAGER`.
-5. Use only `bishan` and/or `campus`.
+5. Use only a `site_codes` value declared in
+   [`backend/src/main/resources/cognito/known-site-codes.json`](../../backend/src/main/resources/cognito/known-site-codes.json) —
+   currently `bishan` and `campus`. This file is the single source both the backend
+   (`DemoDataSeeder`) and this manifest's CI guard read (SCRUM-490); a code not listed there is
+   rejected by both. Adding a new site means adding it here, adding a matching site definition
+   (display name and coordinates) in `DemoDataSeeder`, and only then using it in a manifest
+   entry — see
+   [SCRUM-490-synthetic-site-allowlist-plan.md](../plans/SCRUM-490-synthetic-site-allowlist-plan.md)
+   for the full mechanism and rationale.
 6. Keep `group: synthetic-test-users`.
 7. Use `desired_status: enabled` or `disabled`.
 8. Leave `cognito_sub` empty only before first creation. Once bound, never
