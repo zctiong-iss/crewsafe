@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { fakeUserManager } from "@/test/fakeUserManager";
 import type { ConditionsStreamHandlers } from "@/api/conditionsStream";
+import type { ConditionsHistory } from "@/api/conditionsHistory";
 import { ConditionsPanel } from "./ConditionsPanel";
 import { useAuth } from "@/auth/useAuth";
 
@@ -31,6 +32,8 @@ const liveSnapshot = (wbgt: number, observedAt: string) => ({
   },
 });
 
+const pendingHistory = () => new Promise<ConditionsHistory>(() => undefined);
+
 describe("ConditionsPanel — degraded on staleness", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
@@ -42,7 +45,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
       return () => {};
     };
 
-    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} loadHistory={pendingHistory} />);
 
     await act(async () => { vi.advanceTimersByTime(100); });
 
@@ -85,7 +88,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
       return () => {};
     };
 
-    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} loadHistory={pendingHistory} />);
 
     // Settle auth under fake timers (replaces findByText)
     await act(async () => { vi.advanceTimersByTime(100); });
@@ -114,7 +117,7 @@ describe("ConditionsPanel — degraded on staleness", () => {
       return () => {};
     };
 
-    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} loadHistory={pendingHistory} />);
     await act(async () => { vi.advanceTimersByTime(100); });
 
     act(() => {
@@ -149,7 +152,7 @@ describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)
   };
 
   it("renders the connecting message as an <output> status region before any snapshot arrives", async () => {
-    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribeNoOp} />);
+    wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribeNoOp} loadHistory={pendingHistory} />);
 
     await act(async () => { vi.advanceTimersByTime(100); });
 
@@ -172,7 +175,7 @@ describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)
         return () => {};
       };
 
-      wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} />);
+      wrap(<ConditionsPanel siteId="s1" subscribe={fakeSubscribe} loadHistory={pendingHistory} />);
 
       await act(async () => { vi.advanceTimersByTime(100); });
 
@@ -196,4 +199,58 @@ describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)
       expect(badge).toHaveClass(`conditions-panel__badge conditions-panel__badge--${freshness.toLowerCase()}`);
     },
   );
+});
+
+describe("ConditionsPanel — four-hour history", () => {
+  it("labels the trend window and keeps a chart-specific loading state", async () => {
+    let handlers!: ConditionsStreamHandlers;
+    const subscribe = (_siteId: string, next: ConditionsStreamHandlers) => {
+      handlers = next;
+      return () => undefined;
+    };
+
+    wrap(<ConditionsPanel siteId="s1" subscribe={subscribe} loadHistory={pendingHistory} />);
+    await screen.findByText("Connecting to live conditions...");
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(29.1, "2026-08-20T08:45:00Z"), []);
+    });
+
+    expect(screen.getByRole("heading", { name: "WBGT Heat Stress Trend — Last 4 hours" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("Loading the last 4 hours of WBGT readings..."))
+      .toBeInTheDocument();
+  });
+
+  it("keeps live data visible and reports a history-only failure", async () => {
+    let handlers!: ConditionsStreamHandlers;
+    const subscribe = (_siteId: string, next: ConditionsStreamHandlers) => {
+      handlers = next;
+      return () => undefined;
+    };
+    const unavailableHistory = async () => {
+      throw new Error("history unavailable");
+    };
+
+    wrap(
+      <ConditionsPanel
+        siteId="s1"
+        subscribe={subscribe}
+        loadHistory={unavailableHistory}
+      />,
+    );
+    await screen.findByText("Connecting to live conditions...");
+
+    act(() => {
+      handlers.onStatus("live");
+      handlers.onSnapshot(liveSnapshot(29.1, "2026-08-20T08:45:00Z"), []);
+    });
+
+    expect(screen.getByText("29.1 °C")).toBeInTheDocument();
+    const notice = await screen.findByText(
+      "Historical readings unavailable — showing live updates only.",
+    );
+    expect(notice).toHaveAttribute("role", "status");
+  });
 });

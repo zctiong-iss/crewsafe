@@ -4,7 +4,10 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { type subscribeToConditions } from "@/api/conditionsStream";
 import type { ConditionsRangeWarning } from "@/api/conditionsDecoder";
-import { useConditionsStream } from "./useConditionsStream";
+import {
+  useConditionsStream,
+  type ConditionsHistoryLoader,
+} from "./useConditionsStream";
 import { ConditionsTrendChart } from "./ConditionsTrendChart";
 import { StopWorkBanner } from "./StopWorkBanner";
 import "./ConditionsPanel.css";
@@ -45,10 +48,12 @@ function rangeWarningMessage(
 export function ConditionsPanel({
   siteId,
   subscribe,
+  loadHistory,
   siteSwitcher,
 }: Readonly<{
   siteId: string;
   subscribe?: typeof subscribeToConditions;
+  loadHistory?: ConditionsHistoryLoader;
   siteSwitcher?: ReactNode;
 }>) {
   const {
@@ -57,7 +62,8 @@ export function ConditionsPanel({
     trend,
     stopWorkActive,
     rangeWarnings,
-  } = useConditionsStream(siteId, subscribe);
+    historyState,
+  } = useConditionsStream(siteId, subscribe, loadHistory);
 
   if (connectionState === "connecting" && snapshot === null)
     return (
@@ -143,8 +149,15 @@ export function ConditionsPanel({
             </dl>
 
             <div className="conditions-panel__chart-card">
-              <h2 className="conditions-panel__chart-title">WBGT Heat Stress Trend</h2>
-              <ConditionsTrendChart points={trend} />
+              <h2 className="conditions-panel__chart-title">
+                WBGT Heat Stress Trend — Last 4 hours
+              </h2>
+              {historyState === "unavailable" && (
+                <p className="conditions-panel__history-notice" role="status">
+                  Historical readings unavailable — showing live updates only.
+                </p>
+              )}
+              <ConditionsTrendChart points={trend} historyState={historyState} />
             </div>
           </>
         )}

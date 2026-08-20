@@ -1,10 +1,17 @@
 /** @author Tang Chee Seng (with assistance from Claude) */
 import { describe, it, expect } from "vitest";
-import { nextBackoffDelay, isConnectionStale, appendTrendPoint, isStopWorkActive, STALE_AFTER_MS } from "./streamLogic";
+import {
+  nextBackoffDelay,
+  isConnectionStale,
+  appendTrendPoint,
+  isStopWorkActive,
+  mergeTrendPoints,
+  STALE_AFTER_MS,
+} from "./streamLogic";
 import type { ConditionsSnapshot } from "@/api/conditionsStream";
 
-const snap = (observedAt: string | null, wbgt = 31): ConditionsSnapshot => ({
-  siteId: "s1", asOf: "2026-08-06T00:00:00Z", activeShift: null, lightning: null,
+const snap = (observedAt: string | null, wbgt = 31, asOf = observedAt ?? "2026-08-06T09:00:00Z"): ConditionsSnapshot => ({
+  siteId: "s1", asOf, activeShift: null, lightning: null,
   conditions: observedAt === null ? null : {
     wbgt, currentBand: null, forecastBand: null, forecastWbgt30m: null,
     temperature: 33, humidity: 70, windSpeed: 2, rainfall: 0,
@@ -31,20 +38,57 @@ describe("isConnectionStale", () => {
   });
 });
 
-describe("appendTrendPoint", () => {
-  it("dedupes consecutive identical observations", () => {
-    let buf = appendTrendPoint([], snap("2026-08-06T07:40:00Z", 31), 60);
-    buf = appendTrendPoint(buf, snap("2026-08-06T07:40:00Z", 31), 60);
-    expect(buf).toHaveLength(1);
-    buf = appendTrendPoint(buf, snap("2026-08-06T07:55:00Z", 32), 60);
-    expect(buf).toHaveLength(2);
+describe("mergeTrendPoints", () => {
+  it("sorts points, prunes outside four hours, and lets the newer source win on overlap", () => {
+    const merged = mergeTrendPoints(
+      [
+        { observedAt: "2026-08-20T08:45:00Z", wbgt: 29.1 },
+        { observedAt: "2026-08-20T04:59:59Z", wbgt: 25 },
+        { observedAt: "2026-08-20T06:00:00Z", wbgt: 27.3 },
+      ],
+      [
+        { observedAt: "2026-08-20T07:00:00Z", wbgt: 28 },
+        { observedAt: "2026-08-20T06:00:00Z", wbgt: 31.2 },
+      ],
+      "2026-08-20T09:00:00Z",
+    );
+
+    expect(merged).toEqual([
+      { observedAt: "2026-08-20T06:00:00Z", wbgt: 31.2 },
+      { observedAt: "2026-08-20T07:00:00Z", wbgt: 28 },
+      { observedAt: "2026-08-20T08:45:00Z", wbgt: 29.1 },
+    ]);
   });
-  it("ignores null conditions and respects the cap", () => {
-    expect(appendTrendPoint([], snap(null), 60)).toHaveLength(0);
-    let buf: ReturnType<typeof appendTrendPoint> = [];
-    for (let i = 0; i < 70; i++)
-      buf = appendTrendPoint(buf, snap(`2026-08-06T00:${String(i).padStart(2, "0")}:00Z`), 60);
-    expect(buf).toHaveLength(60);
+
+  it("keeps every point in the time window instead of applying the former 60-point cap", () => {
+    const points = Array.from({ length: 70 }, (_, index) => ({
+      observedAt: new Date(Date.parse("2026-08-20T05:01:00Z") + index * 180_000).toISOString(),
+      wbgt: 27 + index / 100,
+    }));
+
+    expect(mergeTrendPoints([], points, "2026-08-20T09:00:00Z")).toHaveLength(70);
+  });
+});
+
+describe("appendTrendPoint", () => {
+  it("deduplicates live observations and prunes against the snapshot server time", () => {
+    let buffer = [
+      { observedAt: "2026-08-20T04:59:59Z", wbgt: 25 },
+      { observedAt: "2026-08-20T08:45:00Z", wbgt: 29 },
+    ];
+
+    buffer = appendTrendPoint(
+      buffer,
+      snap("2026-08-20T08:45:00Z", 30, "2026-08-20T09:00:00Z"),
+    );
+
+    expect(buffer).toEqual([
+      { observedAt: "2026-08-20T08:45:00Z", wbgt: 30 },
+    ]);
+  });
+
+  it("ignores a null conditions payload", () => {
+    expect(appendTrendPoint([], snap(null))).toEqual([]);
   });
 });
 
