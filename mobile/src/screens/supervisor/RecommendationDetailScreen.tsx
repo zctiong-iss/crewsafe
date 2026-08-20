@@ -44,7 +44,11 @@ import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
-import { buildRationaleSummary, showsModelProse } from "@/helpers/planRationale";
+import {
+  buildRationaleSummary,
+  humaniseWorkerReferences,
+  showsModelProse,
+} from "@/helpers/planRationale";
 import type { Mitigation, MitigationCategory, Recommendation } from "@/types/domain";
 import type { RecommendationsStackParamList } from "@/navigation/types";
 
@@ -238,7 +242,9 @@ function RationaleSection({
   const { t } = useTranslation();
 
   const summary = buildRationaleSummary(recommendation);
-  const modelProse = showsModelProse(recommendation) ? recommendation.rationale : null;
+  const modelProse = showsModelProse(recommendation)
+    ? humaniseWorkerReferences(recommendation.rationale ?? "", recommendation.workers)
+    : null;
 
   const toggleLabel = expanded ? t("recommendations.readLess") : t("recommendations.readMore");
 
