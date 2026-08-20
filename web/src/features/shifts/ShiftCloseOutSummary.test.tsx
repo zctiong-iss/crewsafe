@@ -71,7 +71,7 @@ describe("ShiftCloseOutSummary", () => {
 
     renderWith({ shift });
 
-    await screen.findByText(/No readings in the shift window/);
+    expect(await screen.findByText(/No readings in the shift window/)).toBeInTheDocument();
   });
 
   it("says the shift is not yet closed when there is no close event", async () => {
@@ -80,7 +80,7 @@ describe("ShiftCloseOutSummary", () => {
 
     renderWith({ shift });
 
-    await screen.findByText("Not yet formally closed");
+    expect(await screen.findByText("Not yet formally closed")).toBeInTheDocument();
   });
 
   it("has no accessibility violations", async () => {

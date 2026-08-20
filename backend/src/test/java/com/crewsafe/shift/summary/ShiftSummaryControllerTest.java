@@ -203,8 +203,9 @@ class ShiftSummaryControllerTest extends AbstractIntegrationTest {
                 .map(line -> line.split(",")[1])
                 .findFirst().orElseThrow();
 
-        assertThat(csv).contains("occurred_at,actor,event,event_type");
-        assertThat(csv).contains("# shift_id," + shift.getId());
+        assertThat(csv)
+                .contains("occurred_at,actor,event,event_type")
+                .contains("# shift_id," + shift.getId());
         assertThat(printed).isEqualTo(sha256(dataSection(csv)));
     }
 
