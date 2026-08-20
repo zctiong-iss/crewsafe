@@ -211,6 +211,47 @@ function DecisionSection({
   );
 }
 
+function RationaleSection({
+  rationale,
+  expanded,
+  onToggle,
+}: Readonly<{
+  rationale: string | null;
+  expanded: boolean;
+  onToggle: () => void;
+}>) {
+  const { t } = useTranslation();
+  if (!rationale) return null;
+
+  const toggleLabel = expanded ? t("recommendations.readLess") : t("recommendations.readMore");
+  return (
+    <>
+      <AppText variant="subtitle" style={styles.sectionTitle}>
+        {t("recommendations.whyTitle")}
+      </AppText>
+      <AppText
+        variant="body"
+        numberOfLines={expanded ? undefined : 3}
+        style={styles.block}
+      >
+        {rationale}
+      </AppText>
+      <TouchableOpacity
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={toggleLabel}
+        hitSlop={8}
+        style={styles.readMore}
+      >
+        <AppText variant="caption" tone="secondary">
+          {toggleLabel}
+        </AppText>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 export default function RecommendationDetailScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -477,40 +518,11 @@ export default function RecommendationDetailScreen() {
         ) : null}
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
-        {rationale ? (
-          <>
-            <AppText variant="subtitle" style={styles.sectionTitle}>
-              {t("recommendations.whyTitle")}
-            </AppText>
-            {/*
-              Clamped to three lines (ADR-0017 §3). This narrative is the single biggest text
-              block on the screen, and an agent writing several paragraphs pushes the actions
-              — the thing the supervisor came here to decide on — below the fold. Three lines
-              is enough to judge whether the reasoning is worth reading in full.
-            */}
-            <AppText
-              variant="body"
-              numberOfLines={showFullWhy ? undefined : 3}
-              style={styles.block}
-            >
-              {rationale}
-            </AppText>
-            <TouchableOpacity
-              onPress={() => setShowFullWhy((value) => !value)}
-              accessibilityRole="button"
-              accessibilityState={{ expanded: showFullWhy }}
-              accessibilityLabel={
-                showFullWhy ? t("recommendations.readLess") : t("recommendations.readMore")
-              }
-              hitSlop={8}
-              style={styles.readMore}
-            >
-              <AppText variant="caption" tone="secondary">
-                {showFullWhy ? t("recommendations.readLess") : t("recommendations.readMore")}
-              </AppText>
-            </TouchableOpacity>
-          </>
-        ) : null}
+        <RationaleSection
+          rationale={rationale}
+          expanded={showFullWhy}
+          onToggle={() => setShowFullWhy((value) => !value)}
+        />
 
         <AppText variant="subtitle" style={styles.sectionTitle}>
           {t("recommendations.evidenceTitle")}

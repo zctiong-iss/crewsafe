@@ -99,6 +99,71 @@ function myShiftPresentation(
   };
 }
 
+function MyShiftDevPanel({
+  onChangeSource,
+  onChangeScenario,
+  onChangeFreshness,
+}: Readonly<{
+  onChangeSource: (source: LightningSource) => void;
+  onChangeScenario: (scenario: LightningScenario) => void;
+  onChangeFreshness: (status: WeatherQualityStatus) => void;
+}>) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  const mockApi = isMockApi();
+  const liveSource = !mockApi && getLightningSource() === "live";
+
+  return (
+    <View
+      style={[
+        styles.devPanel,
+        { borderTopColor: theme.colors.border, borderTopWidth: theme.metrics.borderWidth },
+      ]}
+    >
+      {!mockApi ? (
+        <>
+          <AppText variant="caption" tone="secondary" style={styles.devLabel}>
+            {t("dev.lightningSourceLabel")}
+          </AppText>
+          {LIGHTNING_SOURCES.map((option) => (
+            <RadioWithTitle
+              key={option}
+              title={t(`dev.lightningSource.${option}`)}
+              selected={option === getLightningSource()}
+              onPress={() => onChangeSource(option)}
+            />
+          ))}
+        </>
+      ) : null}
+
+      <AppText variant="caption" tone="secondary" style={styles.devLabel}>
+        {t("dev.scenarioLabel")}
+      </AppText>
+      {SCENARIOS.map((option) => (
+        <RadioWithTitle
+          key={option.key}
+          title={t(option.labelKey)}
+          selected={option.key === getLightningScenario()}
+          onPress={() => onChangeScenario(option.key)}
+          disabled={liveSource}
+        />
+      ))}
+
+      <AppText variant="caption" tone="secondary" style={styles.devLabel}>
+        {t("dev.freshnessLabel")}
+      </AppText>
+      {FRESHNESS_OPTIONS.map((option) => (
+        <RadioWithTitle
+          key={option}
+          title={t(`freshness.${option}`)}
+          selected={option === getFreshnessScenario()}
+          onPress={() => onChangeFreshness(option)}
+        />
+      ))}
+    </View>
+  );
+}
+
 export default function MyShiftScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -300,62 +365,11 @@ export default function MyShiftScreen() {
         ) : null}
 
         {showDevPanel ? (
-          <View
-            style={[
-              styles.devPanel,
-              { borderTopColor: theme.colors.border, borderTopWidth: theme.metrics.borderWidth },
-            ]}
-          >
-            {/*
-              Absent in mock auth mode, where there is nothing to switch to: that mode never
-              touches the network, so "live" would be a button that changed nothing.
-            */}
-            {!isMockApi() ? (
-              <>
-                <AppText variant="caption" tone="secondary" style={styles.devLabel}>
-                  {t("dev.lightningSourceLabel")}
-                </AppText>
-                {LIGHTNING_SOURCES.map((option) => (
-                  <RadioWithTitle
-                    key={option}
-                    title={t(`dev.lightningSource.${option}`)}
-                    selected={option === getLightningSource()}
-                    onPress={() => onChangeSource(option)}
-                  />
-                ))}
-              </>
-            ) : null}
-
-            <AppText variant="caption" tone="secondary" style={styles.devLabel}>
-              {t("dev.scenarioLabel")}
-            </AppText>
-            {SCENARIOS.map((option) => (
-              <RadioWithTitle
-                key={option.key}
-                title={t(option.labelKey)}
-                selected={option.key === getLightningScenario()}
-                onPress={() => onChangeScenario(option.key)}
-                /*
-                  Disabled under Live, not hidden. A simulated scenario has no meaning against
-                  a live feed, and a radio that still moves while changing nothing on screen is
-                  how someone concludes the live data is broken.
-                */
-                disabled={!isMockApi() && getLightningSource() === "live"}
-              />
-            ))}
-
-            <AppText variant="caption" tone="secondary" style={styles.devLabel}>
-              {t("dev.freshnessLabel")}
-            </AppText>
-            {FRESHNESS_OPTIONS.map((option) => (
-              <RadioWithTitle
-                key={option}
-                title={t(`freshness.${option}`)}
-                selected={option === getFreshnessScenario()}
-                onPress={() => onChangeFreshness(option)}
-              />
-            ))}
-          </View>
+          <MyShiftDevPanel
+            onChangeSource={onChangeSource}
+            onChangeScenario={onChangeScenario}
+            onChangeFreshness={onChangeFreshness}
+          />
         ) : null}
       </ScrollView>
 

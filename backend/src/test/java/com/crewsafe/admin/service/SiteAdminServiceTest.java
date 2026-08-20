@@ -84,7 +84,7 @@ class SiteAdminServiceTest {
 
             assertThat(saved.getName()).isEqualTo("New Site");
             assertThat(saved.isArchived()).isFalse();
-            verify(audit).record(eq(actorId), eq("SITE_CREATED"), eq("SITE"), eq(saved.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_CREATED"), eq("SITE"), eq(saved.getId()), anyString());
         }
     }
 
@@ -126,7 +126,7 @@ class SiteAdminServiceTest {
                     new BigDecimal("1.4"), new BigDecimal("103.9"), actorId);
 
             assertThat(saved.getLatitude()).isEqualByComparingTo("1.4");
-            verify(audit).record(eq(actorId), eq("SITE_UPDATED"), eq("SITE"), eq(target.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_UPDATED"), eq("SITE"), eq(target.getId()), anyString());
         }
     }
 
@@ -143,7 +143,7 @@ class SiteAdminServiceTest {
             Site result = service.archive(target.getId(), actorId);
 
             assertThat(result.isArchived()).isTrue();
-            verify(audit).record(eq(actorId), eq("SITE_ARCHIVED"), eq("SITE"), eq(target.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_ARCHIVED"), eq("SITE"), eq(target.getId()), anyString());
         }
 
         @Test
@@ -157,7 +157,7 @@ class SiteAdminServiceTest {
 
             assertThat(result).isSameAs(target);
             verify(sites, never()).save(any());
-            verify(audit, never()).record(any(), anyString(), anyString(), any(), anyString());
+            verify(audit, never()).recordEvent(any(), anyString(), anyString(), any(), anyString());
         }
 
         @Test
@@ -170,7 +170,7 @@ class SiteAdminServiceTest {
             Site result = service.unarchive(target.getId(), actorId);
 
             assertThat(result.isArchived()).isFalse();
-            verify(audit).record(eq(actorId), eq("SITE_UNARCHIVED"), eq("SITE"), eq(target.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_UNARCHIVED"), eq("SITE"), eq(target.getId()), anyString());
         }
 
         @Test

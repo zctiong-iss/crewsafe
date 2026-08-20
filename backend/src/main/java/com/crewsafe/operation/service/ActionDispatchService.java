@@ -59,7 +59,7 @@ public class ActionDispatchService {
      * synchronization is still technically bound to the thread even though the physical commit
      * has already happened. Default propagation would silently "join" that tail end instead of
      * opening a genuinely new transaction, so the write here would run without ever being
-     * durably committed. {@link AuditService#record} already forces {@code REQUIRES_NEW} for
+     * durably committed. {@link AuditService#recordEvent} already forces {@code REQUIRES_NEW} for
      * exactly this reason. Harmless for this method's other caller (the controller, which has
      * no ambient transaction to begin with).
      */
@@ -88,7 +88,7 @@ public class ActionDispatchService {
                 .build();
 
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), AuditEventType.ACTION_DISPATCHED,
+        auditService.recordEvent(principal.getId(), AuditEventType.ACTION_DISPATCHED,
                 AUDIT_TARGET_TYPE, saved.getId(),
                 "Action dispatched: " + actionCode + " to worker: " + workerId);
         log.info("action_dispatched");
@@ -128,7 +128,7 @@ public class ActionDispatchService {
                 .build();
 
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(actorId, AuditEventType.ACTION_AUTO_DISPATCHED,
+        auditService.recordEvent(actorId, AuditEventType.ACTION_AUTO_DISPATCHED,
                 AUDIT_TARGET_TYPE, saved.getId(),
                 "Action auto-dispatched (no supervisor approval): " + actionCode + " to worker: " + workerId);
         log.info("action_auto_dispatched");
@@ -186,7 +186,7 @@ public class ActionDispatchService {
         dispatch.setStatus(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED);
         dispatch.setStartTime(Instant.now());
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), AuditEventType.ACTION_ACKNOWLEDGED,
+        auditService.recordEvent(principal.getId(), AuditEventType.ACTION_ACKNOWLEDGED,
                 AUDIT_TARGET_TYPE, saved.getId(), "Action acknowledged: " + dispatchId);
         log.info("action_dispatch_acknowledged");
 
@@ -213,7 +213,7 @@ public class ActionDispatchService {
         dispatch.setEndTime(Instant.now());
         dispatch.setCompletedBy(ActionDispatch.CompletionSource.WORKER);
         ActionDispatch saved = actionDispatchRepository.save(dispatch);
-        auditService.record(principal.getId(), AuditEventType.ACTION_COMPLETED,
+        auditService.recordEvent(principal.getId(), AuditEventType.ACTION_COMPLETED,
                 AUDIT_TARGET_TYPE, saved.getId(), "Action completed: " + dispatchId);
         log.info("action_dispatch_completed");
 
@@ -237,7 +237,7 @@ public class ActionDispatchService {
             dispatch.setStatus(ActionDispatch.ActionDispatchStatus.LATE);
             dispatch.setLateAt(Instant.now(clock));
             ActionDispatch saved = actionDispatchRepository.save(dispatch);
-            auditService.record(null, AuditEventType.ACTION_LATE,
+            auditService.recordEvent(null, AuditEventType.ACTION_LATE,
                     AUDIT_TARGET_TYPE, saved.getId(), "Action went late (unacknowledged past ack window): " + saved.getId());
         }
 
@@ -264,7 +264,7 @@ public class ActionDispatchService {
             dispatch.setEndTime(Instant.now(clock));
             dispatch.setCompletedBy(ActionDispatch.CompletionSource.SYSTEM);
             ActionDispatch saved = actionDispatchRepository.save(dispatch);
-            auditService.record(null, AuditEventType.ACTION_AUTO_COMPLETED,
+            auditService.recordEvent(null, AuditEventType.ACTION_AUTO_COMPLETED,
                     AUDIT_TARGET_TYPE, saved.getId(), "Action auto-completed (auto-complete window elapsed): " + saved.getId());
             recordRestIfThisWasOne(saved);
         }

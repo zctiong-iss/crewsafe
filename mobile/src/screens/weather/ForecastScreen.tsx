@@ -56,15 +56,7 @@ import { wbgtBandColor } from "@/helpers/wbgtBandColor";
 import type { ForecastHorizonMinutes } from "@/types/domain";
 import type { WeatherStackParamList } from "@/navigation/types";
 
-function horizonPresentation(state: HorizonState) {
-  const forecast = state.status === "ready" ? state.forecast : null;
-  return {
-    forecast,
-    loading: state.status === "loading" || state.status === "idle",
-    unavailable: state.status === "unavailable",
-    failed: state.status === "error",
-  };
-}
+type ReadyForecast = NonNullable<HorizonState["forecast"]>;
 
 export default function ForecastScreen() {
   const { t } = useTranslation();
@@ -137,26 +129,8 @@ function HorizonCard({
   state: HorizonState;
   onRetry: () => void;
 }>) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const theme = useTheme();
-  const { forecast, loading, unavailable, failed } = horizonPresentation(state);
-
-  // Null when the server sent no band, which renders as ordinary text — never as the coolest
-  // band, since an unknown reading shown in green would read as a safe one.
-  const bandColor =
-    forecast
-      ? wbgtBandColor(forecast.band, theme.colors)
-      : null;
-
-  // The interval's bounds carry their own bands, so a range crossing 31 or 33 shows it.
-  const lowerBandColor =
-    forecast
-      ? wbgtBandColor(forecast.confidenceIntervalLowerBand, theme.colors)
-      : null;
-  const upperBandColor =
-    forecast
-      ? wbgtBandColor(forecast.confidenceIntervalUpperBand, theme.colors)
-      : null;
 
   return (
     <View
@@ -167,151 +141,126 @@ function HorizonCard({
       ]}
     >
       <AppText variant="label">{t("forecast.horizon", { count: horizonMinutes })}</AppText>
+      <HorizonContent state={state} onRetry={onRetry} />
+    </View>
+  );
+}
 
-      {loading ? (
-        <View style={styles.cardBody}>
-          <AppLoader message={t("common.loading")} />
-        </View>
+function HorizonContent({ state, onRetry }: Readonly<{ state: HorizonState; onRetry: () => void }>) {
+  const { t } = useTranslation();
+
+  if (state.status === "loading" || state.status === "idle") {
+    return (
+      <View style={styles.cardBody}>
+        <AppLoader message={t("common.loading")} />
+      </View>
+    );
+  }
+  if (state.status === "ready") {
+    return state.forecast ? <ForecastReading forecast={state.forecast} /> : null;
+  }
+  if (state.status === "unavailable") {
+    return (
+      <View style={styles.cardBody}>
+        <AppText variant="subtitle">{t("forecast.unavailableTitle")}</AppText>
+        <AppText variant="body" tone="secondary" style={styles.unavailableBody}>
+          {t("forecast.unavailableBody")}
+        </AppText>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.cardBody}>
+      <MessageBanner
+        message={t(state.errorKey ?? "errors.unknown")}
+        tone="danger"
+        requestId={state.requestId}
+      />
+      <AppButton title={t("common.retry")} onPress={onRetry} style={styles.retry} />
+    </View>
+  );
+}
+
+function ForecastReading({ forecast }: Readonly<{ forecast: ReadyForecast }>) {
+  const { t, i18n } = useTranslation();
+  const theme = useTheme();
+  const bandColor = wbgtBandColor(forecast.band, theme.colors);
+  const lowerBandColor = wbgtBandColor(forecast.confidenceIntervalLowerBand, theme.colors);
+  const upperBandColor = wbgtBandColor(forecast.confidenceIntervalUpperBand, theme.colors);
+
+  return (
+    <View style={styles.cardBody}>
+      <View style={styles.valueRow}>
+        <AppText variant="display" style={bandColor ? { color: bandColor } : undefined}>
+          {forecast.predictedValue.toFixed(1)}
+        </AppText>
+        <AppText
+          variant="subtitle"
+          tone={bandColor ? undefined : "secondary"}
+          style={[styles.unit, bandColor ? { color: bandColor } : null]}
+        >
+          °C
+        </AppText>
+      </View>
+
+      {forecast.band ? (
+        <AppText
+          variant="label"
+          style={[styles.bandLabel, bandColor ? { color: bandColor } : undefined]}
+        >
+          {t(`wbgt.band.${forecast.band}`)}
+        </AppText>
       ) : null}
 
-      {forecast ? (
-        <View style={styles.cardBody}>
-          {/*
-            Coloured by the band MOM's poster uses, so a supervisor who knows that wall chart
-            reads the risk level before reading the number. The band comes evaluated from the
-            server (SCRUM-369) — the client colours it, it does not decide it.
-          */}
-          <View style={styles.valueRow}>
-            <AppText
-              variant="display"
-              style={bandColor ? { color: bandColor } : undefined}
-            >
-              {forecast.predictedValue.toFixed(1)}
-            </AppText>
-            {/*
-              The unit takes the band colour but keeps its smaller size. `tone` is dropped when
-              a colour applies, because tone sets a colour of its own and the two would fight —
-              the explicit style wins in `AppText`, but leaving `secondary` on would make the
-              intent unreadable to the next person.
-            */}
-            <AppText
-              variant="subtitle"
-              tone={bandColor ? undefined : "secondary"}
-              style={[styles.unit, bandColor ? { color: bandColor } : null]}
-            >
-              °C
-            </AppText>
-          </View>
+      <AppText variant="caption" tone="secondary">
+        {t("forecast.rangeLabel")}
+      </AppText>
+      <AppText
+        variant="subtitle"
+        accessibilityLabel={t("forecast.range", {
+          lower: forecast.confidenceIntervalLower.toFixed(1),
+          upper: forecast.confidenceIntervalUpper.toFixed(1),
+        })}
+      >
+        <AppText variant="subtitle" style={lowerBandColor ? { color: lowerBandColor } : undefined}>
+          {forecast.confidenceIntervalLower.toFixed(1)}
+        </AppText>
+        {t("forecast.rangeSeparator")}
+        <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+          {forecast.confidenceIntervalUpper.toFixed(1)}
+        </AppText>
+        <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
+          {t("forecast.rangeUnit")}
+        </AppText>
+      </AppText>
 
-          {/*
-            The band in words, directly under the value it describes.
+      <ForecastBasisNote forecast={forecast} />
 
-            Not decoration: colour alone fails WCAG 1.4.1, and on site it also fails to sunlight
-            flattening hue and to red/green colour-vision deficiency. This is the signal the
-            colour is only a shortcut to — and it carries the 31-to-32 versus 32-to-33
-            distinction that the poster's single amber column cannot.
-          */}
-          {forecast.band ? (
-            <AppText
-              variant="label"
-              style={[styles.bandLabel, bandColor ? { color: bandColor } : undefined]}
-            >
-              {t(`wbgt.band.${forecast.band}`)}
-            </AppText>
-          ) : null}
+      <View style={styles.provenance}>
+        <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+          {t("forecast.model", { version: forecast.modelVersion })}
+        </AppText>
+        <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+          {t("forecast.generatedAt", {
+            time: formatTime(forecast.generatedAt, i18n.language),
+          })}
+        </AppText>
+      </View>
+    </View>
+  );
+}
 
-          {/* Always present, never behind a tap. The uncertainty is part of the reading. */}
-          <AppText variant="caption" tone="secondary">
-            {t("forecast.rangeLabel")}
-          </AppText>
-          {/*
-            Each bound in its own band's colour, because an interval routinely crosses a
-            boundary — the half-width reaches 4°C — and one colour across the whole range would
-            assert it stays in one band while the range itself says it might not. A green lower
-            bound beside an amber upper one is the range saying "this could already be in the
-            rest-required band", which is the most useful thing it has to tell a supervisor.
+function ForecastBasisNote({ forecast }: Readonly<{ forecast: ReadyForecast }>) {
+  const { t } = useTranslation();
+  if (!forecast.degraded || !forecast.basis || forecast.basis === "MODEL") return null;
 
-            The nested elements are for colour only. `accessibilityLabel` carries the intact
-            translated sentence, so a screen reader hears one phrase rather than three
-            fragments, and the localised whole is never assembled from parts.
-          */}
-          <AppText
-            variant="subtitle"
-            accessibilityLabel={t("forecast.range", {
-              lower: forecast.confidenceIntervalLower.toFixed(1),
-              upper: forecast.confidenceIntervalUpper.toFixed(1),
-            })}
-          >
-            <AppText variant="subtitle" style={lowerBandColor ? { color: lowerBandColor } : undefined}>
-              {forecast.confidenceIntervalLower.toFixed(1)}
-            </AppText>
-            {t("forecast.rangeSeparator")}
-            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
-              {forecast.confidenceIntervalUpper.toFixed(1)}
-            </AppText>
-            {/*
-              One unit for two bounds, so it follows the hotter end. On a range that crosses a
-              boundary the trailing colour then reinforces the stricter band rather than
-              softening it — the wrong way round would let an amber upper bound trail off in
-              green.
-            */}
-            <AppText variant="subtitle" style={upperBandColor ? { color: upperBandColor } : undefined}>
-              {t("forecast.rangeUnit")}
-            </AppText>
-          </AppText>
-
-          {/*
-            Placed directly under the range and above the provenance, because it explains the
-            range rather than describing where the number came from. A supervisor who reads
-            only as far as the interval has still been told why it is as wide as it is.
-
-            `degraded` is the server's own verdict; the client never infers trustworthiness
-            from a timestamp, for the same reason it does not compute the band.
-          */}
-          {forecast.degraded && forecast.basis && forecast.basis !== "MODEL" ? (
-            <View style={styles.basisNote}>
-              <AppText variant="caption">
-                {t(`forecast.basisNote.${forecast.basis}`)}
-              </AppText>
-              {typeof forecast.inputAgeMinutes === "number" ? (
-                <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-                  {t("forecast.inputAge", { count: forecast.inputAgeMinutes })}
-                </AppText>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View style={styles.provenance}>
-            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-              {t("forecast.model", { version: forecast.modelVersion })}
-            </AppText>
-            <AppText variant="caption" tone="secondary" style={styles.metaItem}>
-              {t("forecast.generatedAt", {
-                time: formatTime(forecast.generatedAt, i18n.language),
-              })}
-            </AppText>
-          </View>
-        </View>
-      ) : null}
-
-      {unavailable ? (
-        <View style={styles.cardBody}>
-          <AppText variant="subtitle">{t("forecast.unavailableTitle")}</AppText>
-          <AppText variant="body" tone="secondary" style={styles.unavailableBody}>
-            {t("forecast.unavailableBody")}
-          </AppText>
-        </View>
-      ) : null}
-
-      {failed ? (
-        <View style={styles.cardBody}>
-          <MessageBanner
-            message={t(state.errorKey ?? "errors.unknown")}
-            tone="danger"
-            requestId={state.requestId}
-          />
-          <AppButton title={t("common.retry")} onPress={onRetry} style={styles.retry} />
-        </View>
+  return (
+    <View style={styles.basisNote}>
+      <AppText variant="caption">{t(`forecast.basisNote.${forecast.basis}`)}</AppText>
+      {typeof forecast.inputAgeMinutes === "number" ? (
+        <AppText variant="caption" tone="secondary" style={styles.metaItem}>
+          {t("forecast.inputAge", { count: forecast.inputAgeMinutes })}
+        </AppText>
       ) : null}
     </View>
   );

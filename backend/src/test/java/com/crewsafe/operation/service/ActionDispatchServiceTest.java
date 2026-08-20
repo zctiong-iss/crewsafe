@@ -138,7 +138,7 @@ class ActionDispatchServiceTest {
         assertNotNull(result);
         assertEquals("REST_10_MIN", result.getActionCode());
         assertEquals(ActionDispatch.ActionDispatchStatus.PENDING, result.getStatus());
-        verify(auditService).record(eq(supervisorId), eq(AuditEventType.ACTION_DISPATCHED),
+        verify(auditService).recordEvent(eq(supervisorId), eq(AuditEventType.ACTION_DISPATCHED),
                 eq("ACTION_DISPATCH"), eq(result.getId()), any());
     }
 
@@ -185,7 +185,7 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.PENDING, result.getStatus());
         assertNull(result.getApproval());
         assertEquals(recommendation, result.getRecommendation());
-        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_AUTO_DISPATCHED),
+        verify(auditService).recordEvent(isNull(), eq(AuditEventType.ACTION_AUTO_DISPATCHED),
                 eq("ACTION_DISPATCH"), eq(result.getId()), any());
         // No Approval lookup at all -- there is none to find.
         verifyNoInteractions(approvalRepository);
@@ -205,7 +205,7 @@ class ActionDispatchServiceTest {
 
         service.autoDispatchAction(recommendation, supervisorId, workerId, "STOP_WORK", "Stop work immediately");
 
-        verify(auditService).record(eq(supervisorId), eq(AuditEventType.ACTION_AUTO_DISPATCHED), any(), any(), any());
+        verify(auditService).recordEvent(eq(supervisorId), eq(AuditEventType.ACTION_AUTO_DISPATCHED), any(), any(), any());
     }
 
     @Test
@@ -236,7 +236,7 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.ACKNOWLEDGED, second.getStatus());
 
         // Only one audit event should be recorded for the first acknowledgement
-        verify(auditService).record(eq(workerId), eq(AuditEventType.ACTION_ACKNOWLEDGED),
+        verify(auditService).recordEvent(eq(workerId), eq(AuditEventType.ACTION_ACKNOWLEDGED),
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
@@ -258,7 +258,7 @@ class ActionDispatchServiceTest {
 
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, result.getStatus());
         verify(actionDispatchRepository, never()).save(any());
-        verify(auditService, never()).record(any(), eq(AuditEventType.ACTION_ACKNOWLEDGED), any(), any(), any());
+        verify(auditService, never()).recordEvent(any(), eq(AuditEventType.ACTION_ACKNOWLEDGED), any(), any(), any());
     }
 
     @Test
@@ -281,7 +281,7 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, second.getStatus());
 
         // Only one audit event should be recorded
-        verify(auditService).record(eq(workerId), eq(AuditEventType.ACTION_COMPLETED),
+        verify(auditService).recordEvent(eq(workerId), eq(AuditEventType.ACTION_COMPLETED),
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
@@ -298,7 +298,7 @@ class ActionDispatchServiceTest {
         assertEquals(1, count);
         assertEquals(ActionDispatch.ActionDispatchStatus.LATE, dispatch.getStatus());
         assertEquals(NOW, dispatch.getLateAt());
-        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_LATE),
+        verify(auditService).recordEvent(isNull(), eq(AuditEventType.ACTION_LATE),
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 
@@ -324,7 +324,7 @@ class ActionDispatchServiceTest {
         assertEquals(ActionDispatch.ActionDispatchStatus.COMPLETED, dispatch.getStatus());
         assertEquals(ActionDispatch.CompletionSource.SYSTEM, dispatch.getCompletedBy());
         assertEquals(NOW, dispatch.getEndTime());
-        verify(auditService).record(isNull(), eq(AuditEventType.ACTION_AUTO_COMPLETED),
+        verify(auditService).recordEvent(isNull(), eq(AuditEventType.ACTION_AUTO_COMPLETED),
                 eq("ACTION_DISPATCH"), eq(dispatchId), any());
     }
 

@@ -251,6 +251,25 @@ class SupervisorCallControllerIT {
     }
 
     @Test
+    @DisplayName("POST /api/supervisor/calls - Invalid input (null supervisorId)")
+    void testInitiateCall_MissingSupervisorId() throws Exception {
+        String requestBody = objectMapper.writeValueAsString(new InitiateCallRequest(
+            site.getId(),
+            "Help needed",
+            null
+        ));
+
+        mockMvc.perform(
+            post("/api/supervisor/calls")
+                .with(authenticatedAs(worker))
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody)
+        )
+        .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("POST /api/supervisor/calls - Input validation (notes exceeds max length)")
     void testInitiateCall_NotesTooLong() throws Exception {
         // Arrange - Create request with notes exceeding 500 characters

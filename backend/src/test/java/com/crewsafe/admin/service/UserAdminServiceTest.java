@@ -203,7 +203,7 @@ class UserAdminServiceTest {
             assertThat(saved.getEmail()).isNull();
             verify(memberships).save(any(SiteMembership.class));
             verify(cognitoProvisioning, never()).createUser(any(), any(), any());
-            verify(audit).record(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
         }
 
         @Test
@@ -223,7 +223,7 @@ class UserAdminServiceTest {
             assertThat(saved.getEmail()).isEqualTo("new-user@synthetic.crewsafe.invalid");
             assertThat(saved.getUsername()).isEqualTo("new-user@synthetic.crewsafe.invalid");
             verify(memberships).save(any(SiteMembership.class));
-            verify(audit).record(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("USER_REGISTERED"), eq("USER"), eq(saved.getId()), anyString());
         }
 
         @Test
@@ -290,8 +290,8 @@ class UserAdminServiceTest {
             AppUser saved = service.updateRoleAndStatus(target.getId(), Role.SUPERVISOR, null, actorId);
 
             assertThat(saved.getRole()).isEqualTo(Role.SUPERVISOR);
-            verify(audit).record(eq(actorId), eq("USER_ROLE_CHANGED"), eq("USER"), eq(target.getId()), anyString());
-            verify(audit, never()).record(eq(actorId), eq("USER_STATUS_CHANGED"), any(), any(), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("USER_ROLE_CHANGED"), eq("USER"), eq(target.getId()), anyString());
+            verify(audit, never()).recordEvent(eq(actorId), eq("USER_STATUS_CHANGED"), any(), any(), anyString());
         }
 
         @Test
@@ -303,7 +303,7 @@ class UserAdminServiceTest {
             AppUser saved = service.updateRoleAndStatus(target.getId(), null, UserStatus.INACTIVE, actorId);
 
             assertThat(saved.getStatus()).isEqualTo(UserStatus.INACTIVE);
-            verify(audit).record(eq(actorId), eq("USER_STATUS_CHANGED"), eq("USER"), eq(target.getId()),
+            verify(audit).recordEvent(eq(actorId), eq("USER_STATUS_CHANGED"), eq("USER"), eq(target.getId()),
                     anyString());
         }
 
@@ -315,7 +315,7 @@ class UserAdminServiceTest {
 
             service.updateRoleAndStatus(target.getId(), Role.WORKER, UserStatus.ACTIVE, actorId);
 
-            verify(audit, never()).record(any(), anyString(), anyString(), any(), anyString());
+            verify(audit, never()).recordEvent(any(), anyString(), anyString(), any(), anyString());
         }
     }
 
@@ -350,7 +350,7 @@ class UserAdminServiceTest {
             service.grantSite(userId, siteId, actorId);
 
             verify(memberships).save(any(SiteMembership.class));
-            verify(audit).record(eq(actorId), eq("SITE_MEMBERSHIP_GRANTED"), eq("USER"), eq(userId), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_MEMBERSHIP_GRANTED"), eq("USER"), eq(userId), anyString());
         }
 
         @Test
@@ -375,7 +375,7 @@ class UserAdminServiceTest {
             service.revokeSite(userId, siteId, actorId);
 
             verify(memberships).delete(membership);
-            verify(audit).record(eq(actorId), eq("SITE_MEMBERSHIP_REVOKED"), eq("USER"), eq(userId), anyString());
+            verify(audit).recordEvent(eq(actorId), eq("SITE_MEMBERSHIP_REVOKED"), eq("USER"), eq(userId), anyString());
         }
     }
 }

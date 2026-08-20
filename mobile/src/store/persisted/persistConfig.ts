@@ -54,7 +54,7 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
       };
       return {
         ...previous,
-        preferences: { ...initialPreferencesState, ...(previous.preferences ?? {}) },
+        preferences: { ...initialPreferencesState, ...previous.preferences },
       };
     },
 
@@ -83,7 +83,7 @@ export const persistConfig: Omit<PersistConfig<any>, "storage"> & {
       return {
         ...previous,
         preferences: {
-          ...(previous.preferences ?? {}),
+          ...previous.preferences,
           reduceMotion: true,
           reduceMotionChosenExplicitly: false,
         },

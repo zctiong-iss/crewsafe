@@ -73,7 +73,7 @@ class CognitoJwtAuthenticationConverterTest {
     void recordsTheFirstRequestWithAToken() {
         converter.convert(tokenWithJti("jti-1"));
 
-        verify(audit).record(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
+        verify(audit).recordEvent(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
                 eq("USER"), eq(user.getId()), any());
     }
 
@@ -85,7 +85,7 @@ class CognitoJwtAuthenticationConverterTest {
         converter.convert(token);
         converter.convert(token);
 
-        verify(audit, times(1)).record(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
+        verify(audit, times(1)).recordEvent(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
                 eq("USER"), eq(user.getId()), any());
     }
 
@@ -97,7 +97,7 @@ class CognitoJwtAuthenticationConverterTest {
     @Test
     void authenticationStillSucceedsWhenTheAuditWriteFails() {
         doThrow(new DataAccessResourceFailureException("audit table unavailable"))
-                .when(audit).record(any(), any(), any(), any(), any());
+                .when(audit).recordEvent(any(), any(), any(), any(), any());
 
         var authentication = converter.convert(tokenWithJti("jti-3"));
 
@@ -118,19 +118,19 @@ class CognitoJwtAuthenticationConverterTest {
         Jwt token = tokenWithJti("jti-4");
 
         doThrow(new DataAccessResourceFailureException("audit table unavailable"))
-                .when(audit).record(any(), any(), any(), any(), any());
+                .when(audit).recordEvent(any(), any(), any(), any(), any());
         converter.convert(token);
 
         // The audit table recovers; the very same token is presented again.
-        doNothing().when(audit).record(any(), any(), any(), any(), any());
+        doNothing().when(audit).recordEvent(any(), any(), any(), any(), any());
         converter.convert(token);
 
-        verify(audit, times(2)).record(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
+        verify(audit, times(2)).recordEvent(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
                 eq("USER"), eq(user.getId()), any());
 
         // ...and once it has succeeded, dedup resumes: no third write.
         converter.convert(token);
-        verify(audit, times(2)).record(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
+        verify(audit, times(2)).recordEvent(eq(user.getId()), eq(AuditEventType.TOKEN_FIRST_SEEN),
                 eq("USER"), eq(user.getId()), any());
     }
 
@@ -145,7 +145,7 @@ class CognitoJwtAuthenticationConverterTest {
                 .build();
 
         assertThat(converter.convert(noJti)).isNotNull();
-        verify(audit, times(0)).record(any(), any(), any(), any(), any());
+        verify(audit, times(0)).recordEvent(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -164,6 +164,6 @@ class CognitoJwtAuthenticationConverterTest {
 
         assertThatThrownBy(() -> converter.convert(token))
                 .isInstanceOf(OAuth2AuthenticationException.class);
-        verify(audit, times(0)).record(any(), any(), any(), any(), any());
+        verify(audit, times(0)).recordEvent(any(), any(), any(), any(), any());
     }
 }

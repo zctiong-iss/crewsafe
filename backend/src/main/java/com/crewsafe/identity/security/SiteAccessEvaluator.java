@@ -61,7 +61,7 @@ public class SiteAccessEvaluator {
 
         if (!permitted) {
             // A denied cross-site attempt is a security event, not just a 403 (FR-04).
-            audit.record(principal.getId(), AuditEventType.ACCESS_DENIED, "SITE", siteId,
+            audit.recordEvent(principal.getId(), AuditEventType.ACCESS_DENIED, "SITE", siteId,
                     "Attempted access to a site the user is not assigned to");
             log.warn("site_access_denied");
         }

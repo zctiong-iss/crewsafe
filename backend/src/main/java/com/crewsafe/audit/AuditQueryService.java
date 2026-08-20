@@ -105,9 +105,9 @@ public class AuditQueryService {
 
         // Not deferred to after-commit like the write-side services do: there is no enclosing
         // write transaction whose rollback could orphan this row, and by this point the file has
-        // genuinely been produced. AuditService#record is REQUIRES_NEW, so it commits in its own
+        // genuinely been produced. AuditService#recordEvent is REQUIRES_NEW, so it commits in its own
         // transaction regardless.
-        audit.record(actorId, AuditEventType.AUDIT_EXPORTED, "SITE", siteId,
+        audit.recordEvent(actorId, AuditEventType.AUDIT_EXPORTED, "SITE", siteId,
                 "Exported " + rowCount + " audit events for site " + siteId + " (" + from + " to " + to + ")");
     }
 
