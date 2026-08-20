@@ -433,13 +433,17 @@ class DatasetIoTest(unittest.TestCase):
                 metrics=(WeatherMetric.WBGT,),
             )
 
+            resumed_start_date = date(2025, 3, 1)
+            resumed_end_date = date(2025, 3, 2)
+            resumed_metrics = (WeatherMetric.WBGT,)
+
             with self.assertRaisesRegex(ValueError, "different dates or metrics"):
                 build_historical_dataset(
                     client,
-                    start_date=date(2025, 3, 1),
-                    end_date=date(2025, 3, 2),
+                    start_date=resumed_start_date,
+                    end_date=resumed_end_date,
                     output_directory=output_directory,
-                    metrics=(WeatherMetric.WBGT,),
+                    metrics=resumed_metrics,
                 )
 
     def test_reports_internal_missing_periods(self) -> None:

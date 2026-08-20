@@ -60,10 +60,143 @@ function shiftPresentation(
 ) {
   return {
     hasAssignments: (shift?.assignments.length ?? 0) > 0,
-    hasNoAssignments: shift?.assignments.length === 0,
     canEdit: editable,
     showEndControls: canEndShift && canEndNow,
   };
+}
+
+function ShiftAssignmentCard({
+  assignment,
+  canEdit,
+  savingAssignmentId,
+  staffingId,
+  workerNameFor,
+  onEdit,
+  onRemove,
+}: Readonly<{
+  assignment: ShiftAssignment;
+  canEdit: boolean;
+  savingAssignmentId: string | null;
+  staffingId: string | null;
+  workerNameFor: (workerId: string) => string;
+  onEdit: (assignment: ShiftAssignment) => void;
+  onRemove: (assignment: ShiftAssignment) => void;
+}>) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
+  return (
+    <View
+      style={[
+        styles.card,
+        cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+        { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+      ]}
+    >
+      <AppText variant="body">{workerNameFor(assignment.workerId)}</AppText>
+
+      <View style={styles.detailRow}>
+        <AppText variant="caption" tone="secondary" style={styles.detailLabel}>
+          {t("shifts.task")}
+        </AppText>
+        <AppText variant="label" style={styles.detailValue}>
+          {assignment.taskName ?? t("shifts.noTask")}
+        </AppText>
+      </View>
+
+      <View style={styles.detailRow}>
+        <AppText variant="caption" tone="secondary" style={styles.detailLabel}>
+          {t("shifts.intensity")}
+        </AppText>
+        <AppText
+          variant="label"
+          style={[
+            styles.detailValue,
+            { color: intensityColor(theme.colors, assignment.intensity) },
+          ]}
+        >
+          {t(`intensity.${assignment.intensity}`)}
+        </AppText>
+      </View>
+
+      {assignment.acclimatisationDay !== null ? (
+        <View
+          style={[
+            styles.acclimatisation,
+            {
+              borderColor: theme.colors.warning,
+              borderWidth: theme.metrics.borderWidth,
+              borderRadius: theme.metrics.radius / 2,
+            },
+          ]}
+        >
+          <AppText variant="caption" tone="warning">
+            {t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}
+          </AppText>
+        </View>
+      ) : null}
+
+      {canEdit ? (
+        <>
+          <AppButton
+            title={t("shifts.editAssignment")}
+            variant="secondary"
+            loading={savingAssignmentId === assignment.id}
+            onPress={() => onEdit(assignment)}
+            style={styles.editButton}
+          />
+          <AppButton
+            title={t("shifts.removeWorker")}
+            variant="secondary"
+            loading={staffingId === assignment.id}
+            onPress={() => onRemove(assignment)}
+            style={styles.editButton}
+          />
+        </>
+      ) : null}
+    </View>
+  );
+}
+
+function ShiftAssignments({
+  assignments,
+  canEdit,
+  savingAssignmentId,
+  staffingId,
+  workerNameFor,
+  onEdit,
+  onRemove,
+}: Readonly<{
+  assignments: readonly ShiftAssignment[];
+  canEdit: boolean;
+  savingAssignmentId: string | null;
+  staffingId: string | null;
+  workerNameFor: (workerId: string) => string;
+  onEdit: (assignment: ShiftAssignment) => void;
+  onRemove: (assignment: ShiftAssignment) => void;
+}>) {
+  const { t } = useTranslation();
+
+  if (assignments.length === 0) {
+    return (
+      <AppText variant="body" tone="secondary">
+        {t("shifts.unstaffed")}
+      </AppText>
+    );
+  }
+
+  return assignments.map((assignment) => (
+    <ShiftAssignmentCard
+      key={assignment.id}
+      assignment={assignment}
+      canEdit={canEdit}
+      savingAssignmentId={savingAssignmentId}
+      staffingId={staffingId}
+      workerNameFor={workerNameFor}
+      onEdit={onEdit}
+      onRemove={onRemove}
+    />
+  ));
 }
 
 export default function ShiftDetailScreen() {
@@ -136,7 +269,7 @@ export default function ShiftDetailScreen() {
    */
   const hasEnded = shift ? new Date(shift.endsAt).getTime() <= Date.now() : false;
   const ending = shift ? endingId === shift.id : false;
-  const { hasAssignments, hasNoAssignments, canEdit, showEndControls } = shiftPresentation(
+  const { hasAssignments, canEdit, showEndControls } = shiftPresentation(
     shift,
     editability.editable,
     canEndShift,
@@ -399,96 +532,15 @@ export default function ShiftDetailScreen() {
           {t("shifts.assignments")}
         </AppText>
 
-        {hasNoAssignments ? (
-          // Not an error: the contract allows a shift to be created empty and staffed later.
-          <AppText variant="body" tone="secondary">
-            {t("shifts.unstaffed")}
-          </AppText>
-        ) : (
-          shift.assignments.map((assignment) => (
-            <View
-              key={assignment.id}
-              style={[
-                styles.card,
-                cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
-                { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <AppText variant="body">{workerNameFor(assignment.workerId)}</AppText>
-
-              <View style={styles.detailRow}>
-                <AppText variant="caption" tone="secondary" style={styles.detailLabel}>
-                  {t("shifts.task")}
-                </AppText>
-                <AppText variant="label" style={styles.detailValue}>
-                  {assignment.taskName ?? t("shifts.noTask")}
-                </AppText>
-              </View>
-
-              <View style={styles.detailRow}>
-                <AppText variant="caption" tone="secondary" style={styles.detailLabel}>
-                  {t("shifts.intensity")}
-                </AppText>
-                {/* Coloured on the same green → amber → red ramp as the picker that set it, so
-                    the card and the sheet agree at a glance. The word is still there: colour
-                    is never the only thing carrying the meaning. */}
-                <AppText
-                  variant="label"
-                  style={[
-                    styles.detailValue,
-                    { color: intensityColor(theme.colors, assignment.intensity) },
-                  ]}
-                >
-                  {t(`intensity.${assignment.intensity}`)}
-                </AppText>
-              </View>
-
-              {/*
-                Above the buttons, not below them.
-
-                It is a property of the assignment, like the two rows over it — reading it after
-                the controls meant the card said what you could do to the worker before it had
-                finished saying who they were. Centred because it is the only element on its own
-                line; left-aligned it looked like a fourth, unlabelled detail row.
-              */}
-              {assignment.acclimatisationDay !== null ? (
-                <View
-                  style={[
-                    styles.acclimatisation,
-                    {
-                      borderColor: theme.colors.warning,
-                      borderWidth: theme.metrics.borderWidth,
-                      borderRadius: theme.metrics.radius / 2,
-                    },
-                  ]}
-                >
-                  <AppText variant="caption" tone="warning">
-                    {t("shifts.acclimatisation", { day: assignment.acclimatisationDay })}
-                  </AppText>
-                </View>
-              ) : null}
-
-              {canEdit ? (
-                <>
-                  <AppButton
-                    title={t("shifts.editAssignment")}
-                    variant="secondary"
-                    loading={savingAssignmentId === assignment.id}
-                    onPress={() => setEditing(assignment)}
-                    style={styles.editButton}
-                  />
-                  <AppButton
-                    title={t("shifts.removeWorker")}
-                    variant="secondary"
-                    loading={staffingId === assignment.id}
-                    onPress={() => onRemoveWorker(assignment)}
-                    style={styles.editButton}
-                  />
-                </>
-              ) : null}
-            </View>
-          ))
-        )}
+        <ShiftAssignments
+          assignments={shift.assignments}
+          canEdit={canEdit}
+          savingAssignmentId={savingAssignmentId}
+          staffingId={staffingId}
+          workerNameFor={workerNameFor}
+          onEdit={setEditing}
+          onRemove={onRemoveWorker}
+        />
 
         {/* Offered even on an unstaffed shift — that is exactly the case the contract has in
             mind when it allows a shift to be created empty and staffed later. */}

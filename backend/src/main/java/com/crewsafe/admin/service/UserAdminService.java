@@ -128,7 +128,7 @@ public class UserAdminService {
         AppUser saved = users.save(draft);
         siteIds.forEach(siteId -> memberships.save(new SiteMembership(saved.getId(), siteId)));
 
-        audit.record(actorId, AuditEventType.USER_REGISTERED, "USER", saved.getId(),
+        audit.recordEvent(actorId, AuditEventType.USER_REGISTERED, "USER", saved.getId(),
                 "User " + saved.getUsername() + " registered as " + role + " with " + siteIds.size() + " site(s)");
 
         return saved;
@@ -153,14 +153,14 @@ public class UserAdminService {
         if (role != null && role != user.getRole()) {
             Role previous = user.getRole();
             user.setRole(role);
-            audit.record(actorId, AuditEventType.USER_ROLE_CHANGED, "USER", userId,
+            audit.recordEvent(actorId, AuditEventType.USER_ROLE_CHANGED, "USER", userId,
                     "Role changed from " + previous + " to " + role);
         }
 
         if (status != null && status != user.getStatus()) {
             UserStatus previous = user.getStatus();
             user.setStatus(status);
-            audit.record(actorId, AuditEventType.USER_STATUS_CHANGED, "USER", userId,
+            audit.recordEvent(actorId, AuditEventType.USER_STATUS_CHANGED, "USER", userId,
                     "Status changed from " + previous + " to " + status);
         }
 
@@ -185,7 +185,7 @@ public class UserAdminService {
 
         memberships.save(new SiteMembership(userId, siteId));
 
-        audit.record(actorId, AuditEventType.SITE_MEMBERSHIP_GRANTED, "USER", userId,
+        audit.recordEvent(actorId, AuditEventType.SITE_MEMBERSHIP_GRANTED, "USER", userId,
                 "Granted site " + siteId);
     }
 
@@ -200,7 +200,7 @@ public class UserAdminService {
 
         memberships.delete(membership);
 
-        audit.record(actorId, AuditEventType.SITE_MEMBERSHIP_REVOKED, "USER", userId,
+        audit.recordEvent(actorId, AuditEventType.SITE_MEMBERSHIP_REVOKED, "USER", userId,
                 "Revoked site " + siteId);
     }
 }

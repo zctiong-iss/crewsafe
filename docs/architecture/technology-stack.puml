@@ -1,0 +1,97 @@
+@startuml technology-stack
+
+' Stack inventory for the CrewSafe SG platform. Package boundaries mirror the
+' folders in the repository root (web/, mobile/, backend/, ml-service/,
+' infra/terraform/) and plan §10.3. This is a component/dependency view, not
+' a request-path diagram — see terraform-architecture.puml for that.
+
+title CrewSafe SG — Technology Stack
+
+left to right direction
+skinparam dpi 160
+skinparam defaultFontName Arial
+skinparam defaultFontSize 17
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam componentStyle rectangle
+skinparam wrapWidth 155
+skinparam maxMessageSize 130
+skinparam nodesep 45
+skinparam ranksep 75
+skinparam ArrowColor #455A64
+
+skinparam rectangle {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  FontColor #1B5E20
+  FontSize 17
+}
+skinparam cloud {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #0D47A1
+  FontSize 17
+}
+skinparam database {
+  BackgroundColor #FFF3E0
+  BorderColor #EF6C00
+  FontColor #E65100
+  FontSize 17
+}
+skinparam artifact {
+  BackgroundColor #F3E5F5
+  BorderColor #7B1FA2
+  FontColor #4A148C
+  FontSize 17
+}
+
+package "Client applications" as client_stack {
+  cloud "React + TypeScript\nWeb SPA · Vite build" as web_stack
+  cloud "MUI\nWeb component library" as mui_stack
+  cloud "React Native + Expo\nMobile app" as mobile_stack
+}
+
+package "Backend & data" as backend_stack {
+  rectangle "Java 21 + Spring Boot 3.5\nREST API — com.crewsafe" as backend_rt
+  rectangle "Spring Security + Spring Data JPA\nCognito resource server · Flyway" as backend_sec
+  database "PostgreSQL\nprimary datastore" as postgres_stack
+}
+
+package "Agent & ML (Python)" as agent_stack {
+  artifact "FastAPI + LangChain / LangGraph\nmitigation-plan drafting layer" as agent_fw
+  artifact "scikit-learn + SageMaker\nWBGT model — SageMaker train/test" as ml_stack
+  cloud "Amazon Bedrock\nClaude models — draft only" as bedrock_stack
+}
+
+package "Platform & delivery" as platform_stack {
+  database "Terraform on AWS\nECS Fargate · ALB · RDS · CloudFront/S3" as terraform_stack
+  database "OpenAPI 3 + SSE\nREST /api/v1 · live updates" as api_stack
+  cloud "Amazon Cognito\nidentity · JWT issuance" as cognito_stack
+}
+
+web_stack ..> api_stack
+mobile_stack ..> api_stack
+backend_rt --> postgres_stack
+backend_rt --> cognito_stack : JWT validation
+backend_rt ..> agent_fw : mitigation-plan request
+agent_fw --> bedrock_stack
+backend_rt ..> terraform_stack : deployed on
+
+note right of agent_fw
+  Draft-only — a supervisor must
+  approve before a plan takes
+  effect (AGENTS.md §3).
+end note
+
+legend right
+  |= Color |= Meaning |
+  |<#E3F2FD>| Client-facing / AWS-managed service |
+  |<#E8F5E9>| Backend compute |
+  |<#F3E5F5>| Agent / ML framework |
+  |<#FFF3E0>| Data and delivery infrastructure |
+  --> | Runtime dependency |
+  ..> | Build-time or integration reference |
+endlegend
+
+@enduml

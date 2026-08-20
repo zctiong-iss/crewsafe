@@ -43,7 +43,7 @@ class AuditEventAppendOnlyTest extends AbstractIntegrationTest {
 
         MDC.put("requestId", correlationId);
         try {
-            audit.record(actor.getId(), eventType, "USER", actor.getId(), "original detail");
+            audit.recordEvent(actor.getId(), eventType, "USER", actor.getId(), "original detail");
         } finally {
             MDC.remove("requestId");
         }
@@ -90,7 +90,7 @@ class AuditEventAppendOnlyTest extends AbstractIntegrationTest {
         String eventType = "BACKGROUND_AUDIT_TEST";
 
         MDC.remove("requestId");
-        audit.record(actor.getId(), eventType, "USER", actor.getId(), "background event");
+        audit.recordEvent(actor.getId(), eventType, "USER", actor.getId(), "background event");
 
         AuditEvent stored = events.findByEventTypeOrderByOccurredAtDesc(eventType).stream()
                 .filter(event -> event.getActorId().equals(actor.getId()))

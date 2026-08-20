@@ -38,6 +38,31 @@ forecast/Bedrock spike code. The internal ML runtime, agent runtime, and mobile 
 runtime are still product-plan targets rather than current Terraform resources; see the
 [declared infrastructure limitations](docs/architecture/terraform-architecture.md#deliberate-limitations-and-follow-ups).
 
+The supervisor console's `/insights` page adds a per-site forecast fallback-status panel
+(basis ladder, degraded flag, widened interval) and a global model-accuracy panel
+(MAE/RMSE, high-risk recall), both reading the existing
+`GET /sites/{siteId}/weather/forecast` and `GET /api/v1/ml/model-status` contracts rather
+than a new backend surface.
+
+## Orientation
+
+A few starting points if you're new to this repository:
+
+- **Quality gates** — the SonarCloud badges at the top of this file reflect the live
+  `main` branch quality gate, vulnerability count, and coverage; the workflows behind
+  them are [.github/workflows/security-scan.yml](.github/workflows/security-scan.yml)
+  and [.github/workflows/dast-staging.yml](.github/workflows/dast-staging.yml).
+- **Architecture** — [docs/architecture/](docs/architecture/) has PlantUML diagrams for
+  backend layering, the technology stack, Terraform/AWS topology, and the DevSecOps
+  toolchain (see [More details](#more-details) below for the full list).
+- **Where the safety-critical logic lives** — the deterministic WBGT policy engine and
+  its authorization/audit boundary are in `backend/`; see [Security and data
+  boundaries](#security-and-data-boundaries) and [docs/adr/](docs/adr/) for why each
+  boundary exists, not just where.
+- **Tests and how to run them** — see [Tests](#tests) below.
+- **AI-assisted development** — see [AI-assisted development](#ai-assisted-development)
+  for the tools used, the workflow, and the approval gates.
+
 ## Repository map
 
 | Directory | Purpose |
@@ -196,6 +221,32 @@ under `/api/test/bedrock` is for integration testing, not a public supervisor AP
 See the [security ADRs](docs/adr/) and the [DevSecOps toolchain diagram](docs/architecture/devsecops-toolchain.puml)
 for the detailed control boundaries.
 
+## AI-assisted development
+
+Parts of this repository — code, tests, docs, and infrastructure — were written with AI
+coding assistants working alongside the team, not autonomously:
+
+- **Tools used:** [Claude Code](https://claude.com/claude-code) (Anthropic) and
+  [OpenAI Codex](https://openai.com/codex/). Both operate under the same working
+  agreement, [AGENTS.md](AGENTS.md), which also fixes which model handles which class of
+  decision (`AGENTS.md` §6.2.1–§6.2.2) — for example, higher-consequence work such as
+  Terraform, authorization, and migrations always requires the implementation-tier model
+  plus human adjudication, never the drafting-tier model alone.
+- **Workflow:** feature work runs through a spec-first cycle (specify → clarify → plan →
+  tasks → analyze → **explicit human approval** → implement → final review) described in
+  `AGENTS.md` §6. Two review gates — after the spec and after the plan — are mandatory
+  stops; an agent does not write production code before a human has approved the plan.
+- **What AI never does unsupervised:** the deterministic WBGT safety policy, authorization
+  checks, database migrations, and any Terraform `apply` are excluded from autonomous
+  agent action by [AGENTS.md](AGENTS.md) §3 and require human review regardless of which
+  tool drafted the change.
+- **Attribution:** commits with AI-assisted authorship carry a `Co-Authored-By:` trailer
+  naming the tool/model that helped (for example, `Co-Authored-By: Claude Sonnet 5
+  <noreply@anthropic.com>`) — visible in `git log`, not asserted only in this file.
+- Every PR is still opened, reviewed, and merged by a human maintainer; CI (tests, SAST/SCA,
+  container/DAST scanning, Terraform plan review) applies identically regardless of whether
+  a change was AI-assisted.
+
 ## Tests
 
 ```bash
@@ -222,7 +273,6 @@ The normal promotion path is:
 4. Apply only from `main` through the manual workflow with the required typed confirmation.
 5. Keep the plan, test output, scan results, and deployment evidence with the review.
 
-
 ## More details
 
 - [web/README.md](web/README.md) — supervisor console: both run paths and its decisions
@@ -231,6 +281,11 @@ The normal promotion path is:
 - [local/README.md](local/README.md) — Compose stack layout and resolved environment
 - [docs/architecture/terraform-architecture.md](docs/architecture/terraform-architecture.md) —
   Terraform component and runtime boundaries
+- [docs/architecture/backend-architecture.puml](docs/architecture/backend-architecture.puml) —
+  backend software layering: identity boundary, controllers, deterministic safety policy,
+  persistence, and the agent layer's draft-only relationship to the service layer
+- [docs/architecture/technology-stack.puml](docs/architecture/technology-stack.puml) —
+  full stack inventory mapped to the repository's top-level folders
 - [docs/architecture/devsecops-toolchain.puml](docs/architecture/devsecops-toolchain.puml) —
   DevSecOps toolchain diagram (open with PlantUML or export for presentations)
 - [SCRUM-111 weather ingestion](docs/runbooks/SCRUM-111-weather-ingestion.md) — external

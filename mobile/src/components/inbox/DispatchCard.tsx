@@ -56,6 +56,16 @@ interface DispatchCardProps {
   hasRestTimer?: boolean;
 }
 
+function acknowledgeTitle(
+  inFlight: boolean,
+  failureKey: string | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) {
+  if (inFlight) return t("inbox.acknowledging");
+  if (failureKey) return t("inbox.retryButton");
+  return t("inbox.acknowledgeButton");
+}
+
 function dispatchPresentation(
   acknowledged: boolean,
   inFlight: boolean,
@@ -72,11 +82,7 @@ function dispatchPresentation(
     statusText: acknowledged
       ? t("inbox.acknowledged", { time: formatTime(acknowledgedAt ?? "", locale) })
       : t("inbox.pending"),
-    acknowledgeTitle: inFlight
-      ? t("inbox.acknowledging")
-      : failureKey
-        ? t("inbox.retryButton")
-        : t("inbox.acknowledgeButton"),
+    acknowledgeTitle: acknowledgeTitle(inFlight, failureKey, t),
   };
 }
 

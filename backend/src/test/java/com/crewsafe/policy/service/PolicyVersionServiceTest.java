@@ -150,7 +150,7 @@ class PolicyVersionServiceTest {
             assertThat(saved.getSiteId()).isEqualTo(siteId);
             assertThat(saved.getCreatedBy()).isEqualTo(actorId);
 
-            verify(audit).record(eq(actorId), eq("POLICY_VERSION_CREATED"), eq("POLICY_VERSION"),
+            verify(audit).recordEvent(eq(actorId), eq("POLICY_VERSION_CREATED"), eq("POLICY_VERSION"),
                     eq(saved.getId()), anyString());
         }
 
@@ -193,7 +193,7 @@ class PolicyVersionServiceTest {
 
             assertThat(result).isSameAs(active);
             verify(policyVersions, never()).save(any());
-            verify(audit, never()).record(any(), anyString(), anyString(), any(), anyString());
+            verify(audit, never()).recordEvent(any(), anyString(), anyString(), any(), anyString());
         }
 
         @Test
@@ -238,7 +238,7 @@ class PolicyVersionServiceTest {
             verify(policyVersions).save(activatedCaptor.capture());
             assertThat(activatedCaptor.getValue().getStatus()).isEqualTo(PolicyVersionStatus.ACTIVE);
 
-            verify(audit).record(eq(actorId), eq("POLICY_VERSION_ACTIVATED"), eq("POLICY_VERSION"),
+            verify(audit).recordEvent(eq(actorId), eq("POLICY_VERSION_ACTIVATED"), eq("POLICY_VERSION"),
                     eq(draft.getId()), anyString());
         }
 

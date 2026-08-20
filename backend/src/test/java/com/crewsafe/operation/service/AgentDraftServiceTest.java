@@ -309,9 +309,9 @@ class AgentDraftServiceTest {
 
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
         verify(recommendationService).autoDispatch(eq(saved), eq(ACTOR_ID), anyList());
-        verify(audit).record(eq(ACTOR_ID), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
+        verify(audit).recordEvent(eq(ACTOR_ID), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
                 eq("RECOMMENDATION"), eq(saved.getId()), any());
-        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_DRAFTED), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), eq(AuditEventType.RECOMMENDATION_DRAFTED), any(), any(), any());
     }
 
     @Test
@@ -326,7 +326,7 @@ class AgentDraftServiceTest {
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
         assertThat(persistedCodes(saved)).contains(PolicyActionCode.STOP_WORK);
         verify(recommendationService, never()).autoDispatch(any(), any(), any());
-        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
     }
 
     @Test
@@ -339,7 +339,7 @@ class AgentDraftServiceTest {
 
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
         verify(recommendationService, never()).autoDispatch(any(), any(), any());
-        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED), any(), any(), any());
     }
 
     @Test
@@ -356,7 +356,7 @@ class AgentDraftServiceTest {
 
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.AUTO_DISPATCHED);
         verify(recommendationService).autoDispatch(eq(saved), isNull(), anyList());
-        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.RECOMMENDATION_AUTO_DISPATCHED),
                 eq("RECOMMENDATION"), eq(saved.getId()), any());
     }
 
@@ -410,9 +410,9 @@ class AgentDraftServiceTest {
     @Test
     @DisplayName("The forecast band is classified from the forecast actually used, not copied from current")
     void forecastBandIsDerivedFromTheForecastValue() {
-        // 34.0°C is a different band from the 32.5°C observation. The policy engine still
-        // hardcodes forecastBand = currentBand behind its SCRUM-188 TODO, so copying it would
-        // report the wrong band the moment SCRUM-281 makes the forecast a real prediction.
+        // 34.0°C is a different band from the 32.5°C observation. SCRUM-188 records that policy
+        // evaluation currently uses currentBand as forecastBand because no forecast value is an
+        // input, so copying that value would misreport a real SCRUM-281 prediction.
         stubDraft(validModelPlan(), false, MODEL_ID, 34.0);
 
         RecommendationEvidence evidence = evidenceOf(
@@ -614,7 +614,7 @@ class AgentDraftServiceTest {
         Recommendation saved = service.generate(SITE_ID, SHIFT_ID, ACTOR_ID).orElseThrow();
         commit();
 
-        verify(audit).record(ACTOR_ID, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
+        verify(audit).recordEvent(ACTOR_ID, AuditEventType.RECOMMENDATION_DRAFTED, "RECOMMENDATION",
                 saved.getId(), "Recommendation drafted (model=" + MODEL_ID + ")");
     }
 
@@ -627,7 +627,7 @@ class AgentDraftServiceTest {
         commit();
 
         ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
-        verify(audit).record(any(), any(), any(), any(), detail.capture());
+        verify(audit).recordEvent(any(), any(), any(), any(), detail.capture());
         assertThat(detail.getValue())
                 .contains(AgentDraftService.FALLBACK_MODEL_VERSION)
                 .contains("unknown_action_code");
@@ -640,7 +640,7 @@ class AgentDraftServiceTest {
 
         service.generate(SITE_ID, SHIFT_ID, ACTOR_ID);
 
-        verify(audit, never()).record(any(), any(), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), any(), any(), any(), any());
     }
 
     // ----------------------------------------------------------------------------------
@@ -658,7 +658,7 @@ class AgentDraftServiceTest {
         commit();
 
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
-        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_DRAFTED), eq("RECOMMENDATION"),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.RECOMMENDATION_DRAFTED), eq("RECOMMENDATION"),
                 eq(saved.getId()), any());
     }
 
@@ -675,7 +675,7 @@ class AgentDraftServiceTest {
 
         assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
         verify(recommendations).save(existing);
-        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
                 eq(existing.getId()), any());
         // Nothing was ever dispatched from a plan nobody decided on -- still cancels through
         // to check there is simply nothing outstanding, not skipped.
@@ -695,7 +695,7 @@ class AgentDraftServiceTest {
 
         assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
         verify(recommendationService).revokeOutstandingDispatches(existing);
-        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
                 eq(existing.getId()), any());
     }
 
@@ -712,7 +712,7 @@ class AgentDraftServiceTest {
 
         assertThat(existing.getStatus()).isEqualTo(Recommendation.RecommendationStatus.SUPERSEDED);
         verify(recommendationService).revokeOutstandingDispatches(existing);
-        verify(audit).record(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
+        verify(audit).recordEvent(isNull(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), eq("RECOMMENDATION"),
                 eq(existing.getId()), any());
     }
 
@@ -726,7 +726,7 @@ class AgentDraftServiceTest {
         service.generateAuto(SITE_ID, SHIFT_ID);
         commit();
 
-        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
         verify(recommendationService, never()).revokeOutstandingDispatches(any());
     }
 
@@ -744,7 +744,7 @@ class AgentDraftServiceTest {
         commit();
 
         assertThat(saved.getStatus()).isEqualTo(Recommendation.RecommendationStatus.PENDING_APPROVAL);
-        verify(audit, never()).record(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
+        verify(audit, never()).recordEvent(any(), eq(AuditEventType.RECOMMENDATION_SUPERSEDED), any(), any(), any());
     }
 
     private static Recommendation openRecommendation(Recommendation.RecommendationStatus status) {
