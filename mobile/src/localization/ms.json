@@ -700,5 +700,18 @@
     "planDraftedTitle": "Pelan baharu dirangka",
     "planDraftedBody_one": "Satu pelan baharu rangkaan AI menunggu keputusan anda.",
     "planDraftedBody_other": "{{count}} pelan baharu rangkaan AI menunggu keputusan anda."
+  },
+  "actionInstructions": {
+    "STOP_WORK": "Hentikan kerja serta-merta dan bawa kru ke kawasan teduh yang sejuk",
+    "STOP_WORK_LIGHTNING": "Hentikan kerja dan bawa kru ke bangunan kukuh atau kenderaan tertutup sepenuhnya",
+    "RESUME_WORK": "Kerja boleh disambung dengan langkah berjaga-jaga biasa",
+    "REST_10_MIN_HOURLY": "Rehat 10 minit di tempat teduh setiap jam",
+    "REST_15_MIN_HOURLY": "Rehat 15 minit di tempat teduh setiap jam",
+    "HYDRATE_HOURLY": "Minum air setiap jam, lebih kurang satu cawan setiap rehat",
+    "HYDRATE_REGULARLY": "Minum air kerap sepanjang syif",
+    "SHADE_RECOVERY": "Sediakan ruang teduh untuk kru berehat",
+    "RESCHEDULE_HEAVY_WORK": "Pindahkan kerja berat ke waktu yang lebih sejuk jika boleh",
+    "ROTATE_TO_LIGHT_DUTY": "Tukarkan pekerja terlibat kepada tugas yang lebih ringan",
+    "CLOSE_MONITORING": "Pantau pekerja terlibat dengan rapi untuk tanda penyakit haba"
   }
 }

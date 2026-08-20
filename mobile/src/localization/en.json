@@ -700,5 +700,18 @@
     "planDraftedTitle": "New plan drafted",
     "planDraftedBody_one": "A new AI-drafted plan is waiting for your decision.",
     "planDraftedBody_other": "{{count}} new AI-drafted plans are waiting for your decision."
+  },
+  "actionInstructions": {
+    "STOP_WORK": "Stop work immediately and move the crew to a cool, shaded area",
+    "STOP_WORK_LIGHTNING": "Stop work and move the crew to a substantial building or a fully enclosed vehicle",
+    "RESUME_WORK": "Work may resume under normal precautions",
+    "REST_10_MIN_HOURLY": "Take a 10-minute rest break in shade every hour",
+    "REST_15_MIN_HOURLY": "Take a 15-minute rest break in shade every hour",
+    "HYDRATE_HOURLY": "Drink water every hour, roughly one cup per break",
+    "HYDRATE_REGULARLY": "Drink water regularly throughout the shift",
+    "SHADE_RECOVERY": "Keep shaded recovery space available to the crew",
+    "RESCHEDULE_HEAVY_WORK": "Move heavy tasks to a cooler part of the day where possible",
+    "ROTATE_TO_LIGHT_DUTY": "Rotate affected workers onto lighter duties",
+    "CLOSE_MONITORING": "Monitor affected workers closely for signs of heat illness"
   }
 }
