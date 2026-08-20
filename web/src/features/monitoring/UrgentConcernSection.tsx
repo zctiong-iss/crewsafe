@@ -64,10 +64,10 @@ export function UrgentConcernSection({
         </p>
       )}
       {!hasSnapshot && connectionState === "connecting" && concerns.length === 0 && (
-        <p className="monitoring-concerns__empty" role="status">Connecting to worker concerns...</p>
+        <output className="monitoring-concerns__empty">Connecting to worker concerns...</output>
       )}
       {hasSnapshot && connectionState === "live" && concerns.length === 0 && (
-        <p className="monitoring-concerns__empty" role="status">No open worker concerns.</p>
+        <output className="monitoring-concerns__empty">No open worker concerns.</output>
       )}
       {hasSnapshot && connectionState !== "live" && concerns.length === 0 && (
         <p className="monitoring-concerns__empty">Last complete update had no open worker concerns.</p>
