@@ -9,6 +9,7 @@ import {
 import { ApiError, messageFor } from "@/api/errors";
 import { EvidenceSummary } from "./EvidenceSummary";
 import { MitigationEditor } from "./MitigationEditor";
+import { AutoDispatchBanner } from "./AutoDispatchBanner";
 
 type Panel = "none" | "reject" | "edit";
 
@@ -36,6 +37,11 @@ export function RecommendationReviewCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A lightning-immediate stop-work skipped approval and was already dispatched — the spec says render
+  // it distinctly, with no approve/reject affordance. So the card carries a danger banner + status pill
+  // and drops the decision controls entirely (there is no decision left to make, for any role).
+  const autoDispatched = recommendation.status === "AUTO_DISPATCHED";
+
   // The one network path. Every button builds a body and calls this — token, error mapping and
   // the "lift decided recommendation up" all live here once.
   async function submit(body: RecommendationDecisionRequest) {
@@ -57,12 +63,19 @@ export function RecommendationReviewCard({
     // spaces one item from the next — the same margin throughout (see ApprovalsPage.css).
     <div className="approvals__item">
       <article className="card approvals__card" aria-label={`Plan for ${shiftLabel}`}>
+        {autoDispatched && <AutoDispatchBanner />}
+
         <header className="approvals__card-head">
           <div>
             <h3 className="approvals__card-title">{shiftLabel}</h3>
             <p className="approvals__card-site">{siteName}</p>
           </div>
-          <span className="pill">{recommendation.modelVersion ?? "No model recorded"}</span>
+          <div className="approvals__card-pills">
+            {autoDispatched && (
+              <span className="pill approvals__status--auto-dispatched">Stop-work dispatched</span>
+            )}
+            <span className="pill">{recommendation.modelVersion ?? "No model recorded"}</span>
+          </div>
         </header>
 
         <EvidenceSummary evidence={recommendation.evidence} />
@@ -99,8 +112,12 @@ export function RecommendationReviewCard({
           Reject / Edit forms open here too, so a control and the form it opens stay together.
 
           A safety manager sees the plan but not the controls — a plain read-only notice in their
-          place, said once rather than shown as three buttons that would each answer 403. */}
-      {!canDecide ? (
+          place, said once rather than shown as three buttons that would each answer 403.
+
+          An auto-dispatched stop-work shows no controls at all (for any role): the banner above has
+          already said there is nothing to decide. */}
+      {!autoDispatched &&
+        (!canDecide ? (
         <p className="approvals__readonly">You can read this plan but not decide on it.</p>
       ) : (
       <div className="approvals__controls">
@@ -160,7 +177,7 @@ export function RecommendationReviewCard({
 
         {busy && <output className="approvals__busy">Saving decision…</output>}
       </div>
-      )}
+      ))}
     </div>
   );
 }
