@@ -10,6 +10,7 @@ import { ApiError, messageFor } from "@/api/errors";
 import { EvidenceSummary } from "./EvidenceSummary";
 import { MitigationEditor } from "./MitigationEditor";
 import { AutoDispatchBanner } from "./AutoDispatchBanner";
+import { MitigationRow } from "./MitigationRow";
 
 type Panel = "none" | "reject" | "edit";
 
@@ -18,6 +19,7 @@ export function RecommendationReviewCard({
   siteId,
   siteName,
   shiftLabel,
+  workerNames,
   canDecide,
   onDecided,
 }: Readonly<{
@@ -25,6 +27,7 @@ export function RecommendationReviewCard({
   siteId: string;
   siteName: string;
   shiftLabel: string;
+  workerNames: ReadonlyMap<string, string>;
   // Whether the signed-in role may act on this plan. A safety manager reads the queue but
   // cannot decide on it — same rule as the mobile detail screen, where the real gate is the
   // backend refusing the write and this is the matching UI so no button offers a 403.
@@ -36,11 +39,24 @@ export function RecommendationReviewCard({
   const [editedPlan, setEditedPlan] = useState<MitigationSuggestion[]>(recommendation.mitigations);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rationaleExpanded, setRationaleExpanded] = useState(false);
 
   // A lightning-immediate stop-work skipped approval and was already dispatched — the spec says render
   // it distinctly, with no approve/reject affordance. So the card carries a danger banner + status pill
   // and drops the decision controls entirely (there is no decision left to make, for any role).
   const autoDispatched = recommendation.status === "AUTO_DISPATCHED";
+  const uncategorisedMitigations = recommendation.mitigations.filter(
+    (mitigation) => !mitigation.category?.trim(),
+  );
+  const mitigationGroups = recommendation.mitigations.reduce<Map<string, MitigationSuggestion[]>>(
+    (groups, mitigation) => {
+      const category = mitigation.category?.trim();
+      if (!category) return groups;
+      groups.set(category, [...(groups.get(category) ?? []), mitigation]);
+      return groups;
+    },
+    new Map(),
+  );
 
   // The one network path. Every button builds a body and calls this — token, error mapping and
   // the "lift decided recommendation up" all live here once.
@@ -74,7 +90,7 @@ export function RecommendationReviewCard({
             {autoDispatched && (
               <span className="pill approvals__status--auto-dispatched">Stop-work dispatched</span>
             )}
-            <span className="pill">{recommendation.modelVersion ?? "No model recorded"}</span>
+            <span className="pill pill--attribute pill--attribute-muted">{recommendation.modelVersion ?? "No model recorded"}</span>
           </div>
         </header>
 
@@ -83,29 +99,50 @@ export function RecommendationReviewCard({
         {/* The "why this was drafted" narrative, in its own panel — equal padding inside and
             equal margin all round, so the reasoning reads as one centred, self-contained block. */}
         <div className="approvals__rationale">
-          <p className="approvals__rationale-text">
+          <p className={`approvals__rationale-text${rationaleExpanded ? "" : " approvals__rationale-text--clamped"}`}>
             {recommendation.rationale ?? "No rationale was recorded for this plan."}
           </p>
+          {recommendation.rationale && (
+            <button
+              type="button"
+              className="approvals__disclosure"
+              onClick={() => setRationaleExpanded((expanded) => !expanded)}
+            >
+              {rationaleExpanded ? "Read less" : "Read more"}
+            </button>
+          )}
         </div>
 
-        <ul className="approvals__mitigations">
-          {/* Keyed by content, not index. actionCode is unique per catalogue action. */}
-          {recommendation.mitigations.map((m) => (
-            <li key={m.actionCode ?? m.action} className="approvals__mitigation">
-              {/* Origin as an outlined attribute pill: MANDATORY reads danger-red, ADVISORY
-                  (the null-origin default too) reads caution-amber. */}
-              <span
-                className={`pill pill--attribute ${
-                  m.origin === "MANDATORY" ? "approvals__origin--mandatory" : "approvals__origin--advisory"
-                }`}
-              >
-                {m.origin ?? "ADVISORY"}
-              </span>
-              {/* The action itself as a neutral entity chip — content, not a severity signal. */}
-              <span className="pill pill--entity approvals__action">{m.action}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="approvals__mitigation-groups">
+          {uncategorisedMitigations.length > 0 && (
+            <div className="approvals__mitigations">
+              {uncategorisedMitigations.map((mitigation) => (
+                <MitigationRow
+                  key={mitigation.actionCode ?? mitigation.action}
+                  mitigation={mitigation}
+                  workerNames={workerNames}
+                />
+              ))}
+            </div>
+          )}
+          {[...mitigationGroups].map(([category, mitigations], index) => {
+            const categoryId = `mitigation-category-${recommendation.id}-${index}`;
+            return (
+            <section key={category} className="approvals__mitigation-group" aria-labelledby={categoryId}>
+              <h4 id={categoryId} className="approvals__mitigation-category">{category}</h4>
+              <div className="approvals__mitigations">
+                {mitigations.map((mitigation) => (
+                  <MitigationRow
+                    key={mitigation.actionCode ?? mitigation.action}
+                    mitigation={mitigation}
+                    workerNames={workerNames}
+                  />
+                ))}
+              </div>
+            </section>
+            );
+          })}
+        </div>
       </article>
 
       {/* Decision controls: below the card, outside its border, aligned to its left edge. The

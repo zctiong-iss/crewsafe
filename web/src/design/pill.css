@@ -44,6 +44,10 @@
   color: var(--ink-secondary);
   border-color: var(--ink-secondary);
 }
+.pill--attribute-muted {
+  color: var(--ink-muted);
+  border-color: var(--line-strong);
+}
 
 /* ENTITY — neutral fill, always bordered. No --surfaceAlt on web; --surface-sunken is the
    nearest analog (the warm-stone recessed-panel tone already used for inputs). */

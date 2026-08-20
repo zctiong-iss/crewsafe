@@ -22,7 +22,13 @@ const renderApprovals = () =>
   );
 
 // One pending recommendation on site-1's shift-1; site-2 has no shifts, so exactly one card.
-function onePendingRecommendation() {
+function onePendingRecommendation({
+  category = "Rest & Recovery",
+  appliesTo = null,
+}: Readonly<{
+  category?: string | null;
+  appliesTo?: string[] | null;
+}> = {}) {
   server.use(
     http.get(`${BASE}/api/v1/sites/:siteId/shifts`, ({ params }) =>
       params.siteId === "site-1"
@@ -60,6 +66,9 @@ function onePendingRecommendation() {
                     actionCode: "ROTATE_CREW",
                     origin: "MANDATORY",
                     ruleReference: "HS-33-HEAVY",
+                    category,
+                    appliesTo,
+                    timing: { durationMinutes: null, everyMinutes: 45, startByUtc: null },
                   },
                 ],
                 approval: null,
@@ -92,6 +101,58 @@ describe("ApprovalsPage", () => {
     expect(
       screen.getByText(/Rotate crew every 45 minutes/),
     ).toBeInTheDocument();
+  });
+
+  it("groups mitigations and reveals their supporting detail on request", async () => {
+    onePendingRecommendation();
+    const user = userEvent.setup();
+    renderApprovals();
+
+    expect(await screen.findByRole("heading", { name: "Rest & Recovery" })).toBeInTheDocument();
+    expect(screen.getByText("Everyone on this shift")).toBeInTheDocument();
+    expect(screen.queryByText("Heat load")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show details" }));
+
+    expect(screen.getByText("Heat load")).toBeInTheDocument();
+    expect(screen.getByText("HS-33-HEAVY")).toBeInTheDocument();
+    expect(screen.getByText("Lower core temp")).toBeInTheDocument();
+  });
+
+  it("renders an uncategorised mitigation without inventing a group heading", async () => {
+    onePendingRecommendation({ category: null });
+    renderApprovals();
+
+    expect(await screen.findByText("Rotate crew every 45 minutes")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "General" })).not.toBeInTheDocument();
+  });
+
+  it("uses names for the first four applies-to chips and collapses the remainder", async () => {
+    onePendingRecommendation({
+      appliesTo: [
+        "00000000-0000-4000-8000-000000000001",
+        "00000000-0000-4000-8000-000000000002",
+        "worker-three",
+        "worker-four",
+        "worker-five",
+      ],
+    });
+    renderApprovals();
+
+    expect(await screen.findByText("Worker One")).toBeInTheDocument();
+    expect(screen.getByText("Worker Two")).toBeInTheDocument();
+    expect(screen.getByText("+1 more")).toBeInTheDocument();
+    expect(screen.queryByText("worker-five")).not.toBeInTheDocument();
+  });
+
+  it("lets a supervisor expand the recommendation rationale", async () => {
+    onePendingRecommendation();
+    const user = userEvent.setup();
+    renderApprovals();
+
+    await user.click(await screen.findByRole("button", { name: "Read more" }));
+
+    expect(screen.getByRole("button", { name: "Read less" })).toBeInTheDocument();
   });
 
   it("approves a recommendation and removes its card", async () => {
