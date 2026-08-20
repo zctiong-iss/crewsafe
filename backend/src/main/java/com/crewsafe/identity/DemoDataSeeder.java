@@ -19,9 +19,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -30,7 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -53,6 +58,20 @@ public class DemoDataSeeder implements ApplicationRunner {
 
     private static final String IDENTITY_KIND_DEVELOPER = "developer";
     private static final String IDENTITY_KIND_SYNTHETIC_TEST = "synthetic-test";
+    private static final String KNOWN_SITE_CODES_RESOURCE = "cognito/known-site-codes.json";
+
+    /**
+     * The Java-side half of a known site (FR-001a): display name and coordinates for site
+     * creation. The other half — which codes are allowed at all — lives in
+     * known-site-codes.json (FR-001), shared with the CI guard in .github/scripts/cognito/.
+     * Adding a genuinely new site requires one entry here and one there; {@link
+     * #validateSiteDefinitionsAreKnown} fails startup loudly if the two ever disagree.
+     */
+    private static final Map<String, SiteDefinition> SITE_DEFINITIONS = Map.of(
+            "bishan", new SiteDefinition("bishan", "Bishan Park Landscaping",
+                    new BigDecimal("1.362200"), new BigDecimal("103.845500")),
+            "campus", new SiteDefinition("campus", "NUS Campus Maintenance",
+                    new BigDecimal("1.296600"), new BigDecimal("103.776400")));
 
     private final AppUserRepository users;
     private final SiteRepository sites;
@@ -65,23 +84,70 @@ public class DemoDataSeeder implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        Set<String> knownSiteCodes = loadKnownSiteCodes(objectMapper);
+        validateSiteDefinitionsAreKnown(SITE_DEFINITIONS, knownSiteCodes);
+
         List<DemoUserMapping> mappings = parseAndValidateMappings(
-                objectMapper, cognitoProperties.getDemoUsersJson());
+                objectMapper, cognitoProperties.getDemoUsersJson(), knownSiteCodes);
 
-        // Two sites. The second exists so that "user cannot reach a site they are not
-        // assigned to" is testable — with only one site the rule is unfalsifiable.
-        Site bishan = findOrCreateSite("Bishan Park Landscaping",
-                new BigDecimal("1.362200"), new BigDecimal("103.845500"));
-        Site campus = findOrCreateSite("NUS Campus Maintenance",
-                new BigDecimal("1.296600"), new BigDecimal("103.776400"));
+        // The reconciler's managed scope is exactly SITE_DEFINITIONS' keys, generically over
+        // however many are declared. reconcileMemberships never deletes a membership to a site
+        // outside this map (FR-003) — see its own comment for why.
+        Map<String, Site> siteByCode = resolveManagedSites(SITE_DEFINITIONS,
+                definition -> findOrCreateSite(
+                        definition.displayName(), definition.latitude(), definition.longitude()));
 
-        Map<String, Site> siteByCode = Map.of("bishan", bishan, "campus", campus);
         for (DemoUserMapping mapping : mappings) {
             AppUser user = reconcileIdentity(mapping);
             reconcileMemberships(user, mapping.siteCodes(), siteByCode);
         }
 
-        log.info("demo_data_reconciled users={} sites=2", mappings.size());
+        log.info("demo_data_reconciled users={} sites={}", mappings.size(), siteByCode.size());
+    }
+
+    /**
+     * Loads the canonical site-code allowlist (FR-001), the single source of truth this class
+     * and the CI guard in .github/scripts/cognito/ both read — adding a new allowed code means
+     * editing this one file, not a literal in Java and in three separate jq filters.
+     */
+    static Set<String> loadKnownSiteCodes(ObjectMapper mapper) {
+        try (InputStream in = new ClassPathResource(KNOWN_SITE_CODES_RESOURCE).getInputStream()) {
+            List<String> codes = mapper.readValue(in, new TypeReference<List<String>>() {});
+            return Set.copyOf(codes);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Unable to load known site codes from " + KNOWN_SITE_CODES_RESOURCE + ".",
+                    exception);
+        }
+    }
+
+    /**
+     * FR-001a: the Java-side site definitions and the shared allowlist must never disagree
+     * about which codes are legitimate. A definition declared here without a matching allowlist
+     * entry is a configuration error — fail startup loudly rather than create a site from
+     * incomplete data or seed around the gap.
+     */
+    static void validateSiteDefinitionsAreKnown(
+            Map<String, SiteDefinition> siteDefinitions, Set<String> knownSiteCodes) {
+        Set<String> undeclared = siteDefinitions.keySet().stream()
+                .filter(code -> !knownSiteCodes.contains(code))
+                .collect(Collectors.toCollection(TreeSet::new));
+        if (!undeclared.isEmpty()) {
+            throw new IllegalStateException(
+                    "Site definition(s) " + undeclared
+                            + " are not present in the known-site-codes.json allowlist.");
+        }
+    }
+
+    /**
+     * Resolves each declared site definition to its persisted {@link Site}, generically over
+     * however many are declared — a new entry in {@link #SITE_DEFINITIONS} needs no change here.
+     */
+    static Map<String, Site> resolveManagedSites(
+            Map<String, SiteDefinition> siteDefinitions, Function<SiteDefinition, Site> resolver) {
+        return siteDefinitions.entrySet().stream()
+                .collect(Collectors.toUnmodifiableMap(
+                        Map.Entry::getKey, entry -> resolver.apply(entry.getValue())));
     }
 
     /**
@@ -162,9 +228,19 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .map(siteByCode::get)
                 .map(Site::getId)
                 .collect(Collectors.toUnmodifiableSet());
+
+        // FR-003: the reconciler only ever owns the sites it manages (siteByCode) — a membership
+        // to any other site, however it got there, is left untouched in both directions. Without
+        // this guard "not in desiredSiteIds" would also match every out-of-scope membership and
+        // delete it on every restart, which is the defect this feature fixes.
+        Set<UUID> managedSiteIds = siteByCode.values().stream()
+                .map(Site::getId)
+                .collect(Collectors.toUnmodifiableSet());
+
         List<SiteMembership> existing = memberships.findByUserId(user.getId());
         List<SiteMembership> obsolete = existing.stream()
-                .filter(membership -> !desiredSiteIds.contains(membership.getSiteId()))
+                .filter(membership -> managedSiteIds.contains(membership.getSiteId())
+                        && !desiredSiteIds.contains(membership.getSiteId()))
                 .toList();
         if (!obsolete.isEmpty()) {
             memberships.deleteAll(obsolete);
@@ -180,7 +256,8 @@ public class DemoDataSeeder implements ApplicationRunner {
                 .forEach(memberships::save);
     }
 
-    static List<DemoUserMapping> parseAndValidateMappings(ObjectMapper mapper, String json) {
+    static List<DemoUserMapping> parseAndValidateMappings(
+            ObjectMapper mapper, String json, Set<String> knownSiteCodes) {
         final List<DemoUserMapping> mappings;
         try {
             mappings = mapper.readValue(json, new TypeReference<>() {});
@@ -222,7 +299,7 @@ public class DemoDataSeeder implements ApplicationRunner {
                         && !"preserve".equals(mapping.desiredStatus()))
                     || (IDENTITY_KIND_SYNTHETIC_TEST.equals(mapping.identityKind())
                         && !List.of("enabled", "disabled").contains(mapping.desiredStatus()))
-                    || mapping.siteCodes().stream().anyMatch(code -> !List.of("bishan", "campus").contains(code))) {
+                    || mapping.siteCodes().stream().anyMatch(code -> !knownSiteCodes.contains(code))) {
                 throw new IllegalArgumentException("Mapping contains an unsafe subject, identity kind, or site code.");
             }
         }
@@ -232,4 +309,9 @@ public class DemoDataSeeder implements ApplicationRunner {
     record DemoUserMapping(String username, String cognitoSub, String displayName,
                            Role role, List<String> siteCodes, String identityKind,
                            String desiredStatus) {}
+
+    /**
+     * The Java-side half of a known site (FR-001a) — see {@link #SITE_DEFINITIONS}.
+     */
+    record SiteDefinition(String code, String displayName, BigDecimal latitude, BigDecimal longitude) {}
 }

@@ -7,6 +7,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 manifest="${SYNTHETIC_USERS_FILE:-$root/.github/cognito/synthetic-users.yml}"
 registry="${CREWSAFE_AWS_ACCOUNTS_JSON:-}"
 shared_config="${CREWSAFE_SHARED_COGNITO_JSON:-}"
+known_site_codes_file="${KNOWN_SITE_CODES_FILE:-$root/backend/src/main/resources/cognito/known-site-codes.json}"
 
 [[ -f "$manifest" ]] || {
   echo "::error::Synthetic user manifest is unavailable." >&2
@@ -14,6 +15,14 @@ shared_config="${CREWSAFE_SHARED_COGNITO_JSON:-}"
 }
 jq -e 'type == "object" and length > 0' <<<"$registry" >/dev/null || {
   echo "::error::AWS account registry is unavailable." >&2
+  exit 1
+}
+# SCRUM-490: the single canonical allowlist (FR-001/FR-006) shared with DemoDataSeeder — see
+# specs/057-synthetic-site-allowlist/research.md for why it lives under backend/ rather than
+# .github/ (the backend Docker build context cannot reach anything outside backend/).
+known_sites="$(jq -ce 'select(type == "array" and length > 0 and all(.[]; type == "string"))' \
+    "$known_site_codes_file")" || {
+  echo "::error::Known site codes file is missing, unreadable, or malformed." >&2
   exit 1
 }
 
@@ -33,7 +42,7 @@ decoded="$(
 }
 
 manifest_diagnostic() {
-  jq -r '
+  jq -r --argjson known_sites "$known_sites" '
     def allowed_fields: [
       "cognito_sub", "desired_status", "display_name", "group",
       "key", "role", "site_codes", "username"
@@ -75,7 +84,7 @@ manifest_diagnostic() {
     elif any(.accounts[][];
       (.site_codes | type) != "array"
       or (.site_codes | length) < 1
-      or any(.site_codes[]; IN("bishan", "campus") | not)) then
+      or any(.site_codes[]; IN($known_sites[]) | not)) then
       "site_codes contain an unsupported or empty assignment"
     elif any(.accounts[][]; .group != "synthetic-test-users") then
       "group must equal synthetic-test-users"
@@ -97,7 +106,7 @@ manifest_diagnostic() {
   ' <<<"$decoded"
 }
 
-jq -e '
+jq -e --argjson known_sites "$known_sites" '
   type == "object"
   and (keys | sort) == ["accounts", "schema_version"]
   and .schema_version == 1
@@ -132,7 +141,7 @@ jq -e '
       and (.role | IN("WORKER", "SUPERVISOR", "SAFETY_MANAGER"))
       and (.site_codes | type == "array" and length >= 1
         and length == (unique | length)
-        and all(.[]; IN("bishan", "campus")))
+        and all(.[]; IN($known_sites[])))
       and .group == "synthetic-test-users"
       and (.desired_status | IN("enabled", "disabled"))
       and (.cognito_sub == null or (
