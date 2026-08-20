@@ -31,6 +31,10 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   // history table backs — a worker already gets this state via the mobile shift screen.
   "/lightning": MANAGEMENT_ROLES,
   "/approvals": ["SUPERVISOR", "SAFETY_MANAGER"],
+  // Cross-site oversight board (US-37): read-only, caller-scoped plan-summary counts.
+  // SAFETY_MANAGER only — the endpoint is open to SUPERVISOR/ADMIN too, but this screen is
+  // the manager's cross-site view; a supervisor already sees their own site's plans directly.
+  "/oversight": ["SAFETY_MANAGER"],
   "/audit": ["SAFETY_MANAGER"],
   // Admin console (US-30): site + local user/role/site-membership management. The only
   // screens an administrator's UI offers at all.

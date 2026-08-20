@@ -27,6 +27,7 @@ import { AdminUsersPage } from "@/features/admin/AdminUsersPage";
 import { CreateSitePage } from "@/features/admin/CreateSitePage";
 import { RegisterUserPage } from "@/features/admin/RegisterUserPage";
 import { AuditPage } from "@/features/audit/AuditPage";
+import { OversightPage } from "@/features/oversight/OversightPage";
 import { SiteProvider } from "@/site/SiteProvider";
 
 /**
@@ -132,7 +133,7 @@ export function App() {
                 item.to !== "/monitoring" &&
                 item.to !== "/audit" && item.to !== "/insights" && item.to !== "/readiness" &&
                 item.to !== "/approvals" && item.to !== "/policy" && item.to !== "/lightning" &&
-                item.to !== "/settings",
+                item.to !== "/settings" && item.to !== "/oversight",
             ).map((item) => (
               <Route
                 key={item.to}
@@ -176,6 +177,10 @@ export function App() {
             <Route
               path="/approvals"
               element={<RoleRoute roles={rolesForRoute("/approvals")}><ApprovalsPage /></RoleRoute>}
+            />
+            <Route
+              path="/oversight"
+              element={<RoleRoute roles={rolesForRoute("/oversight")}><OversightPage /></RoleRoute>}
             />
             <Route
               path="/policy/new"

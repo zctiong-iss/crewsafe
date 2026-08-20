@@ -49,7 +49,7 @@ import { formatDateTime } from "@/helpers/dateTime";
 import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
-import type { ShiftAssignment } from "@/types/domain";
+import type { Shift, ShiftAssignment } from "@/types/domain";
 import type { ShiftsStackParamList } from "@/navigation/types";
 
 function shiftPresentation(
@@ -63,6 +63,31 @@ function shiftPresentation(
     canEdit: editable,
     showEndControls: canEndShift && canEndNow,
   };
+}
+
+/**
+ * The shift-derived flags the screen renders from, computed against a single `now` snapshot.
+ *
+ * Lifted out of the component so this cluster of date/status branching counts here rather than
+ * against {@code ShiftDetailScreen}'s cognitive complexity (Sonar S3776) — and so the whole set
+ * is derived from one timestamp instead of several independent {@code Date.now()} reads.
+ *
+ * - `editable`: not yet ended (CLOSED, or `endsAt` already past) — decides what to offer; the
+ *   server refuses either way.
+ * - `running`: started but not ended.
+ * - `canEndNow`: in a state the server will still transition (PLANNED/ACTIVE), so an end
+ *   control is worth offering rather than one that can only be refused.
+ * - `hasEnded`: `endsAt` is in the past — close is refused before then (cancel is the early tool).
+ */
+function deriveShiftState(shift: Shift | undefined, now: number) {
+  if (!shift) {
+    return { editable: false, running: false, canEndNow: false, hasEnded: false };
+  }
+  const hasEnded = new Date(shift.endsAt).getTime() <= now;
+  const ended = shift.status === "CLOSED" || hasEnded;
+  const running = !ended && new Date(shift.startsAt).getTime() <= now;
+  const canEndNow = shift.status === "PLANNED" || shift.status === "ACTIVE";
+  return { editable: !ended, running, canEndNow, hasEnded };
 }
 
 function ShiftAssignmentCard({
@@ -230,48 +255,32 @@ export default function ShiftDetailScreen() {
   const [editingWindow, setEditingWindow] = useState(false);
   const [addingWorker, setAddingWorker] = useState(false);
 
-  /**
-   * Whether this shift may still be corrected (SCRUM-266).
-   *
-   * `CLOSED` and a past `endsAt` are both checked because they are not the same fact: nothing
-   * moves a shift to `CLOSED` on a timer, so status alone would leave yesterday's shifts
-   * looking editable. The server refuses either way — this only decides what to offer.
+  /*
+   * Every shift-derived flag the screen renders from (SCRUM-266), computed together in
+   * deriveShiftState against one `now` snapshot:
+   *  - editable: not yet ended — CLOSED and a past `endsAt` are both checked because nothing
+   *    moves a shift to CLOSED on a timer, so status alone would leave yesterday's editable;
+   *  - canEndNow: still in a server-transitionable state (PLANNED/ACTIVE), so an end control is
+   *    worth offering rather than one that can only be refused;
+   *  - hasEnded: `endsAt` is past — close is refused before then, cancel is the early tool.
+   * The server refuses in every case; these only decide what to offer.
    */
-  const editability = useMemo(() => {
-    if (!shift) return { editable: false, running: false };
-    const ended = shift.status === "CLOSED" || new Date(shift.endsAt).getTime() <= Date.now();
-    const running =
-      !ended && new Date(shift.startsAt).getTime() <= Date.now();
-    return { editable: !ended, running };
-  }, [shift]);
+  const { editable, running, canEndNow, hasEnded } = useMemo(
+    () => deriveShiftState(shift, Date.now()),
+    [shift],
+  );
 
   /*
-   * Who may end a shift, and when.
-   *
-   * Supervisors and admins only, following `canDecide` in RecommendationDetailScreen. The
-   * shift screens already sit behind the supervisor tab set, so this is defence in depth
-   * rather than the only guard — and the server refuses either way.
+   * Who may end a shift: supervisors and admins only, following `canDecide` in
+   * RecommendationDetailScreen. The shift screens already sit behind the supervisor tab set,
+   * so this is defence in depth rather than the only guard — and the server refuses either way.
    */
   const canEndShift = user?.role === "SUPERVISOR" || user?.role === "ADMIN";
 
-  /*
-   * Both actions are only offered on a shift that has not already ended terminally.
-   * PLANNED and ACTIVE are the two states the server will transition; CLOSED and CANCELLED
-   * are terminal, and offering a control that can only be refused is worse than offering none.
-   */
-  const canEndNow = shift?.status === "PLANNED" || shift?.status === "ACTIVE";
-
-  /*
-   * Close is refused while `endsAt` is still in the future — a shift cannot be closed early;
-   * cancel is the tool for calling one off. Mirrored here so the control can explain itself
-   * rather than spending a request on a 400, but the server stays the authority: a device
-   * clock that disagrees must not be able to talk it into closing early.
-   */
-  const hasEnded = shift ? new Date(shift.endsAt).getTime() <= Date.now() : false;
   const ending = shift ? endingId === shift.id : false;
   const { hasAssignments, canEdit, showEndControls } = shiftPresentation(
     shift,
-    editability.editable,
+    editable,
     canEndShift,
     canEndNow,
   );
@@ -661,7 +670,7 @@ export default function ShiftDetailScreen() {
         visible={editing !== null}
         assignment={editing}
         workerName={editing ? workerNameFor(editing.workerId) : ""}
-        shiftIsRunning={editability.running}
+        shiftIsRunning={running}
         saving={savingAssignmentId !== null}
         onCancel={() => setEditing(null)}
         onSave={(values) => {
@@ -677,7 +686,7 @@ export default function ShiftDetailScreen() {
         visible={editingWindow}
         startsAt={shift.startsAt}
         endsAt={shift.endsAt}
-        shiftIsRunning={editability.running}
+        shiftIsRunning={running}
         crewSize={shift.assignments.length}
         saving={savingWindow}
         onCancel={() => setEditingWindow(false)}
