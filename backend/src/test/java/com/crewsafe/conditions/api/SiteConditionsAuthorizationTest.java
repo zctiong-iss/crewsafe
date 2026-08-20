@@ -8,6 +8,9 @@ import com.crewsafe.identity.repository.AppUserRepository;
 import com.crewsafe.identity.repository.SiteMembershipRepository;
 import com.crewsafe.site.domain.Site;
 import com.crewsafe.site.repository.SiteRepository;
+import com.crewsafe.weather.domain.WeatherQualityStatus;
+import com.crewsafe.weather.domain.WeatherSource;
+import com.crewsafe.weather.repository.WeatherObservationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,9 +20,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,6 +51,7 @@ class SiteConditionsAuthorizationTest extends AbstractIntegrationTest {
     @Autowired private AppUserRepository users;
     @Autowired private SiteRepository sites;
     @Autowired private SiteMembershipRepository memberships;
+    @Autowired private WeatherObservationRepository observations;
 
     private Site siteA;
     private Site siteB;
@@ -91,6 +98,63 @@ class SiteConditionsAuthorizationTest extends AbstractIntegrationTest {
 
     private String streamUrl(Site site) {
         return "/api/v1/sites/" + site.getId() + "/conditions/stream";
+    }
+
+    private String historyUrl(Site site) {
+        return "/api/v1/sites/" + site.getId() + "/conditions/history";
+    }
+
+    @Test
+    void returnsOnlyChronologicalNonNullWbgtReadingsFromTheLastFourHours() throws Exception {
+        Instant now = Instant.now();
+        insertObservation(siteA.getId(), now.minus(Duration.ofHours(5)), new BigDecimal("25.00"));
+        insertObservation(siteA.getId(), now.minus(Duration.ofHours(3)), new BigDecimal("27.30"));
+        insertObservation(siteA.getId(), now.minus(Duration.ofHours(1)), null);
+        insertObservation(siteA.getId(), now.minus(Duration.ofMinutes(15)), new BigDecimal("29.10"));
+        insertObservation(siteB.getId(), now.minus(Duration.ofMinutes(10)), new BigDecimal("35.00"));
+
+        mockMvc.perform(get(historyUrl(siteA))
+                        .header("Authorization", "Bearer " + supervisorAToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.from").isString())
+                .andExpect(jsonPath("$.asOf").isString())
+                .andExpect(jsonPath("$.points.length()").value(2))
+                .andExpect(jsonPath("$.points[0].wbgt").value(27.3))
+                .andExpect(jsonPath("$.points[1].wbgt").value(29.1));
+    }
+
+    @Test
+    void assignedSafetyManagerCanReadConditionsHistory() throws Exception {
+        mockMvc.perform(get(historyUrl(siteA))
+                        .header("Authorization", "Bearer " + managerAToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void adminCanReadConditionsHistoryWithoutMembership() throws Exception {
+        mockMvc.perform(get(historyUrl(siteA))
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void workerCannotReadConditionsHistoryEvenAtTheirOwnSite() throws Exception {
+        mockMvc.perform(get(historyUrl(siteA))
+                        .header("Authorization", "Bearer " + workerAToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorCannotReadAnotherSitesConditionsHistory() throws Exception {
+        mockMvc.perform(get(historyUrl(siteA))
+                        .header("Authorization", "Bearer " + supervisorBToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void unauthenticatedConditionsHistoryRequestIsRejected() throws Exception {
+        mockMvc.perform(get(historyUrl(siteA)))
+                .andExpect(status().isUnauthorized());
     }
 
     // --- allowed: assigned supervisor/manager/admin connect ---
@@ -151,5 +215,13 @@ class SiteConditionsAuthorizationTest extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/sites/" + UUID.randomUUID() + "/conditions/stream")
                         .header("Authorization", "Bearer " + supervisorAToken))
                 .andExpect(status().isForbidden());
+    }
+
+    private void insertObservation(UUID siteId, Instant observedAt, BigDecimal wbgt) {
+        observations.insertIfAbsent(new WeatherObservationRepository.InsertObservationCommand(
+                UUID.randomUUID(), siteId, wbgt, new BigDecimal("31.80"),
+                new BigDecimal("62.40"), new BigDecimal("6.50"), BigDecimal.ZERO,
+                observedAt, observedAt.plusSeconds(10), WeatherSource.NEA.name(),
+                WeatherQualityStatus.LIVE.name(), "S-history"));
     }
 }
