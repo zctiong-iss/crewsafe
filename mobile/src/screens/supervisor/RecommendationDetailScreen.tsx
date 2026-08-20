@@ -44,7 +44,8 @@ import { formatDateTime } from "@/helpers/dateTime";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
 import { DETERMINISTIC_FALLBACK_MODEL } from "@/types/domain";
-import type { Mitigation, MitigationCategory } from "@/types/domain";
+import { buildRationaleSummary, showsModelProse } from "@/helpers/planRationale";
+import type { Mitigation, MitigationCategory, Recommendation } from "@/types/domain";
 import type { RecommendationsStackParamList } from "@/navigation/types";
 
 /** The order topics are shown in: what stops work first, what sustains it after. */
@@ -93,14 +94,12 @@ function mitigationEntries(mitigations: readonly Mitigation[]): { mitigation: Mi
 
 function recommendationPresentation(
   approval: { decision?: string | null; decidedAt: string; editedMitigations?: readonly Mitigation[] | null; reason?: string | null } | null,
-  rationale: string | null,
   citedVersion: { id: string; versionLabel: string } | null,
 ) {
   const editedMitigations = approval?.decision === "EDITED" ? approval.editedMitigations : null;
   const rejectionReason = approval?.decision === "REJECTED" ? approval.reason : null;
   return {
     approval: approval || null,
-    rationale: rationale || null,
     citedVersion: citedVersion || null,
     editedMitigations: editedMitigations || null,
     rejectionReason: rejectionReason || null,
@@ -211,43 +210,92 @@ function DecisionSection({
   );
 }
 
+/**
+ * Why this plan exists, in the reader's language.
+ *
+ * ── THE SUMMARY IS BUILT, THE PROSE IS QUOTED ───────────────────────────────────────────
+ * The server sends `rationale` as finished English prose, which i18next cannot translate. So
+ * the sentence a supervisor reads is composed here from structured evidence — see
+ * `helpers/planRationale.ts` for why that is possible and what it degrades to when the
+ * evidence is thin.
+ *
+ * The server's own wording is not discarded. Where it is genuine model output it is shown
+ * below, LABELLED as the model's original English, because text in a language the reader did
+ * not choose has to be marked as such or it reads as a translation failure rather than as
+ * source material. Where it is the deterministic template it is suppressed entirely: that
+ * string is the same sentence the summary just rendered, and printing both would show one
+ * sentence twice, once translated and once not.
+ */
 function RationaleSection({
-  rationale,
+  recommendation,
   expanded,
   onToggle,
 }: Readonly<{
-  rationale: string | null;
+  recommendation: Recommendation;
   expanded: boolean;
   onToggle: () => void;
 }>) {
   const { t } = useTranslation();
-  if (!rationale) return null;
+
+  const summary = buildRationaleSummary(recommendation);
+  const modelProse = showsModelProse(recommendation) ? recommendation.rationale : null;
 
   const toggleLabel = expanded ? t("recommendations.readLess") : t("recommendations.readMore");
+
   return (
     <>
       <AppText variant="subtitle" style={styles.sectionTitle}>
         {t("recommendations.whyTitle")}
       </AppText>
-      <AppText
-        variant="body"
-        numberOfLines={expanded ? undefined : 3}
-        style={styles.block}
-      >
-        {rationale}
+
+      {/*
+        One key for the whole sentence, not fragments joined together — word order differs
+        across the seven locales, and a sentence assembled from parts is grammatical in
+        English and nowhere else. The band resolves through the EXISTING `wbgt.band.*` keys
+        so this paragraph cannot drift from the band shown on the weather card.
+      */}
+      <AppText variant="body" style={styles.block}>
+        {t(summary.key, {
+          ...summary.values,
+          band: summary.values.band ? t(summary.values.band) : undefined,
+        })}
       </AppText>
-      <TouchableOpacity
-        onPress={onToggle}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        accessibilityLabel={toggleLabel}
-        hitSlop={8}
-        style={styles.readMore}
-      >
-        <AppText variant="caption" tone="secondary">
-          {toggleLabel}
+
+      {/* A separate sentence: how the plan was PRODUCED is not a fact about the conditions,
+          and folding both into one string gives translators two unrelated halves. */}
+      {summary.fromPolicyEngine ? (
+        <AppText variant="caption" tone="secondary" style={styles.block}>
+          {t("recommendations.rationaleFromPolicyEngine")}
         </AppText>
-      </TouchableOpacity>
+      ) : null}
+
+      {modelProse ? (
+        <>
+          <AppText variant="caption" tone="secondary" style={styles.modelProseLabel}>
+            {t("recommendations.modelWordingLabel")}
+          </AppText>
+          <AppText
+            variant="body"
+            tone="secondary"
+            numberOfLines={expanded ? undefined : 3}
+            style={styles.block}
+          >
+            {modelProse}
+          </AppText>
+          <TouchableOpacity
+            onPress={onToggle}
+            accessibilityRole="button"
+            accessibilityState={{ expanded }}
+            accessibilityLabel={toggleLabel}
+            hitSlop={8}
+            style={styles.readMore}
+          >
+            <AppText variant="caption" tone="secondary">
+              {toggleLabel}
+            </AppText>
+          </TouchableOpacity>
+        </>
+      ) : null}
     </>
   );
 }
@@ -436,14 +484,9 @@ export default function RecommendationDetailScreen() {
    */
   const superseded = recommendation.status === "SUPERSEDED";
   const decided = approval !== null || autoDispatched;
-  const presentation = recommendationPresentation(
-    approval,
-    recommendation.rationale,
-    citedVersion,
-  );
+  const presentation = recommendationPresentation(approval, citedVersion);
   const {
     approval: approvalView,
-    rationale,
     citedVersion: citedVersionView,
     editedMitigations,
     rejectionReason,
@@ -519,7 +562,7 @@ export default function RecommendationDetailScreen() {
 
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
         <RationaleSection
-          rationale={rationale}
+          recommendation={recommendation}
           expanded={showFullWhy}
           onToggle={() => setShowFullWhy((value) => !value)}
         />
@@ -700,6 +743,9 @@ const styles = StyleSheet.create({
   },
   block: {
     marginBottom: vs(12),
+  },
+  modelProseLabel: {
+    marginTop: vs(12),
   },
   readMore: {
     // Sits under the clamped narrative, and keeps a full touch target at every text size.

@@ -27,6 +27,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
 import { formatTime } from "@/helpers/dateTime";
 import { humaniseActionCode } from "@/helpers/actionCodes";
+import { instructionKeyFor } from "@/helpers/actionInstruction";
 import type { ActionDispatch } from "@/types/domain";
 
 interface DispatchCardProps {
@@ -84,6 +85,19 @@ function dispatchPresentation(
       : t("inbox.pending"),
     acknowledgeTitle: acknowledgeTitle(inFlight, failureKey, t),
   };
+}
+
+/**
+ * The instruction a worker reads.
+ *
+ * Kept out of the component so the fallback chain is one readable expression rather than a
+ * nested ternary inside JSX: translated canned sentence → the server's own text → the
+ * "no instruction" placeholder, which is the only one of the three that is not an instruction.
+ */
+function instructionText(instruction: string | null, t: (key: string) => string): string {
+  const key = instructionKeyFor(instruction);
+  if (key) return t(key);
+  return instruction ?? t("inbox.noInstruction");
 }
 
 const DispatchCard: FC<DispatchCardProps> = ({
@@ -184,8 +198,18 @@ const DispatchCard: FC<DispatchCardProps> = ({
         </AppText>
       </View>
 
+      {/*
+        Translated when the server sent its canned sentence, shown verbatim when it did not.
+
+        Matched on the TEXT rather than on `actionCode`, for two reasons that both matter. The
+        dispatch code is the DISPATCH code — HYDRATE_HOURLY and HYDRATE_REGULARLY both arrive
+        as HYDRATE with different sentences, so the code cannot choose between them. And a
+        supervisor may have EDITED the plan before approving it, in which case this sentence is
+        their wording; translating from the code would replace a deliberate safety instruction
+        with a generic one. See `helpers/actionInstruction.ts`.
+      */}
       <AppText variant="body" style={styles.instruction}>
-        {dispatch.instruction ?? t("inbox.noInstruction")}
+        {instructionText(dispatch.instruction, t)}
       </AppText>
 
       {/*

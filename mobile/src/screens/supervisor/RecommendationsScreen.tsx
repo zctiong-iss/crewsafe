@@ -35,8 +35,10 @@ import { plansListFocusChanged, showToast } from "@/store/reducers/uiSlice";
 import { useAutoRefresh, REFRESH_INTERVALS } from "@/hooks/useAutoRefresh";
 import { useNotificationPermission } from "@/notifications/useNotificationPermission";
 import { formatDateTime } from "@/helpers/dateTime";
+import { buildRationaleSummary } from "@/helpers/planRationale";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
+import type { Recommendation } from "@/types/domain";
 import type { RecommendationsStackParamList } from "@/navigation/types";
 
 export default function RecommendationsScreen() {
@@ -170,6 +172,22 @@ export default function RecommendationsScreen() {
     }
   }, [items, status, dispatch]);
 
+  /*
+   * Built per row rather than memoised across the list: the sentence depends on `t`, whose
+   * identity changes on a language switch. Caching it would hold the previous language's
+   * text — the exact bug this is fixing, reintroduced one layer up.
+   */
+  const rationaleFor = useCallback(
+    (plan: Recommendation): string => {
+      const summary = buildRationaleSummary(plan);
+      return t(summary.key, {
+        ...summary.values,
+        band: summary.values.band ? t(summary.values.band) : undefined,
+      });
+    },
+    [t],
+  );
+
   const windowFor = useCallback(
     (shiftId: string) => {
       const shift = shifts.find((item) => item.id === shiftId);
@@ -275,11 +293,18 @@ export default function RecommendationsScreen() {
                 {t("recommendations.mitigationCount", { count: item.mitigations.length })}
               </AppText>
 
-              {item.rationale ? (
-                <AppText variant="caption" numberOfLines={2} style={styles.cardRationale}>
-                  {item.rationale}
-                </AppText>
-              ) : null}
+              {/*
+                The same localised summary the detail screen renders, not the server's English
+                `rationale`. This row was the last place the untranslated prose still showed:
+                the detail screen was fixed first, so a supervisor reading in Malay saw a
+                translated plan sitting behind an English preview of it.
+
+                Two lines, so it stays a preview — the row's job is to say WHICH plan this is,
+                and the detail screen carries the reasoning.
+              */}
+              <AppText variant="caption" numberOfLines={2} style={styles.cardRationale}>
+                {rationaleFor(item)}
+              </AppText>
             </TouchableOpacity>
           );
         }}
