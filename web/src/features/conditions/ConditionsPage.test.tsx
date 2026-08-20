@@ -11,6 +11,7 @@ import { server } from "@/test/mocks/server";
 import { SiteProvider } from "@/site/SiteProvider";
 import { expectNoA11yViolations } from "@/test/a11y";
 import type { ConditionsStreamHandlers } from "@/api/conditionsStream";
+import type { ConditionsHistory } from "@/api/conditionsHistory";
 import { ConditionsPage } from "./ConditionsPage";
 import "@testing-library/jest-dom/vitest";
 
@@ -26,12 +27,17 @@ const renderPage = () => {
     handlers.onStatus("connecting");
     return () => {};
   };
+  const loadHistory = async (): Promise<ConditionsHistory> => ({
+    from: "2026-08-20T05:00:00Z",
+    asOf: "2026-08-20T09:00:00Z",
+    points: [],
+  });
   return render(
     <MemoryRouter>
       <AuthProvider userManager={fakeUserManager({})}>
         <WhenSignedIn>
           <SiteProvider>
-            <ConditionsPage subscribe={fakeSubscribe} />
+            <ConditionsPage subscribe={fakeSubscribe} loadHistory={loadHistory} />
           </SiteProvider>
         </WhenSignedIn>
       </AuthProvider>
