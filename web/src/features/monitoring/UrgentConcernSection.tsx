@@ -35,11 +35,13 @@ export function UrgentConcernSection({
   connectionState: ConcernConnectionState;
   hasSnapshot: boolean;
 }>) {
+  if (concerns.length === 0 && hasSnapshot && connectionState === "live") return null;
+
   return (
     <section className="monitoring-concerns" aria-labelledby="urgent-concerns-title">
       <div className="monitoring-concerns__header">
         <h2 id="urgent-concerns-title" className="monitoring-concerns__title">
-          <span aria-hidden="true">!</span> Urgent worker concerns
+          <span aria-hidden="true">!</span> Urgent Worker Concerns
           <output
             className="monitoring-concerns__tally"
             aria-label={`${concerns.length} open concerns`}
@@ -55,19 +57,19 @@ export function UrgentConcernSection({
 
       {connectionState === "degraded" && (
         <p className="monitoring-concerns__degraded" role="alert">
-          Concern feed interrupted — showing the last complete update. Reconnecting...
+          Workers' feed interrupted — showing the last complete update. Reconnecting...
         </p>
       )}
       {connectionState === "closed" && (
         <p className="monitoring-concerns__degraded" role="alert">
-          Concern feed unavailable. The action board remains available.
+          Workers' feed unavailable, but the action board remains available.
         </p>
       )}
       {!hasSnapshot && connectionState === "connecting" && concerns.length === 0 && (
-        <output className="monitoring-concerns__empty">Connecting to worker concerns...</output>
+        <output className="monitoring-concerns__empty">Connecting to workers' feed...</output>
       )}
       {hasSnapshot && connectionState === "live" && concerns.length === 0 && (
-        <output className="monitoring-concerns__empty">No open worker concerns.</output>
+        <output className="monitoring-concerns__empty">No open concerns raised by workers.</output>
       )}
       {hasSnapshot && connectionState !== "live" && concerns.length === 0 && (
         <p className="monitoring-concerns__empty">Last complete update had no open worker concerns.</p>

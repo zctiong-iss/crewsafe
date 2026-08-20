@@ -124,7 +124,7 @@ export function ApprovalsPage() {
   }
 
   return (
-    <AppShell title="Approvals" subtitle="Plans Awaiting Review">
+    <AppShell title="Action Plan Management" subtitle="Plans Awaiting Review">
       {load.status === "loading" && <output className="approvals__loading">Loading Pending Plans…</output>}
 
       {load.status === "error" && <EmptyState headline="Could Not Load Plans" body={load.message} />}

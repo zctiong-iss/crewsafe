@@ -42,7 +42,7 @@ describe("direct route access", () => {
 
   it.each(OPERATIONAL_ROLES)("allows %s to open action monitoring", async (role) => {
     renderAt("/monitoring", role);
-    expect(await screen.findByRole("heading", { name: "Action Monitoring" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Team Monitor" })).toBeInTheDocument();
   });
 
   it("redirects a worker away from action monitoring", async () => {
@@ -59,7 +59,7 @@ describe("direct route access", () => {
     "keeps the approvals placeholder available to %s",
     async (role) => {
       renderAt("/approvals", role);
-      expect(await screen.findByRole("heading", { name: "Approvals" })).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { name: "Action Plan Management" })).toBeInTheDocument();
     },
   );
 

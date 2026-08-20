@@ -26,18 +26,17 @@ describe("UrgentConcernSection", () => {
     expect(screen.queryByRole("button", { name: /acknowledge/i })).not.toBeInTheDocument();
   });
 
-  it("shows empty and degraded states while retaining the last snapshot", () => {
+  it("shows feed-state messages until a live empty snapshot hides the section", () => {
     const { rerender } = render(
       <UrgentConcernSection concerns={[]} connectionState="connecting" hasSnapshot={false} />,
     );
-    expect(screen.getByText("Connecting to worker concerns...")).toBeInTheDocument();
+    expect(screen.getByText("Connecting to workers' feed...")).toBeInTheDocument();
     rerender(
-      <UrgentConcernSection concerns={[oneConcern]} connectionState="degraded" hasSnapshot />,
+      <UrgentConcernSection concerns={[]} connectionState="degraded" hasSnapshot />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/last complete update/i);
-    expect(screen.getByText("Worker 550e8400")).toBeInTheDocument();
     rerender(<UrgentConcernSection concerns={[]} connectionState="live" hasSnapshot />);
-    expect(screen.getByText("No open worker concerns.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Urgent worker concerns/i })).not.toBeInTheDocument();
   });
 
   it("has no accessibility violations", async () => {

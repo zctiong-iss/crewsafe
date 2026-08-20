@@ -22,9 +22,9 @@ export interface NavItem {
 export const NAVIGATION: readonly NavItem[] = [
   { to: "/", label: "Live Board" },
   { to: "/shifts", label: "Shifts & Tasks" },
-  { to: "/readiness", label: "Readiness" },
-  { to: "/monitoring", label: "Action Monitoring" },
-  { to: "/approvals", label: "Approvals" },
+  { to: "/readiness", label: "Team Readiness" },
+  { to: "/monitoring", label: "Team Monitor" },
+  { to: "/approvals", label: "Action Plan Management" },
   { to: "/oversight", label: "Oversight" },
   { to: "/insights", label: "Insights" },
   { to: "/audit", label: "Audit Trail" },

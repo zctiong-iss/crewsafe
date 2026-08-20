@@ -13,7 +13,7 @@ import { UrgentConcernSection } from "./UrgentConcernSection";
 import { bucketDispatches } from "./actionMonitoringLogic";
 import "./ActionMonitoringPanel.css";
 
-const SHELL_TITLE = "Action Monitoring";
+const SHELL_TITLE = "Team Monitor";
 const SHELL_SUBTITLE = "Live worker concerns, dispatch acknowledgement & completion status";
 
 // Connection badge copy + a non-colour glyph, so the state reads without relying on hue.

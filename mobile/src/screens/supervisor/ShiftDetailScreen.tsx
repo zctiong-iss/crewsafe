@@ -49,7 +49,7 @@ import { formatDateTime } from "@/helpers/dateTime";
 import { intensityColor } from "@/helpers/intensityColor";
 import { sharedPaddingHorizontal, cardSurface } from "@/styles/sharedStyles";
 import { useTheme } from "@/theme/ThemeProvider";
-import type { Shift, ShiftAssignment } from "@/types/domain";
+import type { CrewWellbeingRow as CrewWellbeingData, Shift, ShiftAssignment } from "@/types/domain";
 import type { ShiftsStackParamList } from "@/navigation/types";
 
 function shiftPresentation(
@@ -224,6 +224,142 @@ function ShiftAssignments({
   ));
 }
 
+function CrewWellbeingCard({
+  assignments,
+  crew,
+  locale,
+  workerNameFor,
+}: Readonly<{
+  assignments: readonly ShiftAssignment[];
+  crew: readonly CrewWellbeingData[];
+  locale: string;
+  workerNameFor: (workerId: string) => string;
+}>) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+
+  if (assignments.length === 0) return null;
+
+  return (
+    <View
+      style={[
+        styles.card,
+        cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
+        { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
+      ]}
+    >
+      <AppText variant="subtitle">{t("wellbeing.crewTitle")}</AppText>
+      {assignments.map((assignment) => (
+        <CrewWellbeingRow
+          key={`wellbeing-${assignment.id}`}
+          workerName={workerNameFor(assignment.workerId)}
+          row={crew.find((row) => row.workerId === assignment.workerId) ?? null}
+          locale={locale}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ShiftActions({
+  canEdit,
+  staffingId,
+  generating,
+  showEndControls,
+  ending,
+  hasEnded,
+  deleting,
+  onAddWorker,
+  onGeneratePlan,
+  onViewRecommendations,
+  onCloseShift,
+  onCancelShift,
+  onDelete,
+}: Readonly<{
+  canEdit: boolean;
+  staffingId: string | null;
+  generating: boolean;
+  showEndControls: boolean;
+  ending: boolean;
+  hasEnded: boolean;
+  deleting: boolean;
+  onAddWorker: () => void;
+  onGeneratePlan: () => void;
+  onViewRecommendations: () => void;
+  onCloseShift: () => void;
+  onCancelShift: () => void;
+  onDelete: () => void;
+}>) {
+  const { t } = useTranslation();
+
+  return (
+    <>
+      {canEdit ? (
+        <AppButton
+          title={t("shifts.addWorker")}
+          variant="secondary"
+          loading={staffingId === "add"}
+          onPress={onAddWorker}
+        />
+      ) : (
+        <AppText variant="caption" tone="secondary" style={styles.block}>
+          {t("shifts.notEditable")}
+        </AppText>
+      )}
+
+      {features.draftPlanTrigger ? (
+        <AppButton
+          title={generating ? t("recommendations.generating") : t("recommendations.generateDraft")}
+          loading={generating}
+          onPress={onGeneratePlan}
+          style={styles.block}
+        />
+      ) : null}
+
+      <AppButton
+        title={t("shifts.viewRecommendations")}
+        variant="secondary"
+        onPress={onViewRecommendations}
+        style={styles.block}
+      />
+
+      {showEndControls ? (
+        <>
+          <AppButton
+            title={ending ? t("shifts.ending") : t("shifts.closeButton")}
+            variant="secondary"
+            loading={ending}
+            disabled={!hasEnded || ending}
+            onPress={onCloseShift}
+            style={styles.block}
+          />
+          {!hasEnded ? (
+            <AppText variant="caption" tone="secondary" style={styles.block}>
+              {t("shifts.closeNotYetEnded")}
+            </AppText>
+          ) : null}
+
+          <AppButton
+            title={t("shifts.cancelButton")}
+            variant="danger"
+            disabled={ending}
+            onPress={onCancelShift}
+            style={styles.block}
+          />
+        </>
+      ) : null}
+
+      <AppButton
+        title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}
+        variant="danger"
+        loading={deleting}
+        onPress={onDelete}
+        style={styles.block}
+      />
+    </>
+  );
+}
+
 export default function ShiftDetailScreen() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
@@ -278,7 +414,7 @@ export default function ShiftDetailScreen() {
   const canEndShift = user?.role === "SUPERVISOR" || user?.role === "ADMIN";
 
   const ending = shift ? endingId === shift.id : false;
-  const { hasAssignments, canEdit, showEndControls } = shiftPresentation(
+  const { canEdit, showEndControls } = shiftPresentation(
     shift,
     editable,
     canEndShift,
@@ -506,36 +642,12 @@ export default function ShiftDetailScreen() {
           ) : null}
         </View>
 
-        {/*
-          US-11: how the crew is coping, above the assignment cards.
-
-          Above, not below, because it is the time-sensitive half. Who is on the shift changes
-          rarely; whether somebody has drunk water in the last two hours changes constantly, and
-          is the reason a supervisor opens this screen mid-shift at all.
-
-          Rendered from the shift's own roster rather than from the wellbeing response, so a
-          worker who has logged nothing still gets a row. That absent row is the one worth acting
-          on, and driving the list off the response would hide exactly it.
-        */}
-        {hasAssignments ? (
-          <View
-            style={[
-              styles.card,
-              cardSurface(theme.highContrast, theme.colors.border, theme.metrics.borderWidth),
-              { borderRadius: theme.metrics.radius, backgroundColor: theme.colors.surface },
-            ]}
-          >
-            <AppText variant="subtitle">{t("wellbeing.crewTitle")}</AppText>
-            {shift.assignments.map((assignment) => (
-              <CrewWellbeingRow
-                key={`wellbeing-${assignment.id}`}
-                workerName={workerNameFor(assignment.workerId)}
-                row={crew.find((row) => row.workerId === assignment.workerId) ?? null}
-                locale={i18n.language}
-              />
-            ))}
-          </View>
-        ) : null}
+        <CrewWellbeingCard
+          assignments={shift.assignments}
+          crew={crew}
+          locale={i18n.language}
+          workerNameFor={workerNameFor}
+        />
 
         <AppText variant="subtitle" style={styles.sectionTitle}>
           {t("shifts.assignments")}
@@ -551,111 +663,29 @@ export default function ShiftDetailScreen() {
           onRemove={onRemoveWorker}
         />
 
-        {/* Offered even on an unstaffed shift — that is exactly the case the contract has in
-            mind when it allows a shift to be created empty and staffed later. */}
-        {canEdit ? (
-          <AppButton
-            title={t("shifts.addWorker")}
-            variant="secondary"
-            loading={staffingId === "add"}
-            onPress={() => setAddingWorker(true)}
-          />
-        ) : null}
-
-        {/* Stated rather than left to be inferred from a missing button. A supervisor who
-            cannot find the edit control should be told the shift is over, not left hunting. */}
-        {!canEdit ? (
-          <AppText variant="caption" tone="secondary" style={styles.block}>
-            {t("shifts.notEditable")}
-          </AppText>
-        ) : null}
-
-        {/*
-          US-08: ask the agent for a plan for this shift.
-
-          On the shift rather than on the Plans tab, because "draft a plan" is a question about a
-          particular crew in particular conditions — and this screen is where a supervisor already
-          has both in front of them.
-
-          Live since SCRUM-289 built the endpoint. The call takes roughly 10–20 s (it makes a real
-          model call), which is what `generating` drives the loading state for. See
-          `features.draftPlanTrigger`.
-        */}
-        {features.draftPlanTrigger ? (
-          <AppButton
-            title={generating ? t("recommendations.generating") : t("recommendations.generateDraft")}
-            loading={generating}
-            onPress={() => {
-              void (async () => {
-                const result = await dispatch(generateRecommendation({ siteId, shiftId }));
-                if (generateRecommendation.fulfilled.match(result)) {
-                  dispatch(showToast({ messageKey: "recommendations.generatedToast", tone: "success" }));
-                  return;
-                }
-                reportFailure("recommendations.generateFailedTitle", result.payload?.errorKey);
-              })();
-            }}
-            style={styles.block}
-          />
-        ) : null}
-
-        {/*
-          The in-context way into US-09: a supervisor looking at a shift can reach the plans
-          drafted for it without hunting for the tab.
-
-          It opens the Plans tab rather than a shift-filtered list. The recommendation endpoint is
-          shift-scoped, so filtering is possible — but the list is short, it is already grouped by
-          shift window, and a second entry point with its own filtered state is more moving parts
-          than the ticket needs. Worth revisiting if a site ever runs enough concurrent shifts for
-          the unfiltered list to be hard to scan.
-        */}
-        <AppButton
-          title={t("shifts.viewRecommendations")}
-          variant="secondary"
-          onPress={() => navigation.getParent()?.navigate("RecommendationsTab")}
-          style={styles.block}
-        />
-
-        {/*
-          Supervisors only, and only while the shift can still be ended. Close sits above
-          Cancel above Delete, in order of how much they destroy: close records that the
-          shift ran, cancel that it did not, delete erases that it ever existed.
-        */}
-        {showEndControls ? (
-          <>
-            <AppButton
-              title={ending ? t("shifts.ending") : t("shifts.closeButton")}
-              variant="secondary"
-              loading={ending}
-              /* Disabled rather than hidden before the shift ends. A control that appears
-                 from nowhere later teaches nothing, and a supervisor looking for a way to
-                 finish a running shift may reach for Cancel instead — which is permanent
-                 and means something different on the record. */
-              disabled={!hasEnded || ending}
-              onPress={onCloseShift}
-              style={styles.block}
-            />
-            {!hasEnded ? (
-              <AppText variant="caption" tone="secondary" style={styles.block}>
-                {t("shifts.closeNotYetEnded")}
-              </AppText>
-            ) : null}
-
-            <AppButton
-              title={t("shifts.cancelButton")}
-              variant="danger"
-              disabled={ending}
-              onPress={() => setCancelSheetOpen(true)}
-              style={styles.block}
-            />
-          </>
-        ) : null}
-        <AppButton
-          title={deleting ? t("shifts.deleting") : t("shifts.deleteButton")}
-          variant="danger"
-          loading={deleting}
-          onPress={onDelete}
-          style={styles.block}
+        <ShiftActions
+          canEdit={canEdit}
+          staffingId={staffingId}
+          generating={generating}
+          showEndControls={showEndControls}
+          ending={ending}
+          hasEnded={hasEnded}
+          deleting={deleting}
+          onAddWorker={() => setAddingWorker(true)}
+          onGeneratePlan={() => {
+            void (async () => {
+              const result = await dispatch(generateRecommendation({ siteId, shiftId }));
+              if (generateRecommendation.fulfilled.match(result)) {
+                dispatch(showToast({ messageKey: "recommendations.generatedToast", tone: "success" }));
+                return;
+              }
+              reportFailure("recommendations.generateFailedTitle", result.payload?.errorKey);
+            })();
+          }}
+          onViewRecommendations={() => navigation.getParent()?.navigate("RecommendationsTab")}
+          onCloseShift={onCloseShift}
+          onCancelShift={() => setCancelSheetOpen(true)}
+          onDelete={onDelete}
         />
       </ScrollView>
 
