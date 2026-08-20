@@ -15,6 +15,10 @@ export const ROUTE_ACCESS: Readonly<Record<string, readonly Role[]>> = {
   "/shifts": OPERATIONAL_ROLES,
   "/shifts/new": MANAGEMENT_ROLES,
   "/shifts/:shiftId/edit": MANAGEMENT_ROLES,
+  // Shift close-out summary (US-44): the audit-reconciled "single record I can defend".
+  // SUPERVISOR + SAFETY_MANAGER, matching the backend's three-role gate (ADMIN is excluded from
+  // operational screens on the frontend by convention; the server stays the real gate).
+  "/shifts/:shiftId/summary": MANAGEMENT_ROLES,
   "/conditions": MANAGEMENT_ROLES,
   // Live action-dispatch board (US-12): the web side of the mobile ack loop. Same audience as
   // /conditions — SUPERVISOR + SAFETY_MANAGER. The backend also grants ADMIN, but an

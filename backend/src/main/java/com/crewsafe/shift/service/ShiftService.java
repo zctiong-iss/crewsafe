@@ -298,7 +298,7 @@ public class ShiftService {
      *
      * <p>An unknown site falls back to UTC and says so, rather than quietly asserting SGT.
      */
-    private String localRange(UUID siteId, Instant startsAt, Instant endsAt) {
+    public String localRange(UUID siteId, Instant startsAt, Instant endsAt) {
         ZoneId zone = sites.findById(siteId)
                 .map(Site::getTimezone)
                 .map(ZoneId::of)
