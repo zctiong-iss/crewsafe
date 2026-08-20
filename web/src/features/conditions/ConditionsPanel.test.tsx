@@ -1,6 +1,6 @@
 /** @author Tang Chee Seng (with assistance from Claude) */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { fakeUserManager } from "@/test/fakeUserManager";
@@ -204,13 +204,13 @@ describe("ConditionsPanel — status region semantics (SCRUM-420 / S6819, S3358)
 describe("ConditionsPanel — four-hour history", () => {
   it("labels the trend window and keeps a chart-specific loading state", async () => {
     let handlers!: ConditionsStreamHandlers;
-    const subscribe = (_siteId: string, next: ConditionsStreamHandlers) => {
+    const subscribe = vi.fn((_siteId: string, next: ConditionsStreamHandlers) => {
       handlers = next;
       return () => undefined;
-    };
+    });
 
     wrap(<ConditionsPanel siteId="s1" subscribe={subscribe} loadHistory={pendingHistory} />);
-    await screen.findByText("Connecting to live conditions...");
+    await waitFor(() => expect(subscribe).toHaveBeenCalledOnce());
 
     act(() => {
       handlers.onStatus("live");
@@ -225,10 +225,10 @@ describe("ConditionsPanel — four-hour history", () => {
 
   it("keeps live data visible and reports a history-only failure", async () => {
     let handlers!: ConditionsStreamHandlers;
-    const subscribe = (_siteId: string, next: ConditionsStreamHandlers) => {
+    const subscribe = vi.fn((_siteId: string, next: ConditionsStreamHandlers) => {
       handlers = next;
       return () => undefined;
-    };
+    });
     const unavailableHistory = async () => {
       throw new Error("history unavailable");
     };
@@ -240,7 +240,7 @@ describe("ConditionsPanel — four-hour history", () => {
         loadHistory={unavailableHistory}
       />,
     );
-    await screen.findByText("Connecting to live conditions...");
+    await waitFor(() => expect(subscribe).toHaveBeenCalledOnce());
 
     act(() => {
       handlers.onStatus("live");
