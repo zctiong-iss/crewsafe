@@ -3,17 +3,13 @@ package com.crewsafe.operation.service;
 import com.crewsafe.mitigation.ai.bedrock.RationaleTranslationClient;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.domain.RecommendationRationaleTranslation;
-import com.crewsafe.operation.repository.RecommendationRationaleTranslationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
@@ -46,7 +42,7 @@ public class RecommendationTranslationService {
 
     private static final String SOURCE_LANGUAGE = "en";
 
-    private final RecommendationRationaleTranslationRepository translations;
+    private final RationaleTranslationCache cache;
     private final RationaleTranslationClient translationClient;
 
     public static boolean isSupportedLocale(String locale) {
@@ -70,8 +66,12 @@ public class RecommendationTranslationService {
      * being asked to approve, and §7.1 says a degraded read beats a failed one: an unreachable
      * ml-service returns the English original with {@code translated=false}, which the client
      * shows under its existing "the model's original wording" label.
+     *
+     * <p>Deliberately NOT transactional. The read needs no transaction of its own, and wrapping
+     * it in one would make a failed cache write poison the read: a failed JPA write marks the
+     * surrounding transaction rollback-only, so catching the exception is not enough to keep the
+     * commit alive. {@link RationaleTranslationCache} owns that write in its own transaction.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public TranslatedRationale rationaleIn(Recommendation recommendation, String locale) {
         String source = recommendation.getRationale();
         if (source == null || source.isBlank()) {
@@ -83,7 +83,7 @@ public class RecommendationTranslationService {
 
         String sourceHash = hash(source);
         Optional<RecommendationRationaleTranslation> cached =
-                translations.findByRecommendationIdAndLocale(recommendation.getId(), locale);
+                cache.find(recommendation.getId(), locale);
 
         /*
          * A cached row whose hash no longer matches was translated from a rationale this plan
@@ -114,36 +114,8 @@ public class RecommendationTranslationService {
             return new TranslatedRationale(source, locale, false);
         }
 
-        store(recommendation.getId(), locale, response, sourceHash, cached.orElse(null));
+        cache.store(recommendation.getId(), locale, response.text(), response.modelId(), sourceHash);
         return new TranslatedRationale(response.text(), locale, true);
-    }
-
-    private void store(UUID recommendationId, String locale,
-                       RationaleTranslationClient.TranslateResponse response,
-                       String sourceHash, RecommendationRationaleTranslation existing) {
-        try {
-            RecommendationRationaleTranslation row = existing != null
-                    ? existing
-                    : RecommendationRationaleTranslation.builder()
-                            .id(UUID.randomUUID())
-                            .recommendationId(recommendationId)
-                            .locale(locale)
-                            .build();
-
-            row.setTranslatedText(response.text());
-            row.setModelId(response.modelId());
-            row.setSourceHash(sourceHash);
-            row.setCreatedAt(Instant.now());
-            translations.save(row);
-        } catch (Exception e) {
-            /*
-             * A losing race on the unique constraint, most likely: two readers opened the same
-             * plan in the same language at once. Both have a valid translation in hand, so
-             * failing the read over a cache write would turn a duplicate effort into a visible
-             * error for no gain.
-             */
-            log.warn("rationale_translation_not_cached locale={} recommendation={}", locale, recommendationId);
-        }
     }
 
     /** SHA-256 of the source prose. Identity only -- nothing here is a security boundary. */

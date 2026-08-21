@@ -4,7 +4,6 @@ import com.crewsafe.mitigation.ai.bedrock.BedrockException;
 import com.crewsafe.mitigation.ai.bedrock.RationaleTranslationClient;
 import com.crewsafe.operation.domain.Recommendation;
 import com.crewsafe.operation.domain.RecommendationRationaleTranslation;
-import com.crewsafe.operation.repository.RecommendationRationaleTranslationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +19,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,7 +43,7 @@ class RecommendationTranslationServiceTest {
     private static final String TAMIL = "வெப்பநிலை 25.3°C ஆக உள்ளது.";
 
     @Mock
-    private RecommendationRationaleTranslationRepository translations;
+    private RationaleTranslationCache cache;
 
     @Mock
     private RationaleTranslationClient translationClient;
@@ -82,7 +82,7 @@ class RecommendationTranslationServiceTest {
     @Test
     @DisplayName("a miss translates and caches")
     void missTranslatesAndCaches() {
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.empty());
         when(translationClient.translate(ENGLISH, "ta")).thenReturn(translated(TAMIL));
 
@@ -91,17 +91,16 @@ class RecommendationTranslationServiceTest {
         assertThat(result.text()).isEqualTo(TAMIL);
         assertThat(result.translated()).isTrue();
 
-        ArgumentCaptor<RecommendationRationaleTranslation> saved =
-                ArgumentCaptor.forClass(RecommendationRationaleTranslation.class);
-        verify(translations).save(saved.capture());
-        assertThat(saved.getValue().getTranslatedText()).isEqualTo(TAMIL);
-        assertThat(saved.getValue().getLocale()).isEqualTo("ta");
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(cache).store(eq(recommendation.getId()), eq("ta"), text.capture(),
+                eq("some-model"), anyString());
+        assertThat(text.getValue()).isEqualTo(TAMIL);
     }
 
     @Test
     @DisplayName("a hit is served without calling the model again")
     void hitSkipsTheModel() {
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.of(cachedRow(TAMIL, hashOf(ENGLISH))));
 
         var result = service.rationaleIn(recommendation, "ta");
@@ -119,7 +118,7 @@ class RecommendationTranslationServiceTest {
          * show a supervisor an explanation for an assessment that no longer applies -- and it
          * would look completely normal, because it is fluent text in their own language.
          */
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.of(cachedRow("translation of a superseded plan", "an-old-hash")));
         when(translationClient.translate(ENGLISH, "ta")).thenReturn(translated(TAMIL));
 
@@ -135,7 +134,7 @@ class RecommendationTranslationServiceTest {
          * The response carries the ENGLISH original, not a translation. Caching it would freeze
          * one Bedrock outage into this plan's permanent Tamil text, and nothing would retry.
          */
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.empty());
         when(translationClient.translate(ENGLISH, "ta")).thenReturn(degraded());
 
@@ -143,7 +142,7 @@ class RecommendationTranslationServiceTest {
 
         assertThat(result.text()).isEqualTo(ENGLISH);
         assertThat(result.translated()).isFalse();
-        verify(translations, never()).save(any());
+        verify(cache, never()).store(any(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
@@ -151,7 +150,7 @@ class RecommendationTranslationServiceTest {
     void transportFailureDegrades() {
         // Section 7.1. A supervisor being asked to approve a plan must not lose the explanation
         // entirely because a translator is down.
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.empty());
         when(translationClient.translate(ENGLISH, "ta"))
                 .thenThrow(new BedrockException("connection refused"));
@@ -160,18 +159,25 @@ class RecommendationTranslationServiceTest {
 
         assertThat(result.text()).isEqualTo(ENGLISH);
         assertThat(result.translated()).isFalse();
-        verify(translations, never()).save(any());
+        verify(cache, never()).store(any(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("a losing race on the cache write still returns the translation")
     void cacheWriteFailureDoesNotFailTheRead() {
-        // Two readers opening the same plan in the same language at once. Both hold a valid
-        // translation, so the duplicate effort must not surface as an error.
-        when(translations.findByRecommendationIdAndLocale(recommendation.getId(), "ta"))
+        /*
+         * Two readers opening the same plan in the same language at once. Both hold a valid
+         * translation, so the duplicate effort must not surface as an error.
+         *
+         * The write lives on RationaleTranslationCache in its own transaction precisely so this
+         * holds in production and not just under a mocked repository. An earlier version caught
+         * the exception here instead, which does NOT work: a failed JPA write marks the
+         * surrounding transaction rollback-only, so the read would still have blown up at commit
+         * with UnexpectedRollbackException while this test went on passing.
+         */
+        when(cache.find(recommendation.getId(), "ta"))
                 .thenReturn(Optional.empty());
         when(translationClient.translate(ENGLISH, "ta")).thenReturn(translated(TAMIL));
-        when(translations.save(any())).thenThrow(new RuntimeException("unique constraint"));
 
         var result = service.rationaleIn(recommendation, "ta");
 

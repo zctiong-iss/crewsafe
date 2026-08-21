@@ -41,6 +41,10 @@ public class ActionDispatchController {
                 request.getWorkerId(),
                 request.getActionCode(),
                 request.getInstruction(),
+                // No instruction code: a supervisor dispatching by hand types their own
+                // wording, and resolving a canned sentence from the action code would replace
+                // what they deliberately wrote with a generic one.
+                null,
                 principal
         );
 

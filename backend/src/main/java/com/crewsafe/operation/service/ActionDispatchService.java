@@ -62,21 +62,19 @@ public class ActionDispatchService {
      * durably committed. {@link AuditService#recordEvent} already forces {@code REQUIRES_NEW} for
      * exactly this reason. Harmless for this method's other caller (the controller, which has
      * no ambient transaction to begin with).
-     */
-    /**
-     * The manual-dispatch form, used by the controller. Records no instruction code, so the
-     * worker's device renders the supplied text verbatim.
      *
-     * <p>That is the safe default here rather than an omission: a supervisor dispatching by hand
-     * types their own instruction, and resolving a canned sentence from the action code would
-     * replace what they deliberately wrote with a generic one.
+     * <p><strong>One method rather than a convenience overload,</strong> and the propagation
+     * above is why. A no-code overload delegating to this one would be a self-invocation, which
+     * a Spring proxy cannot intercept -- so the {@code REQUIRES_NEW} that the {@code afterCommit}
+     * caller depends on would silently not apply on that path. Callers pass {@code null}
+     * explicitly instead, which also makes "this dispatch has no canned sentence" a visible
+     * decision at each call site rather than a default nobody reads.
+     *
+     * @param instructionCode translatable key for {@code instruction}, or {@code null} to have
+     *        the worker's device render the text verbatim. Null is correct for a manual
+     *        dispatch: a supervisor typing their own instruction must not have it replaced by a
+     *        generic sentence resolved from the action code.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
-                                         @AuthenticationPrincipal CrewSafeUserPrincipal principal) {
-        return dispatchAction(approvalId, workerId, actionCode, instruction, null, principal);
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActionDispatch dispatchAction(UUID approvalId, UUID workerId, String actionCode, String instruction,
                                          String instructionCode,
@@ -124,14 +122,15 @@ public class ActionDispatchService {
      * <p>{@code REQUIRES_NEW} for the same reason as {@link #dispatchAction}: this is called
      * from {@code AgentDraftService}'s {@code afterCommit} callback, where Spring's
      * transaction synchronization is still bound to the thread even though the physical
-     * commit already happened.
+     * commit already happened. For the same reason there is no no-code overload delegating to
+     * this method: that would be a self-invocation, which the proxy cannot intercept, and the
+     * {@code REQUIRES_NEW} this caller depends on would silently not apply.
+     *
+     * @param instructionCode translatable key for {@code instruction}, or {@code null} to render
+     *        the text verbatim. This is the lightning path, so the code matters most here -- it
+     *        is what keeps a lightning stop-work ("get inside a building") from rendering as a
+     *        heat stop-work ("move to shade").
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public ActionDispatch autoDispatchAction(Recommendation recommendation, UUID actorId, UUID workerId,
-                                              String actionCode, String instruction) {
-        return autoDispatchAction(recommendation, actorId, workerId, actionCode, instruction, null);
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public ActionDispatch autoDispatchAction(Recommendation recommendation, UUID actorId, UUID workerId,
                                               String actionCode, String instruction, String instructionCode) {

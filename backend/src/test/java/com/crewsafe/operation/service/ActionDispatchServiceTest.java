@@ -133,7 +133,7 @@ class ActionDispatchServiceTest {
         when(appUserRepository.findById(workerId)).thenReturn(Optional.of(worker));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenReturn(dispatch);
 
-        ActionDispatch result = service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take a 10 minute rest", principal);
+        ActionDispatch result = service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take a 10 minute rest", null, principal);
 
         assertNotNull(result);
         assertEquals("REST_10_MIN", result.getActionCode());
@@ -147,7 +147,7 @@ class ActionDispatchServiceTest {
         when(approvalRepository.findById(approvalId)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", principal));
+                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", null, principal));
     }
 
     @Test
@@ -160,7 +160,7 @@ class ActionDispatchServiceTest {
         when(approvalRepository.findById(approvalId)).thenReturn(Optional.of(unapprovedApproval));
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", principal));
+                () -> service.dispatchAction(approvalId, workerId, "REST_10_MIN", "Take rest", null, principal));
     }
 
     /**
@@ -178,7 +178,7 @@ class ActionDispatchServiceTest {
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenAnswer(i -> i.getArgument(0));
 
         ActionDispatch result = service.autoDispatchAction(recommendation, null, workerId, "STOP_WORK",
-                "Stop work immediately");
+                "Stop work immediately", null);
 
         assertNotNull(result);
         assertEquals("STOP_WORK", result.getActionCode());
@@ -203,7 +203,7 @@ class ActionDispatchServiceTest {
         when(appUserRepository.findById(workerId)).thenReturn(Optional.of(worker));
         when(actionDispatchRepository.save(any(ActionDispatch.class))).thenAnswer(i -> i.getArgument(0));
 
-        service.autoDispatchAction(recommendation, supervisorId, workerId, "STOP_WORK", "Stop work immediately");
+        service.autoDispatchAction(recommendation, supervisorId, workerId, "STOP_WORK", "Stop work immediately", null);
 
         verify(auditService).recordEvent(eq(supervisorId), eq(AuditEventType.ACTION_AUTO_DISPATCHED), any(), any(), any());
     }
@@ -214,7 +214,7 @@ class ActionDispatchServiceTest {
         when(appUserRepository.findById(workerId)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> service.autoDispatchAction(
-                recommendation, null, workerId, "STOP_WORK", "Stop work immediately"));
+                recommendation, null, workerId, "STOP_WORK", "Stop work immediately", null));
     }
 
     @Test
