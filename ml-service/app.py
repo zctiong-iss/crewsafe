@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from agent.contract import AgentDraftRequest, AgentDraftResponse
 from agent.graph import draft_plan, set_bedrock_client
+from agent.translation import TranslationRequest, TranslationResponse, translate
 from bedrock_client import BedrockClient, BedrockAccessError, BedrockModelAccessError
 from models import (
     MitigationRequest,
@@ -346,6 +347,50 @@ async def agent_draft(request: AgentDraftRequest):
         "agent_draft_completed shift=%s mitigations=%d used_fallback=%s total_ms=%.0f tokens=%d+%d",
         request.shiftId, len(response.mitigations), response.usedFallback,
         (time.time() - start_time) * 1000, response.inputTokens, response.outputTokens,
+    )
+    return response
+
+
+@app.post(
+    "/agent/translate",
+    response_model=TranslationResponse,
+    responses={
+        200: {"description": "The text in the target language, or the original if translation failed"},
+        422: {"description": "Unknown target locale, or text outside the length bounds"},
+    },
+)
+async def agent_translate(request: TranslationRequest):
+    """Restate an already-approved plan rationale in the reader's language.
+
+    Separate from /agent/draft because it is not allowed to reason. Drafting turns a policy
+    decision into advice; this may only say the same sentence in another language. See
+    agent/translation.py for why that distinction is enforced in the prompt rather than trusted.
+
+    Like /agent/draft, it has no 503. Bedrock being unavailable returns the English original
+    with usedFallback=true, because the caller is rendering a plan a supervisor is being asked
+    to approve and taking the explanation away entirely would be the worse failure (section
+    7.1). Callers must not cache a usedFallback response -- one outage would otherwise freeze
+    English into that plan for good.
+
+    An unrecognised locale IS a 422, deliberately. Silently returning English would look like a
+    success to every caller and get stored as though it were a translation.
+    """
+    model_id = os.getenv("BEDROCK_TRANSLATION_MODEL_ID", os.getenv("BEDROCK_MODEL_ID", DEFAULT_MODEL_ID))
+
+    if bedrock_client is None:
+        logger.warning("Translation requested before Bedrock client was ready")
+        return TranslationResponse(
+            text=request.text,
+            targetLocale=request.targetLocale,
+            modelId="none",
+            usedFallback=True,
+            fallbackReason="bedrock_client_unavailable",
+        )
+
+    response = translate(bedrock_client, request.text, request.targetLocale, model_id)
+    logger.info(
+        "agent_translate_completed locale=%s used_fallback=%s chars=%d",
+        response.targetLocale, response.usedFallback, len(response.text),
     )
     return response
 

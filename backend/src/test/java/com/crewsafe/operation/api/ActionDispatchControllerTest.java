@@ -100,7 +100,7 @@ class ActionDispatchControllerTest extends AbstractIntegrationTest {
 
     @Test
     void testDispatchAction_Success() throws Exception {
-        when(actionDispatchService.dispatchAction(eq(approvalId), eq(workerId), eq("REST_10_MIN"), any(), any(CrewSafeUserPrincipal.class)))
+        when(actionDispatchService.dispatchAction(eq(approvalId), eq(workerId), eq("REST_10_MIN"), any(), any(), any(CrewSafeUserPrincipal.class)))
                 .thenReturn(dispatch);
 
         DispatchActionRequest request = DispatchActionRequest.builder()

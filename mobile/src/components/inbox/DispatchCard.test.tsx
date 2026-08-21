@@ -5,6 +5,8 @@
  * file's own header comment. Asserts the pending vs. acknowledged presentation, the
  * in-flight/failure button states, and that a failure is paired with reassurance that a
  * retry is safe rather than a second, silent submission.
+ *
+ * @author Justin Chua
  */
 import { render } from "@testing-library/react-native";
 
@@ -29,6 +31,7 @@ function dispatch(overrides: Partial<ActionDispatch> = {}): ActionDispatch {
     workerId: "w1",
     actionCode: "REST_10_MIN",
     instruction: "Rest for 10 minutes",
+    instructionCode: null,
     startTime: null,
     endTime: null,
     status: "PENDING",

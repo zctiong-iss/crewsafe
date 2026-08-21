@@ -24,7 +24,6 @@
  * @author Justin Chua
  */
 import { ApiError } from "../errors";
-import i18n from "@/localization/i18n";
 import type { ActionDispatch } from "@/types/domain";
 import { DEMO_USERS } from "@/auth/demoUsers";
 
@@ -60,26 +59,25 @@ const WORKER_ID = DEMO_USERS[0].id;
 const APPROVAL_ID = "44444444-4444-4444-8444-444444444444";
 
 /**
- * ── INSTRUCTION TEXT IS RESOLVED AT READ TIME, NOT AT SEED TIME ─────────────────────────
- * `ActionDispatch.instruction` is free text the *server* authors — a supervisor's own words
- * attached to a dispatched action. No client-side translation file can reach it, which is
- * exactly the problem: a worker who set the app to Malay would still read the instruction
- * in whatever language it was written in.
+ * ── THE SEED NOW SENDS WHAT A REAL SERVER SENDS ─────────────────────────────────────────
+ * This mock used to hold a translation KEY per dispatch and resolve it per read, standing in
+ * for a server that localised its own instructions. It read well and it hid the bug.
  *
- * This mock stands in for that server, so it does what a localising server would do: it
- * resolves the instruction into the caller's active language when the request is served.
- * The seed therefore holds a translation *key*, and `materialise` turns it into text per
- * read. That also means a language change is reflected on the next poll rather than needing
- * a restart, because each poll re-materialises.
+ * Live plans come from Bedrock, which writes `action` as free prose — the sentence a worker
+ * received was whatever the model composed, in English, matching no key anywhere. But the demo
+ * route resolved its own keys and rendered perfectly in all seven languages, so every
+ * screenshot taken against the mock showed a working screen while the live path was broken.
+ * A fixture that cannot reproduce the defect is worse than no fixture.
  *
- * A real backend has to solve this properly — see the untranslatable-instruction note in
- * the README. Nothing here makes that problem go away; it stops the demo from *hiding* it
- * behind three hardcoded English sentences.
+ * So the seed now carries exactly what the wire carries: the server's ENGLISH text plus the
+ * `instructionCode` that `InstructionCatalogue` resolves server-side. Translation happens where
+ * it happens in production — in the card, from the code — and the demo exercises the same path
+ * as local and live.
+ *
+ * The `dev.mockInstruction.*` keys are left in the locale files. They cost nothing and the
+ * bespoke wording is the right fixture for the verbatim path if this seed ever needs it back.
  */
-interface SeedDispatch extends Omit<ActionDispatch, "instruction"> {
-  /** i18n key under `dev.mockInstruction.*`, resolved per read by `materialise`. */
-  instructionKey: string;
-}
+type SeedDispatch = ActionDispatch;
 
 /**
  * Codes drawn from the catalogue named in `V3__domain_schema.sql`: "a growing catalog of
@@ -92,7 +90,11 @@ const SEED: SeedDispatch[] = [
     approvalId: APPROVAL_ID,
     workerId: WORKER_ID,
     actionCode: "REST_15_MIN",
-    instructionKey: "dev.mockInstruction.REST_15_MIN",
+    // The server's English, verbatim from `DeterministicPlanBuilder.ACTION_TEXT`...
+    instruction: "Take a 15-minute rest break in shade every hour",
+    // ...and the code the card actually translates from. Note it is NOT `actionCode`:
+    // REST_15_MIN is the collapsed dispatch form and has no sentence of its own.
+    instructionCode: "REST_15_MIN_HOURLY",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -103,7 +105,13 @@ const SEED: SeedDispatch[] = [
     approvalId: APPROVAL_ID,
     workerId: WORKER_ID,
     actionCode: "HYDRATE",
-    instructionKey: "dev.mockInstruction.HYDRATE",
+    /*
+     * The case that rules out keying on `actionCode` altogether. HYDRATE_HOURLY and
+     * HYDRATE_REGULARLY both dispatch as HYDRATE, and they say different things about how
+     * often to drink -- so this seed is only unambiguous because of `instructionCode`.
+     */
+    instruction: "Drink water regularly throughout the shift",
+    instructionCode: "HYDRATE_REGULARLY",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -122,7 +130,8 @@ const SEED: SeedDispatch[] = [
      * `humaniseActionCode` has its own unit-level coverage.
      */
     actionCode: "ROTATE_TO_LIGHT_DUTY",
-    instructionKey: "dev.mockInstruction.ROTATE_TO_LIGHT_DUTY",
+    instruction: "Rotate affected workers onto lighter duties",
+    instructionCode: "ROTATE_TO_LIGHT_DUTY",
     startTime: null,
     endTime: null,
     status: "PENDING",
@@ -132,10 +141,15 @@ const SEED: SeedDispatch[] = [
 
 const dispatches = new Map<string, SeedDispatch>(SEED.map((d) => [d.id, { ...d }]));
 
-/** Seed record → the wire shape, with the instruction resolved into the active language. */
+/**
+ * Seed record → the wire shape.
+ *
+ * A pass-through copy now that the seed holds the wire shape itself. Kept rather than inlined
+ * because every read goes through it, which is the one place to reproduce a server-side quirk
+ * if one ever needs reproducing.
+ */
 function materialise(seed: SeedDispatch): ActionDispatch {
-  const { instructionKey, ...rest } = seed;
-  return { ...rest, instruction: i18n.t(instructionKey) };
+  return { ...seed };
 }
 
 /**

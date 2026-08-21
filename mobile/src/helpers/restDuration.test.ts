@@ -27,6 +27,7 @@ function dispatchWith(overrides: Partial<ActionDispatch> = {}): ActionDispatch {
     workerId: "w1",
     actionCode: "REST_15_MIN",
     instruction: null,
+    instructionCode: null,
     startTime: null,
     endTime: null,
     status: "PENDING",

@@ -76,6 +76,19 @@ export interface ActionDispatch {
   /** Open catalogue, not an enum: REST_10_MIN, REST_15_MIN, HYDRATE, STOP_WORK, ... */
   actionCode: string;
   instruction: string | null;
+  /**
+   * Translatable key for `instruction`, or null to render `instruction` verbatim.
+   *
+   * Null for dispatches written before the backend's V25 migration, and for a supervisor's
+   * manual dispatch, where the text is their own wording rather than a canned sentence.
+   *
+   * PREFER THIS OVER `instruction`. The text is written by the language model -- ml-service
+   * declares `action` as a free 1..200 character string -- so it is never guaranteed to match
+   * any table the client ships. The code is drawn from a ten-item allowlist the policy engine
+   * must already have mandated, which is why it can be trusted to select a sentence when the
+   * prose cannot. Mirrors `mitigation/domain/InstructionCatalogue.java`.
+   */
+  instructionCode: string | null;
   startTime: string | null;
   endTime: string | null;
   status: ActionDispatchStatus;

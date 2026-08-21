@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useTranslatedRationale } from "@/hooks/useTranslatedRationale";
 import { useTranslation } from "react-i18next";
 import { s, vs } from "react-native-size-matters";
 
@@ -232,19 +233,31 @@ function DecisionSection({
  */
 function RationaleSection({
   recommendation,
+  siteId,
+  shiftId,
   expanded,
   onToggle,
 }: Readonly<{
   recommendation: Recommendation;
+  siteId: string;
+  shiftId: string;
   expanded: boolean;
   onToggle: () => void;
 }>) {
   const { t } = useTranslation();
 
   const summary = buildRationaleSummary(recommendation);
-  const modelProse = showsModelProse(recommendation)
+  const originalProse = showsModelProse(recommendation)
     ? humaniseWorkerReferences(recommendation.rationale ?? "", recommendation.workers)
     : null;
+
+  /*
+   * The summary above renders offline and instantly; only this paragraph needs the network,
+   * because free model prose cannot be rebuilt from structured data. It shows the English
+   * original until the translation lands, and keeps showing it if one never does.
+   */
+  const translation = useTranslatedRationale(siteId, shiftId, recommendation.id, originalProse);
+  const modelProse = originalProse ? translation.text : null;
 
   const toggleLabel = expanded ? t("recommendations.readLess") : t("recommendations.readMore");
 
@@ -277,8 +290,15 @@ function RationaleSection({
 
       {modelProse ? (
         <>
+          {/*
+            The label follows what is actually on screen. Calling a translated paragraph "the
+            model's original wording (English)" would be plainly wrong to anyone reading it,
+            and calling an untranslated one a translation would hide the degrade.
+          */}
           <AppText variant="caption" tone="secondary" style={styles.modelProseLabel}>
-            {t("recommendations.modelWordingLabel")}
+            {translation.translated
+              ? t("recommendations.modelWordingTranslatedLabel")
+              : t("recommendations.modelWordingLabel")}
           </AppText>
           <AppText
             variant="body"
@@ -569,6 +589,8 @@ export default function RecommendationDetailScreen() {
         {/* ── Why, and on what ─────────────────────────────────────────────── */}
         <RationaleSection
           recommendation={recommendation}
+          siteId={siteId}
+          shiftId={shiftId}
           expanded={showFullWhy}
           onToggle={() => setShowFullWhy((value) => !value)}
         />

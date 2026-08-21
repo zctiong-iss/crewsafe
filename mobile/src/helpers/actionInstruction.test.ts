@@ -8,7 +8,11 @@
  *
  * @author Justin Chua
  */
-import { instructionKeyFor, CANNED_INSTRUCTION_CODES } from "./actionInstruction";
+import {
+  instructionKeyFor,
+  instructionKeyForDispatch,
+  CANNED_INSTRUCTION_CODES,
+} from "./actionInstruction";
 import en from "@/localization/en.json";
 
 describe("the canned sentences", () => {
@@ -97,5 +101,63 @@ describe("the table stays in step with the translations", () => {
     const translated = Object.keys((en as { actionInstructions: Record<string, string> }).actionInstructions);
 
     expect(CANNED_INSTRUCTION_CODES.sort()).toEqual(translated.sort());
+  });
+});
+
+
+describe("resolving a whole dispatch", () => {
+  it("uses the code when there is one", () => {
+    expect(instructionKeyForDispatch("HYDRATE_HOURLY", "anything at all")).toBe(
+      "actionInstructions.HYDRATE_HOURLY",
+    );
+  });
+
+  it("uses the code even when the text is the model's own wording", () => {
+    /*
+     * The whole reason the code exists. This sentence is real -- it is what a live Bedrock
+     * plan produced -- and it appears in neither repository, so no table can match it.
+     */
+    expect(
+      instructionKeyForDispatch(
+        "SHADE_RECOVERY",
+        "Take breaks in shade whenever possible to allow passive cooling",
+      ),
+    ).toBe("actionInstructions.SHADE_RECOVERY");
+  });
+
+  it("keeps the lightning stop-work distinct from the heat one", () => {
+    // Both dispatch as STOP_WORK. One means shade, the other means a building.
+    expect(instructionKeyForDispatch("STOP_WORK_LIGHTNING", "stop now")).toBe(
+      "actionInstructions.STOP_WORK_LIGHTNING",
+    );
+    expect(instructionKeyForDispatch("STOP_WORK", "stop now")).toBe(
+      "actionInstructions.STOP_WORK",
+    );
+  });
+
+  it("falls back to the text when there is no code", () => {
+    // Pre-migration rows. The text match still recovers every deterministic sentence.
+    expect(
+      instructionKeyForDispatch(null, "Drink water regularly throughout the shift"),
+    ).toBe("actionInstructions.HYDRATE_REGULARLY");
+  });
+
+  it("does not trust a code it has no translation for", () => {
+    /*
+     * Returning a key here would render `actionInstructions.SOMETHING_NEW` to a worker. English
+     * they can act on is strictly better than a string they cannot.
+     */
+    expect(instructionKeyForDispatch("SOMETHING_NEW", "Move to the east muster point")).toBeNull();
+  });
+
+  it("treats a blank code as absent", () => {
+    expect(
+      instructionKeyForDispatch("   ", "Drink water regularly throughout the shift"),
+    ).toBe("actionInstructions.HYDRATE_REGULARLY");
+  });
+
+  it("returns null when neither the code nor the text is usable", () => {
+    expect(instructionKeyForDispatch(null, "Something a supervisor typed")).toBeNull();
+    expect(instructionKeyForDispatch(undefined, null)).toBeNull();
   });
 });

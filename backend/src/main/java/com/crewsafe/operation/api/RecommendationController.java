@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.crewsafe.operation.service.RecommendationTranslationService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
@@ -41,6 +43,7 @@ import java.util.UUID;
  * make one; that is the supervisor's call to record, per SCRUM-119.
  *
  * @author Abu Bakar
+ * @author Justin Chua
  */
 @RestController
 @RequestMapping("/api/v1/sites/{siteId}/shifts/{shiftId}/recommendations")
@@ -50,6 +53,7 @@ public class RecommendationController {
 
     private final RecommendationService recommendationService;
     private final AgentDraftService agentDraftService;
+    private final RecommendationTranslationService translationService;
     /** Names the workers a plan refers to; see {@link #workersNamedBy}. */
     private final AppUserRepository users;
 
@@ -130,6 +134,45 @@ public class RecommendationController {
                 .map(this::toResponse)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * The plan's rationale in the reader's language.
+     *
+     * <p>A separate call rather than a field on {@link RecommendationResponse}, deliberately.
+     * The list endpoint returns every plan for a shift, and widening the response would make a
+     * translation request fire for plans nobody opened -- spending model calls on prose that is
+     * never read, on the same path a supervisor uses during a heat event.
+     *
+     * <p>{@code translated} false means the body is the English original. The client already
+     * has a label for that case, so a degraded read renders as the model's original wording
+     * rather than as a failure.
+     *
+     * <p>The authorization expression is copied from {@link #getRecommendation} exactly.
+     * Translation must not become a way to read a plan for a site you could not otherwise see.
+     */
+    @GetMapping("/{recommendationId}/rationale")
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'SAFETY_MANAGER', 'ADMIN') and @siteAccess.canAccess(#siteId)")
+    public ResponseEntity<RationaleResponse> getRationale(
+            @PathVariable UUID siteId, @PathVariable UUID shiftId, @PathVariable UUID recommendationId,
+            @RequestParam(name = "locale", defaultValue = "en") String locale) {
+
+        if (!RecommendationTranslationService.isSupportedLocale(locale)) {
+            // A locale nobody ships is a client bug. Answering it with English would look like
+            // a success and be cached by the caller as though it were a translation.
+            return ResponseEntity.badRequest().build();
+        }
+
+        return recommendationService.getRecommendation(siteId, shiftId, recommendationId)
+                .map(recommendation -> translationService.rationaleIn(recommendation, locale))
+                .map(result -> new RationaleResponse(
+                        recommendationId, result.text(), result.locale(), result.translated()))
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** {@code translated} false means {@code text} is the stored English. */
+    public record RationaleResponse(UUID recommendationId, String text, String locale, boolean translated) {
     }
 
     @PostMapping("/{recommendationId}/decision")

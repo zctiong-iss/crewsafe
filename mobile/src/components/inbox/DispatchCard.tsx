@@ -27,7 +27,7 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { cardSurface } from "@/styles/sharedStyles";
 import { formatTime } from "@/helpers/dateTime";
 import { humaniseActionCode } from "@/helpers/actionCodes";
-import { instructionKeyFor } from "@/helpers/actionInstruction";
+import { instructionKeyForDispatch } from "@/helpers/actionInstruction";
 import type { ActionDispatch } from "@/types/domain";
 
 interface DispatchCardProps {
@@ -91,13 +91,21 @@ function dispatchPresentation(
  * The instruction a worker reads.
  *
  * Kept out of the component so the fallback chain is one readable expression rather than a
- * nested ternary inside JSX: translated canned sentence → the server's own text → the
- * "no instruction" placeholder, which is the only one of the three that is not an instruction.
+ * nested ternary inside JSX: the dispatch's own instruction code → the canned sentence matched
+ * by text → the server's text verbatim → the "no instruction" placeholder, which is the only
+ * one of the four that is not an instruction.
+ *
+ * Each step down is a step further from certainty, and the last two are English. That ordering
+ * is deliberate: English a worker can act on beats a raw translation key, and a sentence
+ * somebody deliberately wrote beats a generic one the client guessed at.
  */
-function instructionText(instruction: string | null, t: (key: string) => string): string {
-  const key = instructionKeyFor(instruction);
+function instructionText(
+  dispatch: Pick<ActionDispatch, "instruction" | "instructionCode">,
+  t: (key: string) => string,
+): string {
+  const key = instructionKeyForDispatch(dispatch.instructionCode, dispatch.instruction);
   if (key) return t(key);
-  return instruction ?? t("inbox.noInstruction");
+  return dispatch.instruction ?? t("inbox.noInstruction");
 }
 
 const DispatchCard: FC<DispatchCardProps> = ({
@@ -199,17 +207,19 @@ const DispatchCard: FC<DispatchCardProps> = ({
       </View>
 
       {/*
-        Translated when the server sent its canned sentence, shown verbatim when it did not.
+        Rendered from `instructionCode` where the server sent one, and from the text otherwise.
 
-        Matched on the TEXT rather than on `actionCode`, for two reasons that both matter. The
-        dispatch code is the DISPATCH code — HYDRATE_HOURLY and HYDRATE_REGULARLY both arrive
-        as HYDRATE with different sentences, so the code cannot choose between them. And a
-        supervisor may have EDITED the plan before approving it, in which case this sentence is
-        their wording; translating from the code would replace a deliberate safety instruction
-        with a generic one. See `helpers/actionInstruction.ts`.
+        NOT from `actionCode`, which is the collapsed DISPATCH code — HYDRATE_HOURLY and
+        HYDRATE_REGULARLY both arrive as HYDRATE carrying different sentences, and a lightning
+        stop-work shares STOP_WORK with a heat one while sending the crew to a building rather
+        than to shade. `instructionCode` keeps those apart; `actionCode` cannot.
+
+        And NOT from the text alone, which was the previous fix and only ever worked on the
+        deterministic fallback: on the live Bedrock path the model writes this sentence itself,
+        so it matches no table and stayed English. See `helpers/actionInstruction.ts`.
       */}
       <AppText variant="body" style={styles.instruction}>
-        {instructionText(dispatch.instruction, t)}
+        {instructionText(dispatch, t)}
       </AppText>
 
       {/*

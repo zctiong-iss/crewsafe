@@ -7,7 +7,21 @@
  * sentence, so a Hindi-reading worker saw "छाया में जाएँ" above "Keep shaded recovery space
  * available to the crew".
  *
- * ── WHY THIS MATCHES ON TEXT AND NOT ON THE ACTION CODE ─────────────────────────────────
+ * ── WHAT THIS FILE IS NOW ───────────────────────────────────────────────────────────────
+ * The FALLBACK path, not the primary one. A dispatch now carries `instructionCode`, resolved
+ * server-side by `InstructionCatalogue`, and `instructionKeyForDispatch` below prefers it.
+ *
+ * The text match remains because rows written before the backend's V25 migration have no code
+ * and cannot be backfilled: a stored HYDRATE row does not record which of the two hydration
+ * sentences it meant, and guessing would silently alter an instruction a worker has already
+ * acknowledged. Matching their text recovers it exactly.
+ *
+ * It also remains as the answer to a question the code path cannot settle: the model writes
+ * `action` freely (ml-service declares it as a 1..200 character string), so an instruction that
+ * matches NOTHING here is either the model's own wording or a supervisor's edit — and either
+ * way it must be shown as written.
+ *
+ * ── WHY MATCHING ON TEXT WAS NEEDED AT ALL ──────────────────────────────────────────────
  * The obvious fix is `t(`actionInstructions.${dispatch.actionCode}`)`. It does not work, for a
  * reason that is invisible until you read `ActionCatalogue.DISPATCH_CODE_BY_CODE`: the code on
  * a dispatch is the DISPATCH code, and several mitigation codes collapse onto one.
@@ -91,6 +105,36 @@ export function instructionKeyFor(instruction: string | null | undefined): strin
 
   const code = CODE_BY_INSTRUCTION.get(normalise(instruction));
   return code ? `actionInstructions.${code}` : null;
+}
+
+/**
+ * The translation key for a whole dispatch: its code first, its text second.
+ *
+ * ── WHY THE CODE WINS ───────────────────────────────────────────────────────────────────
+ * Because the text is not trustworthy and the code is. `MitigationSuggestion.action` is a free
+ * string on the ml-service side, so on the live Bedrock path the sentence is whatever the model
+ * composed for that one request — "Take breaks in shade whenever possible to allow passive
+ * cooling" appears nowhere in either repository. No table can match that, which is why the text
+ * path translated the deterministic fallback and left live plans in English.
+ *
+ * The code is drawn from a ten-item allowlist that `agent/validation.py` rejects any deviation
+ * from, and which the policy engine must already have mandated. So the model may re-word an
+ * instruction but may not choose a different one: the code carries the safety content and the
+ * prose carries only style.
+ *
+ * ── WHY AN UNRECOGNISED CODE IS NOT TRUSTED ─────────────────────────────────────────────
+ * A code with no key falls through to the text rather than rendering `actionInstructions.FOO`.
+ * A worker who reads an untranslated English instruction can still act on it; a worker looking
+ * at a raw translation key cannot.
+ */
+export function instructionKeyForDispatch(
+  instructionCode: string | null | undefined,
+  instruction: string | null | undefined,
+): string | null {
+  if (instructionCode?.trim() && CANNED_INSTRUCTIONS[instructionCode]) {
+    return `actionInstructions.${instructionCode}`;
+  }
+  return instructionKeyFor(instruction);
 }
 
 /** Exported for the test that keeps this table in step with the server's. */
