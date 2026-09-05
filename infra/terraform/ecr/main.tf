@@ -177,6 +177,10 @@ resource "aws_ecr_repository" "backend" {
   name                 = local.repository_name
   image_tag_mutability = "IMMUTABLE"
 
+  # A repository holding images refuses deletion unless this is set. Only a
+  # reviewed teardown sets it; a normal apply leaves the refusal in place.
+  force_delete = var.decommission
+
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -192,6 +196,10 @@ resource "aws_ecr_repository" "backend" {
 resource "aws_ecr_repository" "web" {
   name                 = local.web_repository_name
   image_tag_mutability = "IMMUTABLE"
+
+  # A repository holding images refuses deletion unless this is set. Only a
+  # reviewed teardown sets it; a normal apply leaves the refusal in place.
+  force_delete = var.decommission
 
   image_scanning_configuration {
     scan_on_push = true
@@ -211,6 +219,10 @@ resource "aws_ecr_repository" "web" {
 resource "aws_ecr_repository" "ml_service" {
   name                 = local.ml_service_repository_name
   image_tag_mutability = "IMMUTABLE"
+
+  # A repository holding images refuses deletion unless this is set. Only a
+  # reviewed teardown sets it; a normal apply leaves the refusal in place.
+  force_delete = var.decommission
 
   image_scanning_configuration {
     scan_on_push = true
