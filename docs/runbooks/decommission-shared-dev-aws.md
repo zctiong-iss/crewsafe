@@ -44,9 +44,11 @@ Two components are **never** destroyed:
 
 ### 1.1 The permission gaps — read this, it shapes the whole sequence
 
-The apply roles were built for create and update, not for teardown. Two gaps
-survive into this runbook and are handled by hand in section 5 rather than by
-extending the policies:
+The apply roles were built for create and update, not for teardown. **Five** gaps
+are known, and they are handled by hand in section 5 rather than by extending the
+policies.
+
+The first two were found by reading the policies before starting:
 
 1. **No `s3:DeleteObject` anywhere** in
    [policies/](../../infra/terraform/iam-policy-management/policies/). The four
@@ -57,10 +59,34 @@ extending the policies:
    `-ml-service-deploy`, or `-cognito-mapping-publish`. Only the `web-sync` role
    is covered, by the `compute-web` policy.
 
-Both failures land at the **end** of the compute destroy, after the ALB, ECS
-services, and CloudFront distributions — everything expensive — are already
-gone. That is why section 4.2 expects a partial failure and section 5 finishes
-the job. **Do not treat that failure as a reason to stop.**
+The remaining three were **not** found that way. They were discovered only by
+running the destroys and reading the failures, because they are permissions the
+AWS provider needs for calls it makes *around* a delete rather than for the
+delete itself. Grepping for `Delete*` actions does not reveal them:
+
+3. **`iam:ListInstanceProfilesForRole`** — the provider reads this before
+   deleting *any* IAM role. Only the `cognito` policy grants it, so role
+   deletion fails in `compute` (4 roles), `ecr` (3 roles), `securityhub-import`
+   (1 role), and `secrets` (1 role).
+4. **`rds:CreateDBSnapshot`** — required because `skip_final_snapshot` is
+   deliberately left `false`. Without it the RDS destroy fails before it starts,
+   with `AccessDenied` on the snapshot rather than on the instance.
+5. **`ec2:DisassociateAddress`** — the provider must disassociate an Elastic IP
+   before releasing it. The `network` policy grants `ec2:ReleaseAddress` but not
+   this, so the EIP survives the destroy. **This one costs money**: AWS bills
+   every allocated public IPv4 address, attached or not. It also leaves the VPC
+   undeletable with `DependencyViolation`.
+
+**The lesson for any future teardown:** auditing a policy for `Delete*` actions
+is not sufficient. The provider's read-before-delete and
+snapshot-before-delete calls need grants too, and they surface only at apply
+time. Budget for at least one failed run per component, or extend the policies
+first (section 3 of this runbook deliberately does not, for a one-off teardown).
+
+Every one of these failures lands at or near the **end** of a component's
+destroy, after the expensive resources are already gone. That is why section 4.2
+expects partial failures and section 5 finishes the job. **Do not treat a failed
+destroy run as a reason to stop** — check what it actually destroyed first.
 
 ---
 
@@ -296,5 +322,65 @@ Once the account is empty, revert the unlock PR. This restores:
 - the `decommission` input on `terraform-plan.yml` and the variable in the four
   roots
 
+**Keep this runbook.** A plain `git revert` deletes it along with the code; restore
+it in the same commit. It is the durable record of what the teardown cost and what
+it caught.
+
 `main` is then back to refusing a destroy dispatch, and the Terraform roots stay
 usable if the project is ever rebuilt into a fresh account.
+
+---
+
+## 8. What actually happened — 2026-09-05
+
+Recorded because the sequence in sections 4 and 5 did not survive contact, and
+the reasons are reusable.
+
+### 8.1 Phase 1 was skipped
+
+All four initial destroys were dispatched straight to `operation=destroy` without
+the `decommission=true` **apply** first. The lowered protections therefore never
+reached AWS state, and every service-level refusal held:
+
+| Component | Failure |
+|---|---|
+| `compute` | ALB `OperationNotPermitted` (deletion protection); 3 buckets HTTP 409 (not empty) |
+| `ecr` | 3 repositories `RepositoryNotEmptyException` |
+
+Phase 1 is not optional and not a formality. The provider reads `force_delete`,
+`force_destroy`, and `deletion_protection` from **prior state** at delete time, so
+a value that exists only in configuration has no effect on a destroy.
+
+### 8.2 Re-running Phase 1 is not always safe afterwards
+
+Once `ecr` was partially destroyed, a Phase 1 `apply` would have **re-created**
+`aws_securityhub_account` and `aws_inspector2_enabler` — turning paid services
+back on. After a partial destroy, prefer the console over an apply that would
+resurrect resources.
+
+### 8.3 A failed run is not a stalled run
+
+Every failed destroy still removed most of its resources. The `compute` run
+reported failure while having successfully destroyed both CloudFront
+distributions, the ECS cluster, service and task definition, the ALB listener and
+target group, and both CloudWatch log groups. **Read what a failed run
+destroyed before deciding what to do next.**
+
+### 8.4 Outcome
+
+Spend went from roughly **US$63/month to under US$1/month**. Destroyed through
+CI: both CloudFront distributions, ECS cluster and service, ALB listener and
+target group, CloudWatch log groups, Security Hub, Inspector, ECR scanning
+configuration and lifecycle policies, the NAT gateway, both public and both
+private subnets, both route tables, the internet gateway, and all security
+groups.
+
+Finished by hand in the console, because of the section 1.1 gaps: the Elastic IP,
+the VPC, the ALB, the RDS instance, the Secrets Manager entries, the ECR
+repositories, and the four S3 buckets.
+
+Still to confirm at the time of writing: the RDS final snapshot (bills ~US$2/month
+if one was taken), leftover CloudWatch log groups, and — most importantly —
+**Security Hub and Inspector in regions other than `ap-southeast-1`**, which the
+`ecr` destroy does not touch and which is the most common cause of a
+"decommissioned" account that still bills.

@@ -18,39 +18,37 @@ jq -e '.components["network-shared-dev"].state_key == "crewsafe/network/shared-d
 jq -e '.components["secrets-shared-dev"].state_key == "crewsafe/secrets/shared-dev.tfstate"' "$catalog" >/dev/null
 jq -e '.components["database-shared-dev"].state_key == "crewsafe/database/shared-dev.tfstate"' "$catalog" >/dev/null
 jq -e '.components["compute-shared-dev"].state_key == "crewsafe/compute/shared-dev.tfstate"' "$catalog" >/dev/null
-# --- Decommissioning window -------------------------------------------------
-#
-# The shared-dev account is being torn down to zero spend. For the duration of
-# that teardown the workload components carry allow_destroy: true, which is a
-# deliberate, reviewed departure from the refusals SCRUM-173 FR-018, SCRUM-174
-# FR-023, SCRUM-175 FR-026, SCRUM-176 FR-051, SCRUM-274, and SCRUM-372 each put
-# in place. The follow-up PR that closes the window restores every one of them,
-# and this block is what fails if that revert is forgotten or only half done.
-#
-# The set is asserted exactly, in both directions: a component missing from it
-# is still refused, and a component that quietly joins it fails the test.
-jq -e '[.components | to_entries[] | select(.value.allow_destroy) | .key] | sort == [
-  "cognito-shared-dev",
-  "compute-shared-dev",
-  "database-shared-dev",
-  "developer-access-shared-dev",
-  "ecr-shared-dev",
-  "network-shared-dev",
-  "secrets-shared-dev",
-  "securityhub-import-shared-dev"
-]' "$catalog" >/dev/null
-# Two components are never destroyable, teardown or not. The state backend holds
-# every other component's state and carries prevent_destroy; the policy-management
-# root owns the very permissions a destroy would need. Neither is in the set above,
-# and neither may be added to it.
-jq -e '.components["state-backend"].allow_destroy == false' "$catalog" >/dev/null
-jq -e '.components["iam-policy-management-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
-# Roots and state keys are unaffected by the teardown and must not drift with it.
-jq -e '.components["ecr-shared-dev"].root == "infra/terraform/ecr" and .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate"' "$catalog" >/dev/null
-jq -e '.components["securityhub-import-shared-dev"].root == "infra/terraform/securityhub-import" and .components["securityhub-import-shared-dev"].state_key == "crewsafe/securityhub-import/shared-dev.tfstate" and .components["securityhub-import-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
-# The developer-access component reuses the shared "standard" execution-role
-# family rather than a dedicated one (research.md R-001).
-jq -e '.components["developer-access-shared-dev"].root == "infra/terraform/developer-access" and .components["developer-access-shared-dev"].state_key == "crewsafe/developer-access/shared-dev.tfstate" and .components["developer-access-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
+# The network underpins the database and compute components, so an accidental
+# destroy dispatch must stay refused (SCRUM-173 FR-018).
+jq -e '.components["network-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# The secrets component holds the entries and roles the database and compute
+# components read from, so its destroy dispatch must stay refused too
+# (SCRUM-174 FR-023). Destroying it would orphan every running task's
+# configuration while leaving the secrets themselves in a pending-deletion state.
+jq -e '.components["secrets-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# The database holds the staging data every backend lane depends on, so a destroy
+# dispatch must stay refused (SCRUM-175 FR-026). This is the first of two
+# independent refusals: the catalogue guard here, and deletion protection at the
+# service itself. Losing this instance blocks every lane at once.
+jq -e '.components["database-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# The compute component is the only internet-reachable surface in the account and
+# the only thing serving the deployed backend, so a destroy dispatch must stay
+# refused (SCRUM-176 FR-051). Destroying it takes the staging URL down for every
+# lane at once, and the distribution's provider-issued name is not recoverable —
+# a rebuild hands out a different hostname, breaking every client that stored it.
+jq -e '.components["compute-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# SCRUM-274 extends this existing ECR component; it must not add a second
+# catalog entry, state key, root, or destroy exception.
+jq -e '.components["ecr-shared-dev"].root == "infra/terraform/ecr" and .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate" and .components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+# The backend CI pipeline pushes to this repository on every merge to main, so an
+# accidental destroy dispatch must stay refused too.
+jq -e '.components["ecr-shared-dev"].allow_destroy == false' "$catalog" >/dev/null
+jq -e '.components["securityhub-import-shared-dev"].root == "infra/terraform/securityhub-import" and .components["securityhub-import-shared-dev"].state_key == "crewsafe/securityhub-import/shared-dev.tfstate" and .components["securityhub-import-shared-dev"].allow_destroy == false and .components["securityhub-import-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
+# The developer-access component creates standing IAM console/CLI identities; a destroy
+# dispatch must stay refused (SCRUM-372) — a roster shrinking to zero should never
+# silently tear down the group and policy alongside it. It reuses the shared "standard"
+# execution-role family rather than a dedicated one (research.md R-001).
+jq -e '.components["developer-access-shared-dev"].root == "infra/terraform/developer-access" and .components["developer-access-shared-dev"].state_key == "crewsafe/developer-access/shared-dev.tfstate" and .components["developer-access-shared-dev"].allow_destroy == false and .components["developer-access-shared-dev"].execution_role_family == "standard"' "$catalog" >/dev/null
 jq empty "$schema"
 "$resolver" state-backend >/dev/null
 "$resolver" iam-policy-management-shared-dev >/dev/null
@@ -91,11 +89,3 @@ elif "$resolver" developer-access-shared-dev >/dev/null 2>&1; then
 fi
 if "$resolver" ../escape >/dev/null 2>&1; then fail "path traversal accepted"; fi
 if "$resolver" unknown >/dev/null 2>&1; then fail "unknown component accepted"; fi
-# The catalogue flag has to actually reach the dispatch refusal, not just sit in
-# the JSON. These two must refuse a destroy operation for as long as they exist.
-if "$resolver" state-backend destroy >/dev/null 2>&1; then
-  fail "destroy dispatch accepted for state-backend"
-fi
-if "$resolver" iam-policy-management-shared-dev destroy >/dev/null 2>&1; then
-  fail "destroy dispatch accepted for iam-policy-management-shared-dev"
-fi

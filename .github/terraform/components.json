@@ -14,7 +14,7 @@
       "root": "infra/terraform/compute",
       "backend_strategy": "remote",
       "state_key": "crewsafe/compute/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "database-shared-dev": {
@@ -22,7 +22,7 @@
       "root": "infra/terraform/database",
       "backend_strategy": "remote",
       "state_key": "crewsafe/database/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "developer-access-shared-dev": {
@@ -30,7 +30,7 @@
       "root": "infra/terraform/developer-access",
       "backend_strategy": "remote",
       "state_key": "crewsafe/developer-access/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "ecr-shared-dev": {
@@ -38,7 +38,7 @@
       "root": "infra/terraform/ecr",
       "backend_strategy": "remote",
       "state_key": "crewsafe/ecr/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "iam-policy-management-shared-dev": {
@@ -54,7 +54,7 @@
       "root": "infra/terraform/network",
       "backend_strategy": "remote",
       "state_key": "crewsafe/network/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "securityhub-import-shared-dev": {
@@ -62,7 +62,7 @@
       "root": "infra/terraform/securityhub-import",
       "backend_strategy": "remote",
       "state_key": "crewsafe/securityhub-import/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "secrets-shared-dev": {
@@ -70,7 +70,7 @@
       "root": "infra/terraform/secrets",
       "backend_strategy": "remote",
       "state_key": "crewsafe/secrets/shared-dev.tfstate",
-      "allow_destroy": true,
+      "allow_destroy": false,
       "execution_role_family": "standard"
     },
     "state-backend": {

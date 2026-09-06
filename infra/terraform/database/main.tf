@@ -251,7 +251,7 @@ resource "aws_db_instance" "main" {
   # dispatch; this refuses the deletion at the service even if that guard were
   # bypassed. And if a deletion is ever genuinely intended, a final snapshot is
   # taken rather than skipped.
-  deletion_protection       = !var.decommission
+  deletion_protection       = true
   skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-final"
 

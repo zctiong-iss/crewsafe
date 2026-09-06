@@ -39,12 +39,10 @@ assert_contains "$main_tf" 'resource "aws_iam_role" "ecr_push"'
 assert_contains "$outputs_tf" 'output "repository_url"'
 assert_contains "$outputs_tf" 'output "repository_arn"'
 assert_contains "$outputs_tf" 'output "push_role_arn"'
-# allow_destroy is asserted by test-component-catalog.sh, which owns the
-# decommissioning window and the revert that closes it. Here only the root and
-# state key matter: SCRUM-274 extends this entry, it must not fork a second one.
 jq -e '
   .components["ecr-shared-dev"].root == "infra/terraform/ecr" and
-  .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate"
+  .components["ecr-shared-dev"].state_key == "crewsafe/ecr/shared-dev.tfstate" and
+  .components["ecr-shared-dev"].allow_destroy == false
 ' "$ROOT/$catalog" >/dev/null
 assert_contains "$runbook" 'Never run Terraform or make AWS mutations from a workstation.'
 

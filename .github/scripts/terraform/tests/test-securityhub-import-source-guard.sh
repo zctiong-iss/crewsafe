@@ -49,7 +49,5 @@ for kind in plan apply; do
 done
 
 catalog="$ROOT/.github/terraform/components.json"
-# allow_destroy is deliberately not asserted here — test-component-catalog.sh
-# owns the decommissioning window and the revert that closes it.
-jq -e '.components["securityhub-import-shared-dev"] | .jira_key == "SCRUM-284" and .root == "infra/terraform/securityhub-import" and .backend_strategy == "remote" and .execution_role_family == "standard"' "$catalog" >/dev/null
+jq -e '.components["securityhub-import-shared-dev"] | .jira_key == "SCRUM-284" and .root == "infra/terraform/securityhub-import" and .backend_strategy == "remote" and .allow_destroy == false and .execution_role_family == "standard"' "$catalog" >/dev/null
 echo "PASS: Sonar Security Hub importer source boundary is static and least-privilege."
