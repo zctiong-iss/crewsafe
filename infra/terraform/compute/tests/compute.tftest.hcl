@@ -1707,29 +1707,3 @@ run "http_listener_protocol_is_unchanged" {
     error_message = "aws_lb_listener.public's forwarding target must remain aws_lb_target_group.public, unchanged by this feature (FR-006)."
   }
 }
-
-# The ALB refuses deletion and the log buckets refuse to be emptied unless a
-# teardown dispatch says otherwise. Both defaults are asserted elsewhere; this
-# asserts that the switch actually reaches every one of them, since a bucket
-# left off the list fails the destroy halfway through.
-run "decommission_lowers_compute_deletion_guards" {
-  command = plan
-  variables {
-    decommission = true
-  }
-
-  assert {
-    condition     = aws_lb.public.enable_deletion_protection == false
-    error_message = "A teardown dispatch must lower ALB deletion protection, or the destroy is refused at the service."
-  }
-
-  assert {
-    condition = (
-      aws_s3_bucket.alb_logs.force_destroy
-      && aws_s3_bucket.web.force_destroy
-      && aws_s3_bucket.web_logs.force_destroy
-      && aws_s3_bucket.cloudfront_logs.force_destroy
-    )
-    error_message = "Every compute bucket must accept a forced destroy during teardown; one left out strands the destroy on a non-empty bucket."
-  }
-}

@@ -194,31 +194,3 @@ run "reject_mobile_web_logout_url" {
   }
   expect_failures = [var.web_logout_urls]
 }
-
-# The decommissioning switch is the only thing that lowers deletion protection,
-# and it must do so only when explicitly set. shared_dev_contract above already
-# asserts the ACTIVE default; this asserts the other half of the pair.
-run "decommission_lowers_deletion_protection" {
-  command = plan
-  variables {
-    expected_account_id      = "123456789012"
-    account_alias            = "alice"
-    github_oidc_main_subject = "repo:owner@267492605/crewsafe@1310783821:ref:refs/heads/main"
-    decommission             = true
-  }
-  override_data {
-    target = data.aws_caller_identity.current
-    values = { account_id = "123456789012" }
-  }
-  override_resource {
-    target = aws_cognito_user_pool.shared_dev
-    values = {
-      id  = "ap-southeast-1_TestPool"
-      arn = "arn:aws:cognito-idp:ap-southeast-1:123456789012:userpool/ap-southeast-1_TestPool"
-    }
-  }
-  assert {
-    condition     = aws_cognito_user_pool.shared_dev.deletion_protection == "INACTIVE"
-    error_message = "A teardown dispatch must lower deletion protection, or the destroy is refused at the service."
-  }
-}

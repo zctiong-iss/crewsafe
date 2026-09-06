@@ -631,25 +631,3 @@ run "minor_upgrades_apply_automatically_without_producing_drift" {
     error_message = "Major version upgrades are permitted. A major version changes migration behaviour and is its own reviewed decision (FR-001)."
   }
 }
-
-# The paired half of "deletion_is_refused_and_backups_are_retained". Deletion
-# protection is refused by default and lowered only by an explicit teardown
-# dispatch. The final snapshot is deliberately NOT skipped even then — a
-# decommission still leaves the data recoverable until the snapshot is removed
-# by hand, which is a separate, deliberate act.
-run "decommission_lowers_deletion_protection_but_keeps_the_final_snapshot" {
-  command = apply
-  variables {
-    decommission = true
-  }
-
-  assert {
-    condition     = aws_db_instance.main.deletion_protection == false
-    error_message = "A teardown dispatch must lower deletion protection, or RDS refuses the destroy."
-  }
-
-  assert {
-    condition     = aws_db_instance.main.skip_final_snapshot == false
-    error_message = "Decommissioning must not start skipping the final snapshot; the data stays recoverable until the snapshot is deleted deliberately (FR-025)."
-  }
-}

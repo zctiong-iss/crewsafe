@@ -294,10 +294,6 @@ data "aws_elb_service_account" "main" {}
 
 resource "aws_s3_bucket" "alb_logs" {
   bucket = "${local.name_prefix}-alb-logs"
-
-  # Only ever true during a reviewed teardown; a normal apply leaves the bucket
-  # refusing to be destroyed while it still holds objects.
-  force_destroy = var.decommission
 }
 
 resource "aws_s3_bucket_ownership_controls" "alb_logs" {
@@ -417,7 +413,7 @@ resource "aws_lb" "public" {
   subnets            = local.network.public_subnet_ids
   security_groups    = [aws_security_group.public_lb.id]
 
-  enable_deletion_protection = !var.decommission
+  enable_deletion_protection = true
   drop_invalid_header_fields = true
 
   access_logs {
@@ -1134,10 +1130,6 @@ resource "aws_iam_role_policy" "cognito_mapping_publication" {
 resource "aws_s3_bucket" "web" {
   bucket = "${local.name_prefix}-web"
 
-  # Only ever true during a reviewed teardown; a normal apply leaves the bucket
-  # refusing to be destroyed while it still holds objects.
-  force_destroy = var.decommission
-
   # The account-match guard is not repeated here — aws_ecs_cluster.main above
   # already carries it, and one precondition anywhere in the plan is enough to
   # halt the whole apply on a mismatched account. A second copy would only
@@ -1215,10 +1207,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "web" {
 
 resource "aws_s3_bucket" "web_logs" {
   bucket = "${local.name_prefix}-web-logs"
-
-  # Only ever true during a reviewed teardown; a normal apply leaves the bucket
-  # refusing to be destroyed while it still holds objects.
-  force_destroy = var.decommission
 }
 
 resource "aws_s3_bucket_ownership_controls" "web_logs" {
@@ -1349,10 +1337,6 @@ resource "aws_s3_bucket_logging" "web_logs" {
 
 resource "aws_s3_bucket" "cloudfront_logs" {
   bucket = "${local.name_prefix}-cloudfront-logs"
-
-  # Only ever true during a reviewed teardown; a normal apply leaves the bucket
-  # refusing to be destroyed while it still holds objects.
-  force_destroy = var.decommission
 }
 
 resource "aws_s3_bucket_ownership_controls" "cloudfront_logs" {

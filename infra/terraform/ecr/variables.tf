@@ -36,18 +36,3 @@ variable "github_oidc_main_subject" {
     error_message = "github_oidc_main_subject must be the exact immutable owner/repository-ID main-branch subject without wildcards."
   }
 }
-
-# Decommissioning switch. Defaults to false so every guard this root normally
-# carries stays in force; nothing about a routine plan or apply changes. It is
-# set to true only by a deliberate teardown dispatch (the `decommission` input
-# on Terraform Plan), which lowers the deletion protections that would
-# otherwise refuse the destroy at the AWS service itself.
-#
-# Two independent refusals still stand in front of this: the component
-# catalogue's allow_destroy, and the typed DESTROY confirmation on Terraform
-# Apply. This only removes the third.
-variable "decommission" {
-  description = "Lower this component's deletion protections for a reviewed teardown. Never true for normal operation."
-  type        = bool
-  default     = false
-}
